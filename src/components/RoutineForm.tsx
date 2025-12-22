@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -24,12 +23,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Loader2, Users } from 'lucide-react';
+import { Plus, Loader2, Users, Check } from 'lucide-react';
 import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
 import { useUnits } from '@/hooks/useUnits';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
@@ -79,17 +78,16 @@ export const RoutineForm = () => {
 
   const toggleUnit = useCallback((unitId: string) => {
     setSelectedUnitIds(prev => {
-      const newIds = prev.includes(unitId)
-        ? prev.filter((id) => id !== unitId)
-        : [...prev, unitId];
-      return newIds;
+      if (prev.includes(unitId)) {
+        return prev.filter((id) => id !== unitId);
+      }
+      return [...prev, unitId];
     });
   }, []);
 
   const selectAllUnits = useCallback(() => {
     if (units) {
-      const allIds = units.map((u) => u.id);
-      setSelectedUnitIds(allIds);
+      setSelectedUnitIds(units.map((u) => u.id));
     }
   }, [units]);
 
@@ -98,7 +96,6 @@ export const RoutineForm = () => {
   }, []);
 
   const onSubmit = async (data: FormValues) => {
-    // Use selectedUnitIds directly since form validation is bypassed
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
@@ -130,6 +127,9 @@ export const RoutineForm = () => {
       <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Criar Nova Rotina</DialogTitle>
+          <DialogDescription>
+            Configure uma nova rotina para as unidades selecionadas.
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -192,12 +192,12 @@ export const RoutineForm = () => {
               )}
             />
 
-            {/* Units Selection */}
+            {/* Units Selection - Using native scroll instead of ScrollArea */}
             <FormField
               control={form.control}
               name="selectedUnits"
               render={() => (
-                <FormItem className="flex-1 overflow-hidden flex flex-col">
+                <FormItem className="flex-1 overflow-hidden flex flex-col min-h-0">
                   <div className="flex items-center justify-between">
                     <FormLabel className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
@@ -225,7 +225,8 @@ export const RoutineForm = () => {
                     </div>
                   </div>
                   
-                  <ScrollArea className="flex-1 border border-border rounded-md">
+                  {/* Native scroll container */}
+                  <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0">
                     <div className="p-3 space-y-1">
                       {loadingUnits ? (
                         <div className="flex items-center justify-center py-4">
@@ -245,11 +246,13 @@ export const RoutineForm = () => {
                                 ${isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'}
                               `}
                             >
-                              <Checkbox
-                                checked={isSelected}
-                                tabIndex={-1}
-                                className="pointer-events-none"
-                              />
+                              {/* Simple checkbox replacement */}
+                              <div className={`
+                                h-4 w-4 rounded border flex items-center justify-center flex-shrink-0
+                                ${isSelected ? 'bg-primary border-primary' : 'border-input'}
+                              `}>
+                                {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                              </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{unit.name}</p>
                                 <p className="text-xs text-muted-foreground">
@@ -268,7 +271,7 @@ export const RoutineForm = () => {
                         </p>
                       )}
                     </div>
-                  </ScrollArea>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
