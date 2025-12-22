@@ -1,42 +1,56 @@
-import { CheckCircle2, Clock, ListTodo, TrendingUp } from 'lucide-react';
-import { mockTasks, getAllSubtasks } from '@/data/mockData';
+import { CheckCircle2, Clock, ListTodo, TrendingUp, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useOverallStats } from '@/hooks/useDashboardData';
 
 export const StatsOverview = () => {
-  const allSubtasks = getAllSubtasks();
-  const completed = allSubtasks.filter((s) => s.status === 'completed').length;
-  const pending = allSubtasks.filter((s) => s.status === 'pending').length;
-  const total = allSubtasks.length;
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const { data: statsData, isLoading } = useOverallStats();
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-xl border border-border bg-card p-4 shadow-card animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-muted" />
+              <div className="space-y-2">
+                <div className="h-6 w-12 bg-muted rounded" />
+                <div className="h-3 w-20 bg-muted rounded" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const stats = [
     {
       label: 'Total de Rotinas',
-      value: mockTasks.length,
+      value: statsData?.routineCount || 0,
       icon: ListTodo,
       color: 'text-primary',
       bg: 'bg-primary/10',
     },
     {
-      label: 'Subtarefas Concluídas',
-      value: completed,
+      label: 'Tarefas Concluídas',
+      value: statsData?.completed || 0,
       icon: CheckCircle2,
       color: 'text-success',
       bg: 'bg-success/10',
     },
     {
-      label: 'Subtarefas Pendentes',
-      value: pending,
+      label: 'Tarefas Pendentes',
+      value: statsData?.pending || 0,
       icon: Clock,
       color: 'text-warning',
       bg: 'bg-warning/10',
     },
     {
       label: 'Taxa de Conclusão',
-      value: `${percentage}%`,
+      value: `${statsData?.percentage || 0}%`,
       icon: TrendingUp,
-      color: percentage >= 70 ? 'text-success' : percentage >= 40 ? 'text-warning' : 'text-destructive',
-      bg: percentage >= 70 ? 'bg-success/10' : percentage >= 40 ? 'bg-warning/10' : 'bg-destructive/10',
+      color: (statsData?.percentage || 0) >= 70 ? 'text-success' : (statsData?.percentage || 0) >= 40 ? 'text-warning' : 'text-destructive',
+      bg: (statsData?.percentage || 0) >= 70 ? 'bg-success/10' : (statsData?.percentage || 0) >= 40 ? 'bg-warning/10' : 'bg-destructive/10',
     },
   ];
 
