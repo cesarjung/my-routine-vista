@@ -1,6 +1,7 @@
-import { LayoutDashboard, Calendar, Users, Building2, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Building2, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SidebarProps {
   activeView: string;
@@ -16,6 +17,7 @@ const menuItems = [
 
 export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
+  const { user, signOut } = useAuth();
 
   return (
     <aside
@@ -64,7 +66,12 @@ export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
         })}
       </nav>
 
-      <div className="p-3 border-t border-sidebar-border">
+      <div className="p-3 border-t border-sidebar-border space-y-1">
+        {!collapsed && user && (
+          <div className="px-3 py-2 text-sm text-muted-foreground truncate">
+            {user.email}
+          </div>
+        )}
         <button
           className={cn(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors'
@@ -72,6 +79,15 @@ export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
         >
           <Settings className="w-5 h-5 flex-shrink-0" />
           {!collapsed && <span className="font-medium">Configurações</span>}
+        </button>
+        <button
+          onClick={signOut}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors'
+          )}
+        >
+          <LogOut className="w-5 h-5 flex-shrink-0" />
+          {!collapsed && <span className="font-medium">Sair</span>}
         </button>
       </div>
     </aside>
