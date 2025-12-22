@@ -2,9 +2,14 @@ import { useState, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import {
   Form,
   FormControl,
@@ -12,6 +17,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import {
   Select,
@@ -28,10 +34,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Loader2, Users, Check } from 'lucide-react';
+import { Plus, Loader2, Users, Check, CalendarIcon } from 'lucide-react';
 import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
 import { useUnits } from '@/hooks/useUnits';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
+import { cn } from '@/lib/utils';
 import type { Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
@@ -47,7 +54,9 @@ const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório'),
   description: z.string().optional(),
   frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const),
-  selectedUnits: z.array(z.string()).min(1, 'Selecione pelo menos uma unidade'),
+  startDate: z.date({ required_error: 'Data de início é obrigatória' }),
+  endDate: z.date().optional(),
+  repeatForever: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -55,6 +64,7 @@ type FormValues = z.infer<typeof formSchema>;
 export const RoutineForm = () => {
   const [open, setOpen] = useState(false);
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [unitError, setUnitError] = useState<string | null>(null);
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: unitManagers } = useUnitManagers();
@@ -65,9 +75,13 @@ export const RoutineForm = () => {
       title: '',
       description: '',
       frequency: 'semanal',
-      selectedUnits: [],
+      startDate: new Date(),
+      endDate: undefined,
+      repeatForever: true,
     },
   });
+
+  const repeatForever = form.watch('repeatForever');
 
   // Create a Set for O(1) lookup
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
@@ -77,6 +91,7 @@ export const RoutineForm = () => {
   }, [unitManagers]);
 
   const toggleUnit = useCallback((unitId: string) => {
+    setUnitError(null);
     setSelectedUnitIds(prev => {
       if (prev.includes(unitId)) {
         return prev.filter((id) => id !== unitId);
@@ -86,6 +101,7 @@ export const RoutineForm = () => {
   }, []);
 
   const selectAllUnits = useCallback(() => {
+    setUnitError(null);
     if (units) {
       setSelectedUnitIds(units.map((u) => u.id));
     }
@@ -96,6 +112,11 @@ export const RoutineForm = () => {
   }, []);
 
   const onSubmit = async (data: FormValues) => {
+    if (selectedUnitIds.length === 0) {
+      setUnitError('Selecione pelo menos uma unidade');
+      return;
+    }
+    
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
@@ -104,16 +125,8 @@ export const RoutineForm = () => {
     });
     form.reset();
     setSelectedUnitIds([]);
+    setUnitError(null);
     setOpen(false);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedUnitIds.length === 0) {
-      form.setError('selectedUnits', { message: 'Selecione pelo menos uma unidade' });
-      return;
-    }
-    form.handleSubmit(onSubmit)(e);
   };
 
   return (
@@ -133,7 +146,7 @@ export const RoutineForm = () => {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-hidden flex flex-col">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-hidden flex flex-col">
             <FormField
               control={form.control}
               name="title"
@@ -192,90 +205,197 @@ export const RoutineForm = () => {
               )}
             />
 
-            {/* Units Selection - Using native scroll instead of ScrollArea */}
+            {/* Recurrence Period */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Data de início</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                            ) : (
+                              <span>Selecione</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Data de término</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            disabled={repeatForever}
+                            className={cn(
+                              "pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground",
+                              repeatForever && "opacity-50"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                            ) : (
+                              <span>{repeatForever ? "Sem fim" : "Selecione"}</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < (form.getValues('startDate') || new Date())}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
-              name="selectedUnits"
-              render={() => (
-                <FormItem className="flex-1 overflow-hidden flex flex-col min-h-0">
-                  <div className="flex items-center justify-between">
-                    <FormLabel className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      Unidades ({selectedUnitIds.length} selecionadas)
-                    </FormLabel>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={selectAllUnits}
-                        className="text-xs h-7"
-                      >
-                        Selecionar todas
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={deselectAllUnits}
-                        className="text-xs h-7"
-                      >
-                        Limpar
-                      </Button>
-                    </div>
+              name="repeatForever"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-sm font-medium">Repetir para sempre</FormLabel>
+                    <FormDescription className="text-xs">
+                      A rotina será criada indefinidamente sem data de término
+                    </FormDescription>
                   </div>
-                  
-                  {/* Native scroll container */}
-                  <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0">
-                    <div className="p-3 space-y-1">
-                      {loadingUnits ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : units && units.length > 0 ? (
-                        units.map((unit) => {
-                          const managers = getManagersForUnit(unit.id);
-                          const isSelected = selectedSet.has(unit.id);
-                          
-                          return (
-                            <div
-                              key={unit.id}
-                              onClick={() => toggleUnit(unit.id)}
-                              className={`
-                                flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors
-                                ${isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'}
-                              `}
-                            >
-                              {/* Simple checkbox replacement */}
-                              <div className={`
-                                h-4 w-4 rounded border flex items-center justify-center flex-shrink-0
-                                ${isSelected ? 'bg-primary border-primary' : 'border-input'}
-                              `}>
-                                {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{unit.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {managers.length > 0 
-                                    ? `Responsável: ${managers.map(m => m.profile?.full_name || m.profile?.email).join(', ')}`
-                                    : 'Sem responsável definido'
-                                  }
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p className="text-center py-4 text-muted-foreground text-sm">
-                          Nenhuma unidade cadastrada
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <FormMessage />
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (checked) {
+                          form.setValue('endDate', undefined);
+                        }
+                      }}
+                    />
+                  </FormControl>
                 </FormItem>
               )}
             />
+
+            {/* Units Selection */}
+            <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-2">
+                <FormLabel className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Unidades ({selectedUnitIds.length} selecionadas)
+                </FormLabel>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={selectAllUnits}
+                    className="text-xs h-7"
+                  >
+                    Selecionar todas
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={deselectAllUnits}
+                    className="text-xs h-7"
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Native scroll container */}
+              <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-40">
+                <div className="p-3 space-y-1">
+                  {loadingUnits ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : units && units.length > 0 ? (
+                    units.map((unit) => {
+                      const managers = getManagersForUnit(unit.id);
+                      const isSelected = selectedSet.has(unit.id);
+                      
+                      return (
+                        <div
+                          key={unit.id}
+                          onClick={() => toggleUnit(unit.id)}
+                          className={`
+                            flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors
+                            ${isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'}
+                          `}
+                        >
+                          <div className={`
+                            h-4 w-4 rounded border flex items-center justify-center flex-shrink-0
+                            ${isSelected ? 'bg-primary border-primary' : 'border-input'}
+                          `}>
+                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{unit.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {managers.length > 0 
+                                ? `Responsável: ${managers.map(m => m.profile?.full_name || m.profile?.email).join(', ')}`
+                                : 'Sem responsável definido'
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-center py-4 text-muted-foreground text-sm">
+                      Nenhuma unidade cadastrada
+                    </p>
+                  )}
+                </div>
+              </div>
+              {unitError && (
+                <p className="text-sm font-medium text-destructive mt-1">{unitError}</p>
+              )}
+            </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button
