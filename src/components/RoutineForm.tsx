@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -70,43 +70,53 @@ export const RoutineForm = () => {
     },
   });
 
-  const getManagersForUnit = (unitId: string) => {
-    return unitManagers?.filter((m) => m.unit_id === unitId) || [];
-  };
+  // Create a Set for O(1) lookup
+  const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
 
-  const toggleUnit = (unitId: string) => {
+  const getManagersForUnit = useCallback((unitId: string) => {
+    return unitManagers?.filter((m) => m.unit_id === unitId) || [];
+  }, [unitManagers]);
+
+  const toggleUnit = useCallback((unitId: string) => {
     setSelectedUnitIds(prev => {
       const newIds = prev.includes(unitId)
         ? prev.filter((id) => id !== unitId)
         : [...prev, unitId];
-      form.setValue('selectedUnits', newIds);
       return newIds;
     });
-  };
+  }, []);
 
-  const selectAllUnits = () => {
+  const selectAllUnits = useCallback(() => {
     if (units) {
       const allIds = units.map((u) => u.id);
       setSelectedUnitIds(allIds);
-      form.setValue('selectedUnits', allIds);
     }
-  };
+  }, [units]);
 
-  const deselectAllUnits = () => {
+  const deselectAllUnits = useCallback(() => {
     setSelectedUnitIds([]);
-    form.setValue('selectedUnits', []);
-  };
+  }, []);
 
   const onSubmit = async (data: FormValues) => {
+    // Use selectedUnitIds directly since form validation is bypassed
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
       frequency: data.frequency,
-      unitIds: data.selectedUnits,
+      unitIds: selectedUnitIds,
     });
     form.reset();
     setSelectedUnitIds([]);
     setOpen(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUnitIds.length === 0) {
+      form.setError('selectedUnits', { message: 'Selecione pelo menos uma unidade' });
+      return;
+    }
+    form.handleSubmit(onSubmit)(e);
   };
 
   return (
@@ -123,7 +133,7 @@ export const RoutineForm = () => {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-hidden flex flex-col">
+          <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-hidden flex flex-col">
             <FormField
               control={form.control}
               name="title"
@@ -224,7 +234,7 @@ export const RoutineForm = () => {
                       ) : units && units.length > 0 ? (
                         units.map((unit) => {
                           const managers = getManagersForUnit(unit.id);
-                          const isSelected = selectedUnitIds.includes(unit.id);
+                          const isSelected = selectedSet.has(unit.id);
                           
                           return (
                             <div
@@ -237,8 +247,8 @@ export const RoutineForm = () => {
                             >
                               <Checkbox
                                 checked={isSelected}
-                                onCheckedChange={() => toggleUnit(unit.id)}
-                                onClick={(e) => e.stopPropagation()}
+                                tabIndex={-1}
+                                className="pointer-events-none"
                               />
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{unit.name}</p>
