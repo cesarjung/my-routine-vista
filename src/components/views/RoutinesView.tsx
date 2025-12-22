@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { RoutineForm } from '@/components/RoutineForm';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import { useRoutines } from '@/hooks/useRoutines';
-import { useCurrentPeriodCheckins } from '@/hooks/useRoutineCheckins';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar, ChevronRight, CheckCircle2, Clock } from 'lucide-react';
-import { ProgressBar } from '@/components/ProgressBar';
+import { Loader2, Calendar, ChevronRight } from 'lucide-react';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
@@ -33,13 +31,6 @@ interface RoutineListItemProps {
 }
 
 const RoutineListItem = ({ routine, isSelected, onClick }: RoutineListItemProps) => {
-  const { data: periodData } = useCurrentPeriodCheckins(routine.id);
-  
-  const checkins = periodData?.period?.routine_checkins || [];
-  const completed = checkins.filter(c => c.completed_at !== null).length;
-  const total = checkins.length;
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-
   return (
     <button
       onClick={onClick}
@@ -51,33 +42,16 @@ const RoutineListItem = ({ routine, isSelected, onClick }: RoutineListItemProps)
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">
-            <div
-              className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0',
-                percentage === 100
-                  ? 'bg-success/20 text-success'
-                  : percentage >= 50
-                  ? 'bg-warning/20 text-warning'
-                  : 'bg-destructive/20 text-destructive'
-              )}
-            >
-              {percentage}%
-            </div>
             <h4 className="font-medium text-foreground truncate">{routine.title}</h4>
           </div>
           
-          <div className="flex items-center gap-4 text-xs text-muted-foreground pl-11">
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="bg-secondary px-2 py-0.5 rounded">
               {frequencyLabels[routine.frequency]}
             </span>
-            <span className="flex items-center gap-1 text-success">
-              <CheckCircle2 className="w-3 h-3" />
-              {completed}
-            </span>
-            <span className="flex items-center gap-1 text-warning">
-              <Clock className="w-3 h-3" />
-              {total - completed}
-            </span>
+            {routine.description && (
+              <span className="truncate max-w-[200px]">{routine.description}</span>
+            )}
           </div>
         </div>
 
@@ -88,12 +62,6 @@ const RoutineListItem = ({ routine, isSelected, onClick }: RoutineListItemProps)
           )}
         />
       </div>
-
-      {total > 0 && (
-        <div className="mt-3 pl-11">
-          <ProgressBar completed={completed} total={total} className="h-1.5" />
-        </div>
-      )}
     </button>
   );
 };
