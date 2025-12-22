@@ -7,9 +7,14 @@ export type TaskInsert = TablesInsert<'tasks'>;
 export type TaskUpdate = TablesUpdate<'tasks'>;
 export type SubtaskInsert = TablesInsert<'subtasks'>;
 
+export interface SubtaskData {
+  title: string;
+  assigned_to?: string | null;
+}
+
 export interface CreateTaskData {
   task: TaskInsert;
-  subtasks?: string[];
+  subtasks?: SubtaskData[];
 }
 
 export const useCreateTask = () => {
@@ -28,9 +33,10 @@ export const useCreateTask = () => {
 
       // Insert subtasks if provided
       if (subtasks && subtasks.length > 0) {
-        const subtasksData: SubtaskInsert[] = subtasks.map((title, index) => ({
+        const subtasksData: SubtaskInsert[] = subtasks.map((subtask, index) => ({
           task_id: newTask.id,
-          title,
+          title: subtask.title,
+          assigned_to: subtask.assigned_to || null,
           order_index: index,
         }));
 

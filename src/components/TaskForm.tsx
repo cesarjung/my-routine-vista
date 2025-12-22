@@ -36,7 +36,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useRoutines, type TaskFrequency } from '@/hooks/useRoutines';
-import { useCreateTask } from '@/hooks/useTaskMutations';
+import { useCreateTask, type SubtaskData } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Enums } from '@/integrations/supabase/types';
 
@@ -77,8 +77,9 @@ interface TaskFormProps {
 }
 
 export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
-  const [subtasks, setSubtasks] = useState<string[]>([]);
-  const [newSubtask, setNewSubtask] = useState('');
+  const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('');
   const [selectedUnitId, setSelectedUnitId] = useState<string>('');
 
   const { user } = useAuth();
@@ -108,14 +109,24 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   };
 
   const addSubtask = () => {
-    if (newSubtask.trim()) {
-      setSubtasks([...subtasks, newSubtask.trim()]);
-      setNewSubtask('');
+    if (newSubtaskTitle.trim()) {
+      setSubtasks([...subtasks, { 
+        title: newSubtaskTitle.trim(), 
+        assigned_to: newSubtaskAssignee && newSubtaskAssignee !== 'none' ? newSubtaskAssignee : null 
+      }]);
+      setNewSubtaskTitle('');
+      setNewSubtaskAssignee('');
     }
   };
 
   const removeSubtask = (index: number) => {
     setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
+
+  const getProfileName = (profileId: string | null | undefined) => {
+    if (!profileId) return null;
+    const profile = profiles?.find(p => p.id === profileId);
+    return profile?.full_name || profile?.email || null;
   };
 
   const onSubmit = async (data: FormData) => {
@@ -404,38 +415,60 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
           <FormLabel>Subtarefas / Checklist</FormLabel>
           <div className="flex gap-2">
             <Input
-              placeholder="Adicionar subtarefa..."
-              value={newSubtask}
-              onChange={(e) => setNewSubtask(e.target.value)}
+              placeholder="Título da subtarefa..."
+              value={newSubtaskTitle}
+              onChange={(e) => setNewSubtaskTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   addSubtask();
                 }
               }}
+              className="flex-1"
             />
+            <Select
+              value={newSubtaskAssignee}
+              onValueChange={setNewSubtaskAssignee}
+              disabled={!selectedUnitId || loadingProfiles}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Responsável" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum</SelectItem>
+                {profiles?.filter((p) => p.id).map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id}>
+                    {profile.full_name || profile.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button type="button" variant="outline" size="icon" onClick={addSubtask}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
 
           {subtasks.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2 border border-border rounded-lg p-3">
               {subtasks.map((subtask, index) => (
-                <Badge
+                <div
                   key={index}
-                  variant="secondary"
-                  className="gap-1 py-1.5 px-3"
+                  className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded"
                 >
-                  {subtask}
+                  <span className="flex-1 text-sm">{subtask.title}</span>
+                  {subtask.assigned_to && (
+                    <Badge variant="secondary" className="text-xs">
+                      {getProfileName(subtask.assigned_to)}
+                    </Badge>
+                  )}
                   <button
                     type="button"
                     onClick={() => removeSubtask(index)}
-                    className="ml-1 hover:text-destructive"
+                    className="text-muted-foreground hover:text-destructive"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-4 w-4" />
                   </button>
-                </Badge>
+                </div>
               ))}
             </div>
           )}
