@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -27,8 +28,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Loader2 } from 'lucide-react';
-import { useCreateRoutine } from '@/hooks/useRoutineMutations';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus, Loader2, Users } from 'lucide-react';
+import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
+import { useUnits } from '@/hooks/useUnits';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
 import type { Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
@@ -44,13 +48,16 @@ const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório'),
   description: z.string().optional(),
   frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const),
+  selectedUnits: z.array(z.string()).min(1, 'Selecione pelo menos uma unidade'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 export const RoutineForm = () => {
   const [open, setOpen] = useState(false);
-  const createRoutine = useCreateRoutine();
+  const createRoutine = useCreateRoutineWithUnits();
+  const { data: units, isLoading: loadingUnits } = useUnits();
+  const { data: unitManagers } = useUnitManagers();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -58,14 +65,41 @@ export const RoutineForm = () => {
       title: '',
       description: '',
       frequency: 'semanal',
+      selectedUnits: [],
     },
   });
+
+  const selectedUnits = form.watch('selectedUnits');
+
+  const getManagersForUnit = (unitId: string) => {
+    return unitManagers?.filter((m) => m.unit_id === unitId) || [];
+  };
+
+  const toggleUnit = (unitId: string) => {
+    const current = form.getValues('selectedUnits');
+    if (current.includes(unitId)) {
+      form.setValue('selectedUnits', current.filter((id) => id !== unitId));
+    } else {
+      form.setValue('selectedUnits', [...current, unitId]);
+    }
+  };
+
+  const selectAllUnits = () => {
+    if (units) {
+      form.setValue('selectedUnits', units.map((u) => u.id));
+    }
+  };
+
+  const deselectAllUnits = () => {
+    form.setValue('selectedUnits', []);
+  };
 
   const onSubmit = async (data: FormValues) => {
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
       frequency: data.frequency,
+      unitIds: data.selectedUnits,
     });
     form.reset();
     setOpen(false);
@@ -79,13 +113,13 @@ export const RoutineForm = () => {
           Nova Rotina
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Criar Nova Rotina</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-hidden flex flex-col">
             <FormField
               control={form.control}
               name="title"
@@ -93,7 +127,7 @@ export const RoutineForm = () => {
                 <FormItem>
                   <FormLabel>Título</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: Checkpoint com unidades" {...field} />
+                    <Input placeholder="Ex: Checkpoint semanal" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -110,6 +144,7 @@ export const RoutineForm = () => {
                     <Textarea
                       placeholder="Descreva a rotina..."
                       className="resize-none"
+                      rows={2}
                       {...field}
                     />
                   </FormControl>
@@ -143,7 +178,89 @@ export const RoutineForm = () => {
               )}
             />
 
-            <div className="flex justify-end gap-3 pt-4">
+            {/* Units Selection */}
+            <FormField
+              control={form.control}
+              name="selectedUnits"
+              render={() => (
+                <FormItem className="flex-1 overflow-hidden flex flex-col">
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Unidades ({selectedUnits.length} selecionadas)
+                    </FormLabel>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={selectAllUnits}
+                        className="text-xs h-7"
+                      >
+                        Selecionar todas
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={deselectAllUnits}
+                        className="text-xs h-7"
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <ScrollArea className="flex-1 border border-border rounded-md">
+                    <div className="p-3 space-y-1">
+                      {loadingUnits ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : units && units.length > 0 ? (
+                        units.map((unit) => {
+                          const managers = getManagersForUnit(unit.id);
+                          const isSelected = selectedUnits.includes(unit.id);
+                          
+                          return (
+                            <div
+                              key={unit.id}
+                              onClick={() => toggleUnit(unit.id)}
+                              className={`
+                                flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors
+                                ${isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'}
+                              `}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleUnit(unit.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{unit.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {managers.length > 0 
+                                    ? `Responsável: ${managers.map(m => m.profile?.full_name || m.profile?.email).join(', ')}`
+                                    : 'Sem responsável definido'
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-center py-4 text-muted-foreground text-sm">
+                          Nenhuma unidade cadastrada
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button
                 type="button"
                 variant="outline"
