@@ -139,8 +139,23 @@ export const useCreateRoutineWithUnits = () => {
 
       if (periodError) throw periodError;
 
-      // Create checkins for each selected unit
+      // Get managers for each unit to assign tasks
+      const { data: unitManagers } = await supabase
+        .from('unit_managers')
+        .select('unit_id, user_id')
+        .in('unit_id', data.unitIds);
+
+      // Create a map of unit_id -> first manager user_id
+      const unitManagerMap = new Map<string, string>();
+      unitManagers?.forEach(um => {
+        if (!unitManagerMap.has(um.unit_id)) {
+          unitManagerMap.set(um.unit_id, um.user_id);
+        }
+      });
+
+      // Create checkins AND tasks for each selected unit
       if (data.unitIds.length > 0) {
+        // Create checkins
         const checkins = data.unitIds.map((unitId) => ({
           routine_period_id: period.id,
           unit_id: unitId,
@@ -151,6 +166,26 @@ export const useCreateRoutineWithUnits = () => {
           .insert(checkins);
 
         if (checkinsError) throw checkinsError;
+
+        // Create tasks for each unit (so managers see them as pending tasks)
+        const tasks = data.unitIds.map((unitId) => ({
+          title: `[Rotina] ${routine.title}`,
+          description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
+          unit_id: unitId,
+          routine_id: routine.id,
+          assigned_to: unitManagerMap.get(unitId) || null,
+          created_by: user.id,
+          start_date: periodStart.toISOString(),
+          due_date: periodEnd.toISOString(),
+          status: 'pendente' as const,
+          priority: 2,
+        }));
+
+        const { error: tasksError } = await supabase
+          .from('tasks')
+          .insert(tasks);
+
+        if (tasksError) throw tasksError;
       }
 
       return routine;
@@ -159,9 +194,10 @@ export const useCreateRoutineWithUnits = () => {
       queryClient.invalidateQueries({ queryKey: ['routines'] });
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast({
         title: 'Rotina criada',
-        description: 'A rotina foi criada com as unidades selecionadas.',
+        description: 'A rotina foi criada com tarefas para cada unidade.',
       });
     },
     onError: (error: Error) => {
