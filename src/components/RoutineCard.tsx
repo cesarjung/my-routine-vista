@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ChevronDown, CheckCircle2, Clock, Calendar, Loader2 } from 'lucide-react';
+import { ChevronDown, CheckCircle2, Clock, Calendar, Loader2, Play, Building2 } from 'lucide-react';
 import { ProgressBar } from './ProgressBar';
-import { useTasks } from '@/hooks/useTasks';
+import { Button } from './ui/button';
+import { 
+  useCurrentPeriodCheckins, 
+  useCreatePeriodWithCheckins,
+  useCompleteCheckin,
+  useUndoCheckin
+} from '@/hooks/useRoutineCheckins';
+import { useUnits } from '@/hooks/useUnits';
 import type { Tables } from '@/integrations/supabase/types';
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface RoutineCardProps {
   routine: Tables<'routines'>;
@@ -15,18 +24,57 @@ const frequencyLabels: Record<string, string> = {
   semanal: 'Semanal',
   quinzenal: 'Quinzenal',
   mensal: 'Mensal',
-  anual: 'Anual',
-  customizada: 'Customizada',
+};
+
+const getPeriodDates = (frequency: string): { start: Date; end: Date } => {
+  const now = new Date();
+  switch (frequency) {
+    case 'diaria':
+      return { start: startOfDay(now), end: endOfDay(now) };
+    case 'semanal':
+      return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+    case 'quinzenal':
+      return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(addWeeks(now, 1), { weekStartsOn: 1 }) };
+    case 'mensal':
+      return { start: startOfMonth(now), end: endOfMonth(now) };
+    default:
+      return { start: startOfDay(now), end: endOfDay(now) };
+  }
 };
 
 export const RoutineCard = ({ routine, delay = 0 }: RoutineCardProps) => {
   const [expanded, setExpanded] = useState(false);
-  const { data: allTasks, isLoading } = useTasks();
+  const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id);
+  const { data: units } = useUnits();
+  const createPeriod = useCreatePeriodWithCheckins();
+  const completeCheckin = useCompleteCheckin();
+  const undoCheckin = useUndoCheckin();
 
-  const routineTasks = allTasks?.filter(t => t.routine_id === routine.id) || [];
-  const completed = routineTasks.filter(t => t.status === 'concluida').length;
-  const total = routineTasks.length;
+  const checkins = periodData?.period?.routine_checkins || [];
+  const completed = checkins.filter(c => c.completed_at !== null).length;
+  const total = checkins.length || units?.length || 0;
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const handleStartPeriod = async () => {
+    const dates = getPeriodDates(routine.frequency);
+    await createPeriod.mutateAsync({
+      routineId: routine.id,
+      periodStart: dates.start,
+      periodEnd: dates.end,
+    });
+  };
+
+  const handleToggleCheckin = async (checkinId: string, isCompleted: boolean) => {
+    if (isCompleted) {
+      await undoCheckin.mutateAsync(checkinId);
+    } else {
+      await completeCheckin.mutateAsync({ checkinId });
+    }
+  };
+
+  const periodLabel = periodData?.period
+    ? `${format(new Date(periodData.period.period_start), "dd/MM", { locale: ptBR })} - ${format(new Date(periodData.period.period_end), "dd/MM", { locale: ptBR })}`
+    : null;
 
   return (
     <div
@@ -57,6 +105,9 @@ export const RoutineCard = ({ routine, delay = 0 }: RoutineCardProps) => {
                 <Calendar className="w-3 h-3" />
                 {frequencyLabels[routine.frequency]}
               </span>
+              {periodLabel && (
+                <span className="text-primary font-medium">{periodLabel}</span>
+              )}
               <span className="flex items-center gap-1 text-success">
                 <CheckCircle2 className="w-3 h-3" />
                 {completed}
@@ -90,45 +141,73 @@ export const RoutineCard = ({ routine, delay = 0 }: RoutineCardProps) => {
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
               </div>
-            ) : routineTasks.length === 0 ? (
+            ) : !periodData?.period ? (
+              <div className="text-center py-6">
+                <Building2 className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground mb-4">
+                  Nenhum período ativo. Inicie um novo período para criar checkins para as unidades.
+                </p>
+                <Button
+                  onClick={handleStartPeriod}
+                  disabled={createPeriod.isPending}
+                  className="gap-2"
+                >
+                  {createPeriod.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                  Iniciar Período
+                </Button>
+              </div>
+            ) : checkins.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                Nenhuma tarefa gerada para esta rotina
+                Nenhuma unidade cadastrada
               </p>
             ) : (
               <div className="space-y-2">
-                {routineTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className={cn(
-                      'flex items-center justify-between p-3 rounded-lg border transition-colors',
-                      task.status === 'concluida'
-                        ? 'bg-success/5 border-success/20'
-                        : 'bg-warning/5 border-warning/20'
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      {task.status === 'concluida' ? (
-                        <CheckCircle2 className="w-5 h-5 text-success" />
-                      ) : (
-                        <Clock className="w-5 h-5 text-warning" />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{task.title}</p>
-                        <p className="text-xs text-muted-foreground">{task.unit?.name}</p>
-                      </div>
-                    </div>
-                    <span
+                {checkins.map((checkin) => {
+                  const isCompleted = checkin.completed_at !== null;
+                  return (
+                    <button
+                      key={checkin.id}
+                      onClick={() => handleToggleCheckin(checkin.id, isCompleted)}
+                      disabled={completeCheckin.isPending || undoCheckin.isPending}
                       className={cn(
-                        'text-xs font-medium px-2 py-1 rounded-full',
-                        task.status === 'concluida'
-                          ? 'bg-success/20 text-success'
-                          : 'bg-warning/20 text-warning'
+                        'w-full flex items-center justify-between p-3 rounded-lg border transition-all hover:scale-[1.01]',
+                        isCompleted
+                          ? 'bg-success/5 border-success/20 hover:bg-success/10'
+                          : 'bg-warning/5 border-warning/20 hover:bg-warning/10'
                       )}
                     >
-                      {task.status === 'concluida' ? 'Concluído' : 'Pendente'}
-                    </span>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-3">
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-5 h-5 text-success" />
+                        ) : (
+                          <Clock className="w-5 h-5 text-warning" />
+                        )}
+                        <div className="text-left">
+                          <p className="text-sm font-medium text-foreground">
+                            {checkin.unit?.name || 'Unidade'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {checkin.unit?.code}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          'text-xs font-medium px-2 py-1 rounded-full',
+                          isCompleted
+                            ? 'bg-success/20 text-success'
+                            : 'bg-warning/20 text-warning'
+                        )}
+                      >
+                        {isCompleted ? 'Concluído' : 'Pendente'}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

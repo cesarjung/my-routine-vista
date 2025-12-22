@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { RoutineCard } from '@/components/RoutineCard';
+import { RoutineForm } from '@/components/RoutineForm';
 import { useRoutines } from '@/hooks/useRoutines';
 import { cn } from '@/lib/utils';
 import { Loader2, Calendar } from 'lucide-react';
@@ -25,9 +26,12 @@ export const RoutinesView = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Rotinas</h1>
-        <p className="text-muted-foreground">Gerencie suas rotinas por frequência</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-1">Rotinas</h1>
+          <p className="text-muted-foreground">Gerencie rotinas com checkins por unidade</p>
+        </div>
+        <RoutineForm />
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -55,7 +59,7 @@ export const RoutinesView = () => {
         <div className="text-center py-12 text-muted-foreground">
           <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>Nenhuma rotina encontrada</p>
-          <p className="text-sm mt-2">Crie rotinas para começar a gerenciar tarefas</p>
+          <p className="text-sm mt-2">Crie rotinas para começar a gerenciar checkins por unidade</p>
         </div>
       ) : (
         <div className="space-y-4">

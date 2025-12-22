@@ -82,6 +82,86 @@ export type Database = {
           },
         ]
       }
+      routine_checkins: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          routine_period_id: string
+          unit_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          routine_period_id: string
+          unit_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          routine_period_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_checkins_routine_period_id_fkey"
+            columns: ["routine_period_id"]
+            isOneToOne: false
+            referencedRelation: "routine_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routine_checkins_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routine_periods: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          period_end: string
+          period_start: string
+          routine_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          period_end: string
+          period_start: string
+          routine_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          period_end?: string
+          period_start?: string
+          routine_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_periods_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routines: {
         Row: {
           created_at: string
@@ -92,7 +172,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           title: string
-          unit_id: string
+          unit_id: string | null
           updated_at: string
         }
         Insert: {
@@ -104,7 +184,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           title: string
-          unit_id: string
+          unit_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -116,7 +196,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           title?: string
-          unit_id?: string
+          unit_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -315,6 +395,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_current_period_dates: {
+        Args: { freq: Database["public"]["Enums"]["task_frequency"] }
+        Returns: {
+          period_end: string
+          period_start: string
+        }[]
+      }
       get_user_unit_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
