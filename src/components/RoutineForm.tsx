@@ -55,6 +55,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 export const RoutineForm = () => {
   const [open, setOpen] = useState(false);
+  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: unitManagers } = useUnitManagers();
@@ -69,28 +70,30 @@ export const RoutineForm = () => {
     },
   });
 
-  const selectedUnits = form.watch('selectedUnits');
-
   const getManagersForUnit = (unitId: string) => {
     return unitManagers?.filter((m) => m.unit_id === unitId) || [];
   };
 
   const toggleUnit = (unitId: string) => {
-    const current = form.getValues('selectedUnits');
-    if (current.includes(unitId)) {
-      form.setValue('selectedUnits', current.filter((id) => id !== unitId));
-    } else {
-      form.setValue('selectedUnits', [...current, unitId]);
-    }
+    setSelectedUnitIds(prev => {
+      const newIds = prev.includes(unitId)
+        ? prev.filter((id) => id !== unitId)
+        : [...prev, unitId];
+      form.setValue('selectedUnits', newIds);
+      return newIds;
+    });
   };
 
   const selectAllUnits = () => {
     if (units) {
-      form.setValue('selectedUnits', units.map((u) => u.id));
+      const allIds = units.map((u) => u.id);
+      setSelectedUnitIds(allIds);
+      form.setValue('selectedUnits', allIds);
     }
   };
 
   const deselectAllUnits = () => {
+    setSelectedUnitIds([]);
     form.setValue('selectedUnits', []);
   };
 
@@ -102,6 +105,7 @@ export const RoutineForm = () => {
       unitIds: data.selectedUnits,
     });
     form.reset();
+    setSelectedUnitIds([]);
     setOpen(false);
   };
 
@@ -187,7 +191,7 @@ export const RoutineForm = () => {
                   <div className="flex items-center justify-between">
                     <FormLabel className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
-                      Unidades ({selectedUnits.length} selecionadas)
+                      Unidades ({selectedUnitIds.length} selecionadas)
                     </FormLabel>
                     <div className="flex gap-2">
                       <Button
@@ -220,7 +224,7 @@ export const RoutineForm = () => {
                       ) : units && units.length > 0 ? (
                         units.map((unit) => {
                           const managers = getManagersForUnit(unit.id);
-                          const isSelected = selectedUnits.includes(unit.id);
+                          const isSelected = selectedUnitIds.includes(unit.id);
                           
                           return (
                             <div
