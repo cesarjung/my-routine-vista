@@ -124,8 +124,8 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
         title: data.title,
         description: data.description || null,
         unit_id: data.unit_id,
-        assigned_to: data.assigned_to || null,
-        routine_id: data.routine_id || null,
+        assigned_to: data.assigned_to && data.assigned_to !== 'none' ? data.assigned_to : null,
+        routine_id: data.routine_id && data.routine_id !== 'none' ? data.routine_id : null,
         status: data.status,
         priority: data.priority,
         start_date: data.start_date?.toISOString() || null,
@@ -194,7 +194,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {units?.map((unit) => (
+                    {units?.filter((u) => u.id).map((unit) => (
                       <SelectItem key={unit.id} value={unit.id}>
                         {unit.name}
                       </SelectItem>
@@ -223,7 +223,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {profiles?.map((profile) => (
+                    {profiles?.filter((p) => p.id).map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
                         {profile.full_name || profile.email}
                       </SelectItem>
@@ -252,8 +252,8 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma</SelectItem>
-                    {routines?.map((routine) => (
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    {routines?.filter((r) => r.id).map((routine) => (
                       <SelectItem key={routine.id} value={routine.id}>
                         {routine.title} ({frequencyLabels[routine.frequency]})
                       </SelectItem>
