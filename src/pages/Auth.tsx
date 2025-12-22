@@ -145,7 +145,7 @@ const Auth = () => {
             <ClipboardCheck className="h-8 w-8 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold text-foreground">
-            Sistema de Rotinas
+            Gestão CCM
           </h1>
           <p className="text-muted-foreground">
             Gerencie tarefas e rotinas da sua unidade
@@ -301,7 +301,7 @@ const Auth = () => {
         </Card>
         
         <p className="text-center text-sm text-muted-foreground">
-          Sistema de Gerenciamento de Rotinas
+          Gestão CCM - Gerenciamento de Rotinas
         </p>
       </div>
     </div>
