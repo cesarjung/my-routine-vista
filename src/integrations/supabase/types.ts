@@ -211,6 +211,7 @@ export type Database = {
       }
       subtasks: {
         Row: {
+          assigned_to: string | null
           completed_at: string | null
           created_at: string
           id: string
@@ -220,6 +221,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
           id?: string
@@ -229,6 +231,7 @@ export type Database = {
           title: string
         }
         Update: {
+          assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
           id?: string
