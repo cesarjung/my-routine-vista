@@ -1,4 +1,4 @@
-import { LayoutDashboard, Calendar, Users, Building2, Settings, ChevronLeft, ChevronRight, LogOut, Columns3, GanttChart, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Building2, Settings, ChevronLeft, ChevronRight, LogOut, Columns3, GanttChart, CalendarDays, ClipboardList } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +10,7 @@ interface SidebarProps {
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'tasks', label: 'Tarefas', icon: ClipboardList },
   { id: 'routines', label: 'Rotinas', icon: Calendar },
   { id: 'kanban', label: 'Kanban', icon: Columns3 },
   { id: 'gantt', label: 'Gantt', icon: GanttChart },
