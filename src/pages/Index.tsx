@@ -4,6 +4,9 @@ import { DashboardView } from '@/components/views/DashboardView';
 import { RoutinesView } from '@/components/views/RoutinesView';
 import { ResponsiblesView } from '@/components/views/ResponsiblesView';
 import { UnitsView } from '@/components/views/UnitsView';
+import { KanbanView } from '@/components/views/KanbanView';
+import { GanttView } from '@/components/views/GanttView';
+import { CalendarView } from '@/components/views/CalendarView';
 
 const Index = () => {
   const [activeView, setActiveView] = useState('dashboard');
@@ -18,6 +21,12 @@ const Index = () => {
         return <ResponsiblesView />;
       case 'units':
         return <UnitsView />;
+      case 'kanban':
+        return <KanbanView />;
+      case 'gantt':
+        return <GanttView />;
+      case 'calendar':
+        return <CalendarView />;
       default:
         return <DashboardView />;
     }

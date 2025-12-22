@@ -1,4 +1,4 @@
-import { LayoutDashboard, Calendar, Users, Building2, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Building2, Settings, ChevronLeft, ChevronRight, LogOut, Columns3, GanttChart, CalendarDays } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,8 +11,11 @@ interface SidebarProps {
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'routines', label: 'Rotinas', icon: Calendar },
-  { id: 'responsibles', label: 'Responsáveis', icon: Users },
+  { id: 'kanban', label: 'Kanban', icon: Columns3 },
+  { id: 'gantt', label: 'Gantt', icon: GanttChart },
+  { id: 'calendar', label: 'Calendário', icon: CalendarDays },
   { id: 'units', label: 'Unidades', icon: Building2 },
+  { id: 'responsibles', label: 'Responsáveis', icon: Users },
 ];
 
 export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
