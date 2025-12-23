@@ -9,10 +9,13 @@ import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
+import { RoutineEditDialog } from '@/components/RoutineEditDialog';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
 };
+
+type Routine = Tables<'routines'>;
 
 type RoutinePeriod = Tables<'routine_periods'> & {
   routine?: Tables<'routines'>;
@@ -81,6 +84,8 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
+  const [routineDialogOpen, setRoutineDialogOpen] = useState(false);
 
   // Fetch active routine periods
   const { data: routinePeriods } = useQuery({
@@ -108,6 +113,14 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     if (task) {
       setEditingTask(task as Task);
       setEditDialogOpen(true);
+    }
+  };
+
+  const handleEditRoutine = (routineId: string) => {
+    const routine = routines?.find(r => r.id === routineId);
+    if (routine) {
+      setEditingRoutine(routine);
+      setRoutineDialogOpen(true);
     }
   };
 
@@ -393,6 +406,8 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                           e.stopPropagation();
                           if (item.type === 'task') {
                             handleEditTask(item.id);
+                          } else if (item.type === 'routine' && item.routineId) {
+                            handleEditRoutine(item.routineId);
                           }
                         }}
                       >
@@ -463,10 +478,18 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                   <div
                     key={item.id}
                     className={cn(
-                      'text-xs px-2 py-1 rounded text-white truncate',
+                      'text-xs px-2 py-1 rounded text-white truncate cursor-pointer hover:opacity-80',
                       getItemColor(item)
                     )}
                     title={item.title}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (item.type === 'task') {
+                        handleEditTask(item.id);
+                      } else if (item.type === 'routine' && item.routineId) {
+                        handleEditRoutine(item.routineId);
+                      }
+                    }}
                   >
                     {item.title}
                   </div>
@@ -552,6 +575,8 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                         onClick={() => {
                           if (item.type === 'task') {
                             handleEditTask(item.id);
+                          } else if (item.type === 'routine' && item.routineId) {
+                            handleEditRoutine(item.routineId);
                           }
                         }}
                       >
@@ -658,6 +683,12 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         task={editingTask}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
+      />
+
+      <RoutineEditDialog
+        routine={editingRoutine}
+        open={routineDialogOpen}
+        onOpenChange={setRoutineDialogOpen}
       />
     </div>
   );
