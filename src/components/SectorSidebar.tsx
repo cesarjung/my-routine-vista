@@ -105,10 +105,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
 
   const renderSectorItem = (sector: Sector) => {
     const isExpanded = expandedSectors.has(sector.id);
-    const tasksKey = `${sector.id}-tasks`;
     const routinesKey = `${sector.id}-routines`;
-    const unitsKey = `${sector.id}-units`;
-    const isTasksExpanded = expandedFolders.has(tasksKey);
     const isRoutinesExpanded = expandedFolders.has(routinesKey);
 
     return (
@@ -132,70 +129,71 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
 
         {isExpanded && !collapsed && (
           <div className="ml-4 space-y-0.5">
-            {/* Tarefas folder */}
+            {/* Tarefas - clicável direto */}
             <button
-              onClick={() => toggleFolder(tasksKey)}
+              onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'tasks' })}
               className={cn(
                 'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors',
-                isActive({ type: 'sector', sectorId: sector.id, folder: 'tasks' })
+                context.type === 'sector' && context.sectorId === sector.id && context.folder === 'tasks'
                   ? 'bg-sidebar-accent text-sidebar-primary'
                   : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
               )}
             >
-              {isTasksExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+              <ClipboardList className="w-4 h-4" />
               <span>Tarefas</span>
             </button>
-            
-            {isTasksExpanded && (
-              <div className="ml-4">
+
+            {/* Rotinas - clicável com dropdown para frequências */}
+            <div className="relative">
+              <div className="flex items-center">
                 <button
-                  onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'tasks' })}
+                  onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'routines' })}
                   className={cn(
-                    'w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition-colors',
-                    isActive({ type: 'sector', sectorId: sector.id, folder: 'tasks' }) && !context.type
+                    'flex-1 flex items-center gap-2 px-2 py-1.5 rounded-l-md text-sm transition-colors',
+                    context.type === 'sector' && context.sectorId === sector.id && context.folder === 'routines'
                       ? 'bg-sidebar-accent text-sidebar-primary'
                       : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                   )}
                 >
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  <span>Todas</span>
+                  <Calendar className="w-4 h-4" />
+                  <span>Rotinas</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFolder(routinesKey);
+                  }}
+                  className={cn(
+                    'px-1.5 py-1.5 rounded-r-md text-sm transition-colors',
+                    isRoutinesExpanded
+                      ? 'bg-sidebar-accent text-sidebar-primary'
+                      : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                  )}
+                >
+                  {isRoutinesExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 </button>
               </div>
-            )}
 
-            {/* Rotinas folder */}
-            <button
-              onClick={() => toggleFolder(routinesKey)}
-              className={cn(
-                'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors',
-                isActive({ type: 'sector', sectorId: sector.id, folder: 'routines' })
-                  ? 'bg-sidebar-accent text-sidebar-primary'
-                  : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+              {isRoutinesExpanded && (
+                <div className="ml-4 mt-0.5 space-y-0.5">
+                  {FREQUENCIES.map((freq) => (
+                    <button
+                      key={freq.id}
+                      onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'routines', frequency: freq.id })}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs transition-colors',
+                        context.type === 'sector' && context.sectorId === sector.id && context.folder === 'routines' && context.frequency === freq.id
+                          ? 'bg-sidebar-accent text-sidebar-primary'
+                          : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                      )}
+                    >
+                      <Calendar className="w-3 h-3" />
+                      <span>{freq.label}</span>
+                    </button>
+                  ))}
+                </div>
               )}
-            >
-              {isRoutinesExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
-              <span>Rotinas</span>
-            </button>
-
-            {isRoutinesExpanded && (
-              <div className="ml-4 space-y-0.5">
-                {FREQUENCIES.map((freq) => (
-                  <button
-                    key={freq.id}
-                    onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'routines', frequency: freq.id })}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs transition-colors',
-                      isActive({ type: 'sector', sectorId: sector.id, folder: 'routines', frequency: freq.id })
-                        ? 'bg-sidebar-accent text-sidebar-primary'
-                        : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                    )}
-                  >
-                    <Calendar className="w-3 h-3" />
-                    <span>{freq.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            </div>
 
             {/* Unidades */}
             <button
