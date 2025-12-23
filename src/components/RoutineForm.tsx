@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format } from 'date-fns';
+import { format, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Loader2, Users, Check, CalendarIcon, X } from 'lucide-react';
+import { Plus, Loader2, Users, Check, CalendarIcon, X, Clock } from 'lucide-react';
 import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
 import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
@@ -68,7 +68,9 @@ const formSchema = z.object({
   frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const),
   recurrenceMode: z.enum(['schedule', 'on_completion'] as const),
   startDate: z.date({ required_error: 'Data de início é obrigatória' }),
+  startTime: z.string().optional(),
   endDate: z.date().optional(),
+  endTime: z.string().optional(),
   repeatForever: z.boolean(),
 });
 
@@ -94,10 +96,20 @@ export const RoutineForm = () => {
       frequency: 'semanal',
       recurrenceMode: 'schedule',
       startDate: new Date(),
+      startTime: '',
       endDate: undefined,
+      endTime: '',
       repeatForever: true,
     },
   });
+
+  // Helper to combine date and time
+  const combineDateAndTime = (date: Date | undefined, time: string | undefined): Date | undefined => {
+    if (!date) return undefined;
+    if (!time) return date;
+    const [hours, minutes] = time.split(':').map(Number);
+    return setMinutes(setHours(date, hours || 0), minutes || 0);
+  };
 
   const repeatForever = form.watch('repeatForever');
 
@@ -271,7 +283,7 @@ export const RoutineForm = () => {
               )}
             />
 
-            {/* Recurrence Period */}
+            {/* Data e Hora de Início */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -315,6 +327,30 @@ export const RoutineForm = () => {
 
               <FormField
                 control={form.control}
+                name="startTime"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Hora de início</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          type="time"
+                          {...field}
+                          className="pl-9"
+                        />
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Data e Hora de Término */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="endDate"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
@@ -351,6 +387,28 @@ export const RoutineForm = () => {
                         />
                       </PopoverContent>
                     </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="endTime"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Hora de término</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          type="time"
+                          {...field}
+                          disabled={repeatForever}
+                          className={cn("pl-9", repeatForever && "opacity-50")}
+                        />
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
