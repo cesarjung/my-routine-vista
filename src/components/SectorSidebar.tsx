@@ -226,11 +226,11 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         {!collapsed ? (
           <div className="flex items-center gap-2">
-            <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-10 w-10 object-contain" />
             <span className="font-semibold text-sidebar-foreground">Gestão CCM</span>
           </div>
         ) : (
-          <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
+          <img src={sirtecLogo} alt="Sirtec" className="h-10 w-10 object-contain" />
         )}
         <button
           onClick={() => onCollapseChange(!collapsed)}
