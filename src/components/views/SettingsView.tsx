@@ -17,6 +17,7 @@ import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
 import { SectorUsersManagement } from '@/components/SectorUsersManagement';
 import { AdminUsersManagement } from '@/components/AdminUsersManagement';
+import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -34,7 +35,7 @@ export const SettingsView = () => {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserUnit, setNewUserUnit] = useState('');
+  const [newUserUnits, setNewUserUnits] = useState<string[]>([]);
   const [newUserRole, setNewUserRole] = useState<AppRole>('usuario');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -283,7 +284,7 @@ export const SettingsView = () => {
           email: newUserEmail,
           password: newUserPassword,
           fullName: newUserName,
-          unitId: newUserUnit || null,
+          unitIds: newUserUnits.length > 0 ? newUserUnits : null,
           role: newUserRole,
         },
       });
@@ -305,7 +306,7 @@ export const SettingsView = () => {
       setNewUserEmail('');
       setNewUserName('');
       setNewUserPassword('');
-      setNewUserUnit('');
+      setNewUserUnits([]);
       setNewUserRole('usuario');
       refetchProfiles();
     } catch (error: any) {
@@ -615,20 +616,14 @@ export const SettingsView = () => {
                     onChange={(e) => setNewUserPassword(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unit">Unidade</Label>
-                  <Select value={newUserUnit} onValueChange={setNewUserUnit}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma unidade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units?.map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id}>
-                          {unit.name} ({unit.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Unidades</Label>
+                  <MultiAssigneeSelect
+                    profiles={(units || []).map(u => ({ id: u.id, full_name: `${u.name} (${u.code})`, email: '', avatar_url: null, unit_id: null, created_at: '', updated_at: '' }))}
+                    selectedIds={newUserUnits}
+                    onChange={setNewUserUnits}
+                    placeholder="Selecione as unidades"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="role">Função</Label>
