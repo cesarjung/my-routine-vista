@@ -26,6 +26,8 @@ interface CreateRoutineWithUnitsData extends CreateRoutineData {
   parentAssignees?: string[]; // Multiple assignees for parent routine
   sectorId?: string; // Setor automático
   skipWeekendsHolidays?: boolean; // Ignorar feriados e finais de semana
+  startDate?: string | null; // Data de início definida pelo usuário
+  dueDate?: string | null; // Data de vencimento definida pelo usuário
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -119,53 +121,70 @@ export const useCreateRoutineWithUnits = () => {
 
       if (routineError) throw routineError;
 
-      // Calculate period dates based on frequency
-      let now = new Date();
-      
-      // Se ignorar feriados/fins de semana, ajustar a data inicial
-      if (data.skipWeekendsHolidays && isWeekendOrHoliday(now)) {
-        now = getNextBusinessDay(now);
-      }
-      
+      // Calculate period dates - use user-provided dates if available, otherwise calculate based on frequency
       let periodStart: Date;
       let periodEnd: Date;
 
-      switch (data.frequency) {
-        case 'diaria':
-          periodStart = new Date(now);
-          periodStart.setHours(0, 0, 0, 0);
-          periodEnd = new Date(periodStart);
-          periodEnd.setHours(23, 59, 59, 999);
-          break;
-        case 'semanal':
-          const dayOfWeek = now.getDay();
-          const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-          periodStart = new Date(now);
-          periodStart.setDate(now.getDate() + diffToMonday);
-          periodStart.setHours(0, 0, 0, 0);
-          periodEnd = new Date(periodStart);
-          periodEnd.setDate(periodStart.getDate() + 6);
-          periodEnd.setHours(23, 59, 59, 999);
-          break;
-        case 'quinzenal':
-          const dayOfWeek2 = now.getDay();
-          const diffToMonday2 = dayOfWeek2 === 0 ? -6 : 1 - dayOfWeek2;
-          periodStart = new Date(now);
-          periodStart.setDate(now.getDate() + diffToMonday2);
-          periodStart.setHours(0, 0, 0, 0);
-          periodEnd = new Date(periodStart);
-          periodEnd.setDate(periodStart.getDate() + 13);
-          periodEnd.setHours(23, 59, 59, 999);
-          break;
-        case 'mensal':
-          periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-          break;
-        default:
-          periodStart = new Date(now);
-          periodStart.setHours(0, 0, 0, 0);
-          periodEnd = new Date(periodStart);
-          periodEnd.setHours(23, 59, 59, 999);
+      if (data.startDate && data.dueDate) {
+        // User provided specific dates
+        periodStart = new Date(data.startDate);
+        periodEnd = new Date(data.dueDate);
+        
+        // Adjust for weekends/holidays if enabled
+        if (data.skipWeekendsHolidays) {
+          if (isWeekendOrHoliday(periodStart)) {
+            periodStart = getNextBusinessDay(periodStart);
+          }
+          if (isWeekendOrHoliday(periodEnd)) {
+            periodEnd = getNextBusinessDay(periodEnd);
+          }
+        }
+      } else {
+        // Calculate based on frequency (fallback to current date)
+        let now = new Date();
+        
+        // Se ignorar feriados/fins de semana, ajustar a data inicial
+        if (data.skipWeekendsHolidays && isWeekendOrHoliday(now)) {
+          now = getNextBusinessDay(now);
+        }
+
+        switch (data.frequency) {
+          case 'diaria':
+            periodStart = new Date(now);
+            periodStart.setHours(0, 0, 0, 0);
+            periodEnd = new Date(periodStart);
+            periodEnd.setHours(23, 59, 59, 999);
+            break;
+          case 'semanal':
+            const dayOfWeek = now.getDay();
+            const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            periodStart = new Date(now);
+            periodStart.setDate(now.getDate() + diffToMonday);
+            periodStart.setHours(0, 0, 0, 0);
+            periodEnd = new Date(periodStart);
+            periodEnd.setDate(periodStart.getDate() + 6);
+            periodEnd.setHours(23, 59, 59, 999);
+            break;
+          case 'quinzenal':
+            const dayOfWeek2 = now.getDay();
+            const diffToMonday2 = dayOfWeek2 === 0 ? -6 : 1 - dayOfWeek2;
+            periodStart = new Date(now);
+            periodStart.setDate(now.getDate() + diffToMonday2);
+            periodStart.setHours(0, 0, 0, 0);
+            periodEnd = new Date(periodStart);
+            periodEnd.setDate(periodStart.getDate() + 13);
+            periodEnd.setHours(23, 59, 59, 999);
+            break;
+          case 'mensal':
+            periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+            break;
+          default:
+            periodStart = new Date(now);
+            periodStart.setHours(0, 0, 0, 0);
+            periodEnd = new Date(periodStart);
+            periodEnd.setHours(23, 59, 59, 999);
+        }
       }
 
       // Create the first period
