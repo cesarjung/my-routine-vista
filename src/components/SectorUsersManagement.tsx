@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { useSectors } from '@/hooks/useSectors';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useSectors, useSectorMutations } from '@/hooks/useSectors';
 import { useSectorUsers, useSectorUserMutations } from '@/hooks/useSectorUsers';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useIsAdmin } from '@/hooks/useUserRole';
@@ -14,12 +15,22 @@ export const SectorUsersManagement = () => {
   const { data: sectors } = useSectors();
   const { data: profiles } = useProfiles();
   const { addUserToSector, removeUserFromSector } = useSectorUserMutations();
+  const { deleteSector } = useSectorMutations();
 
   const [selectedSectorId, setSelectedSectorId] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const { data: sectorUsers, isLoading: loadingUsers } = useSectorUsers(selectedSectorId);
+
+  const selectedSector = sectors?.find(s => s.id === selectedSectorId);
+
+  const handleDeleteSector = async () => {
+    if (!selectedSectorId) return;
+    
+    await deleteSector.mutateAsync(selectedSectorId);
+    setSelectedSectorId('');
+  };
 
   // Get users not already in the selected sector
   const availableUsers = profiles?.filter(
@@ -88,65 +99,94 @@ export const SectorUsersManagement = () => {
 
         {selectedSectorId && (
           <>
-            {/* Header with Add Button */}
+            {/* Header with Add Button and Delete Sector */}
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium text-muted-foreground">
                 Usuários com acesso
               </h4>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="gap-2">
-                    <UserPlus className="w-4 h-4" />
-                    Adicionar Usuário
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Adicionar Usuário ao Setor</DialogTitle>
-                    <DialogDescription>
-                      Selecione um usuário para dar acesso a este setor
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <div className="py-4">
-                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um usuário" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableUsers.length === 0 ? (
-                          <div className="p-2 text-sm text-muted-foreground text-center">
-                            Todos os usuários já têm acesso
-                          </div>
-                        ) : (
-                          availableUsers.map(profile => (
-                            <SelectItem key={profile.id} value={profile.id}>
-                              <div className="flex flex-col">
-                                <span>{profile.full_name || profile.email}</span>
-                                {profile.full_name && (
-                                  <span className="text-xs text-muted-foreground">{profile.email}</span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="flex items-center gap-2">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="destructive" className="gap-2">
+                      <Trash2 className="w-4 h-4" />
+                      Excluir Setor
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir setor?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja excluir o setor "{selectedSector?.name}"? 
+                        Essa ação não pode ser desfeita e removerá todos os acessos de usuários a este setor.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteSector}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {deleteSector.isPending ? 'Excluindo...' : 'Excluir'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="gap-2">
+                      <UserPlus className="w-4 h-4" />
+                      Adicionar Usuário
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Adicionar Usuário ao Setor</DialogTitle>
+                      <DialogDescription>
+                        Selecione um usuário para dar acesso a este setor
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="py-4">
+                      <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um usuário" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableUsers.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground text-center">
+                              Todos os usuários já têm acesso
+                            </div>
+                          ) : (
+                            availableUsers.map(profile => (
+                              <SelectItem key={profile.id} value={profile.id}>
+                                <div className="flex flex-col">
+                                  <span>{profile.full_name || profile.email}</span>
+                                  {profile.full_name && (
+                                    <span className="text-xs text-muted-foreground">{profile.email}</span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button 
-                      onClick={handleAddUser} 
-                      disabled={!selectedUserId || addUserToSector.isPending}
-                    >
-                      {addUserToSector.isPending ? 'Adicionando...' : 'Adicionar'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button 
+                        onClick={handleAddUser} 
+                        disabled={!selectedUserId || addUserToSector.isPending}
+                      >
+                        {addUserToSector.isPending ? 'Adicionando...' : 'Adicionar'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
 
             {/* Users List */}
