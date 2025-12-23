@@ -233,13 +233,10 @@ export const useCreateRoutineWithUnits = () => {
 
         if (tasksError) throw tasksError;
       } else {
-        // No units selected - need to use user's own unit
+        // No units selected
+        // Admins/Gestores podem criar sem unidade
         // Regular users MUST have a unit_id in their profile
-        // Admins/Gestores should have selected units in the form (validated there)
-        if (!userUnitId) {
-          if (isAdminOrGestor) {
-            throw new Error('Por favor, selecione pelo menos uma unidade para a rotina.');
-          }
+        if (!isAdminOrGestor && !userUnitId) {
           throw new Error('Você precisa estar associado a uma unidade para criar rotinas.');
         }
 
@@ -248,7 +245,7 @@ export const useCreateRoutineWithUnits = () => {
           .insert({
             title: `[Rotina] ${routine.title}`,
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
-            unit_id: userUnitId,
+            unit_id: userUnitId || null, // null for admins/gestors without unit
             routine_id: routine.id,
             assigned_to: data.parentAssignedTo || user.id,
             created_by: user.id,
@@ -261,15 +258,17 @@ export const useCreateRoutineWithUnits = () => {
 
         if (taskError) throw taskError;
 
-        // Create a checkin for the user's unit
-        const { error: checkinError } = await supabase
-          .from('routine_checkins')
-          .insert({
-            routine_period_id: period.id,
-            unit_id: userUnitId,
-          });
+        // Create a checkin for the user's unit only if they have one
+        if (userUnitId) {
+          const { error: checkinError } = await supabase
+            .from('routine_checkins')
+            .insert({
+              routine_period_id: period.id,
+              unit_id: userUnitId,
+            });
 
-        if (checkinError) throw checkinError;
+          if (checkinError) throw checkinError;
+        }
       }
 
       return routine;
