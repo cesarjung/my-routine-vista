@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTasks } from '@/hooks/useTasks';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, differenceInDays, startOfDay, addDays, subDays, max, min } from 'date-fns';
@@ -14,6 +15,7 @@ interface GanttViewProps {
 
 export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   const { data: tasks, isLoading } = useTasks();
+  const { user } = useAuth();
   const [viewStart, setViewStart] = useState(() => subDays(new Date(), 7));
 
   const daysToShow = 30;
@@ -26,9 +28,10 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   const tasksWithDates = useMemo(() => {
     return tasks?.filter(t => {
       const matchesSector = !sectorId || (t as any).sector_id === sectorId;
-      return t.due_date && matchesSector;
+      const matchesUser = !isMyTasks || t.assigned_to === user?.id;
+      return t.due_date && matchesSector && matchesUser;
     }) || [];
-  }, [tasks, sectorId]);
+  }, [tasks, sectorId, isMyTasks, user?.id]);
 
   const getTaskPosition = (task: typeof tasksWithDates[0]) => {
     if (!task.due_date) return null;
