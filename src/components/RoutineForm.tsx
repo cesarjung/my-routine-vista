@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import {
   Form,
   FormControl,
@@ -34,14 +35,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Loader2, Users, Check, CalendarIcon } from 'lucide-react';
+import { Plus, Loader2, Users, Check, CalendarIcon, X } from 'lucide-react';
 import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
 import { useUnits } from '@/hooks/useUnits';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
+import { useProfiles } from '@/hooks/useProfiles';
 import { cn } from '@/lib/utils';
 import type { Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
+
+interface SubtaskData {
+  title: string;
+  assigned_to: string | null;
+}
 
 const frequencyOptions: { value: TaskFrequency; label: string }[] = [
   { value: 'diaria', label: 'Diária' },
@@ -65,9 +72,14 @@ export const RoutineForm = () => {
   const [open, setOpen] = useState(false);
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
+  const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('');
+  
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: unitManagers } = useUnitManagers();
+  const { data: allProfiles } = useProfiles();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -90,6 +102,14 @@ export const RoutineForm = () => {
     return unitManagers?.filter((m) => m.unit_id === unitId) || [];
   }, [unitManagers]);
 
+  // Get all profiles from selected units for subtask assignment
+  const availableProfiles = useMemo(() => {
+    if (!allProfiles || selectedUnitIds.length === 0) return [];
+    return allProfiles.filter(p => 
+      p.unit_id && selectedUnitIds.includes(p.unit_id)
+    );
+  }, [allProfiles, selectedUnitIds]);
+
   const toggleUnit = useCallback((unitId: string) => {
     setUnitError(null);
     setSelectedUnitIds(prev => {
@@ -111,6 +131,27 @@ export const RoutineForm = () => {
     setSelectedUnitIds([]);
   }, []);
 
+  const addSubtask = () => {
+    if (newSubtaskTitle.trim()) {
+      setSubtasks([...subtasks, { 
+        title: newSubtaskTitle.trim(), 
+        assigned_to: newSubtaskAssignee && newSubtaskAssignee !== 'none' ? newSubtaskAssignee : null 
+      }]);
+      setNewSubtaskTitle('');
+      setNewSubtaskAssignee('');
+    }
+  };
+
+  const removeSubtask = (index: number) => {
+    setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
+
+  const getProfileName = (profileId: string | null | undefined) => {
+    if (!profileId) return null;
+    const profile = allProfiles?.find(p => p.id === profileId);
+    return profile?.full_name || profile?.email || null;
+  };
+
   const onSubmit = async (data: FormValues) => {
     if (selectedUnitIds.length === 0) {
       setUnitError('Selecione pelo menos uma unidade');
@@ -122,9 +163,11 @@ export const RoutineForm = () => {
       description: data.description,
       frequency: data.frequency,
       unitIds: selectedUnitIds,
+      subtasks: subtasks.length > 0 ? subtasks : undefined,
     });
     form.reset();
     setSelectedUnitIds([]);
+    setSubtasks([]);
     setUnitError(null);
     setOpen(false);
   };
@@ -137,7 +180,7 @@ export const RoutineForm = () => {
           Nova Rotina
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Criar Nova Rotina</DialogTitle>
           <DialogDescription>
@@ -146,7 +189,7 @@ export const RoutineForm = () => {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-hidden flex flex-col">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-y-auto pr-2">
             <FormField
               control={form.control}
               name="title"
@@ -318,7 +361,7 @@ export const RoutineForm = () => {
             />
 
             {/* Units Selection */}
-            <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            <div className="flex flex-col">
               <div className="flex items-center justify-between mb-2">
                 <FormLabel className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
@@ -347,7 +390,7 @@ export const RoutineForm = () => {
               </div>
               
               {/* Native scroll container */}
-              <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-40">
+              <div className="border border-border rounded-md overflow-y-auto max-h-32">
                 <div className="p-3 space-y-1">
                   {loadingUnits ? (
                     <div className="flex items-center justify-center py-4">
@@ -362,15 +405,15 @@ export const RoutineForm = () => {
                         <div
                           key={unit.id}
                           onClick={() => toggleUnit(unit.id)}
-                          className={`
-                            flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors
-                            ${isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'}
-                          `}
+                          className={cn(
+                            "flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors",
+                            isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'
+                          )}
                         >
-                          <div className={`
-                            h-4 w-4 rounded border flex items-center justify-center flex-shrink-0
-                            ${isSelected ? 'bg-primary border-primary' : 'border-input'}
-                          `}>
+                          <div className={cn(
+                            "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
+                            isSelected ? 'bg-primary border-primary' : 'border-input'
+                          )}>
                             {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -394,6 +437,76 @@ export const RoutineForm = () => {
               </div>
               {unitError && (
                 <p className="text-sm font-medium text-destructive mt-1">{unitError}</p>
+              )}
+            </div>
+
+            {/* Subtasks / Checklist */}
+            <div className="space-y-3">
+              <FormLabel>Subtarefas com Responsáveis</FormLabel>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Título da subtarefa..."
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addSubtask();
+                    }
+                  }}
+                  className="flex-1"
+                />
+                <Select
+                  value={newSubtaskAssignee}
+                  onValueChange={setNewSubtaskAssignee}
+                  disabled={selectedUnitIds.length === 0}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Responsável" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {availableProfiles.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.full_name || profile.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="icon" onClick={addSubtask}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedUnitIds.length === 0 
+                  ? "Selecione unidades para ver os responsáveis disponíveis"
+                  : "Os responsáveis só podem marcar suas próprias subtarefas"
+                }
+              </p>
+
+              {subtasks.length > 0 && (
+                <div className="space-y-2 border border-border rounded-lg p-3 max-h-32 overflow-y-auto">
+                  {subtasks.map((subtask, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded"
+                    >
+                      <span className="flex-1 text-sm">{subtask.title}</span>
+                      {subtask.assigned_to && (
+                        <Badge variant="secondary" className="text-xs">
+                          {getProfileName(subtask.assigned_to)}
+                        </Badge>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeSubtask(index)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 

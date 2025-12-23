@@ -5,6 +5,11 @@ import type { Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
+interface SubtaskData {
+  title: string;
+  assigned_to: string | null;
+}
+
 interface CreateRoutineData {
   title: string;
   description?: string;
@@ -13,6 +18,7 @@ interface CreateRoutineData {
 
 interface CreateRoutineWithUnitsData extends CreateRoutineData {
   unitIds: string[];
+  subtasks?: SubtaskData[];
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -181,11 +187,31 @@ export const useCreateRoutineWithUnits = () => {
           priority: 2,
         }));
 
-        const { error: tasksError } = await supabase
+        const { data: createdTasks, error: tasksError } = await supabase
           .from('tasks')
-          .insert(tasks);
+          .insert(tasks)
+          .select();
 
         if (tasksError) throw tasksError;
+
+        // Create subtasks for each created task if subtasks were provided
+        if (data.subtasks && data.subtasks.length > 0 && createdTasks) {
+          const allSubtasks = createdTasks.flatMap((task, index) => 
+            data.subtasks!.map((subtask, subtaskIndex) => ({
+              task_id: task.id,
+              title: subtask.title,
+              assigned_to: subtask.assigned_to,
+              order_index: subtaskIndex,
+              is_completed: false,
+            }))
+          );
+
+          const { error: subtasksError } = await supabase
+            .from('subtasks')
+            .insert(allSubtasks);
+
+          if (subtasksError) throw subtasksError;
+        }
       }
 
       return routine;
@@ -195,9 +221,10 @@ export const useCreateRoutineWithUnits = () => {
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['user-subtasks'] });
       toast({
         title: 'Rotina criada',
-        description: 'A rotina foi criada com tarefas para cada unidade.',
+        description: 'A rotina foi criada com tarefas e subtarefas para cada unidade.',
       });
     },
     onError: (error: Error) => {
