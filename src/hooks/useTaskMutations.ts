@@ -203,13 +203,10 @@ export const useCreateTaskWithUnits = () => {
 
         return { parentTask, childTasks: createdChildTasks };
       } else {
-        // No units selected - need to use user's own unit
+        // No units selected
+        // Admins/Gestores podem criar sem unidade
         // Regular users MUST have a unit_id in their profile
-        // Admins/Gestores should have selected units in the form (validated there)
-        if (!userUnitId) {
-          if (isAdminOrGestor) {
-            throw new Error('Por favor, selecione pelo menos uma unidade para a tarefa.');
-          }
+        if (!isAdminOrGestor && !userUnitId) {
           throw new Error('Você precisa estar associado a uma unidade para criar tarefas.');
         }
 
@@ -218,7 +215,7 @@ export const useCreateTaskWithUnits = () => {
           .insert({
             title: data.title,
             description: data.description || null,
-            unit_id: userUnitId,
+            unit_id: userUnitId || null, // null for admins/gestors without unit
             assigned_to: data.parentAssignedTo || user.id,
             status: 'pendente',
             priority: data.priority,
