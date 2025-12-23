@@ -65,14 +65,34 @@ serve(async (req) => {
         });
       }
 
+      // Get user ID from auth header to include in state
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const scopes = [
         "https://www.googleapis.com/auth/calendar",
         "https://www.googleapis.com/auth/calendar.events"
       ].join(" ");
 
-      // We'll use state to store the redirect URI for the callback
+      // Include user_id in state so we can save tokens on callback
       const state = encodeURIComponent(JSON.stringify({ 
-        redirect_uri: redirectUri 
+        redirect_uri: redirectUri,
+        user_id: user.id
       }));
 
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -84,7 +104,7 @@ serve(async (req) => {
         `&prompt=consent` +
         `&state=${state}`;
 
-      console.log("Generated auth URL");
+      console.log("Generated auth URL for user:", user.id);
 
       return new Response(JSON.stringify({ authUrl }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -116,13 +136,19 @@ serve(async (req) => {
       }
 
       const redirectUri = state.redirect_uri;
+      const userId = state.user_id;
       
       if (!isValidUri(redirectUri)) {
         console.error("Invalid redirect URI in state");
         return new Response("Parâmetros inválidos", { status: 400 });
       }
 
-      console.log("Exchanging code for tokens...");
+      if (!userId) {
+        console.error("No user_id in state");
+        return new Response("Parâmetros inválidos", { status: 400 });
+      }
+
+      console.log("Exchanging code for tokens for user:", userId);
 
       // Exchange code for tokens
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -144,13 +170,34 @@ serve(async (req) => {
         return new Response("Erro ao conectar com Google Calendar. Tente novamente.", { status: 400 });
       }
 
-      console.log("Tokens obtained successfully");
+      console.log("Tokens obtained successfully, saving to database...");
 
-      // Create temporary token for the frontend to exchange
-      const tempToken = crypto.randomUUID();
+      // Save tokens directly in the callback
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       
-      // Store tokens temporarily in a way the frontend can retrieve them
-      const finalRedirect = `${redirectUri}?google_auth=success&temp_token=${tempToken}&access_token=${encodeURIComponent(tokenData.access_token)}&refresh_token=${encodeURIComponent(tokenData.refresh_token || "")}&expires_in=${tokenData.expires_in}`;
+      const expiresAt = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000);
+
+      const { error: upsertError } = await supabase
+        .from("google_calendar_tokens")
+        .upsert({
+          user_id: userId,
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token || null,
+          expires_at: expiresAt.toISOString(),
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "user_id"
+        });
+
+      if (upsertError) {
+        console.error("Error saving tokens:", upsertError.message);
+        return new Response(`Erro ao salvar conexão: ${upsertError.message}`, { status: 500 });
+      }
+
+      console.log("Tokens saved successfully for user:", userId);
+
+      // Redirect back to app with success flag only (no tokens in URL)
+      const finalRedirect = `${redirectUri}?google_auth=success`;
 
       return new Response(null, {
         status: 302,
