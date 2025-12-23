@@ -12,8 +12,9 @@ import { useProfiles, Profile } from '@/hooks/useProfiles';
 import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar } from 'lucide-react';
 import { UnitsManagement } from '@/components/UnitsManagement';
+import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -242,6 +243,10 @@ export const SettingsView = () => {
             <Building2 className="w-4 h-4" />
             Unidades
           </TabsTrigger>
+          <TabsTrigger value="integrations" className="flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            Integrações
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
@@ -372,6 +377,12 @@ export const SettingsView = () => {
 
         <TabsContent value="units">
           <UnitsManagement />
+        </TabsContent>
+
+        <TabsContent value="integrations">
+          <div className="space-y-4">
+            <GoogleCalendarConnect />
+          </div>
         </TabsContent>
       </Tabs>
 
