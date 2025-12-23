@@ -107,6 +107,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
     const isExpanded = expandedSectors.has(sector.id);
     const tasksKey = `${sector.id}-tasks`;
     const routinesKey = `${sector.id}-routines`;
+    const unitsKey = `${sector.id}-units`;
     const isTasksExpanded = expandedFolders.has(tasksKey);
     const isRoutinesExpanded = expandedFolders.has(routinesKey);
 
@@ -195,6 +196,20 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 ))}
               </div>
             )}
+
+            {/* Unidades */}
+            <button
+              onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'units' })}
+              className={cn(
+                'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors',
+                isActive({ type: 'sector', sectorId: sector.id, folder: 'units' })
+                  ? 'bg-sidebar-accent text-sidebar-primary'
+                  : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+              )}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Unidades</span>
+            </button>
           </div>
         )}
       </div>
@@ -314,20 +329,6 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
 
       {/* Footer */}
       <div className="p-3 border-t border-sidebar-border space-y-1">
-        {/* Unidades */}
-        <button
-          onClick={() => onNavigate({ type: 'units' })}
-          className={cn(
-            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-            context.type === 'units'
-              ? 'bg-sidebar-accent text-sidebar-primary shadow-glow'
-              : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-          )}
-        >
-          <Building2 className={cn('w-5 h-5 flex-shrink-0', context.type === 'units' && 'text-primary')} />
-          {!collapsed && <span className="font-medium">Unidades</span>}
-        </button>
-
         {!collapsed && user && (
           <div className="px-3 py-2 text-sm text-muted-foreground truncate">
             {user.email}
