@@ -17,7 +17,8 @@ import {
   List,
   Columns3,
   CalendarDays,
-  GanttChart
+  GanttChart,
+  Pencil
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,6 +27,12 @@ import { ViewMode } from '@/types/navigation';
 import { KanbanView } from './KanbanView';
 import { CalendarView } from './CalendarView';
 import { GanttView } from './GanttView';
+import { TaskEditDialog } from '@/components/TaskEditDialog';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Task = Tables<'tasks'> & {
+  unit?: { name: string; code: string } | null;
+};
 
 const statusLabels: Record<string, string> = {
   pendente: 'Pendente',
@@ -66,6 +73,8 @@ export const MyTasksView = () => {
   
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set(['all']));
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const isLoading = tasksLoading || routinesLoading;
 
@@ -183,7 +192,14 @@ export const MyTasksView = () => {
               {isExpanded && (
                 <div className="border-t border-border divide-y divide-border">
                   {sectorTasks.map((task) => (
-                    <div key={task.id} className="px-4 py-3 flex items-center gap-3 hover:bg-secondary/20 transition-colors">
+                    <div 
+                      key={task.id} 
+                      className="px-4 py-3 flex items-center gap-3 hover:bg-secondary/20 transition-colors cursor-pointer group"
+                      onClick={() => {
+                        setSelectedTask(task as Task);
+                        setIsEditDialogOpen(true);
+                      }}
+                    >
                       <div className={cn(
                         "w-2 h-2 rounded-full",
                         task.status === 'pendente' && "bg-warning",
@@ -208,6 +224,7 @@ export const MyTasksView = () => {
                       <Badge variant="outline" className={cn("text-xs", statusColors[task.status])}>
                         {statusLabels[task.status]}
                       </Badge>
+                      <Pencil className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   ))}
                 </div>
@@ -326,6 +343,13 @@ export const MyTasksView = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Task Edit Dialog */}
+      <TaskEditDialog
+        task={selectedTask}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+      />
     </div>
   );
 };

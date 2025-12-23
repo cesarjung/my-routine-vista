@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
 import { CustomPanel } from '@/components/dashboard/CustomPanel';
+import { DraggablePanelList } from '@/components/dashboard/DraggablePanelList';
 import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
@@ -511,13 +512,9 @@ export const DashboardView = () => {
         <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-destructive/30" />&lt;40%</span>
       </div>
 
-      {/* Custom Panels */}
+      {/* Custom Panels with Drag and Drop */}
       {customPanels && customPanels.length > 0 && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-          {customPanels.map(panel => (
-            <CustomPanel key={panel.id} panel={panel} />
-          ))}
-        </div>
+        <DraggablePanelList panels={customPanels} />
       )}
 
       {isLoading ? (

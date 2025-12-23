@@ -138,3 +138,32 @@ export const useDeleteDashboardPanel = () => {
     }
   });
 };
+
+export const useReorderDashboardPanels = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (panels: { id: string; order_index: number }[]) => {
+      // Update all panels in parallel
+      const updates = panels.map(panel => 
+        supabase
+          .from('dashboard_panels')
+          .update({ order_index: panel.order_index })
+          .eq('id', panel.id)
+      );
+
+      const results = await Promise.all(updates);
+      const errors = results.filter(r => r.error);
+      
+      if (errors.length > 0) {
+        throw new Error('Erro ao reordenar painéis');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-panels'] });
+    },
+    onError: (error) => {
+      toast.error('Erro ao reordenar painéis: ' + error.message);
+    }
+  });
+};
