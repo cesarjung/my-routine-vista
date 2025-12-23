@@ -55,7 +55,7 @@ serve(async (req) => {
     }
 
     // Get request body
-    const { email, password, fullName, unitId, role } = await req.json();
+    const { email, password, fullName, unitIds, role } = await req.json();
 
     if (!email || !password || !fullName) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -91,27 +91,34 @@ serve(async (req) => {
     }
 
     if (newUser.user) {
-      // Update profile with unit
-      if (unitId) {
-        await adminClient
-          .from("profiles")
-          .update({ unit_id: unitId, full_name: fullName })
-          .eq("id", newUser.user.id);
-      }
+      const userId = newUser.user.id;
+      const unitIdsArray: string[] = Array.isArray(unitIds) ? unitIds : [];
+      const primaryUnitId = unitIdsArray.length > 0 ? unitIdsArray[0] : null;
+
+      // Update profile with primary unit and name
+      await adminClient
+        .from("profiles")
+        .update({ unit_id: primaryUnitId, full_name: fullName })
+        .eq("id", userId);
 
       // Update role if not default
       if (role && role !== "usuario") {
         await adminClient
           .from("user_roles")
           .update({ role })
-          .eq("user_id", newUser.user.id);
+          .eq("user_id", userId);
       }
 
-      // If gestor, add to unit_managers
-      if (role === "gestor" && unitId) {
+      // Add to unit_managers for all selected units (if gestor or has multiple units)
+      if (unitIdsArray.length > 0) {
+        const unitManagersToInsert = unitIdsArray.map((unitId: string) => ({
+          user_id: userId,
+          unit_id: unitId,
+        }));
+        
         await adminClient
           .from("unit_managers")
-          .insert({ user_id: newUser.user.id, unit_id: unitId });
+          .insert(unitManagersToInsert);
       }
     }
 
