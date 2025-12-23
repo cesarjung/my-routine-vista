@@ -289,20 +289,6 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
           </div>
         )}
 
-        {/* Todos os setores */}
-        <button
-          onClick={() => onNavigate({ type: 'all-sectors' })}
-          className={cn(
-            'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-            context.type === 'all-sectors'
-              ? 'bg-sidebar-accent text-sidebar-primary'
-              : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-          )}
-        >
-          <Folder className="w-4 h-4" />
-          {!collapsed && <span className="text-sm">Todos os setores</span>}
-        </button>
-
         {/* Minhas Tarefas */}
         <button
           onClick={() => onNavigate({ type: 'my-tasks' })}
@@ -315,6 +301,20 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         >
           <Users className="w-4 h-4" />
           {!collapsed && <span className="text-sm">Minhas Tarefas</span>}
+        </button>
+
+        {/* Todos os setores */}
+        <button
+          onClick={() => onNavigate({ type: 'all-sectors' })}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+            context.type === 'all-sectors'
+              ? 'bg-sidebar-accent text-sidebar-primary'
+              : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+          )}
+        >
+          <Folder className="w-4 h-4" />
+          {!collapsed && <span className="text-sm">Todos os setores</span>}
         </button>
 
         {/* Sectors list */}
