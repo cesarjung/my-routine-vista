@@ -3,11 +3,10 @@ import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar, ExternalLink } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
+import { Loader2, ExternalLink, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface GoogleCalendarEvent {
   id: string;
@@ -29,14 +28,15 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
   const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-  // Pad days to start on Sunday
-  const startDay = monthStart.getDay();
-  const paddedDays = Array(startDay).fill(null).concat(daysInMonth);
+  
+  // Get the full calendar grid (including days from prev/next month to fill weeks)
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   // Fetch Google Calendar events when in My Tasks view and connected
   useEffect(() => {
@@ -45,8 +45,8 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         setIsLoadingGoogleEvents(true);
         try {
           const events = await fetchEvents(
-            monthStart.toISOString(),
-            monthEnd.toISOString()
+            calendarStart.toISOString(),
+            calendarEnd.toISOString()
           );
           setGoogleEvents(events);
         } catch (error) {
@@ -59,7 +59,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     } else {
       setGoogleEvents([]);
     }
-  }, [isMyTasks, isConnected, currentMonth, fetchEvents, monthStart, monthEnd]);
+  }, [isMyTasks, isConnected, currentMonth]);
 
   const getTasksForDay = (date: Date) => {
     return tasks?.filter(task => {
@@ -77,11 +77,32 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     });
   };
 
-  const statusColors: Record<string, string> = {
-    pendente: 'bg-warning/80 text-warning-foreground',
-    em_andamento: 'bg-primary/80 text-primary-foreground',
-    concluida: 'bg-success/80 text-success-foreground',
-    atrasada: 'bg-destructive/80 text-destructive-foreground',
+  const getEventTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return format(date, 'HH:mm');
+  };
+
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    pendente: { bg: 'bg-amber-500', text: 'text-white' },
+    em_andamento: { bg: 'bg-orange-600', text: 'text-white' },
+    concluida: { bg: 'bg-emerald-500', text: 'text-white' },
+    atrasada: { bg: 'bg-red-500', text: 'text-white' },
+  };
+
+  const toggleDayExpanded = (dayKey: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(dayKey)) {
+        next.delete(dayKey);
+      } else {
+        next.add(dayKey);
+      }
+      return next;
+    });
+  };
+
+  const isCurrentMonth = (date: Date) => {
+    return date.getMonth() === currentMonth.getMonth();
   };
 
   if (isLoading) {
@@ -109,7 +130,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
         >
           <ChevronLeft className="w-4 h-4" />
@@ -119,7 +140,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         </h2>
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
         >
           <ChevronRight className="w-4 h-4" />
@@ -127,13 +148,13 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       </div>
 
       {/* Calendar Grid */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
         {/* Week Header */}
-        <div className="grid grid-cols-7 bg-secondary/50">
+        <div className="grid grid-cols-7 bg-muted/30">
           {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
             <div
               key={day}
-              className="p-3 text-center text-sm font-medium text-muted-foreground border-b border-border"
+              className="py-3 text-center text-sm font-medium text-muted-foreground border-b border-border"
             >
               {day}
             </div>
@@ -142,73 +163,99 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
 
         {/* Days Grid */}
         <div className="grid grid-cols-7">
-          {paddedDays.map((day, index) => {
-            if (!day) {
-              return (
-                <div
-                  key={`empty-${index}`}
-                  className="min-h-[100px] p-2 border-b border-r border-border bg-secondary/20"
-                />
-              );
-            }
-
+          {calendarDays.map((day, index) => {
+            const dayKey = day.toISOString();
             const dayTasks = getTasksForDay(day);
             const dayGoogleEvents = isMyTasks ? getGoogleEventsForDay(day) : [];
-            const totalItems = dayTasks.length + dayGoogleEvents.length;
+            const allItems = [...dayTasks.map(t => ({ type: 'task' as const, data: t })), ...dayGoogleEvents.map(e => ({ type: 'google' as const, data: e }))];
+            const totalItems = allItems.length;
             const isCurrentDay = isToday(day);
+            const isExpanded = expandedDays.has(dayKey);
+            const maxVisible = 2;
+            const hiddenCount = Math.max(0, totalItems - maxVisible);
+            const isInCurrentMonth = isCurrentMonth(day);
 
             return (
               <div
-                key={day.toISOString()}
+                key={dayKey}
                 className={cn(
-                  'min-h-[100px] p-2 border-b border-r border-border transition-colors hover:bg-secondary/30',
+                  'min-h-[120px] border-b border-r border-border transition-colors relative',
+                  !isInCurrentMonth && 'bg-muted/20',
                   isCurrentDay && 'bg-primary/5'
                 )}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span
+                {/* Day Header */}
+                <div className="flex items-start justify-between p-2">
+                  <div
                     className={cn(
                       'text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full',
-                      isCurrentDay && 'bg-primary text-primary-foreground'
+                      isCurrentDay && 'bg-primary text-primary-foreground',
+                      !isInCurrentMonth && 'text-muted-foreground/50'
                     )}
                   >
                     {format(day, 'd')}
-                  </span>
+                  </div>
                   {totalItems > 0 && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                       {totalItems}
                     </span>
                   )}
                 </div>
-                <div className="space-y-1 overflow-y-auto max-h-[60px]">
-                  {/* App Tasks */}
-                  {dayTasks.slice(0, 2).map((task) => (
-                    <div
-                      key={task.id}
-                      className={cn(
-                        'text-xs px-1.5 py-0.5 rounded truncate cursor-pointer',
-                        statusColors[task.status]
-                      )}
-                      title={task.title}
+
+                {/* Events Container */}
+                <div className="px-1 pb-2 space-y-1">
+                  {allItems.slice(0, isExpanded ? undefined : maxVisible).map((item, idx) => {
+                    if (item.type === 'task') {
+                      const task = item.data;
+                      const colors = statusColors[task.status] || statusColors.pendente;
+                      return (
+                        <div
+                          key={`task-${task.id}`}
+                          className={cn(
+                            'text-xs px-2 py-1 rounded-sm truncate cursor-pointer flex items-center gap-1',
+                            colors.bg,
+                            colors.text
+                          )}
+                          title={task.title}
+                        >
+                          <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70" />
+                          <span className="truncate">{task.title}</span>
+                        </div>
+                      );
+                    } else {
+                      const event = item.data;
+                      const time = getEventTime(event.startDate);
+                      return (
+                        <div
+                          key={`google-${event.id}`}
+                          className="text-xs px-2 py-1 rounded-sm truncate cursor-pointer bg-blue-500 text-white flex items-center gap-1"
+                          title={`${time} - ${event.title}`}
+                        >
+                          <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70" />
+                          <span className="truncate">{time !== '00:00' ? `${time} - ` : ''}{event.title}</span>
+                        </div>
+                      );
+                    }
+                  })}
+
+                  {/* Expand/Collapse Button */}
+                  {hiddenCount > 0 && !isExpanded && (
+                    <button
+                      onClick={() => toggleDayExpanded(dayKey)}
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-1"
                     >
-                      {task.title}
-                    </div>
-                  ))}
-                  {/* Google Calendar Events */}
-                  {dayGoogleEvents.slice(0, 2).map((event) => (
-                    <div
-                      key={event.id}
-                      className="text-xs px-1.5 py-0.5 rounded truncate cursor-pointer bg-blue-500/80 text-white flex items-center gap-1"
-                      title={`Google: ${event.title}`}
+                      <ChevronDown className="w-3 h-3" />
+                      +{hiddenCount} mais
+                    </button>
+                  )}
+                  {isExpanded && totalItems > maxVisible && (
+                    <button
+                      onClick={() => toggleDayExpanded(dayKey)}
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-1"
                     >
-                      <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
-                      {event.title}
-                    </div>
-                  ))}
-                  {totalItems > 4 && (
-                    <div className="text-xs text-muted-foreground px-1.5">
-                      +{totalItems - 4} mais
-                    </div>
+                      <ChevronUp className="w-3 h-3" />
+                      menos
+                    </button>
                   )}
                 </div>
               </div>
@@ -220,24 +267,24 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-sm">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-warning" />
+          <div className="w-3 h-3 rounded-sm bg-amber-500" />
           <span className="text-muted-foreground">Pendente</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-primary" />
+          <div className="w-3 h-3 rounded-sm bg-orange-600" />
           <span className="text-muted-foreground">Em Andamento</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-success" />
+          <div className="w-3 h-3 rounded-sm bg-emerald-500" />
           <span className="text-muted-foreground">Concluída</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-destructive" />
+          <div className="w-3 h-3 rounded-sm bg-red-500" />
           <span className="text-muted-foreground">Atrasada</span>
         </div>
         {isMyTasks && (
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-blue-500" />
+            <div className="w-3 h-3 rounded-sm bg-blue-500" />
             <span className="text-muted-foreground">Google Calendar</span>
           </div>
         )}
