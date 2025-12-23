@@ -218,7 +218,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   return (
     <aside
       className={cn(
-        'h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300',
+        'h-full flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
