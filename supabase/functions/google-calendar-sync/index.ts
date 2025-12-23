@@ -11,6 +11,11 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Input validation constants
+const MAX_TITLE_LENGTH = 500;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface GoogleEvent {
   id: string;
   summary: string;
@@ -18,6 +23,22 @@ interface GoogleEvent {
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
   status?: string;
+}
+
+// Input validation helpers
+function isValidUUID(str: string): boolean {
+  return UUID_REGEX.test(str);
+}
+
+function sanitizeString(str: string | null | undefined, maxLength: number): string {
+  if (!str) return "";
+  return str.slice(0, maxLength).trim();
+}
+
+function isValidDate(dateStr: string | null | undefined): boolean {
+  if (!dateStr) return true; // Optional dates are valid
+  const date = new Date(dateStr);
+  return !isNaN(date.getTime());
 }
 
 async function getValidAccessToken(supabase: any, userId: string): Promise<string | null> {
@@ -60,7 +81,7 @@ async function getValidAccessToken(supabase: any, userId: string): Promise<strin
   const refreshData = await refreshResponse.json();
 
   if (refreshData.error) {
-    console.error("Token refresh failed:", refreshData);
+    console.error("Token refresh failed:", refreshData.error);
     return null;
   }
 
@@ -87,7 +108,10 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("Authorization header required");
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -96,7 +120,10 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      throw new Error("Unauthorized");
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const url = new URL(req.url);
@@ -108,7 +135,7 @@ serve(async (req) => {
     
     if (!accessToken) {
       return new Response(JSON.stringify({ 
-        error: "Google Calendar not connected",
+        error: "Google Calendar não conectado",
         needsAuth: true
       }), {
         status: 401,
@@ -118,18 +145,48 @@ serve(async (req) => {
 
     if (action === "create-event") {
       // Create event in Google Calendar from task
-      const body = await req.json();
-      const { taskId, title, description, startDate, dueDate } = body;
-
-      if (!title) {
-        throw new Error("Title is required");
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      console.log(`Creating Google Calendar event for task: ${taskId}`);
+      const { taskId, title, description, startDate, dueDate } = body;
+
+      // Validate inputs
+      const sanitizedTitle = sanitizeString(title, MAX_TITLE_LENGTH);
+      if (!sanitizedTitle) {
+        return new Response(JSON.stringify({ error: "Título é obrigatório" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (taskId && !isValidUUID(taskId)) {
+        return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!isValidDate(startDate) || !isValidDate(dueDate)) {
+        return new Response(JSON.stringify({ error: "Data inválida" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const sanitizedDescription = sanitizeString(description, MAX_DESCRIPTION_LENGTH);
+
+      console.log(`Creating Google Calendar event for task: ${taskId || 'new'}`);
 
       const event = {
-        summary: title,
-        description: description || "",
+        summary: sanitizedTitle,
+        description: sanitizedDescription,
         start: {
           dateTime: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
           timeZone: "America/Sao_Paulo",
@@ -155,21 +212,24 @@ serve(async (req) => {
       const eventData = await response.json();
 
       if (!response.ok) {
-        console.error("Error creating event:", eventData);
-        throw new Error(eventData.error?.message || "Failed to create event");
+        console.error("Error creating event:", eventData.error?.message);
+        return new Response(JSON.stringify({ error: "Erro ao criar evento no Google Calendar" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log(`Event created with ID: ${eventData.id}`);
 
       // Update task with Google event ID
-      if (taskId) {
+      if (taskId && isValidUUID(taskId)) {
         const { error: updateError } = await supabase
           .from("tasks")
           .update({ google_event_id: eventData.id })
           .eq("id", taskId);
 
         if (updateError) {
-          console.error("Error updating task with event ID:", updateError);
+          console.error("Error updating task with event ID:", updateError.message);
         }
       }
 
@@ -184,18 +244,40 @@ serve(async (req) => {
 
     if (action === "update-event") {
       // Update existing Google Calendar event
-      const body = await req.json();
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { eventId, title, description, startDate, dueDate, status } = body;
 
-      if (!eventId) {
-        throw new Error("Event ID is required");
+      if (!eventId || typeof eventId !== 'string' || eventId.length > 256) {
+        return new Response(JSON.stringify({ error: "ID do evento inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+
+      if (!isValidDate(startDate) || !isValidDate(dueDate)) {
+        return new Response(JSON.stringify({ error: "Data inválida" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const sanitizedTitle = sanitizeString(title, MAX_TITLE_LENGTH);
+      const sanitizedDescription = sanitizeString(description, MAX_DESCRIPTION_LENGTH);
 
       console.log(`Updating Google Calendar event: ${eventId}`);
 
       const event: any = {
-        summary: title,
-        description: description || "",
+        summary: sanitizedTitle,
+        description: sanitizedDescription,
       };
 
       if (startDate) {
@@ -218,7 +300,7 @@ serve(async (req) => {
       }
 
       const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
         {
           method: "PATCH",
           headers: {
@@ -231,8 +313,11 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("Error updating event:", errorData);
-        throw new Error(errorData.error?.message || "Failed to update event");
+        console.error("Error updating event:", errorData.error?.message);
+        return new Response(JSON.stringify({ error: "Erro ao atualizar evento no Google Calendar" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log("Event updated successfully");
@@ -244,17 +329,29 @@ serve(async (req) => {
 
     if (action === "delete-event") {
       // Delete Google Calendar event
-      const body = await req.json();
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { eventId } = body;
 
-      if (!eventId) {
-        throw new Error("Event ID is required");
+      if (!eventId || typeof eventId !== 'string' || eventId.length > 256) {
+        return new Response(JSON.stringify({ error: "ID do evento inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log(`Deleting Google Calendar event: ${eventId}`);
 
       const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
         {
           method: "DELETE",
           headers: {
@@ -264,9 +361,11 @@ serve(async (req) => {
       );
 
       if (!response.ok && response.status !== 404) {
-        const errorData = await response.json();
-        console.error("Error deleting event:", errorData);
-        throw new Error(errorData.error?.message || "Failed to delete event");
+        console.error("Error deleting event");
+        return new Response(JSON.stringify({ error: "Erro ao deletar evento do Google Calendar" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log("Event deleted successfully");
@@ -278,8 +377,11 @@ serve(async (req) => {
 
     if (action === "fetch-events") {
       // Fetch events from Google Calendar to import as tasks
-      const timeMin = url.searchParams.get("timeMin") || new Date().toISOString();
-      const timeMax = url.searchParams.get("timeMax") || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const timeMinParam = url.searchParams.get("timeMin");
+      const timeMaxParam = url.searchParams.get("timeMax");
+      
+      const timeMin = isValidDate(timeMinParam) && timeMinParam ? timeMinParam : new Date().toISOString();
+      const timeMax = isValidDate(timeMaxParam) && timeMaxParam ? timeMaxParam : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
       console.log(`Fetching Google Calendar events from ${timeMin} to ${timeMax}`);
 
@@ -299,8 +401,11 @@ serve(async (req) => {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error("Error fetching events:", data);
-        throw new Error(data.error?.message || "Failed to fetch events");
+        console.error("Error fetching events:", data.error?.message);
+        return new Response(JSON.stringify({ error: "Erro ao buscar eventos do Google Calendar" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log(`Fetched ${data.items?.length || 0} events`);
@@ -330,18 +435,37 @@ serve(async (req) => {
 
     if (action === "import-event") {
       // Import a Google Calendar event as a task
-      const body = await req.json();
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { eventId, unitId } = body;
 
-      if (!eventId || !unitId) {
-        throw new Error("Event ID and Unit ID are required");
+      if (!eventId || typeof eventId !== 'string' || eventId.length > 256) {
+        return new Response(JSON.stringify({ error: "ID do evento inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!unitId || !isValidUUID(unitId)) {
+        return new Response(JSON.stringify({ error: "Unidade inválida" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log(`Importing Google Calendar event: ${eventId}`);
 
       // Fetch the event details
       const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -352,7 +476,11 @@ serve(async (req) => {
       const event = await response.json();
 
       if (!response.ok) {
-        throw new Error(event.error?.message || "Failed to fetch event");
+        console.error("Error fetching event:", event.error?.message);
+        return new Response(JSON.stringify({ error: "Erro ao buscar evento do Google Calendar" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       // Create task from event
@@ -362,8 +490,8 @@ serve(async (req) => {
       const { data: task, error: insertError } = await supabase
         .from("tasks")
         .insert({
-          title: event.summary,
-          description: event.description || null,
+          title: sanitizeString(event.summary, MAX_TITLE_LENGTH),
+          description: sanitizeString(event.description, MAX_DESCRIPTION_LENGTH) || null,
           start_date: startDate,
           due_date: dueDate,
           unit_id: unitId,
@@ -376,8 +504,11 @@ serve(async (req) => {
         .single();
 
       if (insertError) {
-        console.error("Error creating task:", insertError);
-        throw insertError;
+        console.error("Error creating task:", insertError.message);
+        return new Response(JSON.stringify({ error: "Erro ao criar tarefa" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log(`Task created with ID: ${task.id}`);
@@ -387,15 +518,14 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Invalid action" }), {
+    return new Response(JSON.stringify({ error: "Ação inválida" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error: unknown) {
-    console.error("Error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
+    console.error("Error:", error instanceof Error ? error.message : "Unknown error");
+    return new Response(JSON.stringify({ error: "Erro interno. Tente novamente." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

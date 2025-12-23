@@ -11,6 +11,26 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Input validation helpers
+const MAX_URI_LENGTH = 2000;
+const MAX_TOKEN_LENGTH = 4096;
+
+function isValidUri(uri: string): boolean {
+  if (!uri || uri.length > MAX_URI_LENGTH) return false;
+  try {
+    new URL(uri);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeToken(token: string | null): string | null {
+  if (!token) return null;
+  if (token.length > MAX_TOKEN_LENGTH) return null;
+  return token;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -31,7 +51,18 @@ serve(async (req) => {
       const redirectUri = url.searchParams.get("redirect_uri");
       
       if (!redirectUri) {
-        throw new Error("redirect_uri is required");
+        return new Response(JSON.stringify({ error: "Parâmetros inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!isValidUri(redirectUri)) {
+        console.error("Invalid redirect URI format or length");
+        return new Response(JSON.stringify({ error: "Parâmetros inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const scopes = [
@@ -68,7 +99,7 @@ serve(async (req) => {
 
       if (error) {
         console.error("OAuth error:", error);
-        return new Response(`Erro na autenticação: ${error}`, { status: 400 });
+        return new Response("Erro na autenticação. Tente novamente.", { status: 400 });
       }
 
       if (!code || !stateParam) {
@@ -76,8 +107,20 @@ serve(async (req) => {
         return new Response("Parâmetros inválidos", { status: 400 });
       }
 
-      const state = JSON.parse(decodeURIComponent(stateParam));
+      let state;
+      try {
+        state = JSON.parse(decodeURIComponent(stateParam));
+      } catch {
+        console.error("Invalid state parameter");
+        return new Response("Parâmetros inválidos", { status: 400 });
+      }
+
       const redirectUri = state.redirect_uri;
+      
+      if (!isValidUri(redirectUri)) {
+        console.error("Invalid redirect URI in state");
+        return new Response("Parâmetros inválidos", { status: 400 });
+      }
 
       console.log("Exchanging code for tokens...");
 
@@ -97,8 +140,8 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
 
       if (tokenData.error) {
-        console.error("Token exchange error:", tokenData);
-        return new Response(`Erro ao obter tokens: ${tokenData.error_description}`, { status: 400 });
+        console.error("Token exchange error:", tokenData.error);
+        return new Response("Erro ao conectar com Google Calendar. Tente novamente.", { status: 400 });
       }
 
       console.log("Tokens obtained successfully");
@@ -107,7 +150,6 @@ serve(async (req) => {
       const tempToken = crypto.randomUUID();
       
       // Store tokens temporarily in a way the frontend can retrieve them
-      // We'll redirect with a temp token that the frontend will exchange
       const finalRedirect = `${redirectUri}?google_auth=success&temp_token=${tempToken}&access_token=${encodeURIComponent(tokenData.access_token)}&refresh_token=${encodeURIComponent(tokenData.refresh_token || "")}&expires_in=${tokenData.expires_in}`;
 
       return new Response(null, {
@@ -122,7 +164,10 @@ serve(async (req) => {
     if (action === "save-tokens") {
       // Save tokens to database (called from frontend after callback)
       if (!authHeader) {
-        throw new Error("Authorization header required");
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -132,18 +177,39 @@ serve(async (req) => {
       const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
       if (userError || !user) {
-        console.error("User verification failed:", userError);
-        throw new Error("Unauthorized");
+        console.error("User verification failed:", userError?.message);
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      const body = await req.json();
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { access_token, refresh_token, expires_in } = body;
 
-      if (!access_token) {
-        throw new Error("access_token is required");
+      const sanitizedAccessToken = sanitizeToken(access_token);
+      const sanitizedRefreshToken = sanitizeToken(refresh_token);
+
+      if (!sanitizedAccessToken) {
+        return new Response(JSON.stringify({ error: "Token inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      const expiresAt = new Date(Date.now() + (expires_in || 3600) * 1000);
+      const expiresInNum = typeof expires_in === 'number' && expires_in > 0 && expires_in < 86400 
+        ? expires_in 
+        : 3600;
+      const expiresAt = new Date(Date.now() + expiresInNum * 1000);
 
       console.log(`Saving tokens for user: ${user.id}`);
 
@@ -152,8 +218,8 @@ serve(async (req) => {
         .from("google_calendar_tokens")
         .upsert({
           user_id: user.id,
-          access_token,
-          refresh_token,
+          access_token: sanitizedAccessToken,
+          refresh_token: sanitizedRefreshToken,
           expires_at: expiresAt.toISOString(),
           updated_at: new Date().toISOString(),
         }, {
@@ -161,8 +227,11 @@ serve(async (req) => {
         });
 
       if (upsertError) {
-        console.error("Error saving tokens:", upsertError);
-        throw upsertError;
+        console.error("Error saving tokens:", upsertError.message);
+        return new Response(JSON.stringify({ error: "Erro ao salvar conexão" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log("Tokens saved successfully");
@@ -175,7 +244,10 @@ serve(async (req) => {
     if (action === "refresh-token") {
       // Refresh access token using refresh token
       if (!authHeader) {
-        throw new Error("Authorization header required");
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -184,7 +256,10 @@ serve(async (req) => {
       const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
       if (userError || !user) {
-        throw new Error("Unauthorized");
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       // Get stored refresh token
@@ -196,7 +271,10 @@ serve(async (req) => {
 
       if (fetchError || !tokenData?.refresh_token) {
         console.error("No refresh token found");
-        throw new Error("No refresh token available");
+        return new Response(JSON.stringify({ error: "Reconecte o Google Calendar" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log("Refreshing access token...");
@@ -216,8 +294,11 @@ serve(async (req) => {
       const refreshData = await refreshResponse.json();
 
       if (refreshData.error) {
-        console.error("Refresh error:", refreshData);
-        throw new Error(refreshData.error_description);
+        console.error("Refresh error:", refreshData.error);
+        return new Response(JSON.stringify({ error: "Erro ao atualizar token. Reconecte o Google Calendar." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const expiresAt = new Date(Date.now() + refreshData.expires_in * 1000);
@@ -233,7 +314,11 @@ serve(async (req) => {
         .eq("user_id", user.id);
 
       if (updateError) {
-        throw updateError;
+        console.error("Error updating token:", updateError.message);
+        return new Response(JSON.stringify({ error: "Erro ao atualizar conexão" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log("Token refreshed successfully");
@@ -249,7 +334,10 @@ serve(async (req) => {
     if (action === "disconnect") {
       // Remove Google Calendar connection
       if (!authHeader) {
-        throw new Error("Authorization header required");
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -258,7 +346,10 @@ serve(async (req) => {
       const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
       if (userError || !user) {
-        throw new Error("Unauthorized");
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log(`Disconnecting Google Calendar for user: ${user.id}`);
@@ -269,7 +360,11 @@ serve(async (req) => {
         .eq("user_id", user.id);
 
       if (deleteError) {
-        throw deleteError;
+        console.error("Error disconnecting:", deleteError.message);
+        return new Response(JSON.stringify({ error: "Erro ao desconectar" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       return new Response(JSON.stringify({ success: true }), {
@@ -280,7 +375,10 @@ serve(async (req) => {
     if (action === "status") {
       // Check if user has Google Calendar connected
       if (!authHeader) {
-        throw new Error("Authorization header required");
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -289,7 +387,10 @@ serve(async (req) => {
       const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
       if (userError || !user) {
-        throw new Error("Unauthorized");
+        return new Response(JSON.stringify({ error: "Não autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const { data: tokenData } = await supabase
@@ -309,15 +410,14 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Invalid action" }), {
+    return new Response(JSON.stringify({ error: "Ação inválida" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error: unknown) {
-    console.error("Error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
+    console.error("Error:", error instanceof Error ? error.message : "Unknown error");
+    return new Response(JSON.stringify({ error: "Erro interno. Tente novamente." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
