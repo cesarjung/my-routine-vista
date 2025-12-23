@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Trash2 } from 'lucide-react';
+import { format, setHours, setMinutes } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Loader2, Trash2, Users, Check, CalendarIcon, Clock, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from '@/components/ui/calendar';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +32,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -40,9 +45,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 import { useUpdateRoutine, useDeleteRoutine } from '@/hooks/useRoutineMutations';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
+import { useUnits } from '@/hooks/useUnits';
+import { useProfiles } from '@/hooks/useProfiles';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
+import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
+import { cn } from '@/lib/utils';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
 type Routine = Tables<'routines'>;
@@ -56,11 +71,23 @@ const frequencyOptions: { value: TaskFrequency; label: string }[] = [
   { value: 'anual', label: 'Anual' },
 ];
 
+const recurrenceModeOptions = [
+  { value: 'schedule', label: 'Por Cronograma', description: 'Cria automaticamente um dia antes' },
+  { value: 'on_completion', label: 'Ao Concluir', description: 'Só cria quando a atual for concluída' },
+];
+
+interface UnitAssignment {
+  unitId: string;
+  assignedToIds: string[];
+}
+
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório').max(200, 'Título muito longo'),
   description: z.string().max(1000, 'Descrição muito longa').optional().nullable(),
   frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal', 'anual', 'customizada']),
+  recurrence_mode: z.enum(['schedule', 'on_completion']),
   is_active: z.boolean(),
+  skip_weekends_holidays: z.boolean(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -73,9 +100,15 @@ interface RoutineEditDialogProps {
 
 export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDialogProps) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
+  const [parentAssignees, setParentAssignees] = useState<string[]>([]);
+  
   const updateRoutine = useUpdateRoutine();
   const deleteRoutine = useDeleteRoutine();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
+  const { data: units, isLoading: loadingUnits } = useUnits();
+  const { data: allProfiles } = useProfiles();
+  const { data: unitManagers } = useUnitManagers();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -83,9 +116,60 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
       title: routine.title,
       description: routine.description || '',
       frequency: routine.frequency,
+      recurrence_mode: routine.recurrence_mode || 'schedule',
       is_active: routine.is_active ?? true,
+      skip_weekends_holidays: false,
     } : undefined,
   });
+
+  // Reset unit assignments when routine changes
+  useEffect(() => {
+    if (routine?.unit_id) {
+      setUnitAssignments([{ unitId: routine.unit_id, assignedToIds: [] }]);
+    } else {
+      setUnitAssignments([]);
+    }
+    setParentAssignees([]);
+  }, [routine]);
+
+  const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
+  const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
+
+  const getProfilesForUnit = useCallback((unitId: string) => {
+    if (!allProfiles) return [];
+    const managerUserIds = unitManagers
+      ?.filter(um => um.unit_id === unitId)
+      ?.map(um => um.user_id) || [];
+    return allProfiles.filter(p => 
+      p.unit_id === unitId || managerUserIds.includes(p.id)
+    );
+  }, [allProfiles, unitManagers]);
+
+  const toggleUnit = useCallback((unitId: string) => {
+    setUnitAssignments(prev => {
+      const exists = prev.find(a => a.unitId === unitId);
+      if (exists) {
+        return prev.filter(a => a.unitId !== unitId);
+      }
+      return [...prev, { unitId, assignedToIds: [] }];
+    });
+  }, []);
+
+  const updateUnitAssignees = useCallback((unitId: string, assignedToIds: string[]) => {
+    setUnitAssignments(prev => 
+      prev.map(a => a.unitId === unitId ? { ...a, assignedToIds } : a)
+    );
+  }, []);
+
+  const selectAllUnits = useCallback(() => {
+    if (units) {
+      setUnitAssignments(units.map(u => ({ unitId: u.id, assignedToIds: [] })));
+    }
+  }, [units]);
+
+  const deselectAllUnits = useCallback(() => {
+    setUnitAssignments([]);
+  }, []);
 
   const onSubmit = async (data: FormData) => {
     if (!routine) return;
@@ -115,7 +199,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Editar Rotina</DialogTitle>
             <DialogDescription>
@@ -124,7 +208,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-y-auto pr-2">
               <FormField
                 control={form.control}
                 name="title"
@@ -209,7 +293,171 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                 />
               </div>
 
-              <DialogFooter className="flex justify-between sm:justify-between">
+              <FormField
+                control={form.control}
+                name="recurrence_mode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Modo de Recorrência</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {recurrenceModeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {recurrenceModeOptions.find(o => o.value === field.value)?.description}
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="skip_weekends_holidays"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium">
+                        Ignorar feriados e finais de semana
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        Tarefas não serão criadas em sábados, domingos ou feriados
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* Responsáveis da Rotina Mãe - Apenas para Gestor/Admin */}
+              {isGestorOrAdmin && (
+                <div className="space-y-2">
+                  <FormLabel>Responsáveis da Rotina Mãe</FormLabel>
+                  <MultiAssigneeSelect
+                    profiles={allProfiles || []}
+                    selectedIds={parentAssignees}
+                    onChange={setParentAssignees}
+                    placeholder="Selecionar responsáveis (opcional)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Os responsáveis da rotina mãe acompanham o progresso geral de todas as unidades.
+                  </p>
+                </div>
+              )}
+
+              {/* Units Selection - Apenas para Gestor/Admin */}
+              {isGestorOrAdmin && (
+                <div className="flex flex-col">
+                  <div className="flex items-center justify-between mb-2">
+                    <FormLabel className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Unidades e Responsáveis ({unitAssignments.length} selecionadas) - Opcional
+                    </FormLabel>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={selectAllUnits}
+                        className="text-xs h-7"
+                      >
+                        Selecionar todas
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={deselectAllUnits}
+                        className="text-xs h-7"
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="border border-border rounded-md overflow-y-auto max-h-48">
+                    <div className="p-3 space-y-2">
+                      {loadingUnits ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : units && units.length > 0 ? (
+                        units.map((unit) => {
+                          const isSelected = selectedSet.has(unit.id);
+                          const assignment = unitAssignments.find(a => a.unitId === unit.id);
+                          const profilesForUnit = getProfilesForUnit(unit.id);
+                          
+                          return (
+                            <div
+                              key={unit.id}
+                              className={cn(
+                                "rounded-md border transition-colors",
+                                isSelected ? 'bg-primary/10 border-primary/30' : 'border-transparent hover:bg-secondary/50'
+                              )}
+                            >
+                              <div
+                                onClick={() => toggleUnit(unit.id)}
+                                className="flex items-center gap-3 p-3 cursor-pointer"
+                              >
+                                <div className={cn(
+                                  "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
+                                  isSelected ? 'bg-primary border-primary' : 'border-input'
+                                )}>
+                                  {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate">{unit.name}</p>
+                                  <p className="text-xs text-muted-foreground">{unit.code}</p>
+                                </div>
+                              </div>
+                              
+                              {isSelected && (
+                                <div className="px-3 pb-3 pt-0">
+                                  <div className="flex items-center gap-2 pl-7">
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">Responsáveis:</span>
+                                    <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                                      <MultiAssigneeSelect
+                                        profiles={profilesForUnit}
+                                        selectedIds={assignment?.assignedToIds || []}
+                                        onChange={(ids) => updateUnitAssignees(unit.id, ids)}
+                                        placeholder="Selecionar responsáveis..."
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-center py-4 text-muted-foreground text-sm">
+                          Nenhuma unidade cadastrada
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Uma tarefa mãe será criada para você acompanhar o progresso geral, e tarefas individuais serão criadas para cada unidade.
+                  </p>
+                </div>
+              )}
+
+              <DialogFooter className="flex justify-between sm:justify-between pt-4 border-t">
                 {isGestorOrAdmin && (
                   <Button
                     type="button"
