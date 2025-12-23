@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTasks } from '@/hooks/useTasks';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Loader2, Calendar } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
@@ -15,6 +16,7 @@ interface CalendarViewProps {
 
 export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const { data: tasks, isLoading } = useTasks();
+  const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const monthStart = startOfMonth(currentMonth);
@@ -29,7 +31,8 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     return tasks?.filter(task => {
       if (!task.due_date) return false;
       const matchesSector = !sectorId || (task as any).sector_id === sectorId;
-      return isSameDay(new Date(task.due_date), date) && matchesSector;
+      const matchesUser = !isMyTasks || task.assigned_to === user?.id;
+      return isSameDay(new Date(task.due_date), date) && matchesSector && matchesUser;
     }) || [];
   };
 

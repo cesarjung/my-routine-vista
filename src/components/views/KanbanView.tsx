@@ -1,4 +1,5 @@
 import { useTasks } from '@/hooks/useTasks';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { CheckCircle2, Clock, AlertCircle, Play, Loader2, GripVertical } from 'lucide-react';
 import type { Enums } from '@/integrations/supabase/types';
@@ -27,11 +28,13 @@ interface KanbanViewProps {
 
 export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
   const { data: tasks, isLoading } = useTasks();
+  const { user } = useAuth();
 
   const getTasksByStatus = (status: TaskStatus) => {
     return tasks?.filter(t => {
       const matchesSector = !sectorId || (t as any).sector_id === sectorId;
-      return t.status === status && matchesSector;
+      const matchesUser = !isMyTasks || t.assigned_to === user?.id;
+      return t.status === status && matchesSector && matchesUser;
     }) || [];
   };
 
