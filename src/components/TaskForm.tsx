@@ -2,8 +2,9 @@ import { useState, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format } from 'date-fns';
+import { format, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Clock } from 'lucide-react';
 import { CalendarIcon, Plus, X, Loader2, Users, Check, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -58,7 +59,9 @@ const formSchema = z.object({
   description: z.string().max(1000, 'Descrição muito longa').optional(),
   priority: z.number().min(1).max(5),
   start_date: z.date().optional(),
+  start_time: z.string().optional(),
   due_date: z.date().optional(),
+  due_time: z.string().optional(),
   is_recurring: z.boolean().optional(),
   recurrence_frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const).optional(),
   recurrence_mode: z.enum(['schedule', 'on_completion'] as const).optional(),
@@ -91,11 +94,22 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       title: '',
       description: '',
       priority: 1,
+      start_time: '',
+      due_time: '',
       is_recurring: false,
       recurrence_frequency: 'semanal',
       recurrence_mode: 'schedule',
     },
   });
+
+  // Helper to combine date and time
+  const combineDateAndTime = (date: Date | undefined, time: string | undefined): string | null => {
+    if (!date) return null;
+    if (!time) return date.toISOString();
+    const [hours, minutes] = time.split(':').map(Number);
+    const combined = setMinutes(setHours(date, hours || 0), minutes || 0);
+    return combined.toISOString();
+  };
 
   const isRecurring = form.watch('is_recurring');
   const recurrenceMode = form.watch('recurrence_mode');
@@ -177,8 +191,8 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       title: data.title,
       description: data.description || null,
       priority: data.priority,
-      start_date: data.start_date?.toISOString() || null,
-      due_date: data.due_date?.toISOString() || null,
+      start_date: combineDateAndTime(data.start_date, data.start_time),
+      due_date: combineDateAndTime(data.due_date, data.due_time),
       parentAssignedTo: effectiveParentAssignedTo,
       unitAssignments,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
@@ -259,7 +273,10 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
               </FormItem>
             )}
           />
+        </div>
 
+        {/* Data e Hora de Início */}
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="start_date"
@@ -299,48 +316,93 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="start_time"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Hora de Início</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type="time"
+                      {...field}
+                      className="pl-9"
+                    />
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
-        <FormField
-          control={form.control}
-          name="due_date"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Data de Vencimento</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "pl-3 text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                    >
-                      {field.value ? (
-                        format(field.value, "dd/MM/yyyy", { locale: ptBR })
-                      ) : (
-                        <span>Selecione</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={field.value}
-                    onSelect={field.onChange}
-                    disabled={(date) => date < (form.getValues('start_date') || new Date())}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-          </Popover>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
+        {/* Data e Hora de Vencimento */}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="due_date"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Data de Vencimento</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {field.value ? (
+                          format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                        ) : (
+                          <span>Selecione</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      disabled={(date) => date < (form.getValues('start_date') || new Date())}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="due_time"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Hora de Vencimento</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type="time"
+                      {...field}
+                      className="pl-9"
+                    />
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
     {/* Tarefa Recorrente */}
     <FormField
