@@ -39,7 +39,7 @@ interface StatusData {
 
 const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string }) => {
   if (data.total === 0) {
-    return <div className="w-10 h-10 rounded-lg bg-secondary/30 flex items-center justify-center text-muted-foreground text-xs">-</div>;
+    return <div className="w-7 h-7 rounded bg-secondary/30 flex items-center justify-center text-muted-foreground text-[10px]">-</div>;
   }
 
   const percentage = Math.round((data.completed / data.total) * 100);
@@ -53,7 +53,7 @@ const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string 
         <TooltipTrigger asChild>
           <div
             className={cn(
-              'w-10 h-10 rounded-lg flex flex-col items-center justify-center text-xs font-bold cursor-default transition-transform hover:scale-110',
+              'w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold cursor-default transition-transform hover:scale-110',
               isComplete && 'bg-success/20 text-success',
               isGood && !isComplete && 'bg-emerald-500/20 text-emerald-400',
               isWarning && 'bg-warning/20 text-warning',
@@ -61,19 +61,15 @@ const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string 
             )}
           >
             {isComplete ? (
-              <CheckCircle2 className="w-4 h-4" />
+              <CheckCircle2 className="w-3.5 h-3.5" />
             ) : (
-              <>
-                <span>{data.completed}</span>
-                <span className="text-[10px] opacity-70">/{data.total}</span>
-              </>
+              <span>{data.completed}/{data.total}</span>
             )}
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs">
           <p className="font-semibold">{FREQUENCY_FULL_LABELS[frequency]}</p>
-          <p>{data.completed} de {data.total} concluídas ({percentage}%)</p>
-          {data.pending > 0 && <p className="text-warning">{data.pending} pendentes</p>}
+          <p>{data.completed}/{data.total} ({percentage}%)</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -81,96 +77,64 @@ const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string 
 };
 
 const TotalBadge = ({ data }: { data: StatusData }) => {
-  if (data.total === 0) {
-    return <span className="text-muted-foreground">-</span>;
-  }
+  if (data.total === 0) return <span className="text-muted-foreground text-xs">-</span>;
 
   const percentage = Math.round((data.completed / data.total) * 100);
   const isGood = percentage >= 70;
   const isWarning = percentage >= 40 && percentage < 70;
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-12 h-1.5 bg-secondary rounded-full overflow-hidden">
-        <div
-          className={cn(
-            'h-full rounded-full',
-            isGood ? 'bg-success' : isWarning ? 'bg-warning' : 'bg-destructive'
-          )}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-      <span className={cn(
-        'text-sm font-bold min-w-[36px]',
-        isGood ? 'text-success' : isWarning ? 'text-warning' : 'text-destructive'
-      )}>
-        {percentage}%
-      </span>
-    </div>
+    <span className={cn(
+      'text-xs font-bold',
+      isGood ? 'text-success' : isWarning ? 'text-warning' : 'text-destructive'
+    )}>
+      {percentage}%
+    </span>
   );
 };
 
 export const DashboardView = () => {
   const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
   
-  const { data: sectors, isLoading: loadingSectors } = useSectors();
+  const { data: sectors } = useSectors();
   const { data: statsData } = useOverallStats(selectedSectorId);
   const { data: unitStatus, isLoading: loadingUnits } = useUnitRoutineStatus(selectedSectorId);
   const { data: responsibleStatus, isLoading: loadingResponsibles } = useResponsibleRoutineStatus(selectedSectorId);
 
-  const selectedSector = sectors?.find(s => s.id === selectedSectorId);
   const isLoading = loadingUnits || loadingResponsibles;
-
   const overallPercentage = statsData?.percentage || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          
-          {/* Overall indicator */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
           <div className={cn(
-            'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold',
+            'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold',
             overallPercentage >= 70 ? 'bg-success/20 text-success' :
             overallPercentage >= 40 ? 'bg-warning/20 text-warning' :
             'bg-destructive/20 text-destructive'
           )}>
-            {overallPercentage >= 70 ? (
-              <CheckCircle2 className="w-4 h-4" />
-            ) : (
-              <AlertCircle className="w-4 h-4" />
-            )}
-            {overallPercentage}% geral
+            {overallPercentage}%
           </div>
         </div>
         
-        {/* Sector filter */}
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-muted-foreground" />
           <Select
             value={selectedSectorId || 'all'}
             onValueChange={(value) => setSelectedSectorId(value === 'all' ? null : value)}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="h-8 w-[150px] text-xs">
               <SelectValue placeholder="Setor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">
-                <div className="flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4" />
-                  <span>Todos</span>
-                </div>
-              </SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               {sectors?.map(sector => (
                 <SelectItem key={sector.id} value={sector.id}>
                   <div className="flex items-center gap-2">
-                    <div 
-                      className="w-3 h-3 rounded-full" 
-                      style={{ backgroundColor: sector.color || '#6366f1' }}
-                    />
-                    <span>{sector.name}</span>
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sector.color || '#6366f1' }} />
+                    {sector.name}
                   </div>
                 </SelectItem>
               ))}
@@ -180,85 +144,51 @@ export const DashboardView = () => {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className="font-medium">Legenda:</span>
-        <span><strong>D</strong> = Diária</span>
-        <span><strong>S</strong> = Semanal</span>
-        <span><strong>Q</strong> = Quinzenal</span>
-        <span><strong>M</strong> = Mensal</span>
-        <span className="ml-4 flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-success/20" /> 100%
-        </span>
-        <span className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-emerald-500/20" /> ≥70%
-        </span>
-        <span className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-warning/20" /> ≥40%
-        </span>
-        <span className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-destructive/20" /> &lt;40%
-        </span>
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+        <span><b>D</b>=Diária <b>S</b>=Semanal <b>Q</b>=Quinzenal <b>M</b>=Mensal</span>
+        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-success/30" />100%</span>
+        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-emerald-500/30" />≥70%</span>
+        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-warning/30" />≥40%</span>
+        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-destructive/30" />&lt;40%</span>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-primary" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Units Matrix */}
-          <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center gap-2 bg-secondary/30">
-              <Building2 className="w-5 h-5 text-primary" />
-              <h2 className="font-semibold text-foreground">Por Unidade</h2>
-              <span className="text-xs text-muted-foreground ml-auto">
-                {unitStatus?.length || 0} unidades
-              </span>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {/* Units */}
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30">
+              <Building2 className="w-4 h-4 text-primary" />
+              <span className="font-medium text-sm">Unidades</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">{unitStatus?.length || 0}</span>
             </div>
-
             {unitStatus?.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                Nenhuma rotina encontrada
-              </div>
+              <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
+              <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-card">
                     <tr className="border-b border-border">
-                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Unidade</th>
-                      {FREQUENCIES.map(freq => (
-                        <th key={freq} className="p-3 text-center text-sm font-medium text-muted-foreground w-14">
-                          {FREQUENCY_LABELS[freq]}
-                        </th>
-                      ))}
-                      <th className="p-3 text-right text-sm font-medium text-muted-foreground">Total</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
+                      {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
+                      <th className="p-2 text-right font-medium text-muted-foreground w-12">%</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {unitStatus?.map((unit, index) => (
-                      <tr 
-                        key={unit.id} 
-                        className="hover:bg-secondary/20 transition-colors animate-fade-in"
-                        style={{ animationDelay: `${index * 20}ms` }}
-                      >
-                        <td className="p-3">
-                          <div className="max-w-[180px]">
-                            <p className="font-medium text-foreground text-sm truncate">{unit.name}</p>
-                            <p className="text-xs text-muted-foreground">{unit.code}</p>
-                          </div>
+                    {unitStatus?.map(unit => (
+                      <tr key={unit.id} className="hover:bg-secondary/20">
+                        <td className="p-2">
+                          <p className="font-medium text-foreground truncate max-w-[120px]" title={unit.name}>{unit.name}</p>
                         </td>
-                        {FREQUENCIES.map(freq => (
-                          <td key={freq} className="p-2 text-center">
-                            <div className="flex justify-center">
-                              <StatusBadge data={unit.frequencies[freq]} frequency={freq} />
-                            </div>
+                        {FREQUENCIES.map(f => (
+                          <td key={f} className="p-1 text-center">
+                            <StatusBadge data={unit.frequencies[f]} frequency={f} />
                           </td>
                         ))}
-                        <td className="p-3">
-                          <div className="flex justify-end">
-                            <TotalBadge data={unit.totals} />
-                          </div>
-                        </td>
+                        <td className="p-2 text-right"><TotalBadge data={unit.totals} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -267,59 +197,37 @@ export const DashboardView = () => {
             )}
           </div>
 
-          {/* Responsibles Matrix */}
-          <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center gap-2 bg-secondary/30">
-              <Users className="w-5 h-5 text-primary" />
-              <h2 className="font-semibold text-foreground">Por Responsável</h2>
-              <span className="text-xs text-muted-foreground ml-auto">
-                {responsibleStatus?.length || 0} pessoas
-              </span>
+          {/* Responsibles */}
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30">
+              <Users className="w-4 h-4 text-primary" />
+              <span className="font-medium text-sm">Responsáveis</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">{responsibleStatus?.length || 0}</span>
             </div>
-
             {responsibleStatus?.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                Nenhuma rotina atribuída
-              </div>
+              <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
+              <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-card">
                     <tr className="border-b border-border">
-                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Responsável</th>
-                      {FREQUENCIES.map(freq => (
-                        <th key={freq} className="p-3 text-center text-sm font-medium text-muted-foreground w-14">
-                          {FREQUENCY_LABELS[freq]}
-                        </th>
-                      ))}
-                      <th className="p-3 text-right text-sm font-medium text-muted-foreground">Total</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
+                      {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
+                      <th className="p-2 text-right font-medium text-muted-foreground w-12">%</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {responsibleStatus?.map((person, index) => (
-                      <tr 
-                        key={person.id} 
-                        className="hover:bg-secondary/20 transition-colors animate-fade-in"
-                        style={{ animationDelay: `${index * 20}ms` }}
-                      >
-                        <td className="p-3">
-                          <div className="max-w-[180px]">
-                            <p className="font-medium text-foreground text-sm truncate">{person.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{person.email}</p>
-                          </div>
+                    {responsibleStatus?.map(person => (
+                      <tr key={person.id} className="hover:bg-secondary/20">
+                        <td className="p-2">
+                          <p className="font-medium text-foreground truncate max-w-[120px]" title={person.name}>{person.name}</p>
                         </td>
-                        {FREQUENCIES.map(freq => (
-                          <td key={freq} className="p-2 text-center">
-                            <div className="flex justify-center">
-                              <StatusBadge data={person.frequencies[freq]} frequency={freq} />
-                            </div>
+                        {FREQUENCIES.map(f => (
+                          <td key={f} className="p-1 text-center">
+                            <StatusBadge data={person.frequencies[f]} frequency={f} />
                           </td>
                         ))}
-                        <td className="p-3">
-                          <div className="flex justify-end">
-                            <TotalBadge data={person.totals} />
-                          </div>
-                        </td>
+                        <td className="p-2 text-right"><TotalBadge data={person.totals} /></td>
                       </tr>
                     ))}
                   </tbody>
