@@ -206,10 +206,22 @@ export const useCreatePeriodWithCheckins = () => {
       periodStart: Date; 
       periodEnd: Date;
     }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Get routine info
+      const { data: routine, error: routineError } = await supabase
+        .from('routines')
+        .select('title, description, unit_id, sector_id')
+        .eq('id', routineId)
+        .single();
+      
+      if (routineError) throw routineError;
+
       // Get routine assignees (users assigned to this routine)
       const { data: assignees, error: assigneesError } = await supabase
         .from('routine_assignees')
-        .select('user_id, profiles:user_id(unit_id)')
+        .select('user_id, profiles:user_id(unit_id, full_name)')
         .eq('routine_id', routineId);
 
       if (assigneesError) throw assigneesError;
@@ -228,20 +240,82 @@ export const useCreatePeriodWithCheckins = () => {
 
       if (periodError) throw periodError;
 
-      // Create checkins for each assignee (user)
-      if (assignees && assignees.length > 0) {
-        const checkins = assignees.map(assignee => ({
-          routine_period_id: period.id,
-          unit_id: (assignee.profiles as any)?.unit_id || null,
-          assignee_user_id: assignee.user_id,
-          status: 'pending',
-        }));
+      // Create parent task for this routine period
+      const { data: parentTask, error: parentTaskError } = await supabase
+        .from('tasks')
+        .insert({
+          title: `[Rotina] ${routine.title}`,
+          description: routine.description,
+          routine_id: routineId,
+          unit_id: routine.unit_id,
+          sector_id: routine.sector_id,
+          created_by: user.id,
+          due_date: periodEnd.toISOString(),
+          start_date: periodStart.toISOString(),
+          status: 'pendente',
+        })
+        .select()
+        .single();
 
+      if (parentTaskError) throw parentTaskError;
+
+      // Create checkins and child tasks for each assignee
+      if (assignees && assignees.length > 0) {
+        const checkins = [];
+        const childTasks = [];
+
+        for (const assignee of assignees) {
+          const assigneeProfile = assignee.profiles as any;
+          const assigneeUnitId = assigneeProfile?.unit_id || routine.unit_id;
+          
+          // Create checkin
+          checkins.push({
+            routine_period_id: period.id,
+            unit_id: assigneeUnitId,
+            assignee_user_id: assignee.user_id,
+            status: 'pending',
+          });
+
+          // Create child task for each assignee
+          childTasks.push({
+            title: `[Rotina] ${routine.title}`,
+            description: routine.description,
+            routine_id: routineId,
+            parent_task_id: parentTask.id,
+            unit_id: assigneeUnitId,
+            sector_id: routine.sector_id,
+            assigned_to: assignee.user_id,
+            created_by: user.id,
+            due_date: periodEnd.toISOString(),
+            start_date: periodStart.toISOString(),
+            status: 'pendente',
+          });
+        }
+
+        // Insert checkins
         const { error: checkinsError } = await supabase
           .from('routine_checkins')
           .insert(checkins);
 
         if (checkinsError) throw checkinsError;
+
+        // Insert child tasks
+        const { data: createdChildTasks, error: childTasksError } = await supabase
+          .from('tasks')
+          .insert(childTasks)
+          .select();
+
+        if (childTasksError) throw childTasksError;
+
+        // Add task assignees for each child task
+        if (createdChildTasks && createdChildTasks.length > 0) {
+          const taskAssignees = createdChildTasks.map((task, index) => ({
+            task_id: task.id,
+            user_id: assignees[index].user_id,
+          }));
+
+          await supabase.from('task_assignees').insert(taskAssignees);
+        }
       }
 
       return period;
@@ -250,9 +324,11 @@ export const useCreatePeriodWithCheckins = () => {
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
       queryClient.invalidateQueries({ queryKey: ['all-active-routine-periods'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['user-tasks'] });
       toast({
         title: 'Período criado',
-        description: 'Novo período de rotina criado com checkins para os responsáveis.',
+        description: 'Tarefas criadas para os responsáveis da rotina.',
       });
     },
     onError: (error: Error) => {
