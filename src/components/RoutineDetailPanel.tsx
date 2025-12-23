@@ -14,9 +14,13 @@ import {
   Play,
   RotateCcw,
   Trash2,
+  Pencil,
+  Plus,
+  X,
 } from 'lucide-react';
 import { Button } from './ui/button';
-import { useDeleteRoutine } from '@/hooks/useRoutineMutations';
+import { Input } from './ui/input';
+import { useDeleteRoutine, useUpdateRoutine } from '@/hooks/useRoutineMutations';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +37,7 @@ import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Textarea } from './ui/textarea';
 import { ProgressBar } from './ProgressBar';
+import { RoutineEditDialog } from './RoutineEditDialog';
 import {
   useCurrentPeriodCheckins,
   useCreatePeriodWithCheckins,
@@ -40,7 +45,14 @@ import {
   useUndoCheckin,
 } from '@/hooks/useRoutineCheckins';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
-import type { Tables } from '@/integrations/supabase/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select';
+import type { Tables, Enums } from '@/integrations/supabase/types';
 import {
   startOfDay,
   endOfDay,
@@ -50,11 +62,14 @@ import {
   endOfMonth,
   addWeeks,
 } from 'date-fns';
+import { toast } from 'sonner';
 
 interface RoutineDetailPanelProps {
   routine: Tables<'routines'>;
   onClose: () => void;
 }
+
+type TaskFrequency = Enums<'task_frequency'>;
 
 const frequencyLabels: Record<string, string> = {
   diaria: 'Diária',
@@ -118,6 +133,13 @@ export const RoutineDetailPanel = ({
   onClose,
 }: RoutineDetailPanelProps) => {
   const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  
+  // Editable fields
+  const [title, setTitle] = useState(routine.title);
+  const [description, setDescription] = useState(routine.description || '');
+  const [frequency, setFrequency] = useState<TaskFrequency>(routine.frequency);
 
   const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id);
   const { data: unitManagers } = useUnitManagers();
@@ -125,11 +147,36 @@ export const RoutineDetailPanel = ({
   const completeCheckin = useCompleteCheckin();
   const undoCheckin = useUndoCheckin();
   const deleteRoutine = useDeleteRoutine();
+  const updateRoutine = useUpdateRoutine();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
 
   const handleDeleteRoutine = async () => {
     await deleteRoutine.mutateAsync(routine.id);
     onClose();
+  };
+
+  const handleSaveChanges = async () => {
+    try {
+      await updateRoutine.mutateAsync({
+        id: routine.id,
+        data: {
+          title,
+          description: description || null,
+          frequency,
+        },
+      });
+      setIsEditing(false);
+      toast.success('Rotina atualizada com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao atualizar rotina');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setTitle(routine.title);
+    setDescription(routine.description || '');
+    setFrequency(routine.frequency);
+    setIsEditing(false);
   };
 
   const checkins = periodData?.period?.routine_checkins || [];
@@ -166,37 +213,75 @@ export const RoutineDetailPanel = ({
       {/* Header */}
       <div className="p-6 border-b border-border">
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-xl font-semibold text-foreground">{routine.title}</h2>
+          {isEditing ? (
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="text-xl font-semibold"
+              placeholder="Título da rotina"
+            />
+          ) : (
+            <h2 className="text-xl font-semibold text-foreground">{routine.title}</h2>
+          )}
           <div className="flex items-center gap-2">
-            {isGestorOrAdmin && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Excluir rotina?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Essa ação não pode ser desfeita. A rotina será desativada permanentemente.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDeleteRoutine}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      {deleteRoutine.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        'Excluir'
-                      )}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+            {isGestorOrAdmin && !isEditing && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditDialogOpen(true)}
+                  className="text-primary hover:text-primary hover:bg-primary/10"
+                  title="Edição completa"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir rotina?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Essa ação não pode ser desfeita. A rotina será desativada permanentemente.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteRoutine}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {deleteRoutine.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Excluir'
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+            {isEditing && (
+              <>
+                <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveChanges}
+                  disabled={updateRoutine.isPending}
+                >
+                  {updateRoutine.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                </Button>
+              </>
             )}
             <Button variant="ghost" size="sm" onClick={onClose}>
               ✕
@@ -241,21 +326,56 @@ export const RoutineDetailPanel = ({
           <div className="flex items-center gap-3">
             <RotateCcw className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Recorrência</span>
-            <span className="ml-auto text-foreground">
-              {frequencyLabels[routine.frequency]}
-            </span>
+            {isEditing ? (
+              <Select value={frequency} onValueChange={(v) => setFrequency(v as TaskFrequency)}>
+                <SelectTrigger className="ml-auto w-32 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="diaria">Diária</SelectItem>
+                  <SelectItem value="semanal">Semanal</SelectItem>
+                  <SelectItem value="quinzenal">Quinzenal</SelectItem>
+                  <SelectItem value="mensal">Mensal</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="ml-auto text-foreground">
+                {frequencyLabels[routine.frequency]}
+              </span>
+            )}
           </div>
         </div>
+        
+        {/* Quick edit button */}
+        {isGestorOrAdmin && !isEditing && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4 w-full"
+            onClick={() => setIsEditing(true)}
+          >
+            <Pencil className="h-4 w-4 mr-2" />
+            Editar rapidamente
+          </Button>
+        )}
       </div>
 
       {/* Description */}
       <div className="p-6 border-b border-border">
-        <Textarea
-          placeholder="Adicione uma descrição..."
-          className="bg-transparent border-none resize-none focus-visible:ring-0 p-0 text-muted-foreground"
-          defaultValue={routine.description || ''}
-          readOnly
-        />
+        {isEditing ? (
+          <Textarea
+            placeholder="Adicione uma descrição..."
+            className="resize-none"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+          />
+        ) : (
+          <p className="text-muted-foreground">
+            {routine.description || 'Sem descrição'}
+          </p>
+        )}
       </div>
 
       {/* Subtasks Section */}
@@ -413,6 +533,13 @@ export const RoutineDetailPanel = ({
           </div>
         )}
       </div>
+
+      {/* Full Edit Dialog */}
+      <RoutineEditDialog
+        routine={routine}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
     </div>
   );
 };
