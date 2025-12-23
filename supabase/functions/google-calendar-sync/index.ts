@@ -376,14 +376,15 @@ serve(async (req) => {
     }
 
     if (action === "fetch-events") {
-      // Fetch events from Google Calendar to import as tasks
+      // Fetch events from Google Calendar for display
       const timeMinParam = url.searchParams.get("timeMin");
       const timeMaxParam = url.searchParams.get("timeMax");
+      const onlyNew = url.searchParams.get("onlyNew") === "true";
       
       const timeMin = isValidDate(timeMinParam) && timeMinParam ? timeMinParam : new Date().toISOString();
       const timeMax = isValidDate(timeMaxParam) && timeMaxParam ? timeMaxParam : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      console.log(`Fetching Google Calendar events from ${timeMin} to ${timeMax}`);
+      console.log(`Fetching Google Calendar events from ${timeMin} to ${timeMax}, onlyNew: ${onlyNew}`);
 
       const response = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
@@ -408,27 +409,32 @@ serve(async (req) => {
         });
       }
 
-      console.log(`Fetched ${data.items?.length || 0} events`);
+      console.log(`Fetched ${data.items?.length || 0} events from Google Calendar`);
 
-      // Filter out events that are already imported (check by google_event_id)
-      const { data: existingTasks } = await supabase
-        .from("tasks")
-        .select("google_event_id")
-        .not("google_event_id", "is", null);
-
-      const existingEventIds = new Set((existingTasks || []).map(t => t.google_event_id));
-
-      const newEvents = (data.items || [])
-        .filter((event: GoogleEvent) => !existingEventIds.has(event.id) && event.status !== "cancelled")
+      let events = (data.items || [])
+        .filter((event: GoogleEvent) => event.status !== "cancelled")
         .map((event: GoogleEvent) => ({
           id: event.id,
-          title: event.summary,
+          title: event.summary || "(Sem título)",
           description: event.description,
           startDate: event.start?.dateTime || event.start?.date,
           endDate: event.end?.dateTime || event.end?.date,
         }));
 
-      return new Response(JSON.stringify({ events: newEvents }), {
+      // If onlyNew is true, filter out events that are already imported as tasks
+      if (onlyNew) {
+        const { data: existingTasks } = await supabase
+          .from("tasks")
+          .select("google_event_id")
+          .not("google_event_id", "is", null);
+
+        const existingEventIds = new Set((existingTasks || []).map(t => t.google_event_id));
+        events = events.filter((event: { id: string }) => !existingEventIds.has(event.id));
+      }
+
+      console.log(`Returning ${events.length} events`);
+
+      return new Response(JSON.stringify({ events }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -483,10 +483,12 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Calendário</h1>
-        <p className="text-muted-foreground">Visualize tarefas organizadas por data</p>
-      </div>
+      {!isMyTasks && (
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-1">Calendário</h1>
+          <p className="text-muted-foreground">Visualize tarefas organizadas por data</p>
+        </div>
+      )}
 
       {/* Navigation Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
