@@ -77,7 +77,16 @@ export const useCreateRoutineWithUnits = () => {
       
       if (!user) throw new Error('Usuário não autenticado');
 
-      // Create the routine
+      // Get the user's unit_id for cases without unit assignments
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('unit_id')
+        .eq('id', user.id)
+        .single();
+
+      const userUnitId = profile?.unit_id;
+
+      // Create the routine (without unit_id - it's optional)
       const { data: routine, error: routineError } = await supabase
         .from('routines')
         .insert({
@@ -86,6 +95,8 @@ export const useCreateRoutineWithUnits = () => {
           frequency: data.frequency,
           created_by: user.id,
           is_active: true,
+          // unit_id is optional - only set if there's a single unit assignment
+          unit_id: data.unitAssignments.length === 1 ? data.unitAssignments[0].unitId : null,
         })
         .select()
         .single();
@@ -154,7 +165,7 @@ export const useCreateRoutineWithUnits = () => {
         unitAssigneeMap.set(a.unitId, a.assignedTo);
       });
 
-      // Create checkins AND tasks for each selected unit
+      // If units were selected, create checkins and tasks for each unit
       if (unitIds.length > 0) {
         // Create checkins
         const checkins = unitIds.map((unitId) => ({
@@ -177,13 +188,13 @@ export const useCreateRoutineWithUnits = () => {
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
             unit_id: firstUnitId,
             routine_id: routine.id,
-            assigned_to: data.parentAssignedTo || user.id, // Responsável definido ou gestor atual
+            assigned_to: data.parentAssignedTo || user.id,
             created_by: user.id,
             start_date: periodStart.toISOString(),
             due_date: periodEnd.toISOString(),
             status: 'pendente' as const,
             priority: 2,
-            parent_task_id: null, // Esta é a tarefa mãe
+            parent_task_id: null,
           })
           .select()
           .single();
@@ -202,7 +213,7 @@ export const useCreateRoutineWithUnits = () => {
           due_date: periodEnd.toISOString(),
           status: 'pendente' as const,
           priority: 2,
-          parent_task_id: parentTask.id, // Link com a tarefa mãe
+          parent_task_id: parentTask.id,
         }));
 
         const { error: tasksError } = await supabase
@@ -210,6 +221,40 @@ export const useCreateRoutineWithUnits = () => {
           .insert(childTasks);
 
         if (tasksError) throw tasksError;
+      } else {
+        // No units selected - create a simple task for the user's own unit
+        // This is for regular users creating routines for themselves
+        if (!userUnitId) {
+          throw new Error('Você precisa estar associado a uma unidade para criar rotinas.');
+        }
+
+        const { error: taskError } = await supabase
+          .from('tasks')
+          .insert({
+            title: `[Rotina] ${routine.title}`,
+            description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
+            unit_id: userUnitId,
+            routine_id: routine.id,
+            assigned_to: data.parentAssignedTo || user.id,
+            created_by: user.id,
+            start_date: periodStart.toISOString(),
+            due_date: periodEnd.toISOString(),
+            status: 'pendente' as const,
+            priority: 2,
+            parent_task_id: null,
+          });
+
+        if (taskError) throw taskError;
+
+        // Create a checkin for the user's unit
+        const { error: checkinError } = await supabase
+          .from('routine_checkins')
+          .insert({
+            routine_period_id: period.id,
+            unit_id: userUnitId,
+          });
+
+        if (checkinError) throw checkinError;
       }
 
       return routine;
