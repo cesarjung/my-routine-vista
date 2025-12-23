@@ -15,11 +15,13 @@ export type SubtaskInsert = TablesInsert<'subtasks'>;
 export interface SubtaskData {
   title: string;
   assigned_to?: string | null;
+  assigned_to_ids?: string[]; // Multiple assignees
 }
 
 export interface UnitAssignment {
   unitId: string;
   assignedTo: string | null;
+  assignedToIds?: string[]; // Multiple assignees per unit
 }
 
 export interface CreateTaskData {
@@ -33,7 +35,8 @@ export interface CreateTaskWithUnitsData {
   priority: number;
   start_date?: string | null;
   due_date?: string | null;
-  parentAssignedTo?: string | null; // Responsável da tarefa mãe
+  parentAssignedTo?: string | null; // Responsável principal (backwards compatibility)
+  parentAssignees?: string[]; // Multiple assignees for parent task
   unitAssignments: UnitAssignment[];
   subtasks?: SubtaskData[];
   // Campos de recorrência
@@ -147,6 +150,17 @@ export const useCreateTaskWithUnits = () => {
 
         if (parentError) throw parentError;
 
+        // Add multiple assignees to task_assignees table
+        const parentAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0 
+          ? data.parentAssignees 
+          : [data.parentAssignedTo || user.id].filter(Boolean);
+        
+        if (parentAssigneeIds.length > 0) {
+          await supabase
+            .from('task_assignees')
+            .insert(parentAssigneeIds.map(userId => ({ task_id: parentTask.id, user_id: userId })));
+        }
+
         // Criar tarefas filhas para cada unidade com seu responsável
         const childTasks = data.unitAssignments.map((assignment) => ({
           title: data.title,
@@ -167,6 +181,23 @@ export const useCreateTaskWithUnits = () => {
           .select();
 
         if (childError) throw childError;
+
+        // Add assignees for each child task
+        if (createdChildTasks) {
+          for (let i = 0; i < createdChildTasks.length; i++) {
+            const childTask = createdChildTasks[i];
+            const assignment = data.unitAssignments[i];
+            const assigneeIds = assignment.assignedToIds && assignment.assignedToIds.length > 0
+              ? assignment.assignedToIds
+              : assignment.assignedTo ? [assignment.assignedTo] : [];
+            
+            if (assigneeIds.length > 0) {
+              await supabase
+                .from('task_assignees')
+                .insert(assigneeIds.map(userId => ({ task_id: childTask.id, user_id: userId })));
+            }
+          }
+        }
 
         // Criar subtarefas para cada tarefa filha se houver
         if (data.subtasks && data.subtasks.length > 0 && createdChildTasks) {

@@ -145,6 +145,35 @@ export type Database = {
           },
         ]
       }
+      routine_assignees: {
+        Row: {
+          created_at: string
+          id: string
+          routine_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          routine_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          routine_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_assignees_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routine_checkins: {
         Row: {
           completed_at: string | null
@@ -350,6 +379,35 @@ export type Database = {
         }
         Relationships: []
       }
+      subtask_assignees: {
+        Row: {
+          created_at: string
+          id: string
+          subtask_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          subtask_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          subtask_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtask_assignees_subtask_id_fkey"
+            columns: ["subtask_id"]
+            isOneToOne: false
+            referencedRelation: "subtasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subtask_attachments: {
         Row: {
           created_at: string
@@ -457,6 +515,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "subtasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_assignees: {
+        Row: {
+          created_at: string
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_assignees_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
