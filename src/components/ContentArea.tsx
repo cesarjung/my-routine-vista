@@ -3,7 +3,7 @@ import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { DashboardView } from '@/components/views/DashboardView';
 import { TasksView } from '@/components/views/TasksView';
 import { RoutinesView } from '@/components/views/RoutinesView';
-import { ResponsiblesView } from '@/components/views/ResponsiblesView';
+import { MyTasksView } from '@/components/views/MyTasksView';
 import { SectorUnitsView } from '@/components/views/SectorUnitsView';
 import { KanbanView } from '@/components/views/KanbanView';
 import { GanttView } from '@/components/views/GanttView';
@@ -52,19 +52,19 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     }
   };
 
-  const showViewToggle = ['all-sectors', 'my-tasks'].includes(context.type) || 
+  const showViewToggle = context.type === 'all-sectors' || 
     (context.type === 'sector' && context.folder !== 'units');
 
   const renderContent = () => {
     // Views especiais sem toggle
     if (context.type === 'dashboard') return <DashboardView />;
     if (context.type === 'settings') return <SettingsView />;
+    if (context.type === 'my-tasks') return <MyTasksView />;
 
     // Contextos com toggle de visualização
     const sectorId = context.type === 'sector' ? context.sectorId : undefined;
     const folder = context.type === 'sector' ? context.folder : undefined;
     const frequency = context.type === 'sector' ? context.frequency : undefined;
-    const isMyTasks = context.type === 'my-tasks';
 
     // Unidades view dentro do setor
     if (context.type === 'sector' && folder === 'units' && sectorId) {
@@ -76,16 +76,13 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         if (folder === 'routines') {
           return <RoutinesView sectorId={sectorId} frequency={frequency} />;
         }
-        if (isMyTasks) {
-          return <ResponsiblesView />;
-        }
         return <TasksView sectorId={sectorId} />;
       case 'kanban':
-        return <KanbanView sectorId={sectorId} isMyTasks={isMyTasks} />;
+        return <KanbanView sectorId={sectorId} />;
       case 'calendar':
-        return <CalendarView sectorId={sectorId} isMyTasks={isMyTasks} />;
+        return <CalendarView sectorId={sectorId} />;
       case 'gantt':
-        return <GanttView sectorId={sectorId} isMyTasks={isMyTasks} />;
+        return <GanttView sectorId={sectorId} />;
       default:
         return <TasksView sectorId={sectorId} />;
     }
