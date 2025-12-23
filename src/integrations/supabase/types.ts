@@ -176,30 +176,36 @@ export type Database = {
       }
       routine_checkins: {
         Row: {
+          assignee_user_id: string | null
           completed_at: string | null
           completed_by: string | null
           created_at: string
           id: string
           notes: string | null
           routine_period_id: string
+          status: string | null
           unit_id: string
         }
         Insert: {
+          assignee_user_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
           id?: string
           notes?: string | null
           routine_period_id: string
+          status?: string | null
           unit_id: string
         }
         Update: {
+          assignee_user_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
           id?: string
           notes?: string | null
           routine_period_id?: string
+          status?: string | null
           unit_id?: string
         }
         Relationships: [
