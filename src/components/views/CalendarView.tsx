@@ -8,19 +8,24 @@ import {
   format, 
   startOfWeek, 
   endOfWeek, 
+  startOfMonth,
+  endOfMonth,
   addWeeks, 
-  subWeeks, 
+  subWeeks,
+  addMonths,
+  subMonths,
+  addDays,
+  subDays,
   eachDayOfInterval, 
   isSameDay, 
   isToday,
-  addDays,
-  parseISO,
-  differenceInMinutes,
-  startOfDay,
-  isSameWeek
+  isSameMonth,
+  isSameWeek,
+  differenceInMinutes
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface GoogleCalendarEvent {
   id: string;
@@ -45,7 +50,9 @@ interface CalendarItem {
   status?: string;
 }
 
-const HOUR_HEIGHT = 48; // pixels per hour
+type ViewMode = 'day' | 'week' | 'month';
+
+const HOUR_HEIGHT = 48;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
@@ -53,22 +60,44 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const { user } = useAuth();
   const { isConnected, fetchEvents } = useGoogleCalendar();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
   const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
-  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
-  const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+  // Calculate date ranges based on view mode
+  const getDateRange = () => {
+    switch (viewMode) {
+      case 'day':
+        return { start: currentDate, end: currentDate };
+      case 'week':
+        return { 
+          start: startOfWeek(currentDate, { weekStartsOn: 0 }), 
+          end: endOfWeek(currentDate, { weekStartsOn: 0 }) 
+        };
+      case 'month':
+        const monthStart = startOfMonth(currentDate);
+        const monthEnd = endOfMonth(currentDate);
+        return { 
+          start: startOfWeek(monthStart, { weekStartsOn: 0 }), 
+          end: endOfWeek(monthEnd, { weekStartsOn: 0 }) 
+        };
+    }
+  };
 
-  // Scroll to current time on mount
+  const { start: rangeStart, end: rangeEnd } = getDateRange();
+  const daysToShow = viewMode === 'day' 
+    ? [currentDate] 
+    : eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+
+  // Scroll to current time on mount (for day/week views)
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && viewMode !== 'month') {
       const now = new Date();
       const scrollPosition = (now.getHours() - 1) * HOUR_HEIGHT;
       scrollRef.current.scrollTop = Math.max(0, scrollPosition);
     }
-  }, []);
+  }, [viewMode]);
 
   // Fetch Google Calendar events
   useEffect(() => {
@@ -77,8 +106,8 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         setIsLoadingGoogleEvents(true);
         try {
           const events = await fetchEvents(
-            weekStart.toISOString(),
-            weekEnd.toISOString()
+            rangeStart.toISOString(),
+            rangeEnd.toISOString()
           );
           setGoogleEvents(events);
         } catch (error) {
@@ -91,17 +120,29 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     } else {
       setGoogleEvents([]);
     }
-  }, [isMyTasks, isConnected, currentDate]);
+  }, [isMyTasks, isConnected, currentDate, viewMode]);
 
   const goToToday = () => setCurrentDate(new Date());
-  const goToPrevWeek = () => setCurrentDate(subWeeks(currentDate, 1));
-  const goToNextWeek = () => setCurrentDate(addWeeks(currentDate, 1));
+  
+  const goToPrev = () => {
+    switch (viewMode) {
+      case 'day': setCurrentDate(subDays(currentDate, 1)); break;
+      case 'week': setCurrentDate(subWeeks(currentDate, 1)); break;
+      case 'month': setCurrentDate(subMonths(currentDate, 1)); break;
+    }
+  };
+  
+  const goToNext = () => {
+    switch (viewMode) {
+      case 'day': setCurrentDate(addDays(currentDate, 1)); break;
+      case 'week': setCurrentDate(addWeeks(currentDate, 1)); break;
+      case 'month': setCurrentDate(addMonths(currentDate, 1)); break;
+    }
+  };
 
-  // Get all items for a specific day
   const getItemsForDay = (date: Date): CalendarItem[] => {
     const items: CalendarItem[] = [];
 
-    // Add tasks
     tasks?.forEach(task => {
       if (!task.due_date) return;
       const matchesSector = !sectorId || (task as any).sector_id === sectorId;
@@ -109,14 +150,13 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       
       if (matchesSector && matchesUser && isSameDay(new Date(task.due_date), date)) {
         const dueDate = new Date(task.due_date);
-        // Tasks without specific time are treated as all-day or at the due time
         const isAllDay = dueDate.getHours() === 0 && dueDate.getMinutes() === 0;
         
         items.push({
           id: task.id,
           title: task.title,
           startDate: dueDate,
-          endDate: new Date(dueDate.getTime() + 60 * 60 * 1000), // 1 hour duration
+          endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
           isAllDay,
           type: 'task',
           status: task.status
@@ -124,14 +164,12 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       }
     });
 
-    // Add Google events (only in My Tasks view)
     if (isMyTasks) {
       googleEvents.forEach(event => {
         const startDate = new Date(event.startDate);
         const endDate = new Date(event.endDate);
         
         if (isSameDay(startDate, date)) {
-          // Check if it's an all-day event
           const isAllDay = startDate.getHours() === 0 && 
                           startDate.getMinutes() === 0 && 
                           (differenceInMinutes(endDate, startDate) >= 1440 || endDate.getHours() === 0);
@@ -154,7 +192,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const getEventPosition = (item: CalendarItem) => {
     const startMinutes = item.startDate.getHours() * 60 + item.startDate.getMinutes();
     const endMinutes = item.endDate.getHours() * 60 + item.endDate.getMinutes();
-    const duration = Math.max(endMinutes - startMinutes, 30); // Minimum 30 min display
+    const duration = Math.max(endMinutes - startMinutes, 30);
 
     const top = (startMinutes / 60) * HOUR_HEIGHT;
     const height = (duration / 60) * HOUR_HEIGHT;
@@ -183,7 +221,15 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     return (minutes / 60) * HOUR_HEIGHT;
   };
 
-  const isThisWeek = isSameWeek(currentDate, new Date(), { weekStartsOn: 0 });
+  const getHeaderTitle = () => {
+    switch (viewMode) {
+      case 'day':
+        return format(currentDate, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+      case 'week':
+      case 'month':
+        return format(currentDate, "MMMM 'de' yyyy", { locale: ptBR });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -199,44 +245,100 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Calendário</h1>
-        <p className="text-muted-foreground">Visualize tarefas organizadas por data</p>
-      </div>
+  // Month View Component
+  const MonthView = () => {
+    const weeks: Date[][] = [];
+    for (let i = 0; i < daysToShow.length; i += 7) {
+      weeks.push(daysToShow.slice(i, i + 7));
+    }
 
-      {/* Navigation Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToToday}
-          className="font-medium"
-        >
-          Hoje
-        </Button>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={goToPrevWeek}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={goToNextWeek}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
-        <h2 className="text-lg font-semibold text-foreground capitalize">
-          {format(currentDate, 'MMMM \'de\' yyyy', { locale: ptBR })}
-        </h2>
-      </div>
-
-      {/* Calendar Container */}
+    return (
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         {/* Week Header */}
-        <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-border">
+        <div className="grid grid-cols-7 bg-muted/30">
+          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
+            <div
+              key={day}
+              className="py-3 text-center text-sm font-medium text-muted-foreground border-b border-border"
+            >
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Weeks */}
+        {weeks.map((week, weekIndex) => (
+          <div key={weekIndex} className="grid grid-cols-7">
+            {week.map((day) => {
+              const dayItems = getItemsForDay(day);
+              const isCurrentDay = isToday(day);
+              const isInCurrentMonth = isSameMonth(day, currentDate);
+
+              return (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    'min-h-[100px] border-b border-r border-border last:border-r-0 p-1',
+                    !isInCurrentMonth && 'bg-muted/20',
+                    isCurrentDay && 'bg-primary/5'
+                  )}
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <span
+                      className={cn(
+                        'text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full',
+                        isCurrentDay && 'bg-primary text-primary-foreground',
+                        !isInCurrentMonth && 'text-muted-foreground/50'
+                      )}
+                    >
+                      {format(day, 'd')}
+                    </span>
+                    {dayItems.length > 0 && (
+                      <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {dayItems.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {dayItems.slice(0, 3).map((item) => (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          'text-xs px-1.5 py-0.5 rounded truncate text-white',
+                          getItemColor(item)
+                        )}
+                        title={item.title}
+                      >
+                        {item.title}
+                      </div>
+                    ))}
+                    {dayItems.length > 3 && (
+                      <div className="text-xs text-muted-foreground px-1">
+                        +{dayItems.length - 3} mais
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Day/Week View Component (Time Grid)
+  const TimeGridView = () => {
+    const gridCols = viewMode === 'day' ? 'grid-cols-[60px_1fr]' : 'grid-cols-[60px_repeat(7,1fr)]';
+
+    return (
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        {/* Header */}
+        <div className={cn('grid border-b border-border', gridCols)}>
           <div className="p-2 text-xs text-muted-foreground text-center border-r border-border">
             GMT-03
           </div>
-          {weekDays.map((day) => {
+          {daysToShow.map((day) => {
             const isCurrentDay = isToday(day);
             return (
               <div
@@ -261,9 +363,9 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         </div>
 
         {/* All-day events row */}
-        <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-border min-h-[40px]">
+        <div className={cn('grid border-b border-border min-h-[40px]', gridCols)}>
           <div className="p-1 text-xs text-muted-foreground text-right pr-2 border-r border-border" />
-          {weekDays.map((day) => {
+          {daysToShow.map((day) => {
             const allDayItems = getItemsForDay(day).filter(item => item.isAllDay);
             return (
               <div
@@ -274,7 +376,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                   <div
                     key={item.id}
                     className={cn(
-                      "text-xs px-2 py-1 rounded text-white truncate",
+                      'text-xs px-2 py-1 rounded text-white truncate',
                       getItemColor(item)
                     )}
                     title={item.title}
@@ -297,7 +399,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
           ref={scrollRef}
           className="overflow-y-auto max-h-[600px] relative"
         >
-          <div className="grid grid-cols-[60px_repeat(7,1fr)]">
+          <div className={cn('grid', gridCols)}>
             {/* Hours Column */}
             <div className="relative">
               {HOURS.map((hour) => (
@@ -314,7 +416,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
             </div>
 
             {/* Day Columns */}
-            {weekDays.map((day, dayIndex) => {
+            {daysToShow.map((day) => {
               const dayItems = getItemsForDay(day).filter(item => !item.isAllDay);
               const isCurrentDay = isToday(day);
 
@@ -323,7 +425,6 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                   key={day.toISOString()}
                   className="relative border-r border-border last:border-r-0"
                 >
-                  {/* Hour lines */}
                   {HOURS.map((hour) => (
                     <div
                       key={hour}
@@ -332,7 +433,6 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                     />
                   ))}
 
-                  {/* Current time indicator */}
                   {isCurrentDay && (
                     <div
                       className="absolute left-0 right-0 z-20 flex items-center"
@@ -343,7 +443,6 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                     </div>
                   )}
 
-                  {/* Events */}
                   {dayItems.map((item, itemIndex) => {
                     const { top, height } = getEventPosition(item);
                     const timeStr = format(item.startDate, 'HH:mm');
@@ -353,13 +452,12 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                       <div
                         key={item.id}
                         className={cn(
-                          "absolute left-1 right-1 rounded-sm px-2 py-1 text-white text-xs overflow-hidden cursor-pointer border-l-4 z-10",
+                          'absolute left-1 right-1 rounded-sm px-2 py-1 text-white text-xs overflow-hidden cursor-pointer border-l-4 z-10',
                           getItemColor(item)
                         )}
                         style={{ 
                           top: top + 1,
                           height: height - 2,
-                          // Offset overlapping events
                           marginLeft: itemIndex > 0 ? `${(itemIndex % 2) * 40}%` : 0,
                           width: itemIndex > 0 ? '60%' : undefined
                         }}
@@ -380,6 +478,61 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
           </div>
         </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground mb-1">Calendário</h1>
+        <p className="text-muted-foreground">Visualize tarefas organizadas por data</p>
+      </div>
+
+      {/* Navigation Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToToday}
+            className="font-medium"
+          >
+            Hoje
+          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={goToPrev}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={goToNext}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+          <h2 className="text-lg font-semibold text-foreground capitalize">
+            {getHeaderTitle()}
+          </h2>
+        </div>
+
+        {/* View Mode Toggle */}
+        <ToggleGroup 
+          type="single" 
+          value={viewMode} 
+          onValueChange={(value) => value && setViewMode(value as ViewMode)}
+          className="border rounded-lg"
+        >
+          <ToggleGroupItem value="day" className="px-4">
+            Dia
+          </ToggleGroupItem>
+          <ToggleGroupItem value="week" className="px-4">
+            Semana
+          </ToggleGroupItem>
+          <ToggleGroupItem value="month" className="px-4">
+            Mês
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      {/* Calendar View */}
+      {viewMode === 'month' ? <MonthView /> : <TimeGridView />}
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-sm">
