@@ -12,11 +12,11 @@ const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'tasks', label: 'Tarefas', icon: ClipboardList },
   { id: 'routines', label: 'Rotinas', icon: Calendar },
+  { id: 'responsibles', label: 'Minhas Tarefas', icon: Users },
   { id: 'kanban', label: 'Kanban', icon: Columns3 },
   { id: 'gantt', label: 'Gantt', icon: GanttChart },
   { id: 'calendar', label: 'Calendário', icon: CalendarDays },
   { id: 'units', label: 'Unidades', icon: Building2 },
-  { id: 'responsibles', label: 'Responsáveis', icon: Users },
 ];
 
 export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
