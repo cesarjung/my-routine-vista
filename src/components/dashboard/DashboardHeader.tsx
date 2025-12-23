@@ -7,6 +7,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import sirtecLogoFull from '@/assets/sirtec-logo-full-black.png';
 
 interface Sector {
   id: string;
@@ -42,26 +43,26 @@ export const DashboardHeader = ({
 
       <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 rounded-xl gradient-primary shadow-glow">
-              <Activity className="w-5 h-5 text-primary-foreground" />
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <img src={sirtecLogoFull} alt="Sirtec Sistemas Elétricos" className="h-12 object-contain" />
+              {selectedSector && (
+                <Badge 
+                  variant="outline" 
+                  className="ml-2 text-sm px-3 py-1"
+                  style={{ 
+                    backgroundColor: `${selectedSector.color}15`,
+                    color: selectedSector.color || 'inherit',
+                    borderColor: `${selectedSector.color}50`
+                  }}
+                >
+                  {selectedSector.name}
+                </Badge>
+              )}
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-              Dashboard
-            </h1>
-            {selectedSector && (
-              <Badge 
-                variant="outline" 
-                className="ml-2 text-sm px-3 py-1"
-                style={{ 
-                  backgroundColor: `${selectedSector.color}15`,
-                  color: selectedSector.color || 'inherit',
-                  borderColor: `${selectedSector.color}50`
-                }}
-              >
-                {selectedSector.name}
-              </Badge>
-            )}
+            <h2 className="text-lg md:text-xl font-semibold text-foreground">
+              Gerenciamento de Rotinas
+            </h2>
           </div>
           <p className="text-muted-foreground text-sm md:text-base max-w-lg">
             {selectedSector 
