@@ -351,100 +351,102 @@ export const UnitsManagement = () => {
           )}
         </div>
 
-        {/* Expanded content: managers and child units */}
+        {/* Expanded content */}
         {isExpanded && (
           <div className="mt-2 ml-6 space-y-2">
-            {/* Managers list */}
-            <div className="p-3 rounded-lg bg-secondary/30 border border-border/50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Responsáveis
-                </span>
-                {isAdmin && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 text-xs"
-                    onClick={() => {
-                      setIsAddingManager(unit.id);
-                      setSelectedManagerId('');
-                    }}
-                  >
-                    <UserPlus className="w-3 h-3" />
-                    Adicionar
-                  </Button>
+            {/* Managers list - only for units (not gerências) */}
+            {!isGerencia && (
+              <div className="p-3 rounded-lg bg-secondary/30 border border-border/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Responsáveis
+                  </span>
+                  {isAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => {
+                        setIsAddingManager(unit.id);
+                        setSelectedManagerId('');
+                      }}
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      Adicionar
+                    </Button>
+                  )}
+                </div>
+
+                {/* Add manager form */}
+                {isAddingManager === unit.id && (
+                  <div className="flex items-center gap-2 mb-3 p-2 bg-background rounded border">
+                    <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
+                      <SelectTrigger className="flex-1 h-8">
+                        <SelectValue placeholder="Selecione um usuário" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableProfiles.length === 0 ? (
+                          <div className="p-2 text-sm text-muted-foreground text-center">
+                            Nenhum usuário disponível
+                          </div>
+                        ) : (
+                          availableProfiles.map(profile => (
+                            <SelectItem key={profile.id} value={profile.id}>
+                              {profile.full_name || profile.email}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" className="h-8" onClick={() => handleAddManager(unit.id)}>
+                      Adicionar
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0"
+                      onClick={() => setIsAddingManager(null)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Managers list */}
+                {managers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum responsável definido</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {managers.map(manager => (
+                      <div 
+                        key={manager.id}
+                        className="flex items-center gap-2 bg-background rounded-full pl-1 pr-2 py-1 border"
+                      >
+                        <Avatar className="w-6 h-6">
+                          <AvatarImage src={manager.profile?.avatar_url || undefined} />
+                          <AvatarFallback className="text-xs">
+                            {manager.profile?.full_name?.charAt(0) || manager.profile?.email?.charAt(0) || '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{manager.profile?.full_name || manager.profile?.email}</span>
+                        {isAdmin && (
+                          <button 
+                            onClick={() => handleRemoveManager(manager.id)}
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
+            )}
 
-              {/* Add manager form */}
-              {isAddingManager === unit.id && (
-                <div className="flex items-center gap-2 mb-3 p-2 bg-background rounded border">
-                  <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
-                    <SelectTrigger className="flex-1 h-8">
-                      <SelectValue placeholder="Selecione um usuário" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableProfiles.length === 0 ? (
-                        <div className="p-2 text-sm text-muted-foreground text-center">
-                          Nenhum usuário disponível
-                        </div>
-                      ) : (
-                        availableProfiles.map(profile => (
-                          <SelectItem key={profile.id} value={profile.id}>
-                            {profile.full_name || profile.email}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" className="h-8" onClick={() => handleAddManager(unit.id)}>
-                    Adicionar
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 w-8 p-0"
-                    onClick={() => setIsAddingManager(null)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
-
-              {/* Managers list */}
-              {managers.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhum responsável definido</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {managers.map(manager => (
-                    <div 
-                      key={manager.id}
-                      className="flex items-center gap-2 bg-background rounded-full pl-1 pr-2 py-1 border"
-                    >
-                      <Avatar className="w-6 h-6">
-                        <AvatarImage src={manager.profile?.avatar_url || undefined} />
-                        <AvatarFallback className="text-xs">
-                          {manager.profile?.full_name?.charAt(0) || manager.profile?.email?.charAt(0) || '?'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">{manager.profile?.full_name || manager.profile?.email}</span>
-                      {isAdmin && (
-                        <button 
-                          onClick={() => handleRemoveManager(manager.id)}
-                          className="text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Child units */}
-            {hasChildren && (
+            {/* Child units - only for gerências */}
+            {isGerencia && hasChildren && (
               <div className="space-y-2">
                 {children.map(child => renderUnitItem(child, false))}
               </div>
