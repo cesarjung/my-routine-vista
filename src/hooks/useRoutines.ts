@@ -28,7 +28,7 @@ export const useRoutines = (unitId?: string) => {
 
       if (error) throw error;
 
-      // Se usuário não é admin/gestor, filtrar para mostrar apenas rotinas atribuídas ou da sua unidade
+      // Se usuário não é admin/gestor, filtrar para mostrar apenas rotinas relevantes
       if (role === 'usuario' && user?.id) {
         // Buscar unit_id do usuário
         const { data: profile } = await supabase
@@ -47,11 +47,32 @@ export const useRoutines = (unitId?: string) => {
 
         const assignedRoutineIds = new Set(routineAssignees?.map(ra => ra.routine_id) || []);
 
+        // Buscar rotinas que têm checkins para a unidade do usuário
+        let routinesWithUserUnitCheckins = new Set<string>();
+        if (userUnitId) {
+          const { data: checkins } = await supabase
+            .from('routine_checkins')
+            .select('routine_period_id')
+            .eq('unit_id', userUnitId);
+          
+          if (checkins && checkins.length > 0) {
+            const periodIds = checkins.map(c => c.routine_period_id);
+            const { data: periods } = await supabase
+              .from('routine_periods')
+              .select('routine_id')
+              .in('id', periodIds);
+            
+            routinesWithUserUnitCheckins = new Set(periods?.map(p => p.routine_id) || []);
+          }
+        }
+
         return (data as Routine[]).filter(routine => {
           // Mostrar se o usuário está na tabela routine_assignees
           if (assignedRoutineIds.has(routine.id)) return true;
           // Mostrar se a rotina é da unidade do usuário
           if (userUnitId && routine.unit_id === userUnitId) return true;
+          // Mostrar se existe um checkin para a unidade do usuário nesta rotina
+          if (routinesWithUserUnitCheckins.has(routine.id)) return true;
           return false;
         });
       }
@@ -95,9 +116,29 @@ export const useRoutinesByFrequency = (frequency: TaskFrequency) => {
 
         const assignedRoutineIds = new Set(routineAssignees?.map(ra => ra.routine_id) || []);
 
+        // Buscar rotinas que têm checkins para a unidade do usuário
+        let routinesWithUserUnitCheckins = new Set<string>();
+        if (userUnitId) {
+          const { data: checkins } = await supabase
+            .from('routine_checkins')
+            .select('routine_period_id')
+            .eq('unit_id', userUnitId);
+          
+          if (checkins && checkins.length > 0) {
+            const periodIds = checkins.map(c => c.routine_period_id);
+            const { data: periods } = await supabase
+              .from('routine_periods')
+              .select('routine_id')
+              .in('id', periodIds);
+            
+            routinesWithUserUnitCheckins = new Set(periods?.map(p => p.routine_id) || []);
+          }
+        }
+
         return (data as Routine[]).filter(routine => {
           if (assignedRoutineIds.has(routine.id)) return true;
           if (userUnitId && routine.unit_id === userUnitId) return true;
+          if (routinesWithUserUnitCheckins.has(routine.id)) return true;
           return false;
         });
       }
