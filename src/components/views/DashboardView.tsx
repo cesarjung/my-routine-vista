@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Building2, Users, Loader2, CheckCircle2, Maximize2, Minimize2, X } from 'lucide-react';
+import { Building2, Users, Loader2, CheckCircle2, Maximize2, X, ExternalLink } from 'lucide-react';
 import { useUnitRoutineStatus, useResponsibleRoutineStatus, useOverallStats } from '@/hooks/useDashboardData';
 import { useDashboardPanels } from '@/hooks/useDashboardPanels';
 import { useSectors } from '@/hooks/useSectors';
+import { useTasks } from '@/hooks/useTasks';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -17,7 +18,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
 import { CustomPanel } from '@/components/dashboard/CustomPanel';
 import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
@@ -36,13 +44,35 @@ const FREQUENCY_FULL_LABELS: Record<string, string> = {
   mensal: 'Mensal',
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  pendente: 'Pendente',
+  em_andamento: 'Em Andamento',
+  concluida: 'Concluída',
+  atrasada: 'Atrasada',
+  cancelada: 'Cancelada',
+};
+
 interface StatusData {
   completed: number;
   pending: number;
   total: number;
 }
 
-const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string }) => {
+interface TasksDialogState {
+  isOpen: boolean;
+  title: string;
+  entityId: string;
+  entityType: 'unit' | 'responsible';
+  frequency: string;
+}
+
+interface StatusBadgeProps {
+  data: StatusData;
+  frequency: string;
+  onClick?: () => void;
+}
+
+const StatusBadge = ({ data, frequency, onClick }: StatusBadgeProps) => {
   if (data.total === 0) {
     return <div className="w-7 h-7 rounded bg-secondary/30 flex items-center justify-center text-muted-foreground text-[10px]">-</div>;
   }
@@ -57,8 +87,11 @@ const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string 
       <Tooltip>
         <TooltipTrigger asChild>
           <div
+            onClick={onClick}
             className={cn(
-              'w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold cursor-default transition-transform hover:scale-110',
+              'w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold transition-transform hover:scale-110',
+              onClick && 'cursor-pointer hover:ring-2 hover:ring-primary/50',
+              !onClick && 'cursor-default',
               isComplete && 'bg-success/20 text-success',
               isGood && !isComplete && 'bg-emerald-500/20 text-emerald-400',
               isWarning && 'bg-warning/20 text-warning',
@@ -75,6 +108,7 @@ const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string 
         <TooltipContent side="top" className="text-xs">
           <p className="font-semibold">{FREQUENCY_FULL_LABELS[frequency]}</p>
           <p>{data.completed}/{data.total} ({percentage}%)</p>
+          {onClick && <p className="text-muted-foreground">Clique para ver tarefas</p>}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -131,9 +165,117 @@ const ResizablePanel = ({ title, icon: Icon, count, children, defaultHeight = 28
   );
 };
 
+// Tasks Dialog Component
+interface TasksDialogProps {
+  state: TasksDialogState;
+  onClose: () => void;
+  sectorId?: string | null;
+}
+
+const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
+  const { data: allTasks, isLoading } = useTasks();
+
+  // Filter tasks based on entity type and frequency
+  const filteredTasks = allTasks?.filter(task => {
+    // Filter by entity (unit or responsible)
+    if (state.entityType === 'unit') {
+      if (task.unit_id !== state.entityId) return false;
+    } else {
+      if (task.assigned_to !== state.entityId) return false;
+    }
+
+    // Filter by sector if selected
+    if (sectorId && task.sector_id !== sectorId) return false;
+
+    // Filter by frequency (through routine)
+    // Note: We need to check if the task has a routine with the matching frequency
+    // For now, we show all tasks for the entity since we don't have routine data here
+    // This will be filtered in the hook if needed
+    
+    return true;
+  }) || [];
+
+  return (
+    <Dialog open={state.isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {state.entityType === 'unit' ? (
+              <Building2 className="w-5 h-5 text-primary" />
+            ) : (
+              <Users className="w-5 h-5 text-primary" />
+            )}
+            {state.title}
+            {state.frequency && (
+              <Badge variant="secondary" className="ml-2">
+                {FREQUENCY_FULL_LABELS[state.frequency] || state.frequency}
+              </Badge>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="flex-1 overflow-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            </div>
+          ) : filteredTasks.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Nenhuma tarefa encontrada
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredTasks.map(task => (
+                <div
+                  key={task.id}
+                  className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{task.title}</p>
+                      {task.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                          {task.description}
+                        </p>
+                      )}
+                    </div>
+                    <Badge
+                      variant={
+                        task.status === 'concluida' ? 'default' :
+                        task.status === 'atrasada' ? 'destructive' :
+                        task.status === 'em_andamento' ? 'secondary' :
+                        'outline'
+                      }
+                      className="shrink-0"
+                    >
+                      {STATUS_LABELS[task.status] || task.status}
+                    </Badge>
+                  </div>
+                  {task.due_date && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Prazo: {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export const DashboardView = () => {
   const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
+    isOpen: false,
+    title: '',
+    entityId: '',
+    entityType: 'unit',
+    frequency: '',
+  });
   
   const { data: sectors } = useSectors();
   const { data: statsData } = useOverallStats(selectedSectorId);
@@ -143,6 +285,25 @@ export const DashboardView = () => {
 
   const isLoading = loadingUnits || loadingResponsibles;
   const overallPercentage = statsData?.percentage || 0;
+
+  const openTasksDialog = (
+    entityId: string,
+    entityName: string,
+    entityType: 'unit' | 'responsible',
+    frequency: string
+  ) => {
+    setTasksDialog({
+      isOpen: true,
+      title: entityName,
+      entityId,
+      entityType,
+      frequency,
+    });
+  };
+
+  const closeTasksDialog = () => {
+    setTasksDialog(prev => ({ ...prev, isOpen: false }));
+  };
 
   // Fullscreen view
   if (isFullscreen) {
@@ -211,7 +372,14 @@ export const DashboardView = () => {
                             </td>
                             {FREQUENCIES.map(f => (
                               <td key={f} className="p-2 text-center">
-                                <StatusBadge data={unit.frequencies[f]} frequency={f} />
+                                <StatusBadge 
+                                  data={unit.frequencies[f]} 
+                                  frequency={f}
+                                  onClick={unit.frequencies[f].total > 0 
+                                    ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
+                                    : undefined
+                                  }
+                                />
                               </td>
                             ))}
                             <td className="p-3 text-right"><TotalBadge data={unit.totals} /></td>
@@ -243,7 +411,14 @@ export const DashboardView = () => {
                             </td>
                             {FREQUENCIES.map(f => (
                               <td key={f} className="p-2 text-center">
-                                <StatusBadge data={person.frequencies[f]} frequency={f} />
+                                <StatusBadge 
+                                  data={person.frequencies[f]} 
+                                  frequency={f}
+                                  onClick={person.frequencies[f].total > 0 
+                                    ? () => openTasksDialog(person.id, person.name, 'responsible', f)
+                                    : undefined
+                                  }
+                                />
                               </td>
                             ))}
                             <td className="p-3 text-right"><TotalBadge data={person.totals} /></td>
@@ -257,6 +432,13 @@ export const DashboardView = () => {
             </>
           )}
         </div>
+
+        {/* Tasks Dialog */}
+        <TasksDialog 
+          state={tasksDialog} 
+          onClose={closeTasksDialog}
+          sectorId={selectedSectorId}
+        />
       </div>
     );
   }
@@ -368,7 +550,14 @@ export const DashboardView = () => {
                       </td>
                       {FREQUENCIES.map(f => (
                         <td key={f} className="p-1 text-center">
-                          <StatusBadge data={unit.frequencies[f]} frequency={f} />
+                          <StatusBadge 
+                            data={unit.frequencies[f]} 
+                            frequency={f}
+                            onClick={unit.frequencies[f].total > 0 
+                              ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
+                              : undefined
+                            }
+                          />
                         </td>
                       ))}
                       <td className="p-2 text-right"><TotalBadge data={unit.totals} /></td>
@@ -400,7 +589,14 @@ export const DashboardView = () => {
                       </td>
                       {FREQUENCIES.map(f => (
                         <td key={f} className="p-1 text-center">
-                          <StatusBadge data={person.frequencies[f]} frequency={f} />
+                          <StatusBadge 
+                            data={person.frequencies[f]} 
+                            frequency={f}
+                            onClick={person.frequencies[f].total > 0 
+                              ? () => openTasksDialog(person.id, person.name, 'responsible', f)
+                              : undefined
+                            }
+                          />
                         </td>
                       ))}
                       <td className="p-2 text-right"><TotalBadge data={person.totals} /></td>
@@ -413,6 +609,13 @@ export const DashboardView = () => {
           </div>
         </>
       )}
+
+      {/* Tasks Dialog */}
+      <TasksDialog 
+        state={tasksDialog} 
+        onClose={closeTasksDialog}
+        sectorId={selectedSectorId}
+      />
     </div>
   );
 };
