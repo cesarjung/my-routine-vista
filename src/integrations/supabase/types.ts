@@ -756,6 +756,7 @@ export type Database = {
           period_start: string
         }[]
       }
+      get_routine_unit_id: { Args: { _routine_id: string }; Returns: string }
       get_user_unit_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -774,6 +775,10 @@ export type Database = {
       }
       user_has_sector_access: {
         Args: { _sector_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_is_routine_assignee: {
+        Args: { _routine_id: string; _user_id: string }
         Returns: boolean
       }
     }
