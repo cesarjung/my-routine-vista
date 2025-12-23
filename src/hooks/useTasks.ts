@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserRole } from '@/hooks/useUserRole';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
 export type Task = Tables<'tasks'>;
@@ -12,8 +14,11 @@ export interface TaskWithDetails extends Task {
 }
 
 export const useTasks = (unitId?: string) => {
+  const { user } = useAuth();
+  const { data: role } = useUserRole();
+
   return useQuery({
-    queryKey: ['tasks', unitId],
+    queryKey: ['tasks', unitId, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from('tasks')
@@ -32,14 +37,49 @@ export const useTasks = (unitId?: string) => {
       const { data, error } = await query;
 
       if (error) throw error;
+
+      // Se usuário não é admin/gestor, filtrar para mostrar apenas suas tarefas ou tarefas da sua unidade
+      if (role === 'usuario' && user?.id) {
+        // Buscar unit_id do usuário
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('unit_id')
+          .eq('id', user.id)
+          .single();
+        
+        const userUnitId = profile?.unit_id;
+
+        // Buscar tarefas atribuídas ao usuário
+        const { data: taskAssignees } = await supabase
+          .from('task_assignees')
+          .select('task_id')
+          .eq('user_id', user.id);
+
+        const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
+
+        return (data as TaskWithDetails[]).filter(task => {
+          // Mostrar se o usuário é o assigned_to
+          if (task.assigned_to === user.id) return true;
+          // Mostrar se o usuário está na tabela task_assignees
+          if (assignedTaskIds.has(task.id)) return true;
+          // Mostrar se a tarefa é da unidade do usuário
+          if (userUnitId && task.unit_id === userUnitId) return true;
+          return false;
+        });
+      }
+
       return data as TaskWithDetails[];
     },
+    enabled: !!user?.id,
   });
 };
 
 export const useTasksByStatus = (status: TaskStatus) => {
+  const { user } = useAuth();
+  const { data: role } = useUserRole();
+
   return useQuery({
-    queryKey: ['tasks', 'status', status],
+    queryKey: ['tasks', 'status', status, user?.id, role],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tasks')
@@ -53,20 +93,77 @@ export const useTasksByStatus = (status: TaskStatus) => {
         .order('due_date', { ascending: true });
 
       if (error) throw error;
+
+      // Se usuário não é admin/gestor, filtrar
+      if (role === 'usuario' && user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('unit_id')
+          .eq('id', user.id)
+          .single();
+        
+        const userUnitId = profile?.unit_id;
+
+        const { data: taskAssignees } = await supabase
+          .from('task_assignees')
+          .select('task_id')
+          .eq('user_id', user.id);
+
+        const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
+
+        return (data as TaskWithDetails[]).filter(task => {
+          if (task.assigned_to === user.id) return true;
+          if (assignedTaskIds.has(task.id)) return true;
+          if (userUnitId && task.unit_id === userUnitId) return true;
+          return false;
+        });
+      }
+
       return data as TaskWithDetails[];
     },
+    enabled: !!user?.id,
   });
 };
 
 export const useTaskStats = () => {
+  const { user } = useAuth();
+  const { data: role } = useUserRole();
+
   return useQuery({
-    queryKey: ['task-stats'],
+    queryKey: ['task-stats', user?.id, role],
     queryFn: async () => {
-      const { data: tasks, error } = await supabase
+      const { data: allTasks, error } = await supabase
         .from('tasks')
-        .select('status');
+        .select('id, status, assigned_to, unit_id');
 
       if (error) throw error;
+
+      let tasks = allTasks;
+
+      // Se usuário não é admin/gestor, filtrar
+      if (role === 'usuario' && user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('unit_id')
+          .eq('id', user.id)
+          .single();
+        
+        const userUnitId = profile?.unit_id;
+
+        const { data: taskAssignees } = await supabase
+          .from('task_assignees')
+          .select('task_id')
+          .eq('user_id', user.id);
+
+        const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
+
+        tasks = allTasks?.filter(task => {
+          if (task.assigned_to === user.id) return true;
+          if (assignedTaskIds.has(task.id)) return true;
+          if (userUnitId && task.unit_id === userUnitId) return true;
+          return false;
+        }) || [];
+      }
 
       const stats = {
         total: tasks?.length || 0,
@@ -78,5 +175,6 @@ export const useTaskStats = () => {
 
       return stats;
     },
+    enabled: !!user?.id,
   });
 };
