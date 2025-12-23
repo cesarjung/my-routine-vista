@@ -32,14 +32,14 @@ export const useDashboardPanels = () => {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['dashboard-panels', user?.id],
+    queryKey: ['dashboard-panels'],
     queryFn: async () => {
       if (!user) return [];
       
+      // Fetch all panels (RLS now allows everyone to view all)
       const { data, error } = await supabase
         .from('dashboard_panels')
         .select('*')
-        .eq('user_id', user.id)
         .order('order_index', { ascending: true });
 
       if (error) throw error;
@@ -50,7 +50,9 @@ export const useDashboardPanels = () => {
         display_config: (panel.display_config || {}) as Record<string, unknown>
       })) as DashboardPanel[];
     },
-    enabled: !!user
+    enabled: !!user,
+    staleTime: 10000,
+    refetchInterval: 30000, // Refetch every 30 seconds to get admin changes
   });
 };
 
@@ -164,10 +166,10 @@ export const useReorderDashboardPanels = () => {
     },
     onMutate: async (newOrder) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['dashboard-panels', user?.id] });
+      await queryClient.cancelQueries({ queryKey: ['dashboard-panels'] });
 
       // Snapshot the previous value
-      const previousPanels = queryClient.getQueryData<DashboardPanel[]>(['dashboard-panels', user?.id]);
+      const previousPanels = queryClient.getQueryData<DashboardPanel[]>(['dashboard-panels']);
 
       // Optimistically update the cache
       if (previousPanels) {
@@ -177,7 +179,7 @@ export const useReorderDashboardPanels = () => {
           return aOrder - bOrder;
         });
         
-        queryClient.setQueryData(['dashboard-panels', user?.id], updatedPanels);
+        queryClient.setQueryData(['dashboard-panels'], updatedPanels);
       }
 
       return { previousPanels };
@@ -185,13 +187,13 @@ export const useReorderDashboardPanels = () => {
     onError: (error, _, context) => {
       // Rollback on error
       if (context?.previousPanels) {
-        queryClient.setQueryData(['dashboard-panels', user?.id], context.previousPanels);
+        queryClient.setQueryData(['dashboard-panels'], context.previousPanels);
       }
       toast.error('Erro ao reordenar painéis: ' + error.message);
     },
     onSettled: () => {
       // Always refetch after error or success
-      queryClient.invalidateQueries({ queryKey: ['dashboard-panels', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-panels'] });
     }
   });
 };

@@ -4,6 +4,7 @@ import { useUnitRoutineStatus, useResponsibleRoutineStatus, useOverallStats } fr
 import { useDashboardPanels } from '@/hooks/useDashboardPanels';
 import { useSectors } from '@/hooks/useSectors';
 import { useTasks } from '@/hooks/useTasks';
+import { useIsAdmin } from '@/hooks/useUserRole';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -283,6 +284,7 @@ export const DashboardView = () => {
   const { data: unitStatus, isLoading: loadingUnits } = useUnitRoutineStatus(selectedSectorId);
   const { data: responsibleStatus, isLoading: loadingResponsibles } = useResponsibleRoutineStatus(selectedSectorId);
   const { data: customPanels, isLoading: loadingPanels } = useDashboardPanels();
+  const { isAdmin } = useIsAdmin();
 
   const isLoading = loadingUnits || loadingResponsibles;
   const overallPercentage = statsData?.percentage || 0;
@@ -479,7 +481,7 @@ export const DashboardView = () => {
             </Tooltip>
           </TooltipProvider>
 
-          <PanelFormDialog panelCount={customPanels?.length || 0} />
+          {isAdmin && <PanelFormDialog panelCount={customPanels?.length || 0} />}
           
           <Select
             value={selectedSectorId || 'all'}

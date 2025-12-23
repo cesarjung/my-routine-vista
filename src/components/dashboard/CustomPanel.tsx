@@ -2,6 +2,7 @@ import { Building2, Users, FolderKanban, Settings, Trash2, CheckCircle2, Loader2
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardPanel, useDeleteDashboardPanel } from '@/hooks/useDashboardPanels';
+import { useIsAdmin } from '@/hooks/useUserRole';
 import { PanelFormDialog } from './PanelFormDialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -270,6 +271,7 @@ interface CustomPanelProps {
 export const CustomPanel = ({ panel }: CustomPanelProps) => {
   const { data, isLoading } = useCustomPanelData(panel);
   const deletePanel = useDeleteDashboardPanel();
+  const { isAdmin } = useIsAdmin();
   const Icon = getGroupIcon(panel.filters.group_by);
 
   return (
@@ -287,38 +289,40 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
         <span className="font-medium text-sm truncate">{panel.title}</span>
         <span className="text-[10px] text-muted-foreground ml-auto">{data?.length || 0}</span>
         
-        <div className="flex items-center gap-1 ml-2">
-          <PanelFormDialog
-            panel={panel}
-            trigger={
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <Settings className="w-3 h-3" />
-              </Button>
-            }
-          />
-          
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
-                <Trash2 className="w-3 h-3" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Remover painel?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta ação não pode ser desfeita. O painel "{panel.title}" será removido permanentemente.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
-                  Remover
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-1 ml-2">
+            <PanelFormDialog
+              panel={panel}
+              trigger={
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Settings className="w-3 h-3" />
+                </Button>
+              }
+            />
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remover painel?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. O painel "{panel.title}" será removido permanentemente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
+                    Remover
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </div>
       
       <div className="overflow-auto flex-1">
