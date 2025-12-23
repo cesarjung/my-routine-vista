@@ -80,14 +80,21 @@ export const useCreateRoutineWithUnits = () => {
       
       if (!user) throw new Error('Usuário não autenticado');
 
-      // Get the user's unit_id for cases without unit assignments
+      // Get the user's unit_id and role
       const { data: profile } = await supabase
         .from('profiles')
         .select('unit_id')
         .eq('id', user.id)
         .single();
 
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
       const userUnitId = profile?.unit_id;
+      const isAdminOrGestor = userRole?.role === 'admin' || userRole?.role === 'gestor';
 
       // Create the routine (without unit_id - it's optional)
       const { data: routine, error: routineError } = await supabase
@@ -226,8 +233,13 @@ export const useCreateRoutineWithUnits = () => {
 
         if (tasksError) throw tasksError;
       } else {
-        // No units selected - create a simple task for the user's own unit
-        // This is for regular users creating routines for themselves
+        // No units selected
+        // For admin/gestor without unit_id, they MUST select at least one unit
+        if (isAdminOrGestor && !userUnitId) {
+          throw new Error('Como administrador ou gestor, você deve selecionar pelo menos uma unidade.');
+        }
+        
+        // For regular users, use their own unit_id
         if (!userUnitId) {
           throw new Error('Você precisa estar associado a uma unidade para criar rotinas.');
         }

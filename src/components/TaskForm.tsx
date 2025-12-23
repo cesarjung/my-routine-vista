@@ -87,6 +87,13 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   const { data: allProfiles } = useProfiles();
   const createTaskWithUnits = useCreateTaskWithUnits();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
+  
+  // Get current user's profile to check if they have a unit_id
+  const currentUserProfile = allProfiles?.find(p => p.id === user?.id);
+  const userHasUnit = !!currentUserProfile?.unit_id;
+  
+  // Admin/Gestor without unit_id must select at least one unit
+  const mustSelectUnit = isGestorOrAdmin && !userHasUnit;
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -179,8 +186,14 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   };
 
   const onSubmit = async (data: FormData) => {
+    // Admin/Gestor sem unidade associada DEVE selecionar pelo menos uma unidade
+    if (mustSelectUnit && unitAssignments.length === 0) {
+      setUnitError('Como administrador ou gestor sem unidade associada, você deve selecionar pelo menos uma unidade.');
+      return;
+    }
+    
     // Usuários regulares não precisam selecionar unidades - tarefa será criada para eles mesmos
-    // Gestores/Admins podem opcionalmente selecionar unidades
+    // Gestores/Admins podem opcionalmente selecionar unidades (a menos que não tenham unit_id)
     
     // Se não for gestor/admin, força o usuário como responsável
     const effectiveParentAssignedTo = isGestorOrAdmin
@@ -516,9 +529,9 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
         {isGestorOrAdmin && (
           <div className="flex-1 overflow-hidden flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-2">
-              <FormLabel className="flex items-center gap-2">
+              <FormLabel className={cn("flex items-center gap-2", mustSelectUnit && unitAssignments.length === 0 && "text-destructive")}>
                 <Users className="h-4 w-4" />
-                Unidades e Responsáveis ({unitAssignments.length} selecionadas) - Opcional
+                Unidades e Responsáveis ({unitAssignments.length} selecionadas){mustSelectUnit ? ' - Obrigatório' : ' - Opcional'}
               </FormLabel>
               <div className="flex gap-2">
                 <Button
