@@ -4,6 +4,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { Tables } from '@/integrations/supabase/types';
+import { TaskEditDialog } from '@/components/TaskEditDialog';
+
+type Task = Tables<'tasks'> & {
+  unit?: { name: string; code: string } | null;
+};
 import { 
   format, 
   startOfWeek, 
@@ -64,6 +70,16 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
   const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  const handleEditTask = (taskId: string) => {
+    const task = tasks?.find(t => t.id === taskId);
+    if (task) {
+      setEditingTask(task as Task);
+      setEditDialogOpen(true);
+    }
+  };
 
   // Calculate date ranges based on view mode
   const getDateRange = () => {
@@ -304,10 +320,16 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                       <div
                         key={item.id}
                         className={cn(
-                          'text-xs px-1.5 py-0.5 rounded truncate text-white',
+                          'text-xs px-1.5 py-0.5 rounded truncate text-white cursor-pointer hover:opacity-80',
                           getItemColor(item)
                         )}
                         title={item.title}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (item.type === 'task') {
+                            handleEditTask(item.id);
+                          }
+                        }}
                       >
                         {item.title}
                       </div>
@@ -452,7 +474,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                       <div
                         key={item.id}
                         className={cn(
-                          'absolute left-1 right-1 rounded-sm px-2 py-1 text-white text-xs overflow-hidden cursor-pointer border-l-4 z-10',
+                          'absolute left-1 right-1 rounded-sm px-2 py-1 text-white text-xs overflow-hidden cursor-pointer border-l-4 z-10 hover:opacity-90',
                           getItemColor(item)
                         )}
                         style={{ 
@@ -462,6 +484,11 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                           width: itemIndex > 0 ? '60%' : undefined
                         }}
                         title={`${item.title} (${timeStr} - ${endTimeStr})`}
+                        onClick={() => {
+                          if (item.type === 'task') {
+                            handleEditTask(item.id);
+                          }
+                        }}
                       >
                         <div className="font-medium truncate">{item.title}</div>
                         {height > 30 && (
@@ -561,6 +588,12 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
           </div>
         )}
       </div>
+
+      <TaskEditDialog
+        task={editingTask}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
     </div>
   );
 };

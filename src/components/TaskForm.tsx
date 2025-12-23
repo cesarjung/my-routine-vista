@@ -66,6 +66,8 @@ const formSchema = z.object({
   is_recurring: z.boolean().optional(),
   recurrence_frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const).optional(),
   recurrence_mode: z.enum(['schedule', 'on_completion'] as const).optional(),
+  repeat_forever: z.boolean().optional(),
+  recurrence_end_date: z.date().optional(),
   skip_weekends_holidays: z.boolean().optional(),
 });
 
@@ -102,6 +104,8 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
       is_recurring: false,
       recurrence_frequency: 'semanal',
       recurrence_mode: 'schedule',
+      repeat_forever: true,
+      recurrence_end_date: undefined,
       skip_weekends_holidays: false,
     },
   });
@@ -117,6 +121,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
 
   const isRecurring = form.watch('is_recurring');
   const recurrenceMode = form.watch('recurrence_mode');
+  const repeatForever = form.watch('repeat_forever');
 
   const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
@@ -496,6 +501,78 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
             </FormItem>
           )}
         />
+
+        <FormField
+          control={form.control}
+          name="repeat_forever"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+              <div className="space-y-0.5">
+                <FormLabel className="text-sm font-medium">Repetir para sempre</FormLabel>
+                <FormDescription className="text-xs">
+                  Se desativado, defina até quando a tarefa deve se repetir
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={(checked) => {
+                    field.onChange(checked);
+                    if (checked) {
+                      form.setValue('recurrence_end_date', undefined);
+                    }
+                  }}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {!repeatForever && (
+          <FormField
+            control={form.control}
+            name="recurrence_end_date"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Repetir até</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {field.value ? (
+                          format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                        ) : (
+                          <span>Selecione a data final</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      disabled={(date) => date < (form.getValues('due_date') || new Date())}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormDescription className="text-xs">
+                  A tarefa se repetirá até esta data
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}
