@@ -258,6 +258,38 @@ export type Database = {
           },
         ]
       }
+      sector_users: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          sector_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          sector_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          sector_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sector_users_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "sectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sectors: {
         Row: {
           color: string | null
@@ -620,6 +652,10 @@ export type Database = {
       }
       is_unit_manager: {
         Args: { _unit_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_has_sector_access: {
+        Args: { _sector_id: string; _user_id: string }
         Returns: boolean
       }
     }

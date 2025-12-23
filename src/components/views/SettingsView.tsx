@@ -12,9 +12,10 @@ import { useProfiles, Profile } from '@/hooks/useProfiles';
 import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey } from 'lucide-react';
 import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
+import { SectorUsersManagement } from '@/components/SectorUsersManagement';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -462,7 +463,7 @@ export const SettingsView = () => {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <UserCircle className="w-4 h-4" />
             Meu Perfil
@@ -479,6 +480,12 @@ export const SettingsView = () => {
             <Building2 className="w-4 h-4" />
             Unidades
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="sectors" className="flex items-center gap-2">
+              <FolderKey className="w-4 h-4" />
+              Setores
+            </TabsTrigger>
+          )}
           <TabsTrigger value="integrations" className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             Integrações
@@ -701,6 +708,12 @@ export const SettingsView = () => {
         <TabsContent value="units">
           <UnitsManagement />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="sectors">
+            <SectorUsersManagement />
+          </TabsContent>
+        )}
 
         <TabsContent value="integrations">
           <div className="space-y-4">
