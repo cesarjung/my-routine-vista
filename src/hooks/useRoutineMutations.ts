@@ -10,10 +10,13 @@ interface UnitAssignment {
   assignedTo: string | null;
 }
 
+type RecurrenceMode = 'schedule' | 'on_completion';
+
 interface CreateRoutineData {
   title: string;
   description?: string;
   frequency: TaskFrequency;
+  recurrenceMode?: RecurrenceMode;
 }
 
 interface CreateRoutineWithUnitsData extends CreateRoutineData {
@@ -93,6 +96,7 @@ export const useCreateRoutineWithUnits = () => {
           title: data.title,
           description: data.description || null,
           frequency: data.frequency,
+          recurrence_mode: data.recurrenceMode || 'schedule',
           created_by: user.id,
           is_active: true,
           // unit_id is optional - only set if there's a single unit assignment

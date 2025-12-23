@@ -207,6 +207,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["task_frequency"]
           id: string
           is_active: boolean | null
+          recurrence_mode: Database["public"]["Enums"]["recurrence_mode"]
           sector_id: string | null
           title: string
           unit_id: string | null
@@ -220,6 +221,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["task_frequency"]
           id?: string
           is_active?: boolean | null
+          recurrence_mode?: Database["public"]["Enums"]["recurrence_mode"]
           sector_id?: string | null
           title: string
           unit_id?: string | null
@@ -233,6 +235,7 @@ export type Database = {
           frequency?: Database["public"]["Enums"]["task_frequency"]
           id?: string
           is_active?: boolean | null
+          recurrence_mode?: Database["public"]["Enums"]["recurrence_mode"]
           sector_id?: string | null
           title?: string
           unit_id?: string | null
@@ -412,8 +415,13 @@ export type Database = {
           due_date: string | null
           google_event_id: string | null
           id: string
+          is_recurring: boolean | null
           parent_task_id: string | null
           priority: number | null
+          recurrence_frequency:
+            | Database["public"]["Enums"]["task_frequency"]
+            | null
+          recurrence_mode: Database["public"]["Enums"]["recurrence_mode"] | null
           routine_id: string | null
           sector_id: string | null
           start_date: string | null
@@ -431,8 +439,15 @@ export type Database = {
           due_date?: string | null
           google_event_id?: string | null
           id?: string
+          is_recurring?: boolean | null
           parent_task_id?: string | null
           priority?: number | null
+          recurrence_frequency?:
+            | Database["public"]["Enums"]["task_frequency"]
+            | null
+          recurrence_mode?:
+            | Database["public"]["Enums"]["recurrence_mode"]
+            | null
           routine_id?: string | null
           sector_id?: string | null
           start_date?: string | null
@@ -450,8 +465,15 @@ export type Database = {
           due_date?: string | null
           google_event_id?: string | null
           id?: string
+          is_recurring?: boolean | null
           parent_task_id?: string | null
           priority?: number | null
+          recurrence_frequency?:
+            | Database["public"]["Enums"]["task_frequency"]
+            | null
+          recurrence_mode?:
+            | Database["public"]["Enums"]["recurrence_mode"]
+            | null
           routine_id?: string | null
           sector_id?: string | null
           start_date?: string | null
@@ -603,6 +625,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "gestor" | "usuario"
+      recurrence_mode: "schedule" | "on_completion"
       task_frequency:
         | "diaria"
         | "semanal"
@@ -744,6 +767,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "gestor", "usuario"],
+      recurrence_mode: ["schedule", "on_completion"],
       task_frequency: [
         "diaria",
         "semanal",
