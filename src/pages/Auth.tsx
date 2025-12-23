@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mail, Lock, User, ClipboardCheck } from 'lucide-react';
+import { Loader2, Mail, Lock, User } from 'lucide-react';
 import { z } from 'zod';
+import sirtecLogo from '@/assets/sirtec-logo.jpg';
 
 const loginSchema = z.object({
   email: z.string().trim().email({ message: "Email inválido" }),
@@ -140,12 +141,12 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
         {/* Logo/Header */}
-        <div className="text-center space-y-2 animate-fade-in">
-          <div className="mx-auto w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
-            <ClipboardCheck className="h-8 w-8 text-primary-foreground" />
+        <div className="text-center space-y-4 animate-fade-in">
+          <div className="mx-auto w-24 h-24 flex items-center justify-center">
+            <img src={sirtecLogo} alt="Sirtec" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Gestão CCM
+          <h1 className="text-2xl font-bold text-foreground">
+            Gestão de Rotinas
           </h1>
           <p className="text-muted-foreground">
             Gerencie tarefas e rotinas da sua unidade
@@ -301,7 +302,7 @@ const Auth = () => {
         </Card>
         
         <p className="text-center text-sm text-muted-foreground">
-          Gestão CCM - Gerenciamento de Rotinas
+          Sirtec Sistemas Elétricos - Gestão de Rotinas
         </p>
       </div>
     </div>
