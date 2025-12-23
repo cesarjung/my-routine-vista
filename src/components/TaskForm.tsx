@@ -137,13 +137,17 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       if (prev.some(a => a.unitId === unitId)) {
         return prev.filter((a) => a.unitId !== unitId);
       }
-      return [...prev, { unitId, assignedTo: null }];
+      return [...prev, { unitId, assignedTo: null, assignedToIds: [] }];
     });
   }, []);
 
-  const updateUnitAssignee = useCallback((unitId: string, assignedTo: string | null) => {
+  const updateUnitAssignees = useCallback((unitId: string, assignedToIds: string[]) => {
     setUnitAssignments(prev => 
-      prev.map(a => a.unitId === unitId ? { ...a, assignedTo } : a)
+      prev.map(a => a.unitId === unitId ? { 
+        ...a, 
+        assignedTo: assignedToIds.length > 0 ? assignedToIds[0] : null,
+        assignedToIds 
+      } : a)
     );
   }, []);
 
@@ -571,25 +575,16 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                           </div>
                         </div>
                         
-                        {/* Dropdown de responsável - aparece quando unidade está selecionada */}
+                        {/* Dropdown de responsáveis - aparece quando unidade está selecionada */}
                         {isSelected && (
                           <div className="mt-2 ml-7">
-                            <Select
-                              value={assignment?.assignedTo || 'none'}
-                              onValueChange={(value) => updateUnitAssignee(unit.id, value === 'none' ? null : value)}
-                            >
-                              <SelectTrigger className="w-full h-8 text-xs">
-                                <SelectValue placeholder="Selecionar responsável" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Sem responsável</SelectItem>
-                                {unitProfiles.map((profile) => (
-                                  <SelectItem key={profile.id} value={profile.id}>
-                                    {profile.full_name || profile.email}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <MultiAssigneeSelect
+                              profiles={unitProfiles}
+                              selectedIds={assignment?.assignedToIds || []}
+                              onChange={(ids) => updateUnitAssignees(unit.id, ids)}
+                              placeholder="Selecionar responsáveis"
+                              className="w-full"
+                            />
                           </div>
                         )}
                       </div>
