@@ -167,8 +167,30 @@ export const useCreateRoutineWithUnits = () => {
 
         if (checkinsError) throw checkinsError;
 
-        // Create tasks for each unit with the selected responsible
-        const tasks = unitIds.map((unitId) => ({
+        // Criar tarefa mãe (para gestores acompanharem o progresso geral)
+        const firstUnitId = unitIds[0];
+        const { data: parentTask, error: parentTaskError } = await supabase
+          .from('tasks')
+          .insert({
+            title: `[Rotina] ${routine.title}`,
+            description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
+            unit_id: firstUnitId,
+            routine_id: routine.id,
+            assigned_to: user.id, // Gestor responsável pela tarefa mãe
+            created_by: user.id,
+            start_date: periodStart.toISOString(),
+            due_date: periodEnd.toISOString(),
+            status: 'pendente' as const,
+            priority: 2,
+            parent_task_id: null, // Esta é a tarefa mãe
+          })
+          .select()
+          .single();
+
+        if (parentTaskError) throw parentTaskError;
+
+        // Create tasks filhas for each unit with the selected responsible
+        const childTasks = unitIds.map((unitId) => ({
           title: `[Rotina] ${routine.title}`,
           description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
           unit_id: unitId,
@@ -179,11 +201,12 @@ export const useCreateRoutineWithUnits = () => {
           due_date: periodEnd.toISOString(),
           status: 'pendente' as const,
           priority: 2,
+          parent_task_id: parentTask.id, // Link com a tarefa mãe
         }));
 
         const { error: tasksError } = await supabase
           .from('tasks')
-          .insert(tasks);
+          .insert(childTasks);
 
         if (tasksError) throw tasksError;
       }

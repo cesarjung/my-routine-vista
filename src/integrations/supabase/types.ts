@@ -333,6 +333,7 @@ export type Database = {
           due_date: string | null
           google_event_id: string | null
           id: string
+          parent_task_id: string | null
           priority: number | null
           routine_id: string | null
           start_date: string | null
@@ -350,6 +351,7 @@ export type Database = {
           due_date?: string | null
           google_event_id?: string | null
           id?: string
+          parent_task_id?: string | null
           priority?: number | null
           routine_id?: string | null
           start_date?: string | null
@@ -367,6 +369,7 @@ export type Database = {
           due_date?: string | null
           google_event_id?: string | null
           id?: string
+          parent_task_id?: string | null
           priority?: number | null
           routine_id?: string | null
           start_date?: string | null
@@ -376,6 +379,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_routine_id_fkey"
             columns: ["routine_id"]
