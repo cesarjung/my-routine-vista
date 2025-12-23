@@ -87,6 +87,10 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   const { data: allProfiles } = useProfiles();
   const createTaskWithUnits = useCreateTaskWithUnits();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
+  
+  // Get current user's profile to check if they have a unit_id
+  const currentUserProfile = allProfiles?.find(p => p.id === user?.id);
+  const userHasUnit = !!currentUserProfile?.unit_id;
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -179,8 +183,12 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   };
 
   const onSubmit = async (data: FormData) => {
-    // Usuários regulares precisam ter unidade associada
-    // Gestores/Admins podem criar sem unidade selecionada
+    // Admins/Gestores sem unidade no perfil DEVEM selecionar pelo menos uma unidade
+    // Usuários regulares usam sua unidade do perfil automaticamente
+    if (isGestorOrAdmin && !userHasUnit && unitAssignments.length === 0) {
+      setUnitError('Por favor, selecione pelo menos uma unidade para a tarefa.');
+      return;
+    }
     
     // Se não for gestor/admin, força o usuário como responsável
     const effectiveParentAssignedTo = isGestorOrAdmin
