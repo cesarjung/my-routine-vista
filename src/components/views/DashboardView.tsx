@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Building2, Users, Loader2, CheckCircle2 } from 'lucide-react';
 import { useUnitRoutineStatus, useResponsibleRoutineStatus, useOverallStats } from '@/hooks/useDashboardData';
+import { useDashboardPanels } from '@/hooks/useDashboardPanels';
 import { useSectors } from '@/hooks/useSectors';
 import { cn } from '@/lib/utils';
 import {
@@ -16,6 +17,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
+import { CustomPanel } from '@/components/dashboard/CustomPanel';
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -133,6 +136,7 @@ export const DashboardView = () => {
   const { data: statsData } = useOverallStats(selectedSectorId);
   const { data: unitStatus, isLoading: loadingUnits } = useUnitRoutineStatus(selectedSectorId);
   const { data: responsibleStatus, isLoading: loadingResponsibles } = useResponsibleRoutineStatus(selectedSectorId);
+  const { data: customPanels, isLoading: loadingPanels } = useDashboardPanels();
 
   const isLoading = loadingUnits || loadingResponsibles;
   const overallPercentage = statsData?.percentage || 0;
@@ -154,6 +158,8 @@ export const DashboardView = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          <PanelFormDialog panelCount={customPanels?.length || 0} />
+          
           <Select
             value={selectedSectorId || 'all'}
             onValueChange={(value) => setSelectedSectorId(value === 'all' ? null : value)}
@@ -185,12 +191,24 @@ export const DashboardView = () => {
         <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-destructive/30" />&lt;40%</span>
       </div>
 
+      {/* Custom Panels */}
+      {customPanels && customPanels.length > 0 && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+          {customPanels.map(panel => (
+            <CustomPanel key={panel.id} panel={panel} />
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 animate-spin text-primary" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        <>
+          {/* Default Panels */}
+          <p className="text-xs text-muted-foreground font-medium mt-4">Painéis Padrão</p>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
           {/* Units Panel */}
           <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
             {unitStatus?.length === 0 ? (
@@ -254,7 +272,8 @@ export const DashboardView = () => {
               </table>
             )}
           </ResizablePanel>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
