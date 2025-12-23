@@ -8,11 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
+import { useCanManageUsers } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX } from 'lucide-react';
 
 export const SettingsView = () => {
+  const { canManageUsers, isLoading: isLoadingRole } = useCanManageUsers();
   const { user } = useAuth();
   const { data: units } = useUnits();
   const { data: profiles, refetch: refetchProfiles } = useProfiles();
@@ -97,6 +99,28 @@ export const SettingsView = () => {
       setIsCreating(false);
     }
   };
+
+  // Show loading while checking permissions
+  if (isLoadingRole) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    );
+  }
+
+  // Restrict access to admins and gestors only
+  if (!canManageUsers) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center gap-4 min-h-[400px]">
+        <ShieldX className="w-16 h-16 text-muted-foreground" />
+        <h2 className="text-xl font-semibold text-foreground">Acesso Restrito</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          Apenas administradores e gestores podem gerenciar usuários.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
