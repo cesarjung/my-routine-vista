@@ -59,6 +59,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('');
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
+  const [parentAssignedTo, setParentAssignedTo] = useState<string>('');
 
   const { user } = useAuth();
   const { data: units, isLoading: loadingUnits } = useUnits();
@@ -150,11 +151,13 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       priority: data.priority,
       start_date: data.start_date?.toISOString() || null,
       due_date: data.due_date?.toISOString() || null,
+      parentAssignedTo: parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null,
       unitAssignments,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
     });
 
     form.reset();
+    setParentAssignedTo('');
     setSubtasks([]);
     setUnitAssignments([]);
     setUnitError(null);
@@ -302,11 +305,35 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                     className="pointer-events-auto"
                   />
                 </PopoverContent>
-              </Popover>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          </Popover>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+
+    {/* Responsável da Tarefa Mãe */}
+    <div className="space-y-2">
+      <FormLabel>Responsável da Tarefa Mãe</FormLabel>
+      <Select
+        value={parentAssignedTo}
+        onValueChange={setParentAssignedTo}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Selecionar responsável (opcional)" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Eu mesmo (atual usuário)</SelectItem>
+          {allProfiles?.map((profile) => (
+            <SelectItem key={profile.id} value={profile.id}>
+              {profile.full_name || profile.email}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        O responsável da tarefa mãe acompanha o progresso geral de todas as unidades.
+      </p>
+    </div>
 
         {/* Units Selection with Responsible */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">

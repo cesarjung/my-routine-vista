@@ -28,6 +28,7 @@ export interface CreateTaskWithUnitsData {
   priority: number;
   start_date?: string | null;
   due_date?: string | null;
+  parentAssignedTo?: string | null; // Responsável da tarefa mãe
   unitAssignments: UnitAssignment[];
   subtasks?: SubtaskData[];
 }
@@ -95,7 +96,7 @@ export const useCreateTaskWithUnits = () => {
           title: data.title,
           description: data.description || null,
           unit_id: firstUnitId, // Necessário pelo schema, usa primeira unidade
-          assigned_to: user.id, // Gestor é responsável pela tarefa mãe
+          assigned_to: data.parentAssignedTo || user.id, // Responsável definido ou gestor atual
           status: 'pendente',
           priority: data.priority,
           start_date: data.start_date || null,
