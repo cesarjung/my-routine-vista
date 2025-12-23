@@ -10,6 +10,7 @@ import { GanttView } from '@/components/views/GanttView';
 import { CalendarView } from '@/components/views/CalendarView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { useSectors } from '@/hooks/useSectors';
+import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
 
 interface ContentAreaProps {
   context: NavigationContext;
@@ -88,14 +89,25 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     }
   };
 
+  const isDashboard = context.type === 'dashboard';
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
       <header className="px-6 py-4 border-b border-border flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">{getTitle()}</h1>
-        {showViewToggle && (
-          <ViewModeToggle value={viewMode} onChange={onViewModeChange} />
+        {isDashboard ? (
+          <img src={sirtecLogoHeader} alt="Sirtec" className="h-10 object-contain" />
+        ) : (
+          <h1 className="text-xl font-semibold text-foreground">{getTitle()}</h1>
         )}
+        <div className="flex items-center gap-4">
+          {isDashboard && (
+            <h1 className="text-lg font-bold text-foreground">Gerenciamento de Rotinas</h1>
+          )}
+          {showViewToggle && (
+            <ViewModeToggle value={viewMode} onChange={onViewModeChange} />
+          )}
+        </div>
       </header>
 
       {/* Content */}
