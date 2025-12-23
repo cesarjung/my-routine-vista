@@ -159,12 +159,12 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
           <div className="space-y-2">
             <Label>Filtrar por Setor</Label>
-            <Select value={sectorId} onValueChange={setSectorId}>
+            <Select value={sectorId || 'all'} onValueChange={(v) => setSectorId(v === 'all' ? '' : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Todos os setores" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos os setores</SelectItem>
+                <SelectItem value="all">Todos os setores</SelectItem>
                 {sectors?.map(sector => (
                   <SelectItem key={sector.id} value={sector.id}>
                     <div className="flex items-center gap-2">
@@ -179,12 +179,12 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
           <div className="space-y-2">
             <Label>Filtrar por Unidade</Label>
-            <Select value={unitId} onValueChange={setUnitId}>
+            <Select value={unitId || 'all'} onValueChange={(v) => setUnitId(v === 'all' ? '' : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Todas as unidades" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas as unidades</SelectItem>
+                <SelectItem value="all">Todas as unidades</SelectItem>
                 {units?.map(unit => (
                   <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>
                 ))}
