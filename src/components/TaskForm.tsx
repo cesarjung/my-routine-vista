@@ -41,6 +41,7 @@ import { useProfiles } from '@/hooks/useProfiles';
 import { useCreateTaskWithUnits, type SubtaskData, type UnitAssignment } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
+import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
 
 const frequencyOptions = [
   { value: 'diaria', label: 'Diária' },
@@ -77,10 +78,10 @@ interface TaskFormProps {
 export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('');
+  const [newSubtaskAssignees, setNewSubtaskAssignees] = useState<string[]>([]);
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
-  const [parentAssignedTo, setParentAssignedTo] = useState<string>('');
+  const [parentAssignees, setParentAssignees] = useState<string[]>([]);
 
   const { user } = useAuth();
   const { data: units, isLoading: loadingUnits } = useUnits();
@@ -161,10 +162,11 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
     if (newSubtaskTitle.trim()) {
       setSubtasks([...subtasks, { 
         title: newSubtaskTitle.trim(), 
-        assigned_to: newSubtaskAssignee && newSubtaskAssignee !== 'none' ? newSubtaskAssignee : null 
+        assigned_to: newSubtaskAssignees.length > 0 ? newSubtaskAssignees[0] : null,
+        assigned_to_ids: newSubtaskAssignees.length > 0 ? newSubtaskAssignees : undefined,
       }]);
       setNewSubtaskTitle('');
-      setNewSubtaskAssignee('');
+      setNewSubtaskAssignees([]);
     }
   };
 
@@ -183,9 +185,9 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
     // Usuários regulares precisam ter unidade no perfil
     
     // Se não for gestor/admin, força o usuário como responsável
-    const effectiveParentAssignedTo = isGestorOrAdmin
-      ? (parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null)
-      : user?.id || null;
+    const effectiveParentAssignees = isGestorOrAdmin
+      ? (parentAssignees.length > 0 ? parentAssignees : [user?.id || ''].filter(Boolean))
+      : [user?.id || ''].filter(Boolean);
 
     await createTaskWithUnits.mutateAsync({
       title: data.title,
@@ -193,7 +195,8 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       priority: data.priority,
       start_date: combineDateAndTime(data.start_date, data.start_time),
       due_date: combineDateAndTime(data.due_date, data.due_time),
-      parentAssignedTo: effectiveParentAssignedTo,
+      parentAssignedTo: effectiveParentAssignees[0] || null,
+      parentAssignees: effectiveParentAssignees as string[],
       unitAssignments,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
       is_recurring: data.is_recurring || false,
@@ -202,7 +205,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
     });
 
     form.reset();
-    setParentAssignedTo('');
+    setParentAssignees([]);
     setSubtasks([]);
     setUnitAssignments([]);
     setUnitError(null);
@@ -489,25 +492,15 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
 
     {isGestorOrAdmin && (
       <div className="space-y-2">
-        <FormLabel>Responsável da Tarefa Mãe</FormLabel>
-        <Select
-          value={parentAssignedTo}
-          onValueChange={setParentAssignedTo}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Selecionar responsável (opcional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Eu mesmo (atual usuário)</SelectItem>
-            {allProfiles?.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id}>
-                {profile.full_name || profile.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FormLabel>Responsáveis da Tarefa Mãe</FormLabel>
+        <MultiAssigneeSelect
+          profiles={allProfiles || []}
+          selectedIds={parentAssignees}
+          onChange={setParentAssignees}
+          placeholder="Selecionar responsáveis (opcional)"
+        />
         <p className="text-xs text-muted-foreground">
-          O responsável da tarefa mãe acompanha o progresso geral de todas as unidades.
+          Os responsáveis da tarefa mãe acompanham o progresso geral de todas as unidades.
         </p>
       </div>
     )}
@@ -634,23 +627,14 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
               }}
               className="flex-1"
             />
-            <Select
-              value={newSubtaskAssignee}
-              onValueChange={setNewSubtaskAssignee}
+            <MultiAssigneeSelect
+              profiles={availableProfiles}
+              selectedIds={newSubtaskAssignees}
+              onChange={setNewSubtaskAssignees}
+              placeholder="Responsáveis"
               disabled={selectedUnitIds.length === 0}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Responsável" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhum</SelectItem>
-                {availableProfiles.map((profile) => (
-                  <SelectItem key={profile.id} value={profile.id}>
-                    {profile.full_name || profile.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="w-[200px]"
+            />
             <Button type="button" variant="outline" size="icon" onClick={addSubtask}>
               <Plus className="h-4 w-4" />
             </Button>
@@ -667,11 +651,19 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                   className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded"
                 >
                   <span className="flex-1 text-sm">{subtask.title}</span>
-                  {subtask.assigned_to && (
-                    <Badge variant="secondary" className="text-xs">
-                      {getProfileName(subtask.assigned_to)}
-                    </Badge>
-                  )}
+                  <div className="flex gap-1 flex-wrap">
+                    {subtask.assigned_to_ids && subtask.assigned_to_ids.length > 0 ? (
+                      subtask.assigned_to_ids.map((id) => (
+                        <Badge key={id} variant="secondary" className="text-xs">
+                          {getProfileName(id)}
+                        </Badge>
+                      ))
+                    ) : subtask.assigned_to ? (
+                      <Badge variant="secondary" className="text-xs">
+                        {getProfileName(subtask.assigned_to)}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeSubtask(index)}
