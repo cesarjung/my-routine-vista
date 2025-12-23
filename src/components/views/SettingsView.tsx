@@ -13,6 +13,7 @@ import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { User, Building2, UserPlus, Shield, ShieldX, Pencil } from 'lucide-react';
+import { UnitsManagement } from '@/components/UnitsManagement';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -237,6 +238,10 @@ export const SettingsView = () => {
             <User className="w-4 h-4" />
             Usuários
           </TabsTrigger>
+          <TabsTrigger value="units" className="flex items-center gap-2">
+            <Building2 className="w-4 h-4" />
+            Unidades
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
@@ -363,6 +368,10 @@ export const SettingsView = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="units">
+          <UnitsManagement />
         </TabsContent>
       </Tabs>
 
