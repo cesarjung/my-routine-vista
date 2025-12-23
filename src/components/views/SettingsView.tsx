@@ -271,56 +271,43 @@ export const SettingsView = () => {
 
     setIsCreating(true);
     try {
-      // Create user via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newUserEmail,
-        password: newUserPassword,
-        options: {
-          data: {
-            full_name: newUserName,
-          },
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Sessão não encontrada');
+      }
+
+      // Call edge function to create user (doesn't change current session)
+      const response = await supabase.functions.invoke('admin-create-user', {
+        body: {
+          email: newUserEmail,
+          password: newUserPassword,
+          fullName: newUserName,
+          unitId: newUserUnit || null,
+          role: newUserRole,
         },
       });
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // Update profile with unit
-        if (newUserUnit) {
-          await supabase
-            .from('profiles')
-            .update({ unit_id: newUserUnit, full_name: newUserName })
-            .eq('id', authData.user.id);
-        }
-
-        // Set role if not default
-        if (newUserRole !== 'usuario') {
-          await supabase
-            .from('user_roles')
-            .update({ role: newUserRole })
-            .eq('user_id', authData.user.id);
-        }
-
-        // If gestor, add to unit_managers
-        if (newUserRole === 'gestor' && newUserUnit) {
-          await supabase
-            .from('unit_managers')
-            .insert({ user_id: authData.user.id, unit_id: newUserUnit });
-        }
-
-        toast({
-          title: 'Usuário criado',
-          description: `${newUserName} foi cadastrado com sucesso.`,
-        });
-
-        // Reset form
-        setNewUserEmail('');
-        setNewUserName('');
-        setNewUserPassword('');
-        setNewUserUnit('');
-        setNewUserRole('usuario');
-        refetchProfiles();
+      if (response.error) {
+        throw new Error(response.error.message || 'Erro ao criar usuário');
       }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      toast({
+        title: 'Usuário criado',
+        description: `${newUserName} foi cadastrado com sucesso.`,
+      });
+
+      // Reset form
+      setNewUserEmail('');
+      setNewUserName('');
+      setNewUserPassword('');
+      setNewUserUnit('');
+      setNewUserRole('usuario');
+      refetchProfiles();
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast({
