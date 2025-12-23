@@ -39,6 +39,7 @@ export const SettingsView = () => {
   // Edit user state
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editUnit, setEditUnit] = useState('');
   const [editRole, setEditRole] = useState<AppRole>('usuario');
   const [isUpdating, setIsUpdating] = useState(false);
@@ -46,6 +47,7 @@ export const SettingsView = () => {
   const openEditDialog = async (profile: Profile) => {
     setEditingUser(profile);
     setEditName(profile.full_name || '');
+    setEditEmail(profile.email || '');
     setEditUnit(profile.unit_id || '');
     
     // Fetch user role
@@ -63,6 +65,30 @@ export const SettingsView = () => {
 
     setIsUpdating(true);
     try {
+      // Update email if changed (requires edge function with admin API)
+      if (editEmail && editEmail !== editingUser.email) {
+        const { data: session } = await supabase.auth.getSession();
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-user-email`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.session?.access_token}`,
+            },
+            body: JSON.stringify({
+              userId: editingUser.id,
+              newEmail: editEmail.trim(),
+            }),
+          }
+        );
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao atualizar email');
+        }
+      }
+
       // Update profile
       const { error: profileError } = await supabase
         .from('profiles')
@@ -405,6 +431,23 @@ export const SettingsView = () => {
                 onChange={(e) => setEditName(e.target.value)}
               />
             </div>
+
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                />
+                {editEmail !== editingUser?.email && (
+                  <p className="text-xs text-muted-foreground">
+                    O email será atualizado no login do usuário
+                  </p>
+                )}
+              </div>
+            )}
             
             <div className="space-y-2">
               <Label htmlFor="edit-unit">Unidade</Label>
