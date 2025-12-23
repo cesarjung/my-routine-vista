@@ -223,20 +223,20 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
       )}
     >
       {/* Header */}
-      <div className="p-3 border-b border-sidebar-border relative">
+      <div className="pt-2 px-3 pb-3 border-b border-sidebar-border relative">
         {!collapsed ? (
           <div className="flex flex-col">
-            <img src={sirtecLogo} alt="Sirtec" className="h-12 w-12 object-contain mb-1" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-16 w-16 object-contain mb-1" />
             <span className="text-base font-semibold text-sidebar-foreground text-center">Gestão CCM</span>
           </div>
         ) : (
           <div className="flex flex-col items-center">
-            <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-10 w-10 object-contain" />
           </div>
         )}
         <button
           onClick={() => onCollapseChange(!collapsed)}
-          className="absolute top-3 right-2 p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
+          className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
