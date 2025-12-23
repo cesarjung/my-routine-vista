@@ -32,11 +32,13 @@ export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
       )}
     >
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
-        {!collapsed && (
+        {!collapsed ? (
           <div className="flex items-center gap-2">
             <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
-            <span className="font-semibold text-sidebar-foreground">Gestão de Rotinas</span>
+            <span className="font-semibold text-sidebar-foreground">Gestão CCM</span>
           </div>
+        ) : (
+          <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
