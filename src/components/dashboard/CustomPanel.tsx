@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { Building2, Users, FolderKanban, Settings, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardPanel, useDeleteDashboardPanel } from '@/hooks/useDashboardPanels';
 import { useIsAdmin } from '@/hooks/useUserRole';
+import { useTasks } from '@/hooks/useTasks';
 import { PanelFormDialog } from './PanelFormDialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
@@ -22,6 +25,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
 
@@ -199,7 +208,13 @@ const useCustomPanelData = (panel: DashboardPanel) => {
   });
 };
 
-const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string }) => {
+interface StatusBadgeProps {
+  data: StatusData;
+  frequency: string;
+  onClick?: () => void;
+}
+
+const StatusBadge = ({ data, frequency, onClick }: StatusBadgeProps) => {
   if (data.total === 0) {
     return <div className="w-7 h-7 rounded bg-secondary/30 flex items-center justify-center text-muted-foreground text-[10px]">-</div>;
   }
@@ -214,8 +229,11 @@ const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string 
       <Tooltip>
         <TooltipTrigger asChild>
           <div
+            onClick={onClick}
             className={cn(
-              'w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold cursor-default transition-transform hover:scale-110',
+              'w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold transition-transform hover:scale-110',
+              onClick && 'cursor-pointer hover:ring-2 hover:ring-primary/50',
+              !onClick && 'cursor-default',
               isComplete && 'bg-success/20 text-success',
               isGood && !isComplete && 'bg-emerald-500/20 text-emerald-400',
               isWarning && 'bg-warning/20 text-warning',
@@ -232,6 +250,7 @@ const StatusBadge = ({ data, frequency }: { data: StatusData; frequency: string 
         <TooltipContent side="top" className="text-xs">
           <p className="font-semibold">{FREQUENCY_FULL_LABELS[frequency]}</p>
           <p>{data.completed}/{data.total} ({percentage}%)</p>
+          {onClick && <p className="text-muted-foreground">Clique para ver tarefas</p>}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -264,101 +283,239 @@ const getGroupIcon = (groupBy: string) => {
   }
 };
 
+interface TasksDialogState {
+  isOpen: boolean;
+  title: string;
+  entityId: string;
+  entityType: 'unit' | 'responsible' | 'sector';
+  frequency: string;
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  pendente: 'Pendente',
+  em_andamento: 'Em Andamento',
+  concluida: 'Concluída',
+  atrasada: 'Atrasada',
+  cancelada: 'Cancelada',
+};
+
 interface CustomPanelProps {
   panel: DashboardPanel;
 }
 
 export const CustomPanel = ({ panel }: CustomPanelProps) => {
   const { data, isLoading } = useCustomPanelData(panel);
+  const { data: allTasks } = useTasks();
   const deletePanel = useDeleteDashboardPanel();
   const { isAdmin } = useIsAdmin();
   const Icon = getGroupIcon(panel.filters.group_by);
+  
+  const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
+    isOpen: false,
+    title: '',
+    entityId: '',
+    entityType: 'unit',
+    frequency: '',
+  });
+
+  const openTasksDialog = (
+    entityId: string,
+    entityName: string,
+    entityType: 'unit' | 'responsible' | 'sector',
+    frequency: string
+  ) => {
+    setTasksDialog({
+      isOpen: true,
+      title: entityName,
+      entityId,
+      entityType,
+      frequency,
+    });
+  };
+
+  const closeTasksDialog = () => {
+    setTasksDialog(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Filter tasks based on dialog state
+  const filteredTasks = allTasks?.filter(task => {
+    if (!tasksDialog.isOpen) return false;
+    
+    // Filter by entity type
+    if (tasksDialog.entityType === 'unit') {
+      if (task.unit_id !== tasksDialog.entityId) return false;
+    } else if (tasksDialog.entityType === 'responsible') {
+      if (task.assigned_to !== tasksDialog.entityId) return false;
+    } else if (tasksDialog.entityType === 'sector') {
+      if (task.sector_id !== tasksDialog.entityId) return false;
+    }
+    
+    // Filter by panel's sector if set
+    if (panel.filters.sector_id && task.sector_id !== panel.filters.sector_id) return false;
+    
+    return true;
+  }) || [];
 
   return (
-    <div
-      className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
-      style={{ 
-        minHeight: 150, 
-        minWidth: 280, 
-        height: 280,
-        maxWidth: '100%'
-      }}
-    >
-      <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30 flex-shrink-0">
-        <Icon className="w-4 h-4 text-primary" />
-        <span className="font-medium text-sm truncate">{panel.title}</span>
-        <span className="text-[10px] text-muted-foreground ml-auto">{data?.length || 0}</span>
+    <>
+      <div
+        className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
+        style={{ 
+          minHeight: 150, 
+          minWidth: 280, 
+          height: 280,
+          maxWidth: '100%'
+        }}
+      >
+        <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30 flex-shrink-0">
+          <Icon className="w-4 h-4 text-primary" />
+          <span className="font-medium text-sm truncate">{panel.title}</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">{data?.length || 0}</span>
+          
+          {isAdmin && (
+            <div className="flex items-center gap-1 ml-2">
+              <PanelFormDialog
+                panel={panel}
+                trigger={
+                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                    <Settings className="w-3 h-3" />
+                  </Button>
+                }
+              />
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remover painel?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta ação não pode ser desfeita. O painel "{panel.title}" será removido permanentemente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
+                      Remover
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+        </div>
         
-        {isAdmin && (
-          <div className="flex items-center gap-1 ml-2">
-            <PanelFormDialog
-              panel={panel}
-              trigger={
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <Settings className="w-3 h-3" />
-                </Button>
-              }
-            />
-            
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Remover painel?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. O painel "{panel.title}" será removido permanentemente.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
-                    Remover
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        )}
-      </div>
-      
-      <div className="overflow-auto flex-1">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-          </div>
-        ) : data?.length === 0 ? (
-          <div className="p-4 text-center text-muted-foreground text-xs">Sem dados para os filtros selecionados</div>
-        ) : (
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-card z-10">
-              <tr className="border-b border-border">
-                <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
-                {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
-                <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {data?.map((item: { id: string; name: string; frequencies: Record<string, StatusData>; totals: StatusData }) => (
-                <tr key={item.id} className="hover:bg-secondary/20">
-                  <td className="p-2">
-                    <p className="font-medium text-foreground" title={item.name}>{item.name}</p>
-                  </td>
-                  {FREQUENCIES.map(f => (
-                    <td key={f} className="p-1 text-center">
-                      <StatusBadge data={item.frequencies[f]} frequency={f} />
-                    </td>
-                  ))}
-                  <td className="p-2 text-right"><TotalBadge data={item.totals} /></td>
+        <div className="overflow-auto flex-1">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            </div>
+          ) : data?.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground text-xs">Sem dados para os filtros selecionados</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card z-10">
+                <tr className="border-b border-border">
+                  <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
+                  {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
+                  <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {data?.map((item: { id: string; name: string; frequencies: Record<string, StatusData>; totals: StatusData }) => (
+                  <tr key={item.id} className="hover:bg-secondary/20">
+                    <td className="p-2">
+                      <p className="font-medium text-foreground" title={item.name}>{item.name}</p>
+                    </td>
+                    {FREQUENCIES.map(f => (
+                      <td key={f} className="p-1 text-center">
+                        <StatusBadge 
+                          data={item.frequencies[f]} 
+                          frequency={f}
+                          onClick={item.frequencies[f].total > 0 
+                            ? () => openTasksDialog(
+                                item.id, 
+                                item.name, 
+                                panel.filters.group_by as 'unit' | 'responsible' | 'sector',
+                                f
+                              )
+                            : undefined
+                          }
+                        />
+                      </td>
+                    ))}
+                    <td className="p-2 text-right"><TotalBadge data={item.totals} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Tasks Dialog */}
+      <Dialog open={tasksDialog.isOpen} onOpenChange={(open) => !open && closeTasksDialog()}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon className="w-5 h-5 text-primary" />
+              {tasksDialog.title}
+              {tasksDialog.frequency && (
+                <Badge variant="secondary" className="ml-2">
+                  {FREQUENCY_FULL_LABELS[tasksDialog.frequency] || tasksDialog.frequency}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto">
+            {filteredTasks.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Nenhuma tarefa encontrada
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredTasks.map(task => (
+                  <div
+                    key={task.id}
+                    className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{task.title}</p>
+                        {task.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                            {task.description}
+                          </p>
+                        )}
+                      </div>
+                      <Badge
+                        variant={
+                          task.status === 'concluida' ? 'default' :
+                          task.status === 'atrasada' ? 'destructive' :
+                          task.status === 'em_andamento' ? 'secondary' :
+                          'outline'
+                        }
+                        className="shrink-0"
+                      >
+                        {STATUS_LABELS[task.status] || task.status}
+                      </Badge>
+                    </div>
+                    {task.due_date && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Prazo: {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
