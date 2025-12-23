@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Check, Flag, Calendar, Pencil, X } from 'lucide-react';
+import { Check, Flag, Calendar, Pencil, X, XCircle } from 'lucide-react';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Button } from './ui/button';
 import { MultiAssigneeSelect } from './MultiAssigneeSelect';
@@ -27,14 +27,18 @@ interface CheckinRowProps {
   checkin: {
     id: string;
     unit_id: string;
+    assignee_user_id?: string | null;
     completed_at: string | null;
     completed_by: string | null;
+    status?: 'pending' | 'completed' | 'not_completed';
     unit?: { id: string; name: string; code: string } | null;
+    assignee_profile?: { id: string; full_name: string | null; email: string } | null;
   };
   isCompleted: boolean;
   managers: Manager[];
   periodEnd?: string | null;
   onToggle: () => void;
+  onMarkNotCompleted?: () => void;
   isToggling: boolean;
   isGestorOrAdmin: boolean;
   allProfiles?: Tables<'profiles'>[];
@@ -73,6 +77,7 @@ export const CheckinRow = ({
   managers,
   periodEnd,
   onToggle,
+  onMarkNotCompleted,
   isToggling,
   isGestorOrAdmin,
   allProfiles = [],
@@ -82,6 +87,9 @@ export const CheckinRow = ({
     managers.map(m => m.user_id)
   );
   const queryClient = useQueryClient();
+
+  const isNotCompleted = checkin.status === 'not_completed';
+  const isPending = checkin.status === 'pending' || !checkin.status;
 
   // Get profiles for this unit
   const profilesForUnit = allProfiles.filter(
@@ -127,11 +135,18 @@ export const CheckinRow = ({
     updateUnitManagersMutation.mutate(selectedAssignees);
   };
 
+  // Display name: prefer assignee name, fallback to unit name
+  const displayName = checkin.assignee_profile?.full_name || 
+    checkin.assignee_profile?.email || 
+    checkin.unit?.name || 
+    'Responsável';
+
   return (
     <div
       className={cn(
-        'grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors hover:bg-secondary/20',
-        isCompleted && 'bg-success/5'
+        'grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors hover:bg-secondary/20 group',
+        isCompleted && 'bg-success/5',
+        isNotCompleted && 'bg-destructive/5'
       )}
     >
       {/* Name with checkbox */}
@@ -143,26 +158,58 @@ export const CheckinRow = ({
             'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
             isCompleted
               ? 'bg-success border-success text-success-foreground'
+              : isNotCompleted
+              ? 'bg-destructive border-destructive text-destructive-foreground'
               : 'border-muted-foreground/50 hover:border-primary'
           )}
         >
           {isCompleted && <Check className="w-3 h-3" />}
+          {isNotCompleted && <X className="w-3 h-3" />}
         </button>
-        <span
-          className={cn(
-            'font-medium text-sm',
-            isCompleted
-              ? 'text-muted-foreground line-through'
-              : 'text-foreground'
+        <div className="flex flex-col min-w-0">
+          <span
+            className={cn(
+              'font-medium text-sm truncate',
+              isCompleted
+                ? 'text-muted-foreground line-through'
+                : isNotCompleted
+                ? 'text-destructive line-through'
+                : 'text-foreground'
+            )}
+          >
+            {displayName}
+          </span>
+          {checkin.unit?.name && checkin.assignee_profile && (
+            <span className="text-xs text-muted-foreground truncate">
+              {checkin.unit.name}
+            </span>
           )}
-        >
-          {checkin.unit?.name || 'Unidade'}
-        </span>
+        </div>
       </div>
 
-      {/* Responsáveis (Avatars) */}
+      {/* Status/Avatar */}
       <div className="col-span-3 flex items-center gap-1">
-        {isEditingResponsible ? (
+        {checkin.assignee_profile ? (
+          <div className="flex items-center gap-2">
+            <Avatar
+              className={cn(
+                'w-7 h-7 border-2 border-card',
+                getAvatarColor(checkin.assignee_user_id || '')
+              )}
+              title={checkin.assignee_profile.full_name || checkin.assignee_profile.email}
+            >
+              <AvatarFallback className="text-xs text-white bg-transparent">
+                {getInitials(checkin.assignee_profile.full_name || checkin.assignee_profile.email)}
+              </AvatarFallback>
+            </Avatar>
+            {isNotCompleted && (
+              <span className="text-xs text-destructive font-medium">Não realizado</span>
+            )}
+            {isCompleted && (
+              <span className="text-xs text-success font-medium">Concluído</span>
+            )}
+          </div>
+        ) : isEditingResponsible ? (
           <div className="flex items-center gap-1 flex-1">
             <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
               <MultiAssigneeSelect
@@ -222,7 +269,7 @@ export const CheckinRow = ({
             ) : (
               <span className="text-xs text-muted-foreground">—</span>
             )}
-            {isGestorOrAdmin && (
+            {isGestorOrAdmin && !checkin.assignee_profile && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -236,9 +283,23 @@ export const CheckinRow = ({
         )}
       </div>
 
-      {/* Prioridade */}
+      {/* Not Completed Button - only show when pending */}
       <div className="col-span-2 flex items-center">
-        <Flag className="w-4 h-4 text-muted-foreground/50" />
+        {isPending && onMarkNotCompleted && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100"
+            onClick={onMarkNotCompleted}
+            disabled={isToggling}
+          >
+            <XCircle className="h-3 w-3 mr-1" />
+            Não Concluído
+          </Button>
+        )}
+        {!isPending && (
+          <Flag className="w-4 h-4 text-muted-foreground/50" />
+        )}
       </div>
 
       {/* Vencimento */}

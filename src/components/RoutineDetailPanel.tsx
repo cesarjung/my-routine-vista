@@ -43,6 +43,7 @@ import {
   useCurrentPeriodCheckins,
   useCreatePeriodWithCheckins,
   useCompleteCheckin,
+  useMarkCheckinNotCompleted,
   useUndoCheckin,
 } from '@/hooks/useRoutineCheckins';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
@@ -148,6 +149,7 @@ export const RoutineDetailPanel = ({
   const { data: allProfiles } = useProfiles();
   const createPeriod = useCreatePeriodWithCheckins();
   const completeCheckin = useCompleteCheckin();
+  const markNotCompleted = useMarkCheckinNotCompleted();
   const undoCheckin = useUndoCheckin();
   const deleteRoutine = useDeleteRoutine();
   const updateRoutine = useUpdateRoutine();
@@ -183,7 +185,8 @@ export const RoutineDetailPanel = ({
   };
 
   const checkins = periodData?.period?.routine_checkins || [];
-  const completed = checkins.filter((c) => c.completed_at !== null).length;
+  const completedOrNotCompleted = checkins.filter((c) => c.status === 'completed' || c.status === 'not_completed').length;
+  const completedCount = checkins.filter((c) => c.status === 'completed').length;
   const total = checkins.length;
 
   const handleStartPeriod = async () => {
@@ -195,12 +198,16 @@ export const RoutineDetailPanel = ({
     });
   };
 
-  const handleToggleCheckin = async (checkinId: string, isCompleted: boolean) => {
-    if (isCompleted) {
+  const handleToggleCheckin = async (checkinId: string, status: string) => {
+    if (status === 'completed' || status === 'not_completed') {
       await undoCheckin.mutateAsync(checkinId);
     } else {
       await completeCheckin.mutateAsync({ checkinId });
     }
+  };
+
+  const handleMarkNotCompleted = async (checkinId: string) => {
+    await markNotCompleted.mutateAsync({ checkinId });
   };
 
   const getManagersForUnit = (unitId: string) => {
@@ -301,19 +308,19 @@ export const RoutineDetailPanel = ({
               variant="outline"
               className={cn(
                 'ml-auto',
-                total > 0 && completed === total
+                total > 0 && completedOrNotCompleted === total
                   ? 'bg-success/20 text-success border-success/30'
                   : 'bg-warning/20 text-warning border-warning/30'
               )}
             >
-              {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
+              {total > 0 && completedOrNotCompleted === total ? 'CONCLUÍDA' : 'PENDENTE'}
             </Badge>
           </div>
 
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Responsáveis</span>
-            <span className="ml-auto text-muted-foreground">{total} unidades</span>
+            <span className="ml-auto text-muted-foreground">{total} pessoas</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -395,10 +402,10 @@ export const RoutineDetailPanel = ({
           />
           <span className="text-sm font-medium text-foreground">Subtarefas</span>
           <span className="text-xs text-muted-foreground">
-            {completed} / {total}
+            {completedCount} / {total}
           </span>
           <div className="ml-auto">
-            <ProgressBar completed={completed} total={total} className="w-24 h-1.5" />
+            <ProgressBar completed={completedCount} total={total} className="w-24 h-1.5" />
           </div>
         </button>
 
@@ -443,7 +450,7 @@ export const RoutineDetailPanel = ({
 
                 {/* Table Rows */}
                 {checkins.map((checkin) => {
-                  const isCompleted = checkin.completed_at !== null;
+                  const isCompleted = checkin.status === 'completed';
                   const managers = getManagersForUnit(checkin.unit_id);
 
                   return (
@@ -453,8 +460,9 @@ export const RoutineDetailPanel = ({
                       isCompleted={isCompleted}
                       managers={managers}
                       periodEnd={periodData?.period?.period_end}
-                      onToggle={() => handleToggleCheckin(checkin.id, isCompleted)}
-                      isToggling={completeCheckin.isPending || undoCheckin.isPending}
+                      onToggle={() => handleToggleCheckin(checkin.id, checkin.status || 'pending')}
+                      onMarkNotCompleted={() => handleMarkNotCompleted(checkin.id)}
+                      isToggling={completeCheckin.isPending || undoCheckin.isPending || markNotCompleted.isPending}
                       isGestorOrAdmin={isGestorOrAdmin}
                       allProfiles={allProfiles}
                     />
