@@ -48,7 +48,7 @@ type TaskFrequency = Enums<'task_frequency'>;
 
 interface UnitAssignment {
   unitId: string;
-  assignedTo: string | null;
+  assignedToIds: string[];
 }
 
 const frequencyOptions: { value: TaskFrequency; label: string }[] = [
@@ -131,20 +131,20 @@ export const RoutineForm = () => {
       if (exists) {
         return prev.filter(a => a.unitId !== unitId);
       }
-      return [...prev, { unitId, assignedTo: null }];
+      return [...prev, { unitId, assignedToIds: [] }];
     });
   }, []);
 
-  const updateUnitAssignee = useCallback((unitId: string, assignedTo: string | null) => {
+  const updateUnitAssignees = useCallback((unitId: string, assignedToIds: string[]) => {
     setUnitAssignments(prev => 
-      prev.map(a => a.unitId === unitId ? { ...a, assignedTo } : a)
+      prev.map(a => a.unitId === unitId ? { ...a, assignedToIds } : a)
     );
   }, []);
 
   const selectAllUnits = useCallback(() => {
     setUnitError(null);
     if (units) {
-      setUnitAssignments(units.map(u => ({ unitId: u.id, assignedTo: null })));
+      setUnitAssignments(units.map(u => ({ unitId: u.id, assignedToIds: [] })));
     }
   }, [units]);
 
@@ -528,27 +528,19 @@ export const RoutineForm = () => {
                               </div>
                             </div>
                             
-                            {/* Responsible dropdown - only show when unit is selected */}
+                            {/* Responsible selection - only show when unit is selected */}
                             {isSelected && (
                               <div className="px-3 pb-3 pt-0">
                                 <div className="flex items-center gap-2 pl-7">
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">Responsável:</span>
-                                  <Select
-                                    value={assignment?.assignedTo || 'none'}
-                                    onValueChange={(value) => updateUnitAssignee(unit.id, value === 'none' ? null : value)}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs flex-1" onClick={(e) => e.stopPropagation()}>
-                                      <SelectValue placeholder="Selecionar..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">Sem responsável</SelectItem>
-                                      {profilesForUnit.map((profile) => (
-                                        <SelectItem key={profile.id} value={profile.id}>
-                                          {profile.full_name || profile.email}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">Responsáveis:</span>
+                                  <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                                    <MultiAssigneeSelect
+                                      profiles={profilesForUnit}
+                                      selectedIds={assignment?.assignedToIds || []}
+                                      onChange={(ids) => updateUnitAssignees(unit.id, ids)}
+                                      placeholder="Selecionar responsáveis..."
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )}
