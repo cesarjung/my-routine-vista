@@ -1,22 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragEndEvent,
   DragStartEvent,
+  DragMoveEvent,
+  useDraggable,
   DragOverlay,
+  Modifier,
 } from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  rectSortingStrategy,
-} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { DashboardPanel, useReorderDashboardPanels } from '@/hooks/useDashboardPanels';
 import { CustomPanel } from './CustomPanel';
@@ -25,10 +16,12 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Types for unified panel system
-export type UnifiedPanel = 
-  | { type: 'custom'; panel: DashboardPanel; order: number }
-  | { type: 'units'; order: number }
-  | { type: 'responsibles'; order: number };
+export type UnifiedPanel = {
+  id: string;
+  type: 'custom' | 'units' | 'responsibles';
+  panel?: DashboardPanel;
+  position: { x: number; y: number };
+};
 
 interface UnifiedDraggablePanelsProps {
   customPanels: DashboardPanel[];
@@ -36,9 +29,9 @@ interface UnifiedDraggablePanelsProps {
   renderResponsiblesPanel: () => React.ReactNode;
 }
 
-const STORAGE_KEY = 'dashboard-panel-order';
+const STORAGE_KEY = 'dashboard-panel-positions';
 
-const getSavedOrder = (userId: string): Record<string, number> | null => {
+const getSavedPositions = (userId: string): Record<string, { x: number; y: number }> | null => {
   try {
     const saved = localStorage.getItem(`${STORAGE_KEY}-${userId}`);
     return saved ? JSON.parse(saved) : null;
@@ -47,40 +40,34 @@ const getSavedOrder = (userId: string): Record<string, number> | null => {
   }
 };
 
-const saveOrder = (userId: string, panels: UnifiedPanel[]) => {
-  const orderMap: Record<string, number> = {};
-  panels.forEach((panel, idx) => {
-    const key = panel.type === 'custom' ? panel.panel.id : `default-${panel.type}`;
-    orderMap[key] = idx;
+const savePositions = (userId: string, panels: UnifiedPanel[]) => {
+  const positionsMap: Record<string, { x: number; y: number }> = {};
+  panels.forEach((panel) => {
+    positionsMap[panel.id] = panel.position;
   });
-  localStorage.setItem(`${STORAGE_KEY}-${userId}`, JSON.stringify(orderMap));
+  localStorage.setItem(`${STORAGE_KEY}-${userId}`, JSON.stringify(positionsMap));
 };
 
-const getPanelId = (panel: UnifiedPanel): string => {
-  if (panel.type === 'custom') return panel.panel.id;
-  return `default-${panel.type}`;
-};
-
-// Sortable Panel Item Component
-interface SortablePanelProps {
+// Draggable Panel Component
+interface DraggablePanelProps {
   panel: UnifiedPanel;
   renderContent: () => React.ReactNode;
-  isDragging?: boolean;
+  onPositionChange: (id: string, position: { x: number; y: number }) => void;
 }
 
-const SortablePanel = ({ panel, renderContent, isDragging }: SortablePanelProps) => {
+const DraggablePanel = ({ panel, renderContent }: DraggablePanelProps) => {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
-    transition,
-    isDragging: isSortableDragging,
-  } = useSortable({ id: getPanelId(panel) });
+    isDragging,
+  } = useDraggable({ id: panel.id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: CSS.Translate.toString(transform),
+    left: panel.position.x,
+    top: panel.position.y,
   };
 
   return (
@@ -88,8 +75,8 @@ const SortablePanel = ({ panel, renderContent, isDragging }: SortablePanelProps)
       ref={setNodeRef}
       style={style}
       className={cn(
-        'relative transition-shadow duration-200',
-        (isSortableDragging || isDragging) && 'opacity-50 z-50 shadow-2xl'
+        'absolute transition-shadow duration-200 w-[calc(50%-0.5rem)] min-w-[300px]',
+        isDragging && 'opacity-50 z-50 shadow-2xl'
       )}
     >
       {/* Drag Handle */}
@@ -108,7 +95,7 @@ const SortablePanel = ({ panel, renderContent, isDragging }: SortablePanelProps)
   );
 };
 
-// Drag Overlay Component
+// Drag Overlay Component  
 const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }: {
   panel: UnifiedPanel;
   renderUnitsPanel: () => React.ReactNode;
@@ -117,7 +104,7 @@ const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }
   const renderContent = () => {
     switch (panel.type) {
       case 'custom':
-        return <CustomPanel panel={panel.panel} />;
+        return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
       case 'units':
         return renderUnitsPanel();
       case 'responsibles':
@@ -126,7 +113,7 @@ const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }
   };
 
   return (
-    <div className="relative opacity-90 shadow-2xl rounded-lg">
+    <div className="relative opacity-90 shadow-2xl rounded-lg w-[calc(50vw-2rem)] min-w-[300px] max-w-[600px]">
       <div className="absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center cursor-grabbing bg-gradient-to-r from-muted/80 to-transparent rounded-l-lg">
         <GripVertical className="w-4 h-4 text-muted-foreground" />
       </div>
@@ -144,45 +131,55 @@ export const UnifiedDraggablePanels = ({
 }: UnifiedDraggablePanelsProps) => {
   const { user } = useAuth();
   const reorderPanels = useReorderDashboardPanels();
+  const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const [containerHeight, setContainerHeight] = useState(600);
+
+  // Calculate initial grid positions
+  const getInitialPosition = (index: number, savedPos?: { x: number; y: number }) => {
+    if (savedPos) return savedPos;
+    
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    const panelWidth = 50; // 50% width
+    const panelHeight = 300;
+    const gap = 16;
+    
+    return {
+      x: col * (panelWidth + gap),
+      y: row * (panelHeight + gap),
+    };
+  };
 
   const buildPanelList = useCallback((): UnifiedPanel[] => {
-    const savedOrder = user ? getSavedOrder(user.id) : null;
+    const savedPositions = user ? getSavedPositions(user.id) : null;
     const panels: UnifiedPanel[] = [];
+    let index = 0;
     
     customPanels.forEach(panel => {
-      const savedIdx = savedOrder?.[panel.id];
       panels.push({
+        id: panel.id,
         type: 'custom',
         panel,
-        order: savedIdx ?? panel.order_index ?? 0,
+        position: getInitialPosition(index, savedPositions?.[panel.id]),
       });
+      index++;
     });
     
-    const unitsOrder = savedOrder?.['default-units'];
-    const responsiblesOrder = savedOrder?.['default-responsibles'];
-    
-    panels.push({ 
-      type: 'units', 
-      order: unitsOrder ?? (customPanels.length > 0 ? customPanels.length : 0)
+    panels.push({
+      id: 'default-units',
+      type: 'units',
+      position: getInitialPosition(index, savedPositions?.['default-units']),
     });
-    panels.push({ 
-      type: 'responsibles', 
-      order: responsiblesOrder ?? (customPanels.length > 0 ? customPanels.length + 1 : 1)
+    index++;
+    
+    panels.push({
+      id: 'default-responsibles',
+      type: 'responsibles',
+      position: getInitialPosition(index, savedPositions?.['default-responsibles']),
     });
     
-    return panels.sort((a, b) => a.order - b.order);
+    return panels;
   }, [customPanels, user]);
 
   const [panels, setPanels] = useState<UnifiedPanel[]>([]);
@@ -197,68 +194,62 @@ export const UnifiedDraggablePanels = ({
     
     if (activeId !== null) return;
     
-    const currentOrder = panels.map(p => getPanelId(p));
-    const newPanels = buildPanelList();
-    
-    const orderedPanels = newPanels.sort((a, b) => {
-      const aKey = getPanelId(a);
-      const bKey = getPanelId(b);
-      const aIdx = currentOrder.indexOf(aKey);
-      const bIdx = currentOrder.indexOf(bKey);
-      
-      if (aIdx === -1 && bIdx === -1) return 0;
-      if (aIdx === -1) return 1;
-      if (bIdx === -1) return -1;
-      
-      return aIdx - bIdx;
+    // Merge new panels while preserving existing positions
+    const currentPositions: Record<string, { x: number; y: number }> = {};
+    panels.forEach(p => {
+      currentPositions[p.id] = p.position;
     });
     
-    setPanels(orderedPanels);
+    const newPanels = buildPanelList().map(p => ({
+      ...p,
+      position: currentPositions[p.id] || p.position,
+    }));
+    
+    setPanels(newPanels);
   }, [customPanels, user]);
+
+  // Update container height based on panel positions
+  useEffect(() => {
+    const maxY = Math.max(...panels.map(p => p.position.y + 300), 600);
+    setContainerHeight(maxY + 50);
+  }, [panels]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { active, delta } = event;
     setActiveId(null);
 
-    if (!over || active.id === over.id) return;
+    if (!delta) return;
 
-    const oldIndex = panels.findIndex(p => getPanelId(p) === active.id);
-    const newIndex = panels.findIndex(p => getPanelId(p) === over.id);
+    const panelIndex = panels.findIndex(p => p.id === active.id);
+    if (panelIndex === -1) return;
 
-    if (oldIndex === -1 || newIndex === -1) return;
+    const panel = panels[panelIndex];
+    const newPosition = {
+      x: Math.max(0, panel.position.x + delta.x),
+      y: Math.max(0, panel.position.y + delta.y),
+    };
 
-    const newPanels = arrayMove(panels, oldIndex, newIndex);
-    const updatedPanels = newPanels.map((panel, idx) => ({
+    const newPanels = [...panels];
+    newPanels[panelIndex] = {
       ...panel,
-      order: idx,
-    }));
+      position: newPosition,
+    };
 
-    setPanels(updatedPanels);
+    setPanels(newPanels);
 
     if (user) {
-      saveOrder(user.id, updatedPanels);
-    }
-
-    const customPanelUpdates = updatedPanels
-      .filter((p): p is UnifiedPanel & { type: 'custom' } => p.type === 'custom')
-      .map(p => ({
-        id: p.panel.id,
-        order_index: p.order,
-      }));
-
-    if (customPanelUpdates.length > 0) {
-      reorderPanels.mutate(customPanelUpdates);
+      savePositions(user.id, newPanels);
     }
   };
 
   const renderPanelContent = (panel: UnifiedPanel) => {
     switch (panel.type) {
       case 'custom':
-        return <CustomPanel panel={panel.panel} />;
+        return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
       case 'units':
         return renderUnitsPanel();
       case 'responsibles':
@@ -266,29 +257,33 @@ export const UnifiedDraggablePanels = ({
     }
   };
 
-  const activePanel = activeId ? panels.find(p => getPanelId(p) === activeId) : null;
+  const activePanel = activeId ? panels.find(p => p.id === activeId) : null;
 
   if (panels.length === 0) return null;
 
   return (
     <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={panels.map(p => getPanelId(p))} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-          {panels.map((panel) => (
-            <SortablePanel
-              key={getPanelId(panel)}
-              panel={panel}
-              renderContent={() => renderPanelContent(panel)}
-              isDragging={activeId === getPanelId(panel)}
-            />
-          ))}
-        </div>
-      </SortableContext>
+      <div 
+        ref={containerRef}
+        className="relative w-full"
+        style={{ minHeight: containerHeight }}
+      >
+        {panels.map((panel) => (
+          <DraggablePanel
+            key={panel.id}
+            panel={panel}
+            renderContent={() => renderPanelContent(panel)}
+            onPositionChange={(id, position) => {
+              setPanels(prev => prev.map(p => 
+                p.id === id ? { ...p, position } : p
+              ));
+            }}
+          />
+        ))}
+      </div>
       
       <DragOverlay>
         {activePanel && (
