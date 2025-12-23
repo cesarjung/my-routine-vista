@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, Trash2, Users, Check, CalendarIcon, Clock, RefreshCw } from 'lucide-react';
+import { Loader2, Trash2, Users, Check, CalendarIcon, Clock } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,12 +68,11 @@ const frequencyOptions: { value: TaskFrequency; label: string }[] = [
   { value: 'semanal', label: 'Semanal' },
   { value: 'quinzenal', label: 'Quinzenal' },
   { value: 'mensal', label: 'Mensal' },
-  { value: 'anual', label: 'Anual' },
 ];
 
 const recurrenceModeOptions = [
-  { value: 'schedule', label: 'Por Cronograma', description: 'Cria automaticamente um dia antes' },
-  { value: 'on_completion', label: 'Ao Concluir', description: 'Só cria quando a atual for concluída' },
+  { value: 'schedule', label: 'Por Cronograma', description: 'Cria automaticamente um dia antes, mesmo que a atual não esteja concluída' },
+  { value: 'on_completion', label: 'Ao Concluir', description: 'Só cria a próxima quando a atual for marcada como concluída' },
 ];
 
 interface UnitAssignment {
@@ -84,10 +83,13 @@ interface UnitAssignment {
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório').max(200, 'Título muito longo'),
   description: z.string().max(1000, 'Descrição muito longa').optional().nullable(),
-  frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal', 'anual', 'customizada']),
-  recurrence_mode: z.enum(['schedule', 'on_completion']),
-  is_active: z.boolean(),
-  skip_weekends_holidays: z.boolean(),
+  frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const),
+  recurrenceMode: z.enum(['schedule', 'on_completion'] as const),
+  startDate: z.date().optional(),
+  startTime: z.string().optional(),
+  endDate: z.date().optional(),
+  endTime: z.string().optional(),
+  skipWeekendsHolidays: z.boolean(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -115,10 +117,13 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
     values: routine ? {
       title: routine.title,
       description: routine.description || '',
-      frequency: routine.frequency,
-      recurrence_mode: routine.recurrence_mode || 'schedule',
-      is_active: routine.is_active ?? true,
-      skip_weekends_holidays: false,
+      frequency: routine.frequency as any,
+      recurrenceMode: routine.recurrence_mode || 'schedule',
+      startDate: undefined,
+      startTime: '',
+      endDate: undefined,
+      endTime: '',
+      skipWeekendsHolidays: false,
     } : undefined,
   });
 
@@ -180,7 +185,6 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
         title: data.title,
         description: data.description || null,
         frequency: data.frequency,
-        is_active: data.is_active,
       },
     });
 
@@ -216,7 +220,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                   <FormItem>
                     <FormLabel>Título</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="Ex: Checkpoint semanal" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -228,10 +232,12 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descrição</FormLabel>
+                    <FormLabel>Descrição (opcional)</FormLabel>
                     <FormControl>
                       <Textarea
-                        rows={3}
+                        placeholder="Descreva a rotina..."
+                        className="resize-none"
+                        rows={2}
                         {...field}
                         value={field.value || ''}
                       />
@@ -241,68 +247,42 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="frequency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Frequência</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {frequencyOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="is_active"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select
-                        onValueChange={(v) => field.onChange(v === 'true')}
-                        value={field.value ? 'true' : 'false'}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="true">Ativa</SelectItem>
-                          <SelectItem value="false">Inativa</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
               <FormField
                 control={form.control}
-                name="recurrence_mode"
+                name="frequency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Frequência</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a frequência" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {frequencyOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Recurrence Mode */}
+              <FormField
+                control={form.control}
+                name="recurrenceMode"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Modo de Recorrência</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="Selecione o modo" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -321,9 +301,138 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                 )}
               />
 
+              {/* Data e Hora de Início */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Data de início</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                              ) : (
+                                <span>Selecione</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="startTime"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Hora de início</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type="time"
+                            {...field}
+                            className="pl-9"
+                          />
+                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Data e Hora de Fim (opcional) */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Data de Vencimento</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                              ) : (
+                                <span>Selecione</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date < (form.getValues('startDate') || new Date())}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endTime"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Hora de Vencimento</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type="time"
+                            {...field}
+                            className="pl-9"
+                          />
+                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <FormField
                 control={form.control}
-                name="skip_weekends_holidays"
+                name="skipWeekendsHolidays"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
                     <div className="space-y-0.5">
@@ -331,7 +440,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                         Ignorar feriados e finais de semana
                       </FormLabel>
                       <FormDescription className="text-xs">
-                        Tarefas não serão criadas em sábados, domingos ou feriados
+                        Tarefas não serão criadas em sábados, domingos ou feriados nacionais
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -347,7 +456,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
               {/* Responsáveis da Rotina Mãe - Apenas para Gestor/Admin */}
               {isGestorOrAdmin && (
                 <div className="space-y-2">
-                  <FormLabel>Responsáveis da Rotina Mãe</FormLabel>
+                  <FormLabel>Responsáveis da Tarefa Mãe</FormLabel>
                   <MultiAssigneeSelect
                     profiles={allProfiles || []}
                     selectedIds={parentAssignees}
@@ -355,7 +464,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                     placeholder="Selecionar responsáveis (opcional)"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Os responsáveis da rotina mãe acompanham o progresso geral de todas as unidades.
+                    Os responsáveis da tarefa mãe acompanham o progresso geral de todas as unidades.
                   </p>
                 </div>
               )}
