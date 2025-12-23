@@ -9,7 +9,7 @@ const Index = () => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-background w-full">
+    <div className="flex h-screen bg-background w-full overflow-hidden">
       <SectorSidebar 
         context={context} 
         onNavigate={setContext} 
