@@ -13,8 +13,21 @@ import {
   Loader2,
   Play,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { Button } from './ui/button';
+import { useDeleteRoutine } from '@/hooks/useRoutineMutations';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from './ui/alert-dialog';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Textarea } from './ui/textarea';
@@ -110,6 +123,12 @@ export const RoutineDetailPanel = ({
   const createPeriod = useCreatePeriodWithCheckins();
   const completeCheckin = useCompleteCheckin();
   const undoCheckin = useUndoCheckin();
+  const deleteRoutine = useDeleteRoutine();
+
+  const handleDeleteRoutine = async () => {
+    await deleteRoutine.mutateAsync(routine.id);
+    onClose();
+  };
 
   const checkins = periodData?.period?.routine_checkins || [];
   const completed = checkins.filter((c) => c.completed_at !== null).length;
@@ -146,9 +165,39 @@ export const RoutineDetailPanel = ({
       <div className="p-6 border-b border-border">
         <div className="flex items-start justify-between mb-4">
           <h2 className="text-xl font-semibold text-foreground">{routine.title}</h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            ✕
-          </Button>
+          <div className="flex items-center gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir rotina?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Essa ação não pode ser desfeita. A rotina será desativada permanentemente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteRoutine}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleteRoutine.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      'Excluir'
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              ✕
+            </Button>
+          </div>
         </div>
 
         {/* Status Row */}
