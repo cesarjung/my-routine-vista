@@ -332,10 +332,10 @@ export const useUpdateTask = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: TaskUpdate & { id: string }) => {
-      // First, get the current task to check for google_event_id
+      // First, get the current task to check for google_event_id and recurring info
       const { data: existingTask } = await supabase
         .from('tasks')
-        .select('google_event_id, title, description, start_date, due_date, status')
+        .select('google_event_id, title, description, start_date, due_date, status, is_recurring, recurrence_frequency, recurrence_mode, unit_id, sector_id, assigned_to, created_by, priority, parent_task_id')
         .eq('id', id)
         .single();
 
@@ -360,6 +360,20 @@ export const useUpdateTask = () => {
         ).catch(console.error);
       }
 
+      // Handle recurring task completion (on_completion mode)
+      if (
+        existingTask?.is_recurring &&
+        existingTask?.recurrence_mode === 'on_completion' &&
+        updates.status === 'concluida' &&
+        existingTask?.status !== 'concluida' &&
+        existingTask?.start_date &&
+        existingTask?.due_date &&
+        existingTask?.recurrence_frequency
+      ) {
+        // Create next instance when task is completed
+        await createNextRecurringInstance(existingTask, id);
+      }
+
       return data;
     },
     onSuccess: () => {
@@ -373,6 +387,121 @@ export const useUpdateTask = () => {
     },
   });
 };
+
+// Helper function to create next recurring task instance
+async function createNextRecurringInstance(
+  existingTask: {
+    title: string;
+    description: string | null;
+    start_date: string;
+    due_date: string;
+    recurrence_frequency: string;
+    unit_id: string | null;
+    sector_id: string | null;
+    assigned_to: string | null;
+    created_by: string | null;
+    priority: number | null;
+    parent_task_id: string | null;
+    recurrence_mode: string | null;
+  },
+  currentTaskId: string
+): Promise<void> {
+  const startDate = new Date(existingTask.start_date);
+  const dueDate = new Date(existingTask.due_date);
+  const duration = dueDate.getTime() - startDate.getTime();
+  
+  // Calculate next start date based on frequency
+  const now = new Date();
+  const nextStart = new Date(now);
+  nextStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+  
+  // If the calculated time has already passed today, start tomorrow
+  if (nextStart <= now) {
+    nextStart.setDate(nextStart.getDate() + 1);
+  }
+  
+  const nextDue = new Date(nextStart.getTime() + duration);
+  
+  // Check if instance already exists
+  const startOfDay = new Date(nextStart);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(nextStart);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  const { data: existingInstance } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('parent_task_id', existingTask.parent_task_id || currentTaskId)
+    .gte('start_date', startOfDay.toISOString())
+    .lte('start_date', endOfDay.toISOString())
+    .limit(1);
+  
+  if (existingInstance && existingInstance.length > 0) {
+    console.log('Next recurring instance already exists');
+    return;
+  }
+  
+  // Create new task instance
+  const { data: newTask, error } = await supabase
+    .from('tasks')
+    .insert({
+      title: existingTask.title,
+      description: existingTask.description,
+      unit_id: existingTask.unit_id,
+      sector_id: existingTask.sector_id,
+      assigned_to: existingTask.assigned_to,
+      created_by: existingTask.created_by,
+      start_date: nextStart.toISOString(),
+      due_date: nextDue.toISOString(),
+      priority: existingTask.priority || 1,
+      status: 'pendente',
+      is_recurring: true,
+      recurrence_frequency: existingTask.recurrence_frequency as 'diaria' | 'semanal' | 'quinzenal' | 'mensal',
+      recurrence_mode: existingTask.recurrence_mode as 'schedule' | 'on_completion',
+      parent_task_id: existingTask.parent_task_id || currentTaskId,
+    })
+    .select('id')
+    .single();
+  
+  if (error) {
+    console.error('Error creating next recurring instance:', error);
+    return;
+  }
+  
+  if (newTask) {
+    // Copy task assignees
+    const { data: assignees } = await supabase
+      .from('task_assignees')
+      .select('user_id')
+      .eq('task_id', currentTaskId);
+    
+    if (assignees && assignees.length > 0) {
+      await supabase
+        .from('task_assignees')
+        .insert(assignees.map(a => ({ task_id: newTask.id, user_id: a.user_id })));
+    }
+    
+    // Copy subtasks
+    const { data: subtasks } = await supabase
+      .from('subtasks')
+      .select('title, assigned_to, order_index')
+      .eq('task_id', currentTaskId);
+    
+    if (subtasks && subtasks.length > 0) {
+      await supabase
+        .from('subtasks')
+        .insert(subtasks.map(s => ({
+          task_id: newTask.id,
+          title: s.title,
+          assigned_to: s.assigned_to,
+          order_index: s.order_index,
+          is_completed: false,
+        })));
+    }
+    
+    toast.success('Próxima tarefa recorrente criada!');
+  }
+}
 
 export const useDeleteTask = () => {
   const queryClient = useQueryClient();
