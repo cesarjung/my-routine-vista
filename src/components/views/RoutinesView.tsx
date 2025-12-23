@@ -66,14 +66,23 @@ const RoutineListItem = ({ routine, isSelected, onClick }: RoutineListItemProps)
   );
 };
 
-export const RoutinesView = () => {
-  const [activeFrequency, setActiveFrequency] = useState<TaskFrequency | 'all'>('all');
+interface RoutinesViewProps {
+  sectorId?: string;
+  frequency?: string;
+}
+
+export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
+  const [activeFrequency, setActiveFrequency] = useState<TaskFrequency | 'all'>(
+    (frequency as TaskFrequency) || 'all'
+  );
   const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
   const { data: routines, isLoading } = useRoutines();
 
-  const filteredRoutines = activeFrequency === 'all'
-    ? routines
-    : routines?.filter(r => r.frequency === activeFrequency);
+  const filteredRoutines = routines?.filter(r => {
+    const matchesFrequency = activeFrequency === 'all' || r.frequency === activeFrequency;
+    const matchesSector = !sectorId || (r as any).sector_id === sectorId;
+    return matchesFrequency && matchesSector;
+  });
 
   return (
     <div className="flex h-full">
