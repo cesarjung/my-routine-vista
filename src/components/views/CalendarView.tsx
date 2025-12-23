@@ -202,11 +202,23 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const getItemsForDay = (date: Date): CalendarItem[] => {
     const items: CalendarItem[] = [];
 
-    // Add tasks
+    // Add tasks - filter to avoid duplicates
+    // For tasks with parent_task_id (child tasks), only show if user belongs to that unit
+    // For parent tasks, only show if they have no children or if viewing all (isMyTasks mode shows only assigned)
     tasks?.forEach(task => {
       if (!task.due_date) return;
       const matchesSector = !sectorId || (task as any).sector_id === sectorId;
       const matchesUser = !isMyTasks || task.assigned_to === user?.id;
+      
+      // Skip parent tasks that have children (to avoid duplicates)
+      // Parent tasks have parent_task_id === null but may have children
+      const hasChildren = task.parent_task_id === null && 
+        tasks.some(t => t.parent_task_id === task.id);
+      
+      // If this is a parent task with children, skip it (children will show instead)
+      if (hasChildren && !isMyTasks) {
+        return;
+      }
       
       if (matchesSector && matchesUser && isSameDay(new Date(task.due_date), date)) {
         const dueDate = new Date(task.due_date);
