@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardPanel, useReorderDashboardPanels } from '@/hooks/useDashboardPanels';
 import { CustomPanel } from './CustomPanel';
-import { GripVertical, Building2, Users } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Types for unified panel system
 export type UnifiedPanel = 
@@ -16,9 +17,26 @@ interface UnifiedDraggablePanelsProps {
   renderResponsiblesPanel: () => React.ReactNode;
 }
 
-const DEFAULT_PANELS_ORDER = {
-  units: 1000,
-  responsibles: 1001,
+const STORAGE_KEY = 'dashboard-panel-order';
+
+// Get saved order from localStorage
+const getSavedOrder = (userId: string): Record<string, number> | null => {
+  try {
+    const saved = localStorage.getItem(`${STORAGE_KEY}-${userId}`);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Save order to localStorage
+const saveOrder = (userId: string, panels: UnifiedPanel[]) => {
+  const orderMap: Record<string, number> = {};
+  panels.forEach((panel, idx) => {
+    const key = panel.type === 'custom' ? panel.panel.id : `default-${panel.type}`;
+    orderMap[key] = idx;
+  });
+  localStorage.setItem(`${STORAGE_KEY}-${userId}`, JSON.stringify(orderMap));
 };
 
 export const UnifiedDraggablePanels = ({
@@ -26,38 +44,75 @@ export const UnifiedDraggablePanels = ({
   renderUnitsPanel,
   renderResponsiblesPanel,
 }: UnifiedDraggablePanelsProps) => {
-  // Build unified panel list
-  const buildPanelList = (): UnifiedPanel[] => {
+  const { user } = useAuth();
+  const reorderPanels = useReorderDashboardPanels();
+  
+  // Build unified panel list with saved order
+  const buildPanelList = useCallback((): UnifiedPanel[] => {
+    const savedOrder = user ? getSavedOrder(user.id) : null;
     const panels: UnifiedPanel[] = [];
     
     // Add custom panels
     customPanels.forEach(panel => {
+      const savedIdx = savedOrder?.[panel.id];
       panels.push({
         type: 'custom',
         panel,
-        order: panel.order_index ?? 0,
+        order: savedIdx ?? panel.order_index ?? 0,
       });
     });
     
-    // Add default panels (will be at the end by default)
-    panels.push({ type: 'units', order: DEFAULT_PANELS_ORDER.units });
-    panels.push({ type: 'responsibles', order: DEFAULT_PANELS_ORDER.responsibles });
+    // Add default panels
+    const unitsOrder = savedOrder?.['default-units'];
+    const responsiblesOrder = savedOrder?.['default-responsibles'];
+    
+    panels.push({ 
+      type: 'units', 
+      order: unitsOrder ?? (customPanels.length > 0 ? customPanels.length : 0)
+    });
+    panels.push({ 
+      type: 'responsibles', 
+      order: responsiblesOrder ?? (customPanels.length > 0 ? customPanels.length + 1 : 1)
+    });
     
     // Sort by order
     return panels.sort((a, b) => a.order - b.order);
-  };
+  }, [customPanels, user]);
 
-  const [panels, setPanels] = useState<UnifiedPanel[]>(buildPanelList);
+  const [panels, setPanels] = useState<UnifiedPanel[]>([]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const reorderPanels = useReorderDashboardPanels();
+  const [initialized, setInitialized] = useState(false);
 
-  // Sync with prop changes when not dragging
+  // Initialize panels on mount or when customPanels change (but preserve order)
   useEffect(() => {
-    if (draggedIndex === null) {
+    if (!initialized || draggedIndex !== null) {
       setPanels(buildPanelList());
+      setInitialized(true);
+      return;
     }
-  }, [customPanels]);
+    
+    // When customPanels change, we need to merge new panels while preserving order
+    const currentOrder = panels.map(p => p.type === 'custom' ? p.panel.id : `default-${p.type}`);
+    const newPanels = buildPanelList();
+    
+    // Keep existing order for panels that still exist
+    const orderedPanels = newPanels.sort((a, b) => {
+      const aKey = a.type === 'custom' ? a.panel.id : `default-${a.type}`;
+      const bKey = b.type === 'custom' ? b.panel.id : `default-${b.type}`;
+      const aIdx = currentOrder.indexOf(aKey);
+      const bIdx = currentOrder.indexOf(bKey);
+      
+      // New panels go to the end
+      if (aIdx === -1 && bIdx === -1) return 0;
+      if (aIdx === -1) return 1;
+      if (bIdx === -1) return -1;
+      
+      return aIdx - bIdx;
+    });
+    
+    setPanels(orderedPanels);
+  }, [customPanels, user]);
 
   const getPanelId = (panel: UnifiedPanel): string => {
     if (panel.type === 'custom') return panel.panel.id;
@@ -114,9 +169,15 @@ export const UnifiedDraggablePanels = ({
       order: idx,
     }));
 
+    // Update local state immediately
     setPanels(updatedPanels);
 
-    // Only persist custom panels to database
+    // Save to localStorage
+    if (user) {
+      saveOrder(user.id, updatedPanels);
+    }
+
+    // Persist custom panels to database
     const customPanelUpdates = updatedPanels
       .filter((p): p is UnifiedPanel & { type: 'custom' } => p.type === 'custom')
       .map(p => ({
@@ -142,6 +203,8 @@ export const UnifiedDraggablePanels = ({
         return renderResponsiblesPanel();
     }
   };
+
+  if (panels.length === 0) return null;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
