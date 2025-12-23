@@ -162,6 +162,15 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     setUnitAssignments([]);
   }, []);
 
+  // Helper to combine date and time
+  const combineDateAndTime = (date: Date | undefined, time: string | undefined): string | null => {
+    if (!date) return null;
+    if (!time) return date.toISOString();
+    const [hours, minutes] = time.split(':').map(Number);
+    const combined = setMinutes(setHours(date, hours || 0), minutes || 0);
+    return combined.toISOString();
+  };
+
   const onSubmit = async (data: FormValues) => {
     const effectiveParentAssignees = isGestorOrAdmin
       ? (parentAssignees.length > 0 ? parentAssignees : [user?.id || ''].filter(Boolean))
@@ -177,6 +186,8 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
       parentAssignees: effectiveParentAssignees as string[],
       sectorId: sectorId,
       skipWeekendsHolidays: data.skipWeekendsHolidays || false,
+      startDate: combineDateAndTime(data.startDate, data.startTime),
+      dueDate: combineDateAndTime(data.dueDate, data.dueTime),
     });
     form.reset();
     setUnitAssignments([]);
