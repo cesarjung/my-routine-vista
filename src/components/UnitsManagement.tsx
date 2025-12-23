@@ -281,19 +281,17 @@ export const UnitsManagement = () => {
       <div key={unit.id} className={cn("animate-fade-in", !isGerencia && "ml-6")}>
         <div 
           className={cn(
-            "flex items-center gap-2 p-3 rounded-lg border transition-colors",
+            "flex items-center gap-2 p-3 rounded-lg border transition-colors cursor-pointer",
             isGerencia 
               ? "bg-primary/5 border-primary/20 hover:bg-primary/10" 
-              : "bg-card border-border hover:bg-secondary/30"
+              : "bg-card border-border hover:bg-secondary/30",
+            !isGerencia && !isExpanded && "border-dashed"
           )}
+          onClick={() => toggleExpand(unit.id)}
         >
-          {isGerencia || hasChildren ? (
-            <button onClick={() => toggleExpand(unit.id)} className="p-1">
-              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          ) : (
-            <div className="w-6" />
-          )}
+          <div className="p-1">
+            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </div>
           
           <div className={cn(
             "w-8 h-8 rounded-lg flex items-center justify-center",
@@ -312,6 +310,11 @@ export const UnitsManagement = () => {
                   {managers.length}
                 </Badge>
               )}
+              {!isGerencia && !isExpanded && (
+                <span className="text-xs text-muted-foreground italic">
+                  Clique para ver responsáveis
+                </span>
+              )}
             </div>
             {unit.description && (
               <p className="text-xs text-muted-foreground truncate">{unit.description}</p>
@@ -319,7 +322,7 @@ export const UnitsManagement = () => {
           </div>
 
           {isAdmin && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               {isGerencia && (
                 <Button 
                   variant="ghost" 
