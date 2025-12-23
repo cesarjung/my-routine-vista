@@ -218,7 +218,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   return (
     <aside
       className={cn(
-        'h-full flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300',
+        'min-h-screen flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -242,8 +242,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         </button>
       </div>
 
-      {/* Navigation - flex-1 to take available space, min-h-0 for proper scrolling */}
-      <nav className="flex-1 min-h-0 p-3 space-y-1 overflow-y-auto">
+      {/* Navigation - flex-1 to fill space, no overflow scroll */}
+      <nav className="flex-1 p-3 space-y-1">
         {/* Dashboard */}
         <button
           onClick={() => onNavigate({ type: 'dashboard' })}
