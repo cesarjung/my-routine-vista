@@ -43,6 +43,8 @@ export interface CreateTaskWithUnitsData {
   is_recurring?: boolean;
   recurrence_frequency?: 'diaria' | 'semanal' | 'quinzenal' | 'mensal';
   recurrence_mode?: 'schedule' | 'on_completion';
+  // Setor
+  sector_id?: string;
 }
 
 export const useCreateTask = () => {
@@ -134,6 +136,7 @@ export const useCreateTaskWithUnits = () => {
             title: data.title,
             description: data.description || null,
             unit_id: firstUnitId,
+            sector_id: data.sector_id || null,
             assigned_to: data.parentAssignedTo || user.id,
             status: 'pendente',
             priority: data.priority,
@@ -166,6 +169,7 @@ export const useCreateTaskWithUnits = () => {
           title: data.title,
           description: data.description || null,
           unit_id: assignment.unitId,
+          sector_id: data.sector_id || null,
           assigned_to: assignment.assignedTo,
           status: 'pendente' as const,
           priority: data.priority,
@@ -247,6 +251,7 @@ export const useCreateTaskWithUnits = () => {
             title: data.title,
             description: data.description || null,
             unit_id: userUnitId || null, // null for admins/gestors without unit
+            sector_id: data.sector_id || null,
             assigned_to: data.parentAssignedTo || user.id,
             status: 'pendente',
             priority: data.priority,

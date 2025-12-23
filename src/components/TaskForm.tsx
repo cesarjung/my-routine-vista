@@ -71,11 +71,12 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 interface TaskFormProps {
+  sectorId?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
-export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
+export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
   const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignees, setNewSubtaskAssignees] = useState<string[]>([]);
@@ -206,6 +207,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       is_recurring: data.is_recurring || false,
       recurrence_frequency: data.is_recurring ? data.recurrence_frequency : undefined,
       recurrence_mode: data.is_recurring ? data.recurrence_mode : undefined,
+      sector_id: sectorId,
     });
 
     form.reset();

@@ -97,7 +97,7 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
               <h1 className="text-2xl font-bold text-foreground mb-1">Rotinas</h1>
               <p className="text-muted-foreground">Gerencie rotinas com checkins por unidade</p>
             </div>
-            <RoutineForm />
+            <RoutineForm sectorId={sectorId} />
           </div>
 
           <div className="flex flex-wrap gap-2">

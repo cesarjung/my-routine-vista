@@ -23,6 +23,7 @@ interface CreateRoutineWithUnitsData extends CreateRoutineData {
   unitAssignments: UnitAssignment[];
   parentAssignedTo?: string | null; // Responsável da rotina/tarefa mãe (backwards compatible)
   parentAssignees?: string[]; // Multiple assignees for parent routine
+  sectorId?: string; // Setor automático
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -107,6 +108,7 @@ export const useCreateRoutineWithUnits = () => {
           recurrence_mode: data.recurrenceMode || 'schedule',
           created_by: user.id,
           is_active: true,
+          sector_id: data.sectorId || null,
           // unit_id is optional - only set if there's a single unit assignment
           unit_id: data.unitAssignments.length === 1 ? data.unitAssignments[0].unitId : null,
         })
@@ -199,6 +201,7 @@ export const useCreateRoutineWithUnits = () => {
             title: `[Rotina] ${routine.title}`,
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
             unit_id: firstUnitId,
+            sector_id: data.sectorId || null,
             routine_id: routine.id,
             assigned_to: data.parentAssignedTo || user.id,
             created_by: user.id,
@@ -238,6 +241,7 @@ export const useCreateRoutineWithUnits = () => {
             title: `[Rotina] ${routine.title}`,
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
             unit_id: unitId,
+            sector_id: data.sectorId || null,
             routine_id: routine.id,
             assigned_to: assigneeIds[0] || null,
             created_by: user.id,
@@ -281,6 +285,7 @@ export const useCreateRoutineWithUnits = () => {
             title: `[Rotina] ${routine.title}`,
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
             unit_id: userUnitId || null, // null for admins/gestors without unit
+            sector_id: data.sectorId || null,
             routine_id: routine.id,
             assigned_to: data.parentAssignedTo || user.id,
             created_by: user.id,

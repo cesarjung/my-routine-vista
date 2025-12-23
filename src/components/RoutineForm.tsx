@@ -77,7 +77,11 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export const RoutineForm = () => {
+interface RoutineFormProps {
+  sectorId?: string;
+}
+
+export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
   const [open, setOpen] = useState(false);
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
@@ -174,6 +178,7 @@ export const RoutineForm = () => {
       unitAssignments: unitAssignments,
       parentAssignedTo: effectiveParentAssignees[0] || null,
       parentAssignees: effectiveParentAssignees as string[],
+      sectorId: sectorId,
     });
     form.reset();
     setUnitAssignments([]);
