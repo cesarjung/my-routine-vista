@@ -127,12 +127,12 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{panel ? 'Editar Painel' : 'Criar Painel Customizado'}</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="title">Nome do Painel</Label>
             <Input
