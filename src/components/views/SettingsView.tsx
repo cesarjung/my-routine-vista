@@ -43,7 +43,7 @@ export const SettingsView = () => {
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
-  const [editUnit, setEditUnit] = useState('');
+  const [editUnits, setEditUnits] = useState<string[]>([]);
   const [editRole, setEditRole] = useState<AppRole>('usuario');
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -69,7 +69,20 @@ export const SettingsView = () => {
     setEditingUser(profile);
     setEditName(profile.full_name || '');
     setEditEmail(profile.email || '');
-    setEditUnit(profile.unit_id || '');
+    
+    // Fetch user's managed units
+    const { data: managedUnits } = await supabase
+      .from('unit_managers')
+      .select('unit_id')
+      .eq('user_id', profile.id);
+    
+    const managedUnitIds = managedUnits?.map(u => u.unit_id) || [];
+    // Include profile unit_id if exists and not already in managed units
+    const allUnits = profile.unit_id && !managedUnitIds.includes(profile.unit_id)
+      ? [profile.unit_id, ...managedUnitIds]
+      : managedUnitIds.length > 0 ? managedUnitIds : (profile.unit_id ? [profile.unit_id] : []);
+    
+    setEditUnits(allUnits);
     
     // Fetch user role
     const { data: roleData } = await supabase
@@ -197,16 +210,32 @@ export const SettingsView = () => {
         }
       }
 
-      // Update profile
+      // Update profile with primary unit (first selected)
+      const primaryUnitId = editUnits.length > 0 ? editUnits[0] : null;
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
           full_name: editName.trim(), 
-          unit_id: editUnit || null 
+          unit_id: primaryUnitId 
         })
         .eq('id', editingUser.id);
 
       if (profileError) throw profileError;
+
+      // Update unit_managers - delete all and insert new ones
+      await supabase
+        .from('unit_managers')
+        .delete()
+        .eq('user_id', editingUser.id);
+      
+      if (editUnits.length > 0) {
+        await supabase
+          .from('unit_managers')
+          .insert(editUnits.map(unitId => ({ 
+            user_id: editingUser.id, 
+            unit_id: unitId 
+          })));
+      }
 
       // Update role (only admins can change roles)
       if (isAdmin) {
@@ -216,29 +245,6 @@ export const SettingsView = () => {
           .eq('user_id', editingUser.id);
 
         if (roleError) throw roleError;
-
-        // Handle unit_managers based on role
-        if (editRole === 'gestor' && editUnit) {
-          // Add to unit_managers if gestor
-          const { data: existingManager } = await supabase
-            .from('unit_managers')
-            .select('id')
-            .eq('user_id', editingUser.id)
-            .eq('unit_id', editUnit)
-            .maybeSingle();
-
-          if (!existingManager) {
-            await supabase
-              .from('unit_managers')
-              .insert({ user_id: editingUser.id, unit_id: editUnit });
-          }
-        } else if (editRole !== 'gestor') {
-          // Remove from unit_managers if not gestor
-          await supabase
-            .from('unit_managers')
-            .delete()
-            .eq('user_id', editingUser.id);
-        }
       }
 
       toast({
@@ -755,19 +761,13 @@ export const SettingsView = () => {
             )}
             
             <div className="space-y-2">
-              <Label htmlFor="edit-unit">Unidade</Label>
-              <Select value={editUnit} onValueChange={setEditUnit}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma unidade" />
-                </SelectTrigger>
-                <SelectContent>
-                  {units?.map((unit) => (
-                    <SelectItem key={unit.id} value={unit.id}>
-                      {unit.name} ({unit.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Unidades</Label>
+              <MultiAssigneeSelect
+                profiles={(units || []).map(u => ({ id: u.id, full_name: `${u.name} (${u.code})`, email: '', avatar_url: null, unit_id: null, created_at: '', updated_at: '' }))}
+                selectedIds={editUnits}
+                onChange={setEditUnits}
+                placeholder="Selecione as unidades"
+              />
             </div>
             
             {isAdmin && (
