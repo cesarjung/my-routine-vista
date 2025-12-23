@@ -1,9 +1,13 @@
 import { useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { RoutineForm } from '@/components/RoutineForm';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
+import { RoutineEditDialog } from '@/components/RoutineEditDialog';
 import { useRoutines } from '@/hooks/useRoutines';
+import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import { cn } from '@/lib/utils';
 import { Loader2, Calendar, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
@@ -28,9 +32,11 @@ interface RoutineListItemProps {
   routine: Tables<'routines'>;
   isSelected: boolean;
   onClick: () => void;
+  onEdit: (e: React.MouseEvent) => void;
+  canEdit: boolean;
 }
 
-const RoutineListItem = ({ routine, isSelected, onClick }: RoutineListItemProps) => {
+const RoutineListItem = ({ routine, isSelected, onClick, onEdit, canEdit }: RoutineListItemProps) => {
   return (
     <button
       onClick={onClick}
@@ -55,12 +61,24 @@ const RoutineListItem = ({ routine, isSelected, onClick }: RoutineListItemProps)
           </div>
         </div>
 
-        <ChevronRight
-          className={cn(
-            'w-5 h-5 text-muted-foreground transition-transform shrink-0',
-            isSelected && 'text-primary'
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEdit}
+              className="opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
           )}
-        />
+          <ChevronRight
+            className={cn(
+              'w-5 h-5 text-muted-foreground transition-transform shrink-0',
+              isSelected && 'text-primary'
+            )}
+          />
+        </div>
       </div>
     </button>
   );
@@ -76,6 +94,8 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
     (frequency as TaskFrequency) || 'all'
   );
   const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
+  const [editingRoutine, setEditingRoutine] = useState<Tables<'routines'> | null>(null);
+  const { isGestorOrAdmin } = useIsGestorOrAdmin();
   const { data: routines, isLoading } = useRoutines();
 
   const filteredRoutines = routines?.filter(r => {
@@ -137,6 +157,11 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
                   routine={routine}
                   isSelected={selectedRoutine?.id === routine.id}
                   onClick={() => setSelectedRoutine(routine)}
+                  onEdit={(e) => {
+                    e.stopPropagation();
+                    setEditingRoutine(routine);
+                  }}
+                  canEdit={isGestorOrAdmin}
                 />
               ))}
             </div>
@@ -153,6 +178,12 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
           />
         </div>
       )}
+
+      <RoutineEditDialog
+        routine={editingRoutine}
+        open={!!editingRoutine}
+        onOpenChange={(open) => !open && setEditingRoutine(null)}
+      />
     </div>
   );
 };
