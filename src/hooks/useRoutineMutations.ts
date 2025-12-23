@@ -7,8 +7,7 @@ type TaskFrequency = Enums<'task_frequency'>;
 
 interface UnitAssignment {
   unitId: string;
-  assignedTo: string | null;
-  assignedToIds?: string[]; // Multiple assignees per unit
+  assignedToIds: string[];
 }
 
 type RecurrenceMode = 'schedule' | 'on_completion';
@@ -172,10 +171,10 @@ export const useCreateRoutineWithUnits = () => {
       // Extract unit IDs from assignments
       const unitIds = data.unitAssignments.map(a => a.unitId);
 
-      // Create a map of unit_id -> assigned_to from user selection
-      const unitAssigneeMap = new Map<string, string | null>();
+      // Create a map of unit_id -> assigned_to_ids from user selection
+      const unitAssigneesMap = new Map<string, string[]>();
       data.unitAssignments.forEach(a => {
-        unitAssigneeMap.set(a.unitId, a.assignedTo);
+        unitAssigneesMap.set(a.unitId, a.assignedToIds || []);
       });
 
       // If units were selected, create checkins and tasks for each unit
@@ -232,26 +231,42 @@ export const useCreateRoutineWithUnits = () => {
             .insert(routineAssigneeIds.map(userId => ({ task_id: parentTask.id, user_id: userId })));
         }
 
-        // Create tasks filhas for each unit with the selected responsible
-        const childTasks = unitIds.map((unitId) => ({
-          title: `[Rotina] ${routine.title}`,
-          description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
-          unit_id: unitId,
-          routine_id: routine.id,
-          assigned_to: unitAssigneeMap.get(unitId) || null,
-          created_by: user.id,
-          start_date: periodStart.toISOString(),
-          due_date: periodEnd.toISOString(),
-          status: 'pendente' as const,
-          priority: 2,
-          parent_task_id: parentTask.id,
-        }));
+        // Create tasks filhas for each unit with the selected responsibles
+        const childTasksToInsert = unitIds.map((unitId) => {
+          const assigneeIds = unitAssigneesMap.get(unitId) || [];
+          return {
+            title: `[Rotina] ${routine.title}`,
+            description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
+            unit_id: unitId,
+            routine_id: routine.id,
+            assigned_to: assigneeIds[0] || null,
+            created_by: user.id,
+            start_date: periodStart.toISOString(),
+            due_date: periodEnd.toISOString(),
+            status: 'pendente' as const,
+            priority: 2,
+            parent_task_id: parentTask.id,
+          };
+        });
 
-        const { error: tasksError } = await supabase
+        const { data: insertedChildTasks, error: tasksError } = await supabase
           .from('tasks')
-          .insert(childTasks);
+          .insert(childTasksToInsert)
+          .select();
 
         if (tasksError) throw tasksError;
+
+        // Create task_assignees for each child task
+        if (insertedChildTasks) {
+          for (const childTask of insertedChildTasks) {
+            const assigneeIds = unitAssigneesMap.get(childTask.unit_id!) || [];
+            if (assigneeIds.length > 0) {
+              await supabase
+                .from('task_assignees')
+                .insert(assigneeIds.map(userId => ({ task_id: childTask.id, user_id: userId })));
+            }
+          }
+        }
       } else {
         // No units selected
         // Admins/Gestores podem criar sem unidade
