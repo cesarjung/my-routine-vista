@@ -12,10 +12,11 @@ import { useProfiles, Profile } from '@/hooks/useProfiles';
 import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key } from 'lucide-react';
 import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
 import { SectorUsersManagement } from '@/components/SectorUsersManagement';
+import { AdminUsersManagement } from '@/components/AdminUsersManagement';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -486,6 +487,12 @@ export const SettingsView = () => {
               Setores
             </TabsTrigger>
           )}
+          {isAdmin && (
+            <TabsTrigger value="passwords" className="flex items-center gap-2">
+              <Key className="w-4 h-4" />
+              Senhas
+            </TabsTrigger>
+          )}
           <TabsTrigger value="integrations" className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             Integrações
@@ -712,6 +719,12 @@ export const SettingsView = () => {
         {isAdmin && (
           <TabsContent value="sectors">
             <SectorUsersManagement />
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="passwords">
+            <AdminUsersManagement />
           </TabsContent>
         )}
 
