@@ -208,7 +208,7 @@ export const DashboardView = () => {
                   {unitStatus?.map(unit => (
                     <tr key={unit.id} className="hover:bg-secondary/20">
                       <td className="p-2">
-                        <p className="font-medium text-foreground truncate max-w-[100px]" title={unit.name}>{unit.name}</p>
+                        <p className="font-medium text-foreground" title={unit.name}>{unit.name}</p>
                       </td>
                       {FREQUENCIES.map(f => (
                         <td key={f} className="p-1 text-center">
@@ -240,7 +240,7 @@ export const DashboardView = () => {
                   {responsibleStatus?.map(person => (
                     <tr key={person.id} className="hover:bg-secondary/20">
                       <td className="p-2">
-                        <p className="font-medium text-foreground truncate max-w-[100px]" title={person.name}>{person.name}</p>
+                        <p className="font-medium text-foreground" title={person.name}>{person.name}</p>
                       </td>
                       {FREQUENCIES.map(f => (
                         <td key={f} className="p-1 text-center">
