@@ -2,7 +2,7 @@ import { LayoutDashboard, Calendar, Users, Building2, Settings, ChevronLeft, Che
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import sirtecLogoFull from '@/assets/sirtec-logo-full.png';
+import sirtecLogo from '@/assets/sirtec-logo.jpg';
 
 interface SidebarProps {
   activeView: string;
@@ -34,7 +34,8 @@ export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <img src={sirtecLogoFull} alt="Sirtec" className="h-8 object-contain" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
+            <span className="font-semibold text-sidebar-foreground">Gestão de Rotinas</span>
           </div>
         )}
         <button
