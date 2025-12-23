@@ -335,7 +335,7 @@ export const useUpdateTask = () => {
       // First, get the current task to check for google_event_id and recurring info
       const { data: existingTask } = await supabase
         .from('tasks')
-        .select('google_event_id, title, description, start_date, due_date, status, is_recurring, recurrence_frequency, recurrence_mode, unit_id, sector_id, assigned_to, created_by, priority, parent_task_id')
+        .select('google_event_id, title, description, start_date, due_date, status, is_recurring, recurrence_frequency, recurrence_mode, unit_id, sector_id, assigned_to, created_by, priority, parent_task_id, routine_id')
         .eq('id', id)
         .single();
 
@@ -347,6 +347,26 @@ export const useUpdateTask = () => {
         .single();
 
       if (error) throw error;
+
+      // If task is being completed and is linked to a routine, update the routine checkin
+      if (
+        existingTask?.routine_id &&
+        updates.status === 'concluida' &&
+        existingTask?.status !== 'concluida' &&
+        existingTask?.assigned_to
+      ) {
+        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'completed');
+      }
+
+      // If task was uncompleted and is linked to a routine, revert the checkin
+      if (
+        existingTask?.routine_id &&
+        existingTask?.status === 'concluida' &&
+        updates.status && updates.status !== 'concluida' &&
+        existingTask?.assigned_to
+      ) {
+        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'pending');
+      }
 
       // Sync to Google Calendar if connected
       if (existingTask?.google_event_id) {
@@ -379,6 +399,8 @@ export const useUpdateTask = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
+      queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
       toast.success('Tarefa atualizada!');
     },
     onError: (error) => {
@@ -387,6 +409,63 @@ export const useUpdateTask = () => {
     },
   });
 };
+
+// Helper function to update routine checkin when a task is completed
+async function updateRoutineCheckinFromTask(
+  routineId: string,
+  assigneeUserId: string,
+  status: 'completed' | 'pending' | 'not_completed'
+): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Find the active period for this routine
+    const now = new Date().toISOString();
+    const { data: activePeriod } = await supabase
+      .from('routine_periods')
+      .select('id')
+      .eq('routine_id', routineId)
+      .eq('is_active', true)
+      .lte('period_start', now)
+      .gte('period_end', now)
+      .maybeSingle();
+
+    if (!activePeriod) return;
+
+    // Find the checkin for this user in this period
+    const { data: checkin } = await supabase
+      .from('routine_checkins')
+      .select('id')
+      .eq('routine_period_id', activePeriod.id)
+      .eq('assignee_user_id', assigneeUserId)
+      .maybeSingle();
+
+    if (!checkin) return;
+
+    // Update the checkin status
+    if (status === 'pending') {
+      await supabase
+        .from('routine_checkins')
+        .update({
+          status: 'pending',
+          completed_at: null,
+          completed_by: null,
+        })
+        .eq('id', checkin.id);
+    } else {
+      await supabase
+        .from('routine_checkins')
+        .update({
+          status,
+          completed_at: new Date().toISOString(),
+          completed_by: user?.id || assigneeUserId,
+        })
+        .eq('id', checkin.id);
+    }
+  } catch (error) {
+    console.error('Error updating routine checkin:', error);
+  }
+}
 
 // Helper function to create next recurring task instance
 async function createNextRecurringInstance(

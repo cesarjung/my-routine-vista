@@ -178,3 +178,46 @@ export const useTaskStats = () => {
     enabled: !!user?.id,
   });
 };
+
+// Hook to get tasks linked to a specific routine
+export const useRoutineTasks = (routineId: string) => {
+  return useQuery({
+    queryKey: ['routine-tasks', routineId],
+    queryFn: async () => {
+      // Get parent task for this routine
+      const { data: parentTask, error: parentError } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          unit:units(id, name, code)
+        `)
+        .eq('routine_id', routineId)
+        .is('parent_task_id', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (parentError) throw parentError;
+      if (!parentTask) return { parentTask: null, childTasks: [] };
+
+      // Get child tasks
+      const { data: childTasks, error: childError } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          unit:units(id, name, code),
+          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email)
+        `)
+        .eq('parent_task_id', parentTask.id)
+        .order('created_at', { ascending: true });
+
+      if (childError) throw childError;
+
+      return {
+        parentTask,
+        childTasks: childTasks || [],
+      };
+    },
+    enabled: !!routineId,
+  });
+};

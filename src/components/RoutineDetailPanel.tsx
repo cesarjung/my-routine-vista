@@ -46,6 +46,8 @@ import {
   useMarkCheckinNotCompleted,
   useUndoCheckin,
 } from '@/hooks/useRoutineCheckins';
+import { useRoutineTasks } from '@/hooks/useTasks';
+import { useUpdateTask } from '@/hooks/useTaskMutations';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
 import { useProfiles } from '@/hooks/useProfiles';
 import {
@@ -145,12 +147,14 @@ export const RoutineDetailPanel = ({
   const [frequency, setFrequency] = useState<TaskFrequency>(routine.frequency);
 
   const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id);
+  const { data: routineTasksData, isLoading: isLoadingTasks } = useRoutineTasks(routine.id);
   const { data: unitManagers } = useUnitManagers();
   const { data: allProfiles } = useProfiles();
   const createPeriod = useCreatePeriodWithCheckins();
   const completeCheckin = useCompleteCheckin();
   const markNotCompleted = useMarkCheckinNotCompleted();
   const undoCheckin = useUndoCheckin();
+  const updateTask = useUpdateTask();
   const deleteRoutine = useDeleteRoutine();
   const updateRoutine = useUpdateRoutine();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
@@ -184,10 +188,17 @@ export const RoutineDetailPanel = ({
     setIsEditing(false);
   };
 
+  // Use tasks instead of checkins when available
+  const childTasks = routineTasksData?.childTasks || [];
+  const completedTasks = childTasks.filter((t) => t.status === 'concluida').length;
+  const totalTasks = childTasks.length;
+  
+  // Fallback to checkins if no tasks yet
   const checkins = periodData?.period?.routine_checkins || [];
   const completedOrNotCompleted = checkins.filter((c) => c.status === 'completed' || c.status === 'not_completed').length;
   const completedCount = checkins.filter((c) => c.status === 'completed').length;
-  const total = checkins.length;
+  const total = totalTasks > 0 ? totalTasks : checkins.length;
+  const completed = totalTasks > 0 ? completedTasks : completedCount;
 
   const handleStartPeriod = async () => {
     const dates = getPeriodDates(routine.frequency);
@@ -308,12 +319,12 @@ export const RoutineDetailPanel = ({
               variant="outline"
               className={cn(
                 'ml-auto',
-                total > 0 && completedOrNotCompleted === total
+                total > 0 && completed === total
                   ? 'bg-success/20 text-success border-success/30'
                   : 'bg-warning/20 text-warning border-warning/30'
               )}
             >
-              {total > 0 && completedOrNotCompleted === total ? 'CONCLUÍDA' : 'PENDENTE'}
+              {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
             </Badge>
           </div>
 
@@ -400,26 +411,26 @@ export const RoutineDetailPanel = ({
               !isSubtasksExpanded && '-rotate-90'
             )}
           />
-          <span className="text-sm font-medium text-foreground">Subtarefas</span>
+          <span className="text-sm font-medium text-foreground">Tarefas por Responsável</span>
           <span className="text-xs text-muted-foreground">
-            {completedCount} / {total}
+            {completed} / {total}
           </span>
           <div className="ml-auto">
-            <ProgressBar completed={completedCount} total={total} className="w-24 h-1.5" />
+            <ProgressBar completed={completed} total={total} className="w-24 h-1.5" />
           </div>
         </button>
 
         {isSubtasksExpanded && (
           <div className="border-t border-border">
-            {isLoading ? (
+            {isLoading || isLoadingTasks ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
-            ) : !periodData?.period ? (
+            ) : !periodData?.period && childTasks.length === 0 ? (
               <div className="text-center py-12 px-6">
                 <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                 <p className="text-muted-foreground mb-4">
-                  Nenhum período ativo. Inicie um novo período para criar checkins.
+                  Nenhum período ativo. Inicie um novo período para criar tarefas.
                 </p>
                 <Button
                   onClick={handleStartPeriod}
@@ -434,21 +445,106 @@ export const RoutineDetailPanel = ({
                   Iniciar Período
                 </Button>
               </div>
-            ) : checkins.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                Nenhuma unidade cadastrada
-              </div>
-            ) : (
+            ) : childTasks.length > 0 ? (
               <div className="divide-y divide-border">
                 {/* Table Header */}
                 <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
-                  <div className="col-span-5">Nome</div>
-                  <div className="col-span-3">Responsável</div>
-                  <div className="col-span-2">Prioridade</div>
+                  <div className="col-span-5">Responsável</div>
+                  <div className="col-span-3">Unidade</div>
+                  <div className="col-span-2">Status</div>
                   <div className="col-span-2">Vencimento</div>
                 </div>
 
-                {/* Table Rows */}
+                {/* Task Rows */}
+                {childTasks.map((task) => {
+                  const isTaskCompleted = task.status === 'concluida';
+                  const assignee = (task as any).assignee;
+                  
+                  return (
+                    <div
+                      key={task.id}
+                      className={cn(
+                        'grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors hover:bg-secondary/20 group',
+                        isTaskCompleted && 'bg-success/5'
+                      )}
+                    >
+                      {/* Assignee name with checkbox */}
+                      <div className="col-span-5 flex items-center gap-3">
+                        <button
+                          onClick={() => {
+                            const newStatus = isTaskCompleted ? 'pendente' : 'concluida';
+                            updateTask.mutate({ id: task.id, status: newStatus });
+                          }}
+                          disabled={updateTask.isPending}
+                          className={cn(
+                            'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
+                            isTaskCompleted
+                              ? 'bg-success border-success text-success-foreground'
+                              : 'border-muted-foreground/50 hover:border-primary'
+                          )}
+                        >
+                          {isTaskCompleted && <Check className="w-3 h-3" />}
+                        </button>
+                        <div className="flex flex-col min-w-0">
+                          <span
+                            className={cn(
+                              'font-medium text-sm truncate',
+                              isTaskCompleted && 'text-muted-foreground line-through'
+                            )}
+                          >
+                            {assignee?.full_name || assignee?.email || 'Sem responsável'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Unit */}
+                      <div className="col-span-3 flex items-center">
+                        <span className="text-sm text-muted-foreground truncate">
+                          {(task as any).unit?.name || '—'}
+                        </span>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className="col-span-2 flex items-center">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-xs',
+                            task.status === 'concluida' && 'bg-success/20 text-success border-success/30',
+                            task.status === 'pendente' && 'bg-warning/20 text-warning border-warning/30',
+                            task.status === 'em_andamento' && 'bg-blue-500/20 text-blue-500 border-blue-500/30'
+                          )}
+                        >
+                          {task.status === 'concluida' ? 'Concluída' : 
+                           task.status === 'em_andamento' ? 'Andamento' : 'Pendente'}
+                        </Badge>
+                      </div>
+
+                      {/* Due Date */}
+                      <div className="col-span-2 flex items-center">
+                        {task.due_date ? (
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(task.due_date), 'dd/MM HH:mm', { locale: ptBR })}
+                          </span>
+                        ) : (
+                          <Calendar className="w-4 h-4 text-muted-foreground/50" />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : checkins.length > 0 ? (
+              <div className="divide-y divide-border">
+                {/* Table Header for legacy checkins */}
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
+                  <div className="col-span-5">Nome</div>
+                  <div className="col-span-3">Responsável</div>
+                  <div className="col-span-2">Ações</div>
+                  <div className="col-span-2">Vencimento</div>
+                </div>
+
+                {/* Checkin Rows */}
                 {checkins.map((checkin) => {
                   const isCompleted = checkin.status === 'completed';
                   const managers = getManagersForUnit(checkin.unit_id);
@@ -468,6 +564,10 @@ export const RoutineDetailPanel = ({
                     />
                   );
                 })}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                Nenhum responsável atribuído à rotina
               </div>
             )}
           </div>
