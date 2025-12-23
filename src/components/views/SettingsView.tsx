@@ -12,7 +12,7 @@ import { useProfiles, Profile } from '@/hooks/useProfiles';
 import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle } from 'lucide-react';
 import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
 
@@ -44,6 +44,24 @@ export const SettingsView = () => {
   const [editRole, setEditRole] = useState<AppRole>('usuario');
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // My profile state (for regular users)
+  const [myName, setMyName] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Get current user's profile
+  const myProfile = profiles?.find(p => p.id === user?.id);
+
+  // Initialize my profile name when profile loads
+  useState(() => {
+    if (myProfile) {
+      setMyName(myProfile.full_name || '');
+    }
+  });
+
   const openEditDialog = async (profile: Profile) => {
     setEditingUser(profile);
     setEditName(profile.full_name || '');
@@ -58,6 +76,93 @@ export const SettingsView = () => {
       .maybeSingle();
     
     setEditRole((roleData?.role as AppRole) || 'usuario');
+  };
+
+  const handleUpdateMyProfile = async () => {
+    if (!user) return;
+
+    setIsUpdatingProfile(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: myName.trim() })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Perfil atualizado',
+        description: 'Seu nome foi atualizado com sucesso.',
+      });
+
+      refetchProfiles();
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      toast({
+        title: 'Erro ao atualizar perfil',
+        description: error.message || 'Tente novamente',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast({
+        title: 'Erro',
+        description: 'Preencha a nova senha e a confirmação',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: 'Erro',
+        description: 'As senhas não coincidem',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: 'Erro',
+        description: 'A senha deve ter pelo menos 6 caracteres',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Senha alterada',
+        description: 'Sua senha foi alterada com sucesso.',
+      });
+
+      // Clear password fields
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      toast({
+        title: 'Erro ao alterar senha',
+        description: error.message || 'Tente novamente',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleUpdateUser = async () => {
@@ -235,15 +340,116 @@ export const SettingsView = () => {
     );
   }
 
-  // Restrict access to admins and gestors only
+  // For regular users (not admin or gestor), show only their profile settings
   if (!canManageUsers) {
+    const userUnit = units?.find(u => u.id === myProfile?.unit_id);
+    
     return (
-      <div className="p-6 flex flex-col items-center justify-center gap-4 min-h-[400px]">
-        <ShieldX className="w-16 h-16 text-muted-foreground" />
-        <h2 className="text-xl font-semibold text-foreground">Acesso Restrito</h2>
-        <p className="text-muted-foreground text-center max-w-md">
-          Apenas administradores e gestores podem gerenciar usuários.
-        </p>
+      <div className="p-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Meu Perfil</h1>
+          <p className="text-muted-foreground">Visualize e atualize suas informações pessoais</p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Profile Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserCircle className="w-5 h-5" />
+                Informações Pessoais
+              </CardTitle>
+              <CardDescription>
+                Seus dados cadastrados no sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="my-name">Nome Completo</Label>
+                <Input
+                  id="my-name"
+                  value={myName || myProfile?.full_name || ''}
+                  onChange={(e) => setMyName(e.target.value)}
+                  placeholder="Seu nome"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  value={myProfile?.email || user?.email || ''}
+                  disabled
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Para alterar o email, entre em contato com um administrador
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Unidade</Label>
+                <Input
+                  value={userUnit ? `${userUnit.name} (${userUnit.code})` : 'Não atribuída'}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <Button 
+                onClick={handleUpdateMyProfile} 
+                disabled={isUpdatingProfile || !myName.trim()}
+              >
+                {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Change Password Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="w-5 h-5" />
+                Alterar Senha
+              </CardTitle>
+              <CardDescription>
+                Atualize sua senha de acesso
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Nova Senha</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirmar Nova Senha</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Digite a senha novamente"
+                />
+              </div>
+
+              <Button 
+                onClick={handleChangePassword} 
+                disabled={isChangingPassword || !newPassword || !confirmPassword}
+              >
+                {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Google Calendar Integration */}
+        <GoogleCalendarConnect />
       </div>
     );
   }
@@ -255,8 +461,12 @@ export const SettingsView = () => {
         <p className="text-muted-foreground">Gerencie usuários, unidades e permissões</p>
       </div>
 
-      <Tabs defaultValue="users" className="space-y-4">
+      <Tabs defaultValue="profile" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="profile" className="flex items-center gap-2">
+            <UserCircle className="w-4 h-4" />
+            Meu Perfil
+          </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center gap-2">
             <UserPlus className="w-4 h-4" />
             Criar Usuário
@@ -274,6 +484,93 @@ export const SettingsView = () => {
             Integrações
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="profile">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Profile Info Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserCircle className="w-5 h-5" />
+                  Informações Pessoais
+                </CardTitle>
+                <CardDescription>
+                  Seus dados cadastrados no sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="my-name-admin">Nome Completo</Label>
+                  <Input
+                    id="my-name-admin"
+                    value={myName || myProfile?.full_name || ''}
+                    onChange={(e) => setMyName(e.target.value)}
+                    placeholder="Seu nome"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    value={myProfile?.email || user?.email || ''}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+
+                <Button 
+                  onClick={handleUpdateMyProfile} 
+                  disabled={isUpdatingProfile || !myName.trim()}
+                >
+                  {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Change Password Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Lock className="w-5 h-5" />
+                  Alterar Senha
+                </CardTitle>
+                <CardDescription>
+                  Atualize sua senha de acesso
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="new-password-admin">Nova Senha</Label>
+                  <Input
+                    id="new-password-admin"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password-admin">Confirmar Nova Senha</Label>
+                  <Input
+                    id="confirm-password-admin"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Digite a senha novamente"
+                  />
+                </div>
+
+                <Button 
+                  onClick={handleChangePassword} 
+                  disabled={isChangingPassword || !newPassword || !confirmPassword}
+                >
+                  {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         <TabsContent value="users">
           <Card>
