@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.update-user-email]
 verify_jwt = false
+
+[functions.process-recurring-tasks]
+verify_jwt = false
