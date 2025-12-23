@@ -49,12 +49,6 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
-        body: null,
-        headers,
-      });
-
-      // Parse the action from URL since we need to pass it differently
       const response = await fetch(
         `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-auth?action=status`,
         { headers }
