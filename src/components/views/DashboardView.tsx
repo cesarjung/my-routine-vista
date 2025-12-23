@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/tooltip';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
 import { CustomPanel } from '@/components/dashboard/CustomPanel';
+import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -146,7 +147,7 @@ export const DashboardView = () => {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
+          <img src={sirtecLogoHeader} alt="Sirtec" className="h-10 object-contain" />
           <div className={cn(
             'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold',
             overallPercentage >= 70 ? 'bg-success/20 text-success' :
@@ -156,6 +157,8 @@ export const DashboardView = () => {
             {overallPercentage}%
           </div>
         </div>
+        
+        <h1 className="text-lg font-bold text-foreground">Gerenciamento de Rotinas</h1>
         
         <div className="flex items-center gap-2">
           <PanelFormDialog panelCount={customPanels?.length || 0} />
