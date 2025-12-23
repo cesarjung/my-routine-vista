@@ -4,7 +4,7 @@ import { DashboardView } from '@/components/views/DashboardView';
 import { TasksView } from '@/components/views/TasksView';
 import { RoutinesView } from '@/components/views/RoutinesView';
 import { ResponsiblesView } from '@/components/views/ResponsiblesView';
-import { UnitsView } from '@/components/views/UnitsView';
+import { SectorUnitsView } from '@/components/views/SectorUnitsView';
 import { KanbanView } from '@/components/views/KanbanView';
 import { GanttView } from '@/components/views/GanttView';
 import { CalendarView } from '@/components/views/CalendarView';
@@ -28,8 +28,6 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         return 'Todos os Setores';
       case 'my-tasks':
         return 'Minhas Tarefas';
-      case 'units':
-        return 'Unidades';
       case 'settings':
         return 'Configurações';
       case 'sector': {
@@ -44,6 +42,9 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
             : 'Todas';
           return `${sectorName} / Rotinas / ${freqLabel}`;
         }
+        if (context.folder === 'units') {
+          return `${sectorName} / Unidades`;
+        }
         return sectorName;
       }
       default:
@@ -51,12 +52,12 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     }
   };
 
-  const showViewToggle = ['all-sectors', 'my-tasks', 'sector'].includes(context.type);
+  const showViewToggle = ['all-sectors', 'my-tasks'].includes(context.type) || 
+    (context.type === 'sector' && context.folder !== 'units');
 
   const renderContent = () => {
     // Views especiais sem toggle
     if (context.type === 'dashboard') return <DashboardView />;
-    if (context.type === 'units') return <UnitsView />;
     if (context.type === 'settings') return <SettingsView />;
 
     // Contextos com toggle de visualização
@@ -65,9 +66,14 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     const frequency = context.type === 'sector' ? context.frequency : undefined;
     const isMyTasks = context.type === 'my-tasks';
 
+    // Unidades view dentro do setor
+    if (context.type === 'sector' && folder === 'units' && sectorId) {
+      return <SectorUnitsView sectorId={sectorId} />;
+    }
+
     switch (viewMode) {
       case 'list':
-        if (folder === 'routines' || (!folder && !isMyTasks && context.type === 'sector')) {
+        if (folder === 'routines') {
           return <RoutinesView sectorId={sectorId} frequency={frequency} />;
         }
         if (isMyTasks) {
