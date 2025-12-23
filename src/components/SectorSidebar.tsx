@@ -242,8 +242,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      {/* Navigation - flex-1 to take available space, min-h-0 for proper scrolling */}
+      <nav className="flex-1 min-h-0 p-3 space-y-1 overflow-y-auto">
         {/* Dashboard */}
         <button
           onClick={() => onNavigate({ type: 'dashboard' })}
@@ -328,8 +328,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         )}
       </nav>
 
-      {/* Footer */}
-      <div className="p-3 border-t border-sidebar-border space-y-1">
+      {/* Footer - always at bottom with mt-auto */}
+      <div className="mt-auto p-3 border-t border-sidebar-border space-y-1 bg-sidebar">
         {!collapsed && user && (
           <div className="px-3 py-2 text-sm text-muted-foreground truncate">
             {user.email}
