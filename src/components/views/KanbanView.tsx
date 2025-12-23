@@ -1,8 +1,14 @@
+import { useState } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Clock, AlertCircle, Play, Loader2, GripVertical } from 'lucide-react';
-import type { Enums } from '@/integrations/supabase/types';
+import { CheckCircle2, Clock, AlertCircle, Play, Loader2, GripVertical, Pencil } from 'lucide-react';
+import type { Enums, Tables } from '@/integrations/supabase/types';
+import { TaskEditDialog } from '@/components/TaskEditDialog';
+
+type Task = Tables<'tasks'> & {
+  unit?: { name: string; code: string } | null;
+};
 
 type TaskStatus = Enums<'task_status'>;
 
@@ -29,6 +35,13 @@ interface KanbanViewProps {
 export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const { user } = useAuth();
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setEditDialogOpen(true);
+  };
 
   const getTasksByStatus = (status: TaskStatus) => {
     return tasks?.filter(t => {
@@ -94,6 +107,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                       key={task.id}
                       className="bg-card rounded-lg border border-border p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer group animate-fade-in"
                       style={{ animationDelay: `${index * 50}ms` }}
+                      onClick={() => handleEditTask(task as Task)}
                     >
                       <div className="flex items-start gap-2">
                         <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-0.5" />
@@ -112,6 +126,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                             </p>
                           )}
                         </div>
+                        <Pencil className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
                   ))
@@ -121,6 +136,12 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
           );
         })}
       </div>
+
+      <TaskEditDialog
+        task={editingTask}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
     </div>
   );
 };

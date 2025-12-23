@@ -69,11 +69,15 @@ const formSchema = z.object({
   description: z.string().optional(),
   frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const),
   recurrenceMode: z.enum(['schedule', 'on_completion'] as const),
+  // Data de início da recorrência (primeira tarefa)
   startDate: z.date({ required_error: 'Data de início é obrigatória' }),
   startTime: z.string().optional(),
-  endDate: z.date().optional(),
-  endTime: z.string().optional(),
+  // Duração de cada tarefa individual (opcional - se não definir, tarefa é de 1 dia)
+  taskDurationDays: z.number().min(0).optional(),
+  taskEndTime: z.string().optional(),
+  // Até quando repetir (recurrence_end_date)
   repeatForever: z.boolean(),
+  recurrenceEndDate: z.date().optional(),
   skipWeekendsHolidays: z.boolean(),
 });
 
@@ -105,9 +109,10 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
       recurrenceMode: 'schedule',
       startDate: new Date(),
       startTime: '',
-      endDate: undefined,
-      endTime: '',
+      taskDurationDays: 0,
+      taskEndTime: '',
       repeatForever: true,
+      recurrenceEndDate: undefined,
       skipWeekendsHolidays: false,
     },
   });
@@ -370,99 +375,141 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
               />
             </div>
 
-            {/* Data e Hora de Término */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Data de término</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
+            {/* Duração de cada tarefa */}
+            <div className="space-y-2 rounded-lg border p-4 bg-secondary/20">
+              <FormLabel className="text-sm font-medium">Duração de cada tarefa (opcional)</FormLabel>
+              <p className="text-xs text-muted-foreground mb-3">
+                Define quanto tempo cada tarefa individual dura. Se não definir, a tarefa é criada para 1 dia.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="taskDurationDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Duração (dias)</FormLabel>
+                      <Select
+                        onValueChange={(v) => field.onChange(parseInt(v))}
+                        value={(field.value || 0).toString()}
+                      >
                         <FormControl>
-                          <Button
-                            variant="outline"
-                            disabled={repeatForever}
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground",
-                              repeatForever && "opacity-50"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "dd/MM/yyyy", { locale: ptBR })
-                            ) : (
-                              <span>{repeatForever ? "Sem fim" : "Selecione"}</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
                         </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < (form.getValues('startDate') || new Date())}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                        <SelectContent>
+                          <SelectItem value="0">Mesmo dia</SelectItem>
+                          <SelectItem value="1">1 dia</SelectItem>
+                          <SelectItem value="2">2 dias</SelectItem>
+                          <SelectItem value="3">3 dias</SelectItem>
+                          <SelectItem value="5">5 dias</SelectItem>
+                          <SelectItem value="7">1 semana</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="endTime"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Hora de término</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          type="time"
-                          {...field}
-                          disabled={repeatForever}
-                          className={cn("pl-9", repeatForever && "opacity-50")}
-                        />
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="taskEndTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Hora limite</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type="time"
+                            value={field.value || ''}
+                            onChange={field.onChange}
+                            className="pl-9"
+                          />
+                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
 
-            <FormField
-              control={form.control}
-              name="repeatForever"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-sm font-medium">Repetir para sempre</FormLabel>
-                    <FormDescription className="text-xs">
-                      A rotina será criada indefinidamente sem data de término
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={(checked) => {
-                        field.onChange(checked);
-                        if (checked) {
-                          form.setValue('endDate', undefined);
-                        }
-                      }}
-                    />
-                  </FormControl>
-              </FormItem>
-            )}
-          />
+            {/* Repetir até quando */}
+            <div className="space-y-3 rounded-lg border p-4 bg-secondary/20">
+              <FormLabel className="text-sm font-medium">Repetir até quando?</FormLabel>
+              <FormField
+                control={form.control}
+                name="repeatForever"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm">Repetir para sempre</FormLabel>
+                      <FormDescription className="text-xs">
+                        A rotina será criada indefinidamente
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={(checked) => {
+                          field.onChange(checked);
+                          if (checked) {
+                            form.setValue('recurrenceEndDate', undefined);
+                          }
+                        }}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {!repeatForever && (
+                <FormField
+                  control={form.control}
+                  name="recurrenceEndDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="text-xs">Repetir até</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                              ) : (
+                                <span>Selecione a data final</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date < (form.getValues('startDate') || new Date())}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormDescription className="text-xs">
+                        A rotina se repetirá até esta data
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
 
           <FormField
             control={form.control}

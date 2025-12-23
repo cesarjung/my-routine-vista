@@ -1,12 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { format, differenceInDays, startOfDay, addDays, subDays, max, min } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import type { Tables } from '@/integrations/supabase/types';
+import { TaskEditDialog } from '@/components/TaskEditDialog';
+
+type Task = Tables<'tasks'> & {
+  unit?: { name: string; code: string } | null;
+};
 
 interface GanttViewProps {
   sectorId?: string;
@@ -17,6 +22,13 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const { user } = useAuth();
   const [viewStart, setViewStart] = useState(() => subDays(new Date(), 7));
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setEditDialogOpen(true);
+  };
 
   const daysToShow = 30;
   const dayWidth = 40;
@@ -107,24 +119,26 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex">
-          {/* Task Names Column */}
-          <div className="min-w-[200px] border-r border-border flex-shrink-0">
-            <div className="h-14 bg-secondary/50 border-b border-border p-3 font-medium text-foreground">
-              Tarefa
-            </div>
-            {tasksWithDates.map((task, index) => (
-              <div
-                key={task.id}
-                className="h-12 border-b border-border px-3 flex items-center animate-fade-in"
-                style={{ animationDelay: `${index * 30}ms` }}
-              >
-                <div className="truncate">
-                  <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
-                  <p className="text-xs text-muted-foreground truncate">{task.unit?.name}</p>
-                </div>
+            {/* Task Names Column */}
+            <div className="min-w-[200px] border-r border-border flex-shrink-0">
+              <div className="h-14 bg-secondary/50 border-b border-border p-3 font-medium text-foreground">
+                Tarefa
               </div>
-            ))}
-          </div>
+              {tasksWithDates.map((task, index) => (
+                <div
+                  key={task.id}
+                  className="h-12 border-b border-border px-3 flex items-center group cursor-pointer hover:bg-secondary/30"
+                  style={{ animationDelay: `${index * 30}ms` }}
+                  onClick={() => handleEditTask(task as Task)}
+                >
+                  <div className="truncate flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{task.unit?.name}</p>
+                  </div>
+                  <Pencil className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                </div>
+              ))}
+            </div>
 
           {/* Timeline */}
           <div className="overflow-x-auto flex-1">
@@ -246,6 +260,12 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
           <span className="text-muted-foreground">Hoje</span>
         </div>
       </div>
+
+      <TaskEditDialog
+        task={editingTask}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
     </div>
   );
 };
