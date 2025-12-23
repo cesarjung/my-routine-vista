@@ -443,46 +443,51 @@ export const RoutineForm = () => {
             {/* Subtasks / Checklist */}
             <div className="space-y-3">
               <FormLabel>Subtarefas com Responsáveis</FormLabel>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Título da subtarefa..."
-                  value={newSubtaskTitle}
-                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addSubtask();
-                    }
-                  }}
-                  className="flex-1"
-                />
-                <Select
-                  value={newSubtaskAssignee}
-                  onValueChange={setNewSubtaskAssignee}
-                  disabled={selectedUnitIds.length === 0}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Responsável" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {availableProfiles.map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.full_name || profile.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button type="button" variant="outline" size="icon" onClick={addSubtask}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {selectedUnitIds.length === 0 
-                  ? "Selecione unidades para ver os responsáveis disponíveis"
-                  : "Os responsáveis só podem marcar suas próprias subtarefas"
-                }
-              </p>
+              
+              {selectedUnitIds.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-3 border border-dashed border-border rounded-md text-center">
+                  Selecione pelo menos uma unidade acima para adicionar subtarefas
+                </p>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Título da subtarefa..."
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addSubtask();
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Select
+                      value={newSubtaskAssignee}
+                      onValueChange={setNewSubtaskAssignee}
+                    >
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Responsável" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem responsável</SelectItem>
+                        {availableProfiles.map((profile) => (
+                          <SelectItem key={profile.id} value={profile.id}>
+                            {profile.full_name || profile.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="outline" size="icon" onClick={addSubtask} disabled={!newSubtaskTitle.trim()}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Os responsáveis só podem marcar suas próprias subtarefas
+                  </p>
+                </>
+              )}
 
               {subtasks.length > 0 && (
                 <div className="space-y-2 border border-border rounded-lg p-3 max-h-32 overflow-y-auto">
@@ -492,11 +497,9 @@ export const RoutineForm = () => {
                       className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded"
                     >
                       <span className="flex-1 text-sm">{subtask.title}</span>
-                      {subtask.assigned_to && (
-                        <Badge variant="secondary" className="text-xs">
-                          {getProfileName(subtask.assigned_to)}
-                        </Badge>
-                      )}
+                      <Badge variant="secondary" className="text-xs">
+                        {getProfileName(subtask.assigned_to) || 'Sem responsável'}
+                      </Badge>
                       <button
                         type="button"
                         onClick={() => removeSubtask(index)}
