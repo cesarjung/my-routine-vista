@@ -76,6 +76,7 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
               <DialogTitle>Criar Nova Tarefa</DialogTitle>
             </DialogHeader>
             <TaskForm
+              sectorId={sectorId}
               onSuccess={() => setIsDialogOpen(false)}
               onCancel={() => setIsDialogOpen(false)}
             />
