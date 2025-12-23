@@ -4,15 +4,203 @@ import type { Enums } from '@/integrations/supabase/types';
 
 export type TaskFrequency = Enums<'task_frequency'>;
 
-export interface FrequencySummary {
-  frequency: TaskFrequency;
-  routineCount: number;
-  taskCount: number;
-  completed: number;
-  pending: number;
-  total: number;
-  percentage: number;
+const FREQUENCIES: TaskFrequency[] = ['diaria', 'semanal', 'quinzenal', 'mensal'];
+
+export interface FrequencyBreakdown {
+  diaria: { completed: number; pending: number; total: number };
+  semanal: { completed: number; pending: number; total: number };
+  quinzenal: { completed: number; pending: number; total: number };
+  mensal: { completed: number; pending: number; total: number };
 }
+
+export interface UnitRoutineStatus {
+  id: string;
+  name: string;
+  code: string;
+  frequencies: FrequencyBreakdown;
+  totals: { completed: number; pending: number; total: number };
+}
+
+export interface ResponsibleRoutineStatus {
+  id: string;
+  name: string;
+  email: string;
+  frequencies: FrequencyBreakdown;
+  totals: { completed: number; pending: number; total: number };
+}
+
+const emptyFrequencyBreakdown = (): FrequencyBreakdown => ({
+  diaria: { completed: 0, pending: 0, total: 0 },
+  semanal: { completed: 0, pending: 0, total: 0 },
+  quinzenal: { completed: 0, pending: 0, total: 0 },
+  mensal: { completed: 0, pending: 0, total: 0 },
+});
+
+export const useUnitRoutineStatus = (sectorId?: string | null) => {
+  return useQuery({
+    queryKey: ['unit-routine-status', sectorId],
+    queryFn: async () => {
+      // Get all units with parent_id (actual units, not gerências)
+      const { data: units, error: unitsError } = await supabase
+        .from('units')
+        .select('id, name, code')
+        .not('parent_id', 'is', null)
+        .order('name');
+
+      if (unitsError) throw unitsError;
+
+      // Get all routines with their frequency
+      let routinesQuery = supabase
+        .from('routines')
+        .select('id, frequency, unit_id')
+        .eq('is_active', true);
+
+      if (sectorId) {
+        routinesQuery = routinesQuery.eq('sector_id', sectorId);
+      }
+
+      const { data: routines } = await routinesQuery;
+
+      // Get all tasks
+      let tasksQuery = supabase
+        .from('tasks')
+        .select('id, status, unit_id, routine_id');
+
+      if (sectorId) {
+        tasksQuery = tasksQuery.eq('sector_id', sectorId);
+      }
+
+      const { data: tasks } = await tasksQuery;
+
+      // Create a map of routine_id to frequency
+      const routineFrequencyMap = new Map<string, TaskFrequency>();
+      routines?.forEach(r => {
+        if (FREQUENCIES.includes(r.frequency)) {
+          routineFrequencyMap.set(r.id, r.frequency);
+        }
+      });
+
+      // Build unit summaries
+      const results: UnitRoutineStatus[] = [];
+
+      for (const unit of units || []) {
+        const frequencies = emptyFrequencyBreakdown();
+        const totals = { completed: 0, pending: 0, total: 0 };
+
+        const unitTasks = tasks?.filter(t => t.unit_id === unit.id) || [];
+
+        for (const task of unitTasks) {
+          const freq = task.routine_id ? routineFrequencyMap.get(task.routine_id) : null;
+          
+          if (freq && FREQUENCIES.includes(freq)) {
+            const isCompleted = task.status === 'concluida';
+            
+            frequencies[freq].total++;
+            frequencies[freq][isCompleted ? 'completed' : 'pending']++;
+            
+            totals.total++;
+            totals[isCompleted ? 'completed' : 'pending']++;
+          }
+        }
+
+        if (totals.total > 0) {
+          results.push({
+            id: unit.id,
+            name: unit.name,
+            code: unit.code,
+            frequencies,
+            totals,
+          });
+        }
+      }
+
+      return results;
+    },
+  });
+};
+
+export const useResponsibleRoutineStatus = (sectorId?: string | null) => {
+  return useQuery({
+    queryKey: ['responsible-routine-status', sectorId],
+    queryFn: async () => {
+      // Get all profiles
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .order('full_name');
+
+      if (profilesError) throw profilesError;
+
+      // Get all routines with their frequency
+      let routinesQuery = supabase
+        .from('routines')
+        .select('id, frequency')
+        .eq('is_active', true);
+
+      if (sectorId) {
+        routinesQuery = routinesQuery.eq('sector_id', sectorId);
+      }
+
+      const { data: routines } = await routinesQuery;
+
+      // Get all tasks with assigned_to
+      let tasksQuery = supabase
+        .from('tasks')
+        .select('id, status, assigned_to, routine_id')
+        .not('assigned_to', 'is', null);
+
+      if (sectorId) {
+        tasksQuery = tasksQuery.eq('sector_id', sectorId);
+      }
+
+      const { data: tasks } = await tasksQuery;
+
+      // Create a map of routine_id to frequency
+      const routineFrequencyMap = new Map<string, TaskFrequency>();
+      routines?.forEach(r => {
+        if (FREQUENCIES.includes(r.frequency)) {
+          routineFrequencyMap.set(r.id, r.frequency);
+        }
+      });
+
+      // Build responsible summaries
+      const results: ResponsibleRoutineStatus[] = [];
+
+      for (const profile of profiles || []) {
+        const frequencies = emptyFrequencyBreakdown();
+        const totals = { completed: 0, pending: 0, total: 0 };
+
+        const responsibleTasks = tasks?.filter(t => t.assigned_to === profile.id) || [];
+
+        for (const task of responsibleTasks) {
+          const freq = task.routine_id ? routineFrequencyMap.get(task.routine_id) : null;
+          
+          if (freq && FREQUENCIES.includes(freq)) {
+            const isCompleted = task.status === 'concluida';
+            
+            frequencies[freq].total++;
+            frequencies[freq][isCompleted ? 'completed' : 'pending']++;
+            
+            totals.total++;
+            totals[isCompleted ? 'completed' : 'pending']++;
+          }
+        }
+
+        if (totals.total > 0) {
+          results.push({
+            id: profile.id,
+            name: profile.full_name || profile.email,
+            email: profile.email,
+            frequencies,
+            totals,
+          });
+        }
+      }
+
+      return results;
+    },
+  });
+};
 
 export interface UnitSummary {
   id: string;
@@ -23,87 +211,6 @@ export interface UnitSummary {
   pending: number;
   total: number;
 }
-
-export interface ResponsibleSummary {
-  id: string;
-  name: string;
-  email: string;
-  completed: number;
-  pending: number;
-  total: number;
-}
-
-export const useFrequencySummary = (sectorId?: string | null) => {
-  return useQuery({
-    queryKey: ['frequency-summary', sectorId],
-    queryFn: async () => {
-      const frequencies: TaskFrequency[] = ['diaria', 'semanal', 'quinzenal', 'mensal'];
-      const summaries: FrequencySummary[] = [];
-
-      for (const freq of frequencies) {
-        // Count routines by frequency
-        let routineQuery = supabase
-          .from('routines')
-          .select('*', { count: 'exact', head: true })
-          .eq('frequency', freq)
-          .eq('is_active', true);
-        
-        if (sectorId) {
-          routineQuery = routineQuery.eq('sector_id', sectorId);
-        }
-
-        const { count: routineCount } = await routineQuery;
-
-        // Get tasks from routines with this frequency
-        let routinesQuery = supabase
-          .from('routines')
-          .select('id')
-          .eq('frequency', freq)
-          .eq('is_active', true);
-        
-        if (sectorId) {
-          routinesQuery = routinesQuery.eq('sector_id', sectorId);
-        }
-
-        const { data: routines } = await routinesQuery;
-        const routineIds = routines?.map(r => r.id) || [];
-        
-        let taskCount = 0;
-        let completed = 0;
-        let pending = 0;
-
-        if (routineIds.length > 0) {
-          let tasksQuery = supabase
-            .from('tasks')
-            .select('status')
-            .in('routine_id', routineIds);
-          
-          if (sectorId) {
-            tasksQuery = tasksQuery.eq('sector_id', sectorId);
-          }
-
-          const { data: tasks } = await tasksQuery;
-
-          taskCount = tasks?.length || 0;
-          completed = tasks?.filter(t => t.status === 'concluida').length || 0;
-          pending = tasks?.filter(t => t.status === 'pendente' || t.status === 'em_andamento').length || 0;
-        }
-
-        summaries.push({
-          frequency: freq,
-          routineCount: routineCount || 0,
-          taskCount,
-          completed,
-          pending,
-          total: taskCount,
-          percentage: taskCount > 0 ? Math.round((completed / taskCount) * 100) : 0,
-        });
-      }
-
-      return summaries;
-    },
-  });
-};
 
 export const useUnitsSummary = (sectorId?: string | null) => {
   return useQuery({
@@ -134,7 +241,6 @@ export const useUnitsSummary = (sectorId?: string | null) => {
         const pending = tasks?.filter(t => t.status !== 'concluida').length || 0;
         const total = completed + pending;
 
-        // Only include units that have tasks (for the selected sector if filtered)
         if (total > 0 || !sectorId) {
           summaries.push({
             id: unit.id,
@@ -149,52 +255,6 @@ export const useUnitsSummary = (sectorId?: string | null) => {
       }
 
       return summaries.filter(s => s.total > 0 || !sectorId);
-    },
-  });
-};
-
-export const useResponsiblesSummary = (sectorId?: string | null) => {
-  return useQuery({
-    queryKey: ['responsibles-summary', sectorId],
-    queryFn: async () => {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .order('full_name');
-
-      if (profilesError) throw profilesError;
-
-      const summaries: ResponsibleSummary[] = [];
-
-      for (const profile of profiles || []) {
-        let tasksQuery = supabase
-          .from('tasks')
-          .select('status')
-          .eq('assigned_to', profile.id);
-        
-        if (sectorId) {
-          tasksQuery = tasksQuery.eq('sector_id', sectorId);
-        }
-
-        const { data: tasks } = await tasksQuery;
-
-        const completed = tasks?.filter(t => t.status === 'concluida').length || 0;
-        const pending = tasks?.filter(t => t.status !== 'concluida').length || 0;
-        const total = completed + pending;
-
-        if (total > 0) {
-          summaries.push({
-            id: profile.id,
-            name: profile.full_name || profile.email,
-            email: profile.email,
-            completed,
-            pending,
-            total,
-          });
-        }
-      }
-
-      return summaries;
     },
   });
 };
