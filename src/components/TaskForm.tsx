@@ -37,6 +37,7 @@ import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useCreateTaskWithUnits, type SubtaskData, type UnitAssignment } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório').max(200, 'Título muito longo'),
@@ -65,6 +66,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: allProfiles } = useProfiles();
   const createTaskWithUnits = useCreateTaskWithUnits();
+  const { isGestorOrAdmin } = useIsGestorOrAdmin();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -145,13 +147,18 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       return;
     }
 
+    // Se não for gestor/admin, força o usuário como responsável
+    const effectiveParentAssignedTo = isGestorOrAdmin
+      ? (parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null)
+      : user?.id || null;
+
     await createTaskWithUnits.mutateAsync({
       title: data.title,
       description: data.description || null,
       priority: data.priority,
       start_date: data.start_date?.toISOString() || null,
       due_date: data.due_date?.toISOString() || null,
-      parentAssignedTo: parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null,
+      parentAssignedTo: effectiveParentAssignedTo,
       unitAssignments,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
     });
@@ -314,22 +321,33 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
     {/* Responsável da Tarefa Mãe */}
     <div className="space-y-2">
       <FormLabel>Responsável da Tarefa Mãe</FormLabel>
-      <Select
-        value={parentAssignedTo}
-        onValueChange={setParentAssignedTo}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Selecionar responsável (opcional)" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">Eu mesmo (atual usuário)</SelectItem>
-          {allProfiles?.map((profile) => (
-            <SelectItem key={profile.id} value={profile.id}>
-              {profile.full_name || profile.email}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {isGestorOrAdmin ? (
+        <Select
+          value={parentAssignedTo}
+          onValueChange={setParentAssignedTo}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Selecionar responsável (opcional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Eu mesmo (atual usuário)</SelectItem>
+            {allProfiles?.map((profile) => (
+              <SelectItem key={profile.id} value={profile.id}>
+                {profile.full_name || profile.email}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <div className="p-3 bg-secondary/50 rounded-md">
+          <p className="text-sm font-medium">
+            {allProfiles?.find(p => p.id === user?.id)?.full_name || user?.email}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Como usuário, você será automaticamente o responsável da tarefa.
+          </p>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">
         O responsável da tarefa mãe acompanha o progresso geral de todas as unidades.
       </p>
