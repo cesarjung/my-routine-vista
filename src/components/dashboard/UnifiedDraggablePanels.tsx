@@ -102,10 +102,12 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
     disabled: !canDrag,
   });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
-    left: panel.position.x,
     top: panel.position.y,
+    // Use full width layout - panels stack vertically
+    left: 0,
+    right: 0,
   };
 
   return (
@@ -113,7 +115,7 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
       ref={setNodeRef}
       style={style}
       className={cn(
-        'absolute transition-shadow duration-200 w-[calc(50%-0.5rem)] min-w-[300px]',
+        'absolute transition-shadow duration-200 w-full',
         isDragging && 'opacity-50 z-50 shadow-2xl'
       )}
     >
@@ -183,17 +185,15 @@ export const UnifiedDraggablePanels = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [containerHeight, setContainerHeight] = useState(600);
 
-  // Calculate initial grid positions
+  // Calculate initial grid positions (using pixel values)
   const getInitialPosition = (index: number) => {
-    const col = index % 2;
-    const row = Math.floor(index / 2);
-    const colWidth = 50; // percentage
     const panelHeight = 300;
     const gap = 16;
     
+    // Stack all panels vertically in order
     return {
-      x: col * (colWidth + gap),
-      y: row * (panelHeight + gap),
+      x: 0,
+      y: index * (panelHeight + gap),
     };
   };
 
@@ -235,20 +235,17 @@ export const UnifiedDraggablePanels = ({
   const [panels, setPanels] = useState<UnifiedPanel[]>([]);
   const [initialized, setInitialized] = useState(false);
 
+  // Rebuild panels whenever savedLayout or customPanels changes
   useEffect(() => {
     if (isLoadingLayout) return;
     
-    if (!initialized) {
-      setPanels(buildPanelList());
-      setInitialized(true);
-      return;
-    }
-    
+    // Don't update while dragging
     if (activeId !== null) return;
     
-    // Merge new panels while preserving existing positions from DB
-    setPanels(buildPanelList());
-  }, [customPanels, savedLayout, isLoadingLayout]);
+    const newPanels = buildPanelList();
+    setPanels(newPanels);
+    setInitialized(true);
+  }, [customPanels, savedLayout, isLoadingLayout, buildPanelList, activeId]);
 
   // Update container height based on panel positions
   useEffect(() => {
