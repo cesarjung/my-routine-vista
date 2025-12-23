@@ -41,6 +41,7 @@ import { useProfiles } from '@/hooks/useProfiles';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
 import type { Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
@@ -80,7 +81,7 @@ export const RoutineForm = () => {
   const [open, setOpen] = useState(false);
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
-  const [parentAssignedTo, setParentAssignedTo] = useState<string>('');
+  const [parentAssignees, setParentAssignees] = useState<string[]>([]);
   
   const { user } = useAuth();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
@@ -161,20 +162,23 @@ export const RoutineForm = () => {
     // Admins/Gestores podem criar rotinas sem selecionar unidade
     // Usuários regulares precisam ter unidade no perfil
     
+    const effectiveParentAssignees = isGestorOrAdmin
+      ? (parentAssignees.length > 0 ? parentAssignees : [user?.id || ''].filter(Boolean))
+      : [user?.id || ''].filter(Boolean);
+    
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
       frequency: data.frequency,
       recurrenceMode: data.recurrenceMode,
       unitAssignments: unitAssignments,
-      parentAssignedTo: isGestorOrAdmin 
-        ? (parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null)
-        : user?.id || null, // Usuário regular sempre é o responsável
+      parentAssignedTo: effectiveParentAssignees[0] || null,
+      parentAssignees: effectiveParentAssignees as string[],
     });
     form.reset();
     setUnitAssignments([]);
     setUnitError(null);
-    setParentAssignedTo('');
+    setParentAssignees([]);
     setOpen(false);
   };
 
@@ -441,28 +445,18 @@ export const RoutineForm = () => {
             )}
           />
 
-          {/* Responsável da Rotina/Tarefa Mãe - Apenas para Gestor/Admin */}
+          {/* Responsáveis da Rotina/Tarefa Mãe - Apenas para Gestor/Admin */}
           {isGestorOrAdmin && (
             <div className="space-y-2">
-              <FormLabel>Responsável da Rotina Mãe</FormLabel>
-              <Select
-                value={parentAssignedTo}
-                onValueChange={setParentAssignedTo}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecionar responsável (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Eu mesmo (atual usuário)</SelectItem>
-                  {allProfiles?.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.full_name || profile.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormLabel>Responsáveis da Rotina Mãe</FormLabel>
+              <MultiAssigneeSelect
+                profiles={allProfiles || []}
+                selectedIds={parentAssignees}
+                onChange={setParentAssignees}
+                placeholder="Selecionar responsáveis (opcional)"
+              />
               <p className="text-xs text-muted-foreground">
-                O responsável da rotina mãe acompanha o progresso geral de todas as unidades.
+                Os responsáveis da rotina mãe acompanham o progresso geral de todas as unidades.
               </p>
             </div>
           )}

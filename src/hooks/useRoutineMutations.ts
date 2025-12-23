@@ -8,6 +8,7 @@ type TaskFrequency = Enums<'task_frequency'>;
 interface UnitAssignment {
   unitId: string;
   assignedTo: string | null;
+  assignedToIds?: string[]; // Multiple assignees per unit
 }
 
 type RecurrenceMode = 'schedule' | 'on_completion';
@@ -21,7 +22,8 @@ interface CreateRoutineData {
 
 interface CreateRoutineWithUnitsData extends CreateRoutineData {
   unitAssignments: UnitAssignment[];
-  parentAssignedTo?: string | null; // Responsável da rotina/tarefa mãe
+  parentAssignedTo?: string | null; // Responsável da rotina/tarefa mãe (backwards compatible)
+  parentAssignees?: string[]; // Multiple assignees for parent routine
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -211,6 +213,24 @@ export const useCreateRoutineWithUnits = () => {
           .single();
 
         if (parentTaskError) throw parentTaskError;
+
+        // Add routine assignees
+        const routineAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0 
+          ? data.parentAssignees 
+          : [data.parentAssignedTo || user.id].filter(Boolean);
+        
+        if (routineAssigneeIds.length > 0) {
+          await supabase
+            .from('routine_assignees')
+            .insert(routineAssigneeIds.map(userId => ({ routine_id: routine.id, user_id: userId })));
+        }
+
+        // Add task assignees for parent task
+        if (routineAssigneeIds.length > 0) {
+          await supabase
+            .from('task_assignees')
+            .insert(routineAssigneeIds.map(userId => ({ task_id: parentTask.id, user_id: userId })));
+        }
 
         // Create tasks filhas for each unit with the selected responsible
         const childTasks = unitIds.map((unitId) => ({
