@@ -87,13 +87,6 @@ export const RoutineForm = () => {
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: allProfiles } = useProfiles();
-  
-  // Get current user's profile to check if they have a unit_id
-  const currentUserProfile = allProfiles?.find(p => p.id === user?.id);
-  const userHasUnit = !!currentUserProfile?.unit_id;
-  
-  // Admin/Gestor without unit_id must select at least one unit
-  const mustSelectUnit = isGestorOrAdmin && !userHasUnit;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -165,14 +158,8 @@ export const RoutineForm = () => {
   };
 
   const onSubmit = async (data: FormValues) => {
-    // Admin/Gestor sem unidade associada DEVE selecionar pelo menos uma unidade
-    if (mustSelectUnit && unitAssignments.length === 0) {
-      setUnitError('Como administrador ou gestor sem unidade associada, você deve selecionar pelo menos uma unidade.');
-      return;
-    }
-    
-    // Usuários regulares não precisam selecionar unidades - rotina será criada para eles mesmos
-    // Gestores/Admins podem opcionalmente selecionar unidades (a menos que não tenham unit_id)
+    // Usuários regulares precisam ter unidade associada
+    // Gestores/Admins podem criar sem unidade selecionada
     
     await createRoutine.mutateAsync({
       title: data.title,
@@ -484,9 +471,9 @@ export const RoutineForm = () => {
             {isGestorOrAdmin && (
               <div className="flex flex-col">
               <div className="flex items-center justify-between mb-2">
-                <FormLabel className={cn("flex items-center gap-2", mustSelectUnit && unitAssignments.length === 0 && "text-destructive")}>
+                <FormLabel className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  Unidades e Responsáveis ({unitAssignments.length} selecionadas){mustSelectUnit ? ' - Obrigatório' : ' - Opcional'}
+                  Unidades e Responsáveis ({unitAssignments.length} selecionadas) - Opcional
                 </FormLabel>
                   <div className="flex gap-2">
                     <Button
