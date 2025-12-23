@@ -20,11 +20,19 @@ const columns: Column[] = [
   { id: 'atrasada', title: 'Atrasadas', icon: AlertCircle, color: 'text-destructive', bgColor: 'bg-destructive/10' },
 ];
 
-export const KanbanView = () => {
+interface KanbanViewProps {
+  sectorId?: string;
+  isMyTasks?: boolean;
+}
+
+export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
   const { data: tasks, isLoading } = useTasks();
 
   const getTasksByStatus = (status: TaskStatus) => {
-    return tasks?.filter(t => t.status === status) || [];
+    return tasks?.filter(t => {
+      const matchesSector = !sectorId || (t as any).sector_id === sectorId;
+      return t.status === status && matchesSector;
+    }) || [];
   };
 
   if (isLoading) {

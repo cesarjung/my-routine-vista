@@ -30,7 +30,11 @@ const statusFilters: { value: string; label: string }[] = [
   { value: 'cancelada', label: 'Cancelada' },
 ];
 
-export const TasksView = () => {
+interface TasksViewProps {
+  sectorId?: string;
+}
+
+export const TasksView = ({ sectorId }: TasksViewProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -45,7 +49,9 @@ export const TasksView = () => {
     const matchesStatus =
       statusFilter === 'all' || task.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    const matchesSector = !sectorId || (task as any).sector_id === sectorId;
+
+    return matchesSearch && matchesStatus && matchesSector;
   });
 
   return (

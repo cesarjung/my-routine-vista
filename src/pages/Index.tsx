@@ -1,51 +1,26 @@
 import { useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { DashboardView } from '@/components/views/DashboardView';
-import { RoutinesView } from '@/components/views/RoutinesView';
-import { ResponsiblesView } from '@/components/views/ResponsiblesView';
-import { UnitsView } from '@/components/views/UnitsView';
-import { KanbanView } from '@/components/views/KanbanView';
-import { GanttView } from '@/components/views/GanttView';
-import { CalendarView } from '@/components/views/CalendarView';
-import { TasksView } from '@/components/views/TasksView';
-import { SettingsView } from '@/components/views/SettingsView';
+import { SectorSidebar } from '@/components/SectorSidebar';
+import { ContentArea } from '@/components/ContentArea';
+import { NavigationContext, ViewMode } from '@/types/navigation';
 
 const Index = () => {
-  const [activeView, setActiveView] = useState('dashboard');
-
-  const renderView = () => {
-    switch (activeView) {
-      case 'dashboard':
-        return <DashboardView />;
-      case 'tasks':
-        return <TasksView />;
-      case 'routines':
-        return <RoutinesView />;
-      case 'responsibles':
-        return <ResponsiblesView />;
-      case 'units':
-        return <UnitsView />;
-      case 'kanban':
-        return <KanbanView />;
-      case 'gantt':
-        return <GanttView />;
-      case 'calendar':
-        return <CalendarView />;
-      case 'settings':
-        return <SettingsView />;
-      default:
-        return <DashboardView />;
-    }
-  };
+  const [context, setContext] = useState<NavigationContext>({ type: 'dashboard' });
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar activeView={activeView} onViewChange={setActiveView} />
-      <main className="flex-1 p-6 overflow-auto">
-        <div className="max-w-7xl mx-auto">
-          {renderView()}
-        </div>
-      </main>
+    <div className="flex min-h-screen bg-background w-full">
+      <SectorSidebar 
+        context={context} 
+        onNavigate={setContext} 
+        collapsed={collapsed}
+        onCollapseChange={setCollapsed}
+      />
+      <ContentArea 
+        context={context} 
+        viewMode={viewMode} 
+        onViewModeChange={setViewMode} 
+      />
     </div>
   );
 };

@@ -8,7 +8,12 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export const CalendarView = () => {
+interface CalendarViewProps {
+  sectorId?: string;
+  isMyTasks?: boolean;
+}
+
+export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -23,7 +28,8 @@ export const CalendarView = () => {
   const getTasksForDay = (date: Date) => {
     return tasks?.filter(task => {
       if (!task.due_date) return false;
-      return isSameDay(new Date(task.due_date), date);
+      const matchesSector = !sectorId || (task as any).sector_id === sectorId;
+      return isSameDay(new Date(task.due_date), date) && matchesSector;
     }) || [];
   };
 

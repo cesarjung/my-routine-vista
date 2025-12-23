@@ -171,6 +171,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["task_frequency"]
           id: string
           is_active: boolean | null
+          sector_id: string | null
           title: string
           unit_id: string | null
           updated_at: string
@@ -183,6 +184,7 @@ export type Database = {
           frequency: Database["public"]["Enums"]["task_frequency"]
           id?: string
           is_active?: boolean | null
+          sector_id?: string | null
           title: string
           unit_id?: string | null
           updated_at?: string
@@ -195,11 +197,19 @@ export type Database = {
           frequency?: Database["public"]["Enums"]["task_frequency"]
           id?: string
           is_active?: boolean | null
+          sector_id?: string | null
           title?: string
           unit_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "routines_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "sectors"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "routines_unit_id_fkey"
             columns: ["unit_id"]
@@ -208,6 +218,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sectors: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       subtask_attachments: {
         Row: {
@@ -336,6 +379,7 @@ export type Database = {
           parent_task_id: string | null
           priority: number | null
           routine_id: string | null
+          sector_id: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
@@ -354,6 +398,7 @@ export type Database = {
           parent_task_id?: string | null
           priority?: number | null
           routine_id?: string | null
+          sector_id?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title: string
@@ -372,6 +417,7 @@ export type Database = {
           parent_task_id?: string | null
           priority?: number | null
           routine_id?: string | null
+          sector_id?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
@@ -391,6 +437,13 @@ export type Database = {
             columns: ["routine_id"]
             isOneToOne: false
             referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "sectors"
             referencedColumns: ["id"]
           },
           {

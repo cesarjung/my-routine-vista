@@ -7,7 +7,12 @@ import { ptBR } from 'date-fns/locale';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
-export const GanttView = () => {
+interface GanttViewProps {
+  sectorId?: string;
+  isMyTasks?: boolean;
+}
+
+export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const [viewStart, setViewStart] = useState(() => subDays(new Date(), 7));
 
@@ -19,8 +24,11 @@ export const GanttView = () => {
   }, [viewStart]);
 
   const tasksWithDates = useMemo(() => {
-    return tasks?.filter(t => t.due_date) || [];
-  }, [tasks]);
+    return tasks?.filter(t => {
+      const matchesSector = !sectorId || (t as any).sector_id === sectorId;
+      return t.due_date && matchesSector;
+    }) || [];
+  }, [tasks, sectorId]);
 
   const getTaskPosition = (task: typeof tasksWithDates[0]) => {
     if (!task.due_date) return null;
