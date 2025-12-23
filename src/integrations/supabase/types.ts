@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      dashboard_layout: {
+        Row: {
+          id: string
+          panel_id: string
+          position_x: number
+          position_y: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          panel_id: string
+          position_x?: number
+          position_y?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          panel_id?: string
+          position_x?: number
+          position_y?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       dashboard_panels: {
         Row: {
           created_at: string
