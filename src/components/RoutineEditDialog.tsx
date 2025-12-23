@@ -1,10 +1,12 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, Trash2, Users, Check, CalendarIcon, Clock } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,6 +114,21 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
   const { data: allProfiles } = useProfiles();
   const { data: unitManagers } = useUnitManagers();
 
+  // Fetch routine assignees
+  const { data: routineAssignees } = useQuery({
+    queryKey: ['routine-assignees', routine?.id],
+    queryFn: async () => {
+      if (!routine?.id) return [];
+      const { data, error } = await supabase
+        .from('routine_assignees')
+        .select('user_id')
+        .eq('routine_id', routine.id);
+      if (error) throw error;
+      return data.map(ra => ra.user_id);
+    },
+    enabled: !!routine?.id && open,
+  });
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     values: routine ? {
@@ -127,15 +144,15 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
     } : undefined,
   });
 
-  // Reset unit assignments when routine changes
+  // Reset unit assignments when routine changes and load saved data
   useEffect(() => {
     if (routine?.unit_id) {
-      setUnitAssignments([{ unitId: routine.unit_id, assignedToIds: [] }]);
+      setUnitAssignments([{ unitId: routine.unit_id, assignedToIds: routineAssignees || [] }]);
     } else {
       setUnitAssignments([]);
     }
-    setParentAssignees([]);
-  }, [routine]);
+    setParentAssignees(routineAssignees || []);
+  }, [routine, routineAssignees]);
 
   const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
