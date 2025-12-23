@@ -146,10 +146,10 @@ const Auth = () => {
             <img src={sirtecLogo} alt="Sirtec" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">
-            Gestão de Rotinas
+            Gestão CCM
           </h1>
           <p className="text-muted-foreground">
-            Gerencie tarefas e rotinas da sua unidade
+            Gerenciamento de Rotinas e Setores
           </p>
         </div>
 
