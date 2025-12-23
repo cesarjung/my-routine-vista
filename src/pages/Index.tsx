@@ -8,6 +8,7 @@ import { KanbanView } from '@/components/views/KanbanView';
 import { GanttView } from '@/components/views/GanttView';
 import { CalendarView } from '@/components/views/CalendarView';
 import { TasksView } from '@/components/views/TasksView';
+import { SettingsView } from '@/components/views/SettingsView';
 
 const Index = () => {
   const [activeView, setActiveView] = useState('dashboard');
@@ -30,6 +31,8 @@ const Index = () => {
         return <GanttView />;
       case 'calendar':
         return <CalendarView />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return <DashboardView />;
     }
