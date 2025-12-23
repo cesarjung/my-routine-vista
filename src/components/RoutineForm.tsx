@@ -38,6 +38,7 @@ import { Plus, Loader2, Users, Check, CalendarIcon, X, Clock } from 'lucide-reac
 import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
 import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -93,6 +94,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: allProfiles } = useProfiles();
+  const { data: unitManagers } = useUnitManagers();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -124,11 +126,20 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
   const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
 
-  // Get profiles for a specific unit
+  // Get profiles for a specific unit (includes both profiles with unit_id and unit_managers)
   const getProfilesForUnit = useCallback((unitId: string) => {
     if (!allProfiles) return [];
-    return allProfiles.filter(p => p.unit_id === unitId);
-  }, [allProfiles]);
+    
+    // Get user IDs from unit_managers for this unit
+    const managerUserIds = unitManagers
+      ?.filter(um => um.unit_id === unitId)
+      ?.map(um => um.user_id) || [];
+    
+    // Get profiles that either have unit_id matching OR are unit managers for this unit
+    return allProfiles.filter(p => 
+      p.unit_id === unitId || managerUserIds.includes(p.id)
+    );
+  }, [allProfiles, unitManagers]);
 
   const toggleUnit = useCallback((unitId: string) => {
     setUnitError(null);

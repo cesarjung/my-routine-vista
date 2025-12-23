@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, forwardRef } from 'react';
 import { Check, X, Users, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,14 +27,14 @@ interface MultiAssigneeSelectProps {
   className?: string;
 }
 
-export const MultiAssigneeSelect = ({
+export const MultiAssigneeSelect = forwardRef<HTMLButtonElement, MultiAssigneeSelectProps>(({
   profiles,
   selectedIds,
   onChange,
   placeholder = 'Selecionar responsáveis...',
   disabled = false,
   className,
-}: MultiAssigneeSelectProps) => {
+}, ref) => {
   const [open, setOpen] = useState(false);
 
   const selectedProfiles = useMemo(() => {
@@ -62,6 +62,7 @@ export const MultiAssigneeSelect = ({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          ref={ref}
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -134,4 +135,6 @@ export const MultiAssigneeSelect = ({
       </PopoverContent>
     </Popover>
   );
-};
+});
+
+MultiAssigneeSelect.displayName = 'MultiAssigneeSelect';
