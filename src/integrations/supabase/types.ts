@@ -654,6 +654,10 @@ export type Database = {
         Args: { _unit_id: string; _user_id: string }
         Returns: boolean
       }
+      user_belongs_to_sector: {
+        Args: { _sector_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_has_sector_access: {
         Args: { _sector_id: string; _user_id: string }
         Returns: boolean
