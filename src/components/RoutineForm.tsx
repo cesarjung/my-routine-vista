@@ -34,7 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Loader2, Users, Check, CalendarIcon, X, Clock } from 'lucide-react';
+import { Plus, Loader2, Users, Check, CalendarIcon, Clock, RefreshCw } from 'lucide-react';
 import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
 import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
@@ -60,20 +60,24 @@ const frequencyOptions: { value: TaskFrequency; label: string }[] = [
 ];
 
 const recurrenceModeOptions = [
-  { value: 'schedule', label: 'Por Cronograma', description: 'Cria automaticamente um dia antes, mesmo que a atual não esteja concluída' },
-  { value: 'on_completion', label: 'Ao Concluir', description: 'Só cria a próxima quando a atual for marcada como concluída' },
+  { value: 'schedule', label: 'Por Cronograma', description: 'Cria automaticamente um dia antes' },
+  { value: 'on_completion', label: 'Ao Concluir', description: 'Cria quando a atual for concluída' },
 ];
 
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório'),
   description: z.string().optional(),
-  frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const),
-  recurrenceMode: z.enum(['schedule', 'on_completion'] as const),
-  startDate: z.date({ required_error: 'Data de início é obrigatória' }),
+  priority: z.number().min(1).max(5),
+  startDate: z.date().optional(),
   startTime: z.string().optional(),
-  endDate: z.date().optional(),
-  endTime: z.string().optional(),
-  skipWeekendsHolidays: z.boolean(),
+  dueDate: z.date().optional(),
+  dueTime: z.string().optional(),
+  isRecurring: z.boolean(),
+  recurrenceFrequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const).optional(),
+  recurrenceMode: z.enum(['schedule', 'on_completion'] as const).optional(),
+  repeatForever: z.boolean().optional(),
+  recurrenceEndDate: z.date().optional(),
+  skipWeekendsHolidays: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -100,40 +104,31 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     defaultValues: {
       title: '',
       description: '',
-      frequency: 'semanal',
-      recurrenceMode: 'schedule',
-      startDate: new Date(),
+      priority: 1,
+      startDate: undefined,
       startTime: '',
-      endDate: undefined,
-      endTime: '',
+      dueDate: undefined,
+      dueTime: '',
+      isRecurring: false,
+      recurrenceFrequency: 'semanal',
+      recurrenceMode: 'schedule',
+      repeatForever: true,
+      recurrenceEndDate: undefined,
       skipWeekendsHolidays: false,
     },
   });
 
-  // Helper to combine date and time
-  const combineDateAndTime = (date: Date | undefined, time: string | undefined): Date | undefined => {
-    if (!date) return undefined;
-    if (!time) return date;
-    const [hours, minutes] = time.split(':').map(Number);
-    return setMinutes(setHours(date, hours || 0), minutes || 0);
-  };
+  const isRecurring = form.watch('isRecurring');
+  const repeatForever = form.watch('repeatForever');
 
-  
-
-  // Create a Set for O(1) lookup
   const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
 
-  // Get profiles for a specific unit (includes both profiles with unit_id and unit_managers)
   const getProfilesForUnit = useCallback((unitId: string) => {
     if (!allProfiles) return [];
-    
-    // Get user IDs from unit_managers for this unit
     const managerUserIds = unitManagers
       ?.filter(um => um.unit_id === unitId)
       ?.map(um => um.user_id) || [];
-    
-    // Get profiles that either have unit_id matching OR are unit managers for this unit
     return allProfiles.filter(p => 
       p.unit_id === unitId || managerUserIds.includes(p.id)
     );
@@ -167,16 +162,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     setUnitAssignments([]);
   }, []);
 
-  const getProfileName = (profileId: string | null | undefined) => {
-    if (!profileId) return null;
-    const profile = allProfiles?.find(p => p.id === profileId);
-    return profile?.full_name || profile?.email || null;
-  };
-
   const onSubmit = async (data: FormValues) => {
-    // Admins/Gestores podem criar rotinas sem selecionar unidade
-    // Usuários regulares precisam ter unidade no perfil
-    
     const effectiveParentAssignees = isGestorOrAdmin
       ? (parentAssignees.length > 0 ? parentAssignees : [user?.id || ''].filter(Boolean))
       : [user?.id || ''].filter(Boolean);
@@ -184,13 +170,13 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
-      frequency: data.frequency,
-      recurrenceMode: data.recurrenceMode,
+      frequency: data.isRecurring ? (data.recurrenceFrequency || 'semanal') : 'semanal',
+      recurrenceMode: data.isRecurring ? (data.recurrenceMode || 'schedule') : 'schedule',
       unitAssignments: unitAssignments,
       parentAssignedTo: effectiveParentAssignees[0] || null,
       parentAssignees: effectiveParentAssignees as string[],
       sectorId: sectorId,
-      skipWeekendsHolidays: data.skipWeekendsHolidays,
+      skipWeekendsHolidays: data.skipWeekendsHolidays || false,
     });
     form.reset();
     setUnitAssignments([]);
@@ -222,7 +208,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Título</FormLabel>
+                  <FormLabel>Título da Rotina</FormLabel>
                   <FormControl>
                     <Input placeholder="Ex: Checkpoint semanal" {...field} />
                   </FormControl>
@@ -252,53 +238,27 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
 
             <FormField
               control={form.control}
-              name="frequency"
+              name="priority"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Frequência</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormLabel>Prioridade</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(parseInt(v))}
+                    defaultValue={field.value.toString()}
+                  >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione a frequência" />
+                        <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {frequencyOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="1">1 - Baixa</SelectItem>
+                      <SelectItem value="2">2 - Normal</SelectItem>
+                      <SelectItem value="3">3 - Média</SelectItem>
+                      <SelectItem value="4">4 - Alta</SelectItem>
+                      <SelectItem value="5">5 - Urgente</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Recurrence Mode */}
-            <FormField
-              control={form.control}
-              name="recurrenceMode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Modo de Recorrência</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o modo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {recurrenceModeOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {recurrenceModeOptions.find(o => o.value === field.value)?.description}
-                  </p>
                   <FormMessage />
                 </FormItem>
               )}
@@ -311,7 +271,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                 name="startDate"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Data de início</FormLabel>
+                    <FormLabel>Data de Início</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -351,7 +311,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                 name="startTime"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Hora de início</FormLabel>
+                    <FormLabel>Hora de Início</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Input
@@ -368,14 +328,14 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
               />
             </div>
 
-            {/* Data e Hora de Fim (opcional) */}
+            {/* Data e Hora de Vencimento */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="endDate"
+                name="dueDate"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Data de fim (opcional)</FormLabel>
+                    <FormLabel>Data de Vencimento</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -413,10 +373,10 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
 
               <FormField
                 control={form.control}
-                name="endTime"
+                name="dueTime"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Hora de fim</FormLabel>
+                    <FormLabel>Hora de Vencimento</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Input
@@ -433,53 +393,208 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
               />
             </div>
 
-          <FormField
-            control={form.control}
-            name="skipWeekendsHolidays"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-sm font-medium">
-                    Ignorar feriados e finais de semana
-                  </FormLabel>
-                  <FormDescription className="text-xs">
-                    Tarefas não serão criadas em sábados, domingos ou feriados nacionais
-                  </FormDescription>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+            {/* Tarefa Recorrente Toggle */}
+            <FormField
+              control={form.control}
+              name="isRecurring"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-sm font-medium flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4" />
+                      Tarefa Recorrente
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      Esta tarefa se repetirá automaticamente conforme a frequência definida
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
-          {/* Responsáveis da Rotina/Tarefa Mãe - Apenas para Gestor/Admin */}
-          {isGestorOrAdmin && (
-            <div className="space-y-2">
-              <FormLabel>Responsáveis da Rotina Mãe</FormLabel>
-              <MultiAssigneeSelect
-                profiles={allProfiles || []}
-                selectedIds={parentAssignees}
-                onChange={setParentAssignees}
-                placeholder="Selecionar responsáveis (opcional)"
-              />
-              <p className="text-xs text-muted-foreground">
-                Os responsáveis da rotina mãe acompanham o progresso geral de todas as unidades.
-              </p>
-            </div>
-          )}
+            {/* Opções de Recorrência - só aparecem quando isRecurring está ativo */}
+            {isRecurring && (
+              <div className="space-y-4 rounded-lg border p-4 bg-secondary/20">
+                <FormField
+                  control={form.control}
+                  name="recurrenceFrequency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frequência</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a frequência" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {frequencyOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="recurrenceMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Modo de Recorrência</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o modo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {recurrenceModeOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {recurrenceModeOptions.find(o => o.value === field.value)?.description}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="repeatForever"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">Repetir para sempre</FormLabel>
+                        <FormDescription className="text-xs">
+                          Se desativado, defina até quando a tarefa deve se repetir
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            if (checked) {
+                              form.setValue('recurrenceEndDate', undefined);
+                            }
+                          }}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {!repeatForever && (
+                  <FormField
+                    control={form.control}
+                    name="recurrenceEndDate"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Repetir até</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "pl-3 text-left font-normal",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                {field.value ? (
+                                  format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                                ) : (
+                                  <span>Selecione a data final</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              disabled={(date) => date < (form.getValues('dueDate') || new Date())}
+                              initialFocus
+                              className="pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormDescription className="text-xs">
+                          A tarefa se repetirá até esta data
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="skipWeekendsHolidays"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">
+                          Ignorar feriados e finais de semana
+                        </FormLabel>
+                        <FormDescription className="text-xs">
+                          Tarefas não serão criadas em sábados, domingos ou feriados nacionais
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {/* Responsáveis da Tarefa Mãe - Apenas para Gestor/Admin */}
+            {isGestorOrAdmin && (
+              <div className="space-y-2">
+                <FormLabel>Responsáveis da Tarefa Mãe</FormLabel>
+                <MultiAssigneeSelect
+                  profiles={allProfiles || []}
+                  selectedIds={parentAssignees}
+                  onChange={setParentAssignees}
+                  placeholder="Selecionar responsáveis (opcional)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Os responsáveis da tarefa mãe acompanham o progresso geral de todas as unidades.
+                </p>
+              </div>
+            )}
 
             {/* Units Selection with Responsible per Unit - Apenas para Gestor/Admin */}
             {isGestorOrAdmin && (
               <div className="flex flex-col">
-              <div className="flex items-center justify-between mb-2">
-                <FormLabel className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Unidades e Responsáveis ({unitAssignments.length} selecionadas) - Opcional
-                </FormLabel>
+                <div className="flex items-center justify-between mb-2">
+                  <FormLabel className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Unidades e Responsáveis ({unitAssignments.length} selecionadas) - Opcional
+                  </FormLabel>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -502,7 +617,6 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                   </div>
                 </div>
                 
-                {/* Native scroll container */}
                 <div className="border border-border rounded-md overflow-y-auto max-h-60">
                   <div className="p-3 space-y-2">
                     {loadingUnits ? (
@@ -539,7 +653,6 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                               </div>
                             </div>
                             
-                            {/* Responsible selection - only show when unit is selected */}
                             {isSelected && (
                               <div className="px-3 pb-3 pt-0">
                                 <div className="flex items-center gap-2 pl-7">
@@ -568,6 +681,9 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                 {unitError && (
                   <p className="text-sm font-medium text-destructive mt-1">{unitError}</p>
                 )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Uma tarefa mãe será criada para você acompanhar o progresso geral, e tarefas individuais serão criadas para cada unidade.
+                </p>
               </div>
             )}
 
