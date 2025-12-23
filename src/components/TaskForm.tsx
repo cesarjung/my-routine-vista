@@ -35,8 +35,7 @@ import {
 
 import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
-import { useUnitManagers } from '@/hooks/useUnitManagers';
-import { useCreateTask, type SubtaskData } from '@/hooks/useTaskMutations';
+import { useCreateTaskWithUnits, type SubtaskData, type UnitAssignment } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 
 const formSchema = z.object({
@@ -58,14 +57,13 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('');
-  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
 
   const { user } = useAuth();
   const { data: units, isLoading: loadingUnits } = useUnits();
-  const { data: unitManagers } = useUnitManagers();
   const { data: allProfiles } = useProfiles();
-  const createTask = useCreateTask();
+  const createTaskWithUnits = useCreateTaskWithUnits();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -76,11 +74,13 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
     },
   });
 
+  const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
 
-  const getManagersForUnit = useCallback((unitId: string) => {
-    return unitManagers?.filter((m) => m.unit_id === unitId) || [];
-  }, [unitManagers]);
+  // Profiles por unidade para dropdown de responsável
+  const getProfilesForUnit = useCallback((unitId: string) => {
+    return allProfiles?.filter(p => p.unit_id === unitId) || [];
+  }, [allProfiles]);
 
   // Get all profiles from selected units for subtask assignment
   const availableProfiles = useMemo(() => {
@@ -92,23 +92,29 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
 
   const toggleUnit = useCallback((unitId: string) => {
     setUnitError(null);
-    setSelectedUnitIds(prev => {
-      if (prev.includes(unitId)) {
-        return prev.filter((id) => id !== unitId);
+    setUnitAssignments(prev => {
+      if (prev.some(a => a.unitId === unitId)) {
+        return prev.filter((a) => a.unitId !== unitId);
       }
-      return [...prev, unitId];
+      return [...prev, { unitId, assignedTo: null }];
     });
+  }, []);
+
+  const updateUnitAssignee = useCallback((unitId: string, assignedTo: string | null) => {
+    setUnitAssignments(prev => 
+      prev.map(a => a.unitId === unitId ? { ...a, assignedTo } : a)
+    );
   }, []);
 
   const selectAllUnits = useCallback(() => {
     setUnitError(null);
     if (units) {
-      setSelectedUnitIds(units.map((u) => u.id));
+      setUnitAssignments(units.map((u) => ({ unitId: u.id, assignedTo: null })));
     }
   }, [units]);
 
   const deselectAllUnits = useCallback(() => {
-    setSelectedUnitIds([]);
+    setUnitAssignments([]);
   }, []);
 
   const addSubtask = () => {
@@ -133,32 +139,24 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   };
 
   const onSubmit = async (data: FormData) => {
-    if (selectedUnitIds.length === 0) {
+    if (unitAssignments.length === 0) {
       setUnitError('Selecione pelo menos uma unidade');
       return;
     }
 
-    // Create a task for each selected unit
-    for (const unitId of selectedUnitIds) {
-      await createTask.mutateAsync({
-        task: {
-          title: data.title,
-          description: data.description || null,
-          unit_id: unitId,
-          assigned_to: user?.id || null, // Gestor é o responsável principal
-          status: 'pendente',
-          priority: data.priority,
-          start_date: data.start_date?.toISOString() || null,
-          due_date: data.due_date?.toISOString() || null,
-          created_by: user?.id || null,
-        },
-        subtasks: subtasks.length > 0 ? subtasks : undefined,
-      });
-    }
+    await createTaskWithUnits.mutateAsync({
+      title: data.title,
+      description: data.description || null,
+      priority: data.priority,
+      start_date: data.start_date?.toISOString() || null,
+      due_date: data.due_date?.toISOString() || null,
+      unitAssignments,
+      subtasks: subtasks.length > 0 ? subtasks : undefined,
+    });
 
     form.reset();
     setSubtasks([]);
-    setSelectedUnitIds([]);
+    setUnitAssignments([]);
     setUnitError(null);
     onSuccess?.();
   };
@@ -310,12 +308,12 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
           )}
         />
 
-        {/* Units Selection */}
+        {/* Units Selection with Responsible */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-2">
             <FormLabel className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Unidades ({selectedUnitIds.length} selecionadas)
+              Unidades e Responsáveis ({unitAssignments.length} selecionadas)
             </FormLabel>
             <div className="flex gap-2">
               <Button
@@ -339,41 +337,63 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
             </div>
           </div>
           
-          <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-32">
-            <div className="p-3 space-y-1">
+          <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-48">
+            <div className="p-3 space-y-2">
               {loadingUnits ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               ) : units && units.length > 0 ? (
                 units.map((unit) => {
-                  const managers = getManagersForUnit(unit.id);
                   const isSelected = selectedSet.has(unit.id);
+                  const assignment = unitAssignments.find(a => a.unitId === unit.id);
+                  const unitProfiles = getProfilesForUnit(unit.id);
                   
                   return (
                     <div
                       key={unit.id}
-                      onClick={() => toggleUnit(unit.id)}
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors",
+                        "p-3 rounded-md transition-colors",
                         isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'
                       )}
                     >
-                      <div className={cn(
-                        "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
-                        isSelected ? 'bg-primary border-primary' : 'border-input'
-                      )}>
-                        {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                      <div 
+                        className="flex items-center gap-3 cursor-pointer"
+                        onClick={() => toggleUnit(unit.id)}
+                      >
+                        <div className={cn(
+                          "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
+                          isSelected ? 'bg-primary border-primary' : 'border-input'
+                        )}>
+                          {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{unit.name}</p>
+                          <p className="text-xs text-muted-foreground">{unit.code}</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{unit.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {managers.length > 0 
-                            ? `Responsável: ${managers.map(m => m.profile?.full_name || m.profile?.email).join(', ')}`
-                            : 'Sem responsável definido'
-                          }
-                        </p>
-                      </div>
+                      
+                      {/* Dropdown de responsável - aparece quando unidade está selecionada */}
+                      {isSelected && (
+                        <div className="mt-2 ml-7">
+                          <Select
+                            value={assignment?.assignedTo || 'none'}
+                            onValueChange={(value) => updateUnitAssignee(unit.id, value === 'none' ? null : value)}
+                          >
+                            <SelectTrigger className="w-full h-8 text-xs">
+                              <SelectValue placeholder="Selecionar responsável" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem responsável</SelectItem>
+                              {unitProfiles.map((profile) => (
+                                <SelectItem key={profile.id} value={profile.id}>
+                                  {profile.full_name || profile.email}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -387,6 +407,9 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
           {unitError && (
             <p className="text-sm font-medium text-destructive mt-1">{unitError}</p>
           )}
+          <p className="text-xs text-muted-foreground mt-2">
+            Uma tarefa mãe será criada para você acompanhar o progresso geral, e tarefas individuais serão criadas para cada unidade.
+          </p>
         </div>
 
         {/* Subtasks / Checklist */}
@@ -462,8 +485,8 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
               Cancelar
             </Button>
           )}
-          <Button type="submit" disabled={createTask.isPending}>
-            {createTask.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={createTaskWithUnits.isPending}>
+            {createTaskWithUnits.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Criar Tarefa
           </Button>
         </div>
