@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Pencil } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { RoutineForm } from '@/components/RoutineForm';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
 import { useRoutines } from '@/hooks/useRoutines';
+import { useRoutinePeriods, useAllActiveRoutinePeriods } from '@/hooks/useRoutineCheckins';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar, ChevronRight } from 'lucide-react';
+import { Loader2, Calendar, ChevronRight, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
@@ -34,9 +37,17 @@ interface RoutineListItemProps {
   onClick: () => void;
   onEdit: (e: React.MouseEvent) => void;
   canEdit: boolean;
+  periodDates?: { period_start: string; period_end: string } | null;
 }
 
-const RoutineListItem = ({ routine, isSelected, onClick, onEdit, canEdit }: RoutineListItemProps) => {
+const RoutineListItem = ({ routine, isSelected, onClick, onEdit, canEdit, periodDates }: RoutineListItemProps) => {
+  const formatPeriodLabel = () => {
+    if (!periodDates) return null;
+    const start = new Date(periodDates.period_start);
+    const end = new Date(periodDates.period_end);
+    return `${format(start, "dd/MM HH:mm", { locale: ptBR })} → ${format(end, "dd/MM HH:mm", { locale: ptBR })}`;
+  };
+
   return (
     <button
       onClick={onClick}
@@ -51,10 +62,21 @@ const RoutineListItem = ({ routine, isSelected, onClick, onEdit, canEdit }: Rout
             <h4 className="font-medium text-foreground truncate">{routine.title}</h4>
           </div>
           
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
             <span className="bg-secondary px-2 py-0.5 rounded">
               {frequencyLabels[routine.frequency]}
             </span>
+            {periodDates ? (
+              <span className="flex items-center gap-1 text-primary">
+                <Clock className="w-3 h-3" />
+                {formatPeriodLabel()}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-muted-foreground/60">
+                <Clock className="w-3 h-3" />
+                Sem período ativo
+              </span>
+            )}
             {routine.description && (
               <span className="truncate max-w-[200px]">{routine.description}</span>
             )}
@@ -97,6 +119,7 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
   const [editingRoutine, setEditingRoutine] = useState<Tables<'routines'> | null>(null);
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
   const { data: routines, isLoading } = useRoutines();
+  const { data: periodsByRoutine } = useAllActiveRoutinePeriods();
 
   const filteredRoutines = routines?.filter(r => {
     const matchesFrequency = activeFrequency === 'all' || r.frequency === activeFrequency;
@@ -162,6 +185,7 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
                     setEditingRoutine(routine);
                   }}
                   canEdit={isGestorOrAdmin}
+                  periodDates={periodsByRoutine?.get(routine.id) || null}
                 />
               ))}
             </div>

@@ -68,6 +68,35 @@ export const useRoutinePeriods = (routineId?: string) => {
   });
 };
 
+// Hook to get all active periods for all routines (for the list view)
+export const useAllActiveRoutinePeriods = () => {
+  return useQuery({
+    queryKey: ['all-active-routine-periods'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('routine_periods')
+        .select('routine_id, period_start, period_end')
+        .eq('is_active', true)
+        .order('period_start', { ascending: false });
+
+      if (error) throw error;
+      
+      // Create a map of routine_id to its active period
+      const periodsByRoutine = new Map<string, { period_start: string; period_end: string }>();
+      data?.forEach(period => {
+        if (!periodsByRoutine.has(period.routine_id)) {
+          periodsByRoutine.set(period.routine_id, {
+            period_start: period.period_start,
+            period_end: period.period_end,
+          });
+        }
+      });
+      
+      return periodsByRoutine;
+    },
+  });
+};
+
 export const useCurrentPeriodCheckins = (routineId: string) => {
   return useQuery({
     queryKey: ['current-period-checkins', routineId],
