@@ -2,6 +2,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
+import { 
+  syncTaskToCalendar, 
+  updateCalendarEvent, 
+  deleteCalendarEvent 
+} from '@/services/googleCalendarSync';
 
 export type TaskInsert = TablesInsert<'tasks'>;
 export type TaskUpdate = TablesUpdate<'tasks'>;
@@ -66,6 +71,15 @@ export const useCreateTask = () => {
 
         if (subtasksError) throw subtasksError;
       }
+
+      // Sync to Google Calendar (fire and forget)
+      syncTaskToCalendar(
+        newTask.id,
+        newTask.title,
+        newTask.description,
+        newTask.start_date,
+        newTask.due_date
+      ).catch(console.error);
 
       return newTask;
     },
@@ -171,6 +185,15 @@ export const useCreateTaskWithUnits = () => {
           }
         }
 
+        // Sync parent task to Google Calendar
+        syncTaskToCalendar(
+          parentTask.id,
+          parentTask.title,
+          parentTask.description,
+          parentTask.start_date,
+          parentTask.due_date
+        ).catch(console.error);
+
         return { parentTask, childTasks: createdChildTasks };
       } else {
         // No units selected - create a simple task for the user's own unit
@@ -217,6 +240,15 @@ export const useCreateTaskWithUnits = () => {
           if (subtasksError) throw subtasksError;
         }
 
+        // Sync to Google Calendar
+        syncTaskToCalendar(
+          task.id,
+          task.title,
+          task.description,
+          task.start_date,
+          task.due_date
+        ).catch(console.error);
+
         return { parentTask: task, childTasks: [] };
       }
     },
@@ -237,6 +269,13 @@ export const useUpdateTask = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: TaskUpdate & { id: string }) => {
+      // First, get the current task to check for google_event_id
+      const { data: existingTask } = await supabase
+        .from('tasks')
+        .select('google_event_id, title, description, start_date, due_date, status')
+        .eq('id', id)
+        .single();
+
       const { data, error } = await supabase
         .from('tasks')
         .update(updates)
@@ -245,6 +284,19 @@ export const useUpdateTask = () => {
         .single();
 
       if (error) throw error;
+
+      // Sync to Google Calendar if connected
+      if (existingTask?.google_event_id) {
+        updateCalendarEvent(
+          existingTask.google_event_id,
+          (updates.title as string) || existingTask.title,
+          updates.description !== undefined ? updates.description : existingTask.description,
+          updates.start_date !== undefined ? updates.start_date : existingTask.start_date,
+          updates.due_date !== undefined ? updates.due_date : existingTask.due_date,
+          (updates.status as string) || existingTask.status
+        ).catch(console.error);
+      }
+
       return data;
     },
     onSuccess: () => {
@@ -264,8 +316,20 @@ export const useDeleteTask = () => {
 
   return useMutation({
     mutationFn: async (taskId: string) => {
+      // First, get the task to check for google_event_id
+      const { data: existingTask } = await supabase
+        .from('tasks')
+        .select('google_event_id')
+        .eq('id', taskId)
+        .single();
+
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) throw error;
+
+      // Delete from Google Calendar if connected
+      if (existingTask?.google_event_id) {
+        deleteCalendarEvent(existingTask.google_event_id).catch(console.error);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
