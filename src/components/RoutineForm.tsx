@@ -57,10 +57,16 @@ const frequencyOptions: { value: TaskFrequency; label: string }[] = [
   { value: 'mensal', label: 'Mensal' },
 ];
 
+const recurrenceModeOptions = [
+  { value: 'schedule', label: 'Por Cronograma', description: 'Cria automaticamente um dia antes, mesmo que a atual não esteja concluída' },
+  { value: 'on_completion', label: 'Ao Concluir', description: 'Só cria a próxima quando a atual for marcada como concluída' },
+];
+
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório'),
   description: z.string().optional(),
   frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const),
+  recurrenceMode: z.enum(['schedule', 'on_completion'] as const),
   startDate: z.date({ required_error: 'Data de início é obrigatória' }),
   endDate: z.date().optional(),
   repeatForever: z.boolean(),
@@ -86,6 +92,7 @@ export const RoutineForm = () => {
       title: '',
       description: '',
       frequency: 'semanal',
+      recurrenceMode: 'schedule',
       startDate: new Date(),
       endDate: undefined,
       repeatForever: true,
@@ -146,6 +153,7 @@ export const RoutineForm = () => {
       title: data.title,
       description: data.description,
       frequency: data.frequency,
+      recurrenceMode: data.recurrenceMode,
       unitAssignments: unitAssignments,
       parentAssignedTo: isGestorOrAdmin 
         ? (parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null)
@@ -229,6 +237,35 @@ export const RoutineForm = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Recurrence Mode */}
+            <FormField
+              control={form.control}
+              name="recurrenceMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Modo de Recorrência</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o modo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {recurrenceModeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {recurrenceModeOptions.find(o => o.value === field.value)?.description}
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

@@ -31,6 +31,10 @@ export interface CreateTaskWithUnitsData {
   parentAssignedTo?: string | null; // Responsável da tarefa mãe
   unitAssignments: UnitAssignment[];
   subtasks?: SubtaskData[];
+  // Campos de recorrência
+  is_recurring?: boolean;
+  recurrence_frequency?: 'diaria' | 'semanal' | 'quinzenal' | 'mensal';
+  recurrence_mode?: 'schedule' | 'on_completion';
 }
 
 export const useCreateTask = () => {
@@ -113,6 +117,9 @@ export const useCreateTaskWithUnits = () => {
             due_date: data.due_date || null,
             created_by: user.id,
             parent_task_id: null,
+            is_recurring: data.is_recurring || false,
+            recurrence_frequency: data.is_recurring ? data.recurrence_frequency : null,
+            recurrence_mode: data.is_recurring ? data.recurrence_mode : null,
           })
           .select()
           .single();
@@ -185,6 +192,9 @@ export const useCreateTaskWithUnits = () => {
             due_date: data.due_date || null,
             created_by: user.id,
             parent_task_id: null,
+            is_recurring: data.is_recurring || false,
+            recurrence_frequency: data.is_recurring ? data.recurrence_frequency : null,
+            recurrence_mode: data.is_recurring ? data.recurrence_mode : null,
           })
           .select()
           .single();

@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Plus, X, Loader2, Users, Check } from 'lucide-react';
+import { CalendarIcon, Plus, X, Loader2, Users, Check, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
@@ -15,11 +15,13 @@ import { Badge } from '@/components/ui/badge';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -39,12 +41,27 @@ import { useCreateTaskWithUnits, type SubtaskData, type UnitAssignment } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 
+const frequencyOptions = [
+  { value: 'diaria', label: 'Diária' },
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'quinzenal', label: 'Quinzenal' },
+  { value: 'mensal', label: 'Mensal' },
+];
+
+const recurrenceModeOptions = [
+  { value: 'schedule', label: 'Por Cronograma', description: 'Cria automaticamente um dia antes' },
+  { value: 'on_completion', label: 'Ao Concluir', description: 'Cria quando a atual for concluída' },
+];
+
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório').max(200, 'Título muito longo'),
   description: z.string().max(1000, 'Descrição muito longa').optional(),
   priority: z.number().min(1).max(5),
   start_date: z.date().optional(),
   due_date: z.date().optional(),
+  is_recurring: z.boolean().optional(),
+  recurrence_frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const).optional(),
+  recurrence_mode: z.enum(['schedule', 'on_completion'] as const).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -74,8 +91,14 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       title: '',
       description: '',
       priority: 1,
+      is_recurring: false,
+      recurrence_frequency: 'semanal',
+      recurrence_mode: 'schedule',
     },
   });
+
+  const isRecurring = form.watch('is_recurring');
+  const recurrenceMode = form.watch('recurrence_mode');
 
   const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
@@ -159,6 +182,9 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       parentAssignedTo: effectiveParentAssignedTo,
       unitAssignments,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
+      is_recurring: data.is_recurring || false,
+      recurrence_frequency: data.is_recurring ? data.recurrence_frequency : undefined,
+      recurrence_mode: data.is_recurring ? data.recurrence_mode : undefined,
     });
 
     form.reset();
@@ -316,7 +342,89 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       )}
     />
 
-    {/* Responsável da Tarefa Mãe - Apenas para Gestor/Admin */}
+    {/* Tarefa Recorrente */}
+    <FormField
+      control={form.control}
+      name="is_recurring"
+      render={({ field }) => (
+        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+          <div className="space-y-0.5">
+            <FormLabel className="text-sm font-medium flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Tarefa Recorrente
+            </FormLabel>
+            <FormDescription className="text-xs">
+              Esta tarefa se repetirá automaticamente conforme a frequência definida
+            </FormDescription>
+          </div>
+          <FormControl>
+            <Switch
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
+
+    {/* Opções de Recorrência */}
+    {isRecurring && (
+      <div className="space-y-4 rounded-lg border p-4 bg-secondary/20">
+        <FormField
+          control={form.control}
+          name="recurrence_frequency"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Frequência</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a frequência" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {frequencyOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="recurrence_mode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Modo de Recorrência</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o modo" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {recurrenceModeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {recurrenceModeOptions.find(o => o.value === field.value)?.description}
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+    )}
+
     {isGestorOrAdmin && (
       <div className="space-y-2">
         <FormLabel>Responsável da Tarefa Mãe</FormLabel>
