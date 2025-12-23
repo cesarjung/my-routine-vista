@@ -260,10 +260,11 @@ export const useCreateTaskWithUnits = () => {
         return { parentTask: task, childTasks: [] };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
-      toast.success('Tarefa criada para todas as unidades!');
+      const hasMultipleUnits = result.childTasks && result.childTasks.length > 0;
+      toast.success(hasMultipleUnits ? 'Tarefa criada para todas as unidades!' : 'Tarefa criada com sucesso!');
     },
     onError: (error) => {
       console.error('Error creating task with units:', error);
