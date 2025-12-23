@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Enums } from '@/integrations/supabase/types';
+import { isWeekendOrHoliday, getNextBusinessDay } from '@/utils/holidays';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
@@ -24,6 +25,7 @@ interface CreateRoutineWithUnitsData extends CreateRoutineData {
   parentAssignedTo?: string | null; // Responsável da rotina/tarefa mãe (backwards compatible)
   parentAssignees?: string[]; // Multiple assignees for parent routine
   sectorId?: string; // Setor automático
+  skipWeekendsHolidays?: boolean; // Ignorar feriados e finais de semana
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -118,14 +120,22 @@ export const useCreateRoutineWithUnits = () => {
       if (routineError) throw routineError;
 
       // Calculate period dates based on frequency
-      const now = new Date();
+      let now = new Date();
+      
+      // Se ignorar feriados/fins de semana, ajustar a data inicial
+      if (data.skipWeekendsHolidays && isWeekendOrHoliday(now)) {
+        now = getNextBusinessDay(now);
+      }
+      
       let periodStart: Date;
       let periodEnd: Date;
 
       switch (data.frequency) {
         case 'diaria':
-          periodStart = new Date(now.setHours(0, 0, 0, 0));
-          periodEnd = new Date(now.setHours(23, 59, 59, 999));
+          periodStart = new Date(now);
+          periodStart.setHours(0, 0, 0, 0);
+          periodEnd = new Date(periodStart);
+          periodEnd.setHours(23, 59, 59, 999);
           break;
         case 'semanal':
           const dayOfWeek = now.getDay();
@@ -152,8 +162,10 @@ export const useCreateRoutineWithUnits = () => {
           periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
           break;
         default:
-          periodStart = new Date(now.setHours(0, 0, 0, 0));
-          periodEnd = new Date(now.setHours(23, 59, 59, 999));
+          periodStart = new Date(now);
+          periodStart.setHours(0, 0, 0, 0);
+          periodEnd = new Date(periodStart);
+          periodEnd.setHours(23, 59, 59, 999);
       }
 
       // Create the first period

@@ -7,6 +7,7 @@ import {
   updateCalendarEvent, 
   deleteCalendarEvent 
 } from '@/services/googleCalendarSync';
+import { isWeekendOrHoliday, getNextBusinessDay } from '@/utils/holidays';
 
 export type TaskInsert = TablesInsert<'tasks'>;
 export type TaskUpdate = TablesUpdate<'tasks'>;
@@ -45,6 +46,8 @@ export interface CreateTaskWithUnitsData {
   recurrence_mode?: 'schedule' | 'on_completion';
   // Setor
   sector_id?: string;
+  // Ignorar feriados e finais de semana
+  skip_weekends_holidays?: boolean;
 }
 
 export const useCreateTask = () => {
@@ -125,6 +128,21 @@ export const useCreateTaskWithUnits = () => {
       const userUnitId = profile?.unit_id;
       const isAdminOrGestor = userRole?.role === 'admin' || userRole?.role === 'gestor';
 
+      // Helper function to adjust dates if skip_weekends_holidays is enabled
+      const adjustDate = (dateStr: string | null | undefined): string | null => {
+        if (!dateStr) return null;
+        if (!data.skip_weekends_holidays) return dateStr;
+        
+        const date = new Date(dateStr);
+        if (isWeekendOrHoliday(date)) {
+          return getNextBusinessDay(date).toISOString();
+        }
+        return dateStr;
+      };
+
+      const adjustedStartDate = adjustDate(data.start_date);
+      const adjustedDueDate = adjustDate(data.due_date);
+
       // If units were selected, create parent + child tasks
       if (data.unitAssignments.length > 0) {
         // Criar tarefa mãe (usa a primeira unidade como referência)
@@ -140,8 +158,8 @@ export const useCreateTaskWithUnits = () => {
             assigned_to: data.parentAssignedTo || user.id,
             status: 'pendente',
             priority: data.priority,
-            start_date: data.start_date || null,
-            due_date: data.due_date || null,
+            start_date: adjustedStartDate,
+            due_date: adjustedDueDate,
             created_by: user.id,
             parent_task_id: null,
             is_recurring: data.is_recurring || false,
@@ -173,8 +191,8 @@ export const useCreateTaskWithUnits = () => {
           assigned_to: assignment.assignedTo,
           status: 'pendente' as const,
           priority: data.priority,
-          start_date: data.start_date || null,
-          due_date: data.due_date || null,
+          start_date: adjustedStartDate,
+          due_date: adjustedDueDate,
           created_by: user.id,
           parent_task_id: parentTask.id,
         }));
@@ -255,8 +273,8 @@ export const useCreateTaskWithUnits = () => {
             assigned_to: data.parentAssignedTo || user.id,
             status: 'pendente',
             priority: data.priority,
-            start_date: data.start_date || null,
-            due_date: data.due_date || null,
+            start_date: adjustedStartDate,
+            due_date: adjustedDueDate,
             created_by: user.id,
             parent_task_id: null,
             is_recurring: data.is_recurring || false,

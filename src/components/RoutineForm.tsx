@@ -73,6 +73,7 @@ const formSchema = z.object({
   endDate: z.date().optional(),
   endTime: z.string().optional(),
   repeatForever: z.boolean(),
+  skipWeekendsHolidays: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -105,6 +106,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
       endDate: undefined,
       endTime: '',
       repeatForever: true,
+      skipWeekendsHolidays: false,
     },
   });
 
@@ -179,6 +181,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
       parentAssignedTo: effectiveParentAssignees[0] || null,
       parentAssignees: effectiveParentAssignees as string[],
       sectorId: sectorId,
+      skipWeekendsHolidays: data.skipWeekendsHolidays,
     });
     form.reset();
     setUnitAssignments([]);
@@ -446,6 +449,29 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                       }}
                     />
                   </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="skipWeekendsHolidays"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-sm font-medium">
+                    Ignorar feriados e finais de semana
+                  </FormLabel>
+                  <FormDescription className="text-xs">
+                    Tarefas não serão criadas em sábados, domingos ou feriados nacionais
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
               </FormItem>
             )}
           />
