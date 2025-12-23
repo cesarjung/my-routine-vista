@@ -86,75 +86,129 @@ export const useCreateTaskWithUnits = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
 
-      // Criar tarefa mãe (sem unit_id específico, usa a primeira unidade como referência)
-      const firstUnitId = data.unitAssignments[0]?.unitId;
-      if (!firstUnitId) throw new Error('Nenhuma unidade selecionada');
+      // Get the user's unit_id for cases without unit assignments
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('unit_id')
+        .eq('id', user.id)
+        .single();
 
-      const { data: parentTask, error: parentError } = await supabase
-        .from('tasks')
-        .insert({
+      const userUnitId = profile?.unit_id;
+
+      // If units were selected, create parent + child tasks
+      if (data.unitAssignments.length > 0) {
+        // Criar tarefa mãe (usa a primeira unidade como referência)
+        const firstUnitId = data.unitAssignments[0].unitId;
+
+        const { data: parentTask, error: parentError } = await supabase
+          .from('tasks')
+          .insert({
+            title: data.title,
+            description: data.description || null,
+            unit_id: firstUnitId,
+            assigned_to: data.parentAssignedTo || user.id,
+            status: 'pendente',
+            priority: data.priority,
+            start_date: data.start_date || null,
+            due_date: data.due_date || null,
+            created_by: user.id,
+            parent_task_id: null,
+          })
+          .select()
+          .single();
+
+        if (parentError) throw parentError;
+
+        // Criar tarefas filhas para cada unidade com seu responsável
+        const childTasks = data.unitAssignments.map((assignment) => ({
           title: data.title,
           description: data.description || null,
-          unit_id: firstUnitId, // Necessário pelo schema, usa primeira unidade
-          assigned_to: data.parentAssignedTo || user.id, // Responsável definido ou gestor atual
-          status: 'pendente',
+          unit_id: assignment.unitId,
+          assigned_to: assignment.assignedTo,
+          status: 'pendente' as const,
           priority: data.priority,
           start_date: data.start_date || null,
           due_date: data.due_date || null,
           created_by: user.id,
-          parent_task_id: null, // Esta é a tarefa mãe
-        })
-        .select()
-        .single();
+          parent_task_id: parentTask.id,
+        }));
 
-      if (parentError) throw parentError;
+        const { data: createdChildTasks, error: childError } = await supabase
+          .from('tasks')
+          .insert(childTasks)
+          .select();
 
-      // Criar tarefas filhas para cada unidade com seu responsável
-      const childTasks = data.unitAssignments.map((assignment) => ({
-        title: data.title,
-        description: data.description || null,
-        unit_id: assignment.unitId,
-        assigned_to: assignment.assignedTo,
-        status: 'pendente' as const,
-        priority: data.priority,
-        start_date: data.start_date || null,
-        due_date: data.due_date || null,
-        created_by: user.id,
-        parent_task_id: parentTask.id, // Link com a tarefa mãe
-      }));
+        if (childError) throw childError;
 
-      const { data: createdChildTasks, error: childError } = await supabase
-        .from('tasks')
-        .insert(childTasks)
-        .select();
-
-      if (childError) throw childError;
-
-      // Criar subtarefas para cada tarefa filha se houver
-      if (data.subtasks && data.subtasks.length > 0 && createdChildTasks) {
-        const allSubtasks: SubtaskInsert[] = [];
-        
-        for (const childTask of createdChildTasks) {
-          data.subtasks.forEach((subtask, index) => {
-            allSubtasks.push({
-              task_id: childTask.id,
-              title: subtask.title,
-              assigned_to: subtask.assigned_to || null,
-              order_index: index,
+        // Criar subtarefas para cada tarefa filha se houver
+        if (data.subtasks && data.subtasks.length > 0 && createdChildTasks) {
+          const allSubtasks: SubtaskInsert[] = [];
+          
+          for (const childTask of createdChildTasks) {
+            data.subtasks.forEach((subtask, index) => {
+              allSubtasks.push({
+                task_id: childTask.id,
+                title: subtask.title,
+                assigned_to: subtask.assigned_to || null,
+                order_index: index,
+              });
             });
-          });
+          }
+
+          if (allSubtasks.length > 0) {
+            const { error: subtasksError } = await supabase
+              .from('subtasks')
+              .insert(allSubtasks);
+
+            if (subtasksError) throw subtasksError;
+          }
         }
 
-        if (allSubtasks.length > 0) {
+        return { parentTask, childTasks: createdChildTasks };
+      } else {
+        // No units selected - create a simple task for the user's own unit
+        // This is for regular users creating tasks for themselves
+        if (!userUnitId) {
+          throw new Error('Você precisa estar associado a uma unidade para criar tarefas.');
+        }
+
+        const { data: task, error: taskError } = await supabase
+          .from('tasks')
+          .insert({
+            title: data.title,
+            description: data.description || null,
+            unit_id: userUnitId,
+            assigned_to: data.parentAssignedTo || user.id,
+            status: 'pendente',
+            priority: data.priority,
+            start_date: data.start_date || null,
+            due_date: data.due_date || null,
+            created_by: user.id,
+            parent_task_id: null,
+          })
+          .select()
+          .single();
+
+        if (taskError) throw taskError;
+
+        // Criar subtarefas se houver
+        if (data.subtasks && data.subtasks.length > 0) {
+          const subtasksData: SubtaskInsert[] = data.subtasks.map((subtask, index) => ({
+            task_id: task.id,
+            title: subtask.title,
+            assigned_to: subtask.assigned_to || null,
+            order_index: index,
+          }));
+
           const { error: subtasksError } = await supabase
             .from('subtasks')
-            .insert(allSubtasks);
+            .insert(subtasksData);
 
           if (subtasksError) throw subtasksError;
         }
-      }
 
-      return { parentTask, childTasks: createdChildTasks };
+        return { parentTask: task, childTasks: [] };
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });

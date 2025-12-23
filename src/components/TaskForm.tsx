@@ -142,11 +142,9 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   };
 
   const onSubmit = async (data: FormData) => {
-    if (unitAssignments.length === 0) {
-      setUnitError('Selecione pelo menos uma unidade');
-      return;
-    }
-
+    // Usuários regulares não precisam selecionar unidades - tarefa será criada para eles mesmos
+    // Gestores/Admins podem opcionalmente selecionar unidades
+    
     // Se não for gestor/admin, força o usuário como responsável
     const effectiveParentAssignedTo = isGestorOrAdmin
       ? (parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null)
@@ -318,10 +316,10 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
       )}
     />
 
-    {/* Responsável da Tarefa Mãe */}
-    <div className="space-y-2">
-      <FormLabel>Responsável da Tarefa Mãe</FormLabel>
-      {isGestorOrAdmin ? (
+    {/* Responsável da Tarefa Mãe - Apenas para Gestor/Admin */}
+    {isGestorOrAdmin && (
+      <div className="space-y-2">
+        <FormLabel>Responsável da Tarefa Mãe</FormLabel>
         <Select
           value={parentAssignedTo}
           onValueChange={setParentAssignedTo}
@@ -338,124 +336,117 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
             ))}
           </SelectContent>
         </Select>
-      ) : (
-        <div className="p-3 bg-secondary/50 rounded-md">
-          <p className="text-sm font-medium">
-            {allProfiles?.find(p => p.id === user?.id)?.full_name || user?.email}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Como usuário, você será automaticamente o responsável da tarefa.
-          </p>
-        </div>
-      )}
-      <p className="text-xs text-muted-foreground">
-        O responsável da tarefa mãe acompanha o progresso geral de todas as unidades.
-      </p>
-    </div>
+        <p className="text-xs text-muted-foreground">
+          O responsável da tarefa mãe acompanha o progresso geral de todas as unidades.
+        </p>
+      </div>
+    )}
 
-        {/* Units Selection with Responsible */}
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-2">
-            <FormLabel className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Unidades e Responsáveis ({unitAssignments.length} selecionadas)
-            </FormLabel>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={selectAllUnits}
-                className="text-xs h-7"
-              >
-                Selecionar todas
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={deselectAllUnits}
-                className="text-xs h-7"
-              >
-                Limpar
-              </Button>
+        {/* Units Selection with Responsible - Apenas para Gestor/Admin */}
+        {isGestorOrAdmin && (
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-2">
+              <FormLabel className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Unidades e Responsáveis ({unitAssignments.length} selecionadas) - Opcional
+              </FormLabel>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={selectAllUnits}
+                  className="text-xs h-7"
+                >
+                  Selecionar todas
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={deselectAllUnits}
+                  className="text-xs h-7"
+                >
+                  Limpar
+                </Button>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-48">
-            <div className="p-3 space-y-2">
-              {loadingUnits ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : units && units.length > 0 ? (
-                units.map((unit) => {
-                  const isSelected = selectedSet.has(unit.id);
-                  const assignment = unitAssignments.find(a => a.unitId === unit.id);
-                  const unitProfiles = getProfilesForUnit(unit.id);
-                  
-                  return (
-                    <div
-                      key={unit.id}
-                      className={cn(
-                        "p-3 rounded-md transition-colors",
-                        isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'
-                      )}
-                    >
-                      <div 
-                        className="flex items-center gap-3 cursor-pointer"
-                        onClick={() => toggleUnit(unit.id)}
+            
+            <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-48">
+              <div className="p-3 space-y-2">
+                {loadingUnits ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : units && units.length > 0 ? (
+                  units.map((unit) => {
+                    const isSelected = selectedSet.has(unit.id);
+                    const assignment = unitAssignments.find(a => a.unitId === unit.id);
+                    const unitProfiles = getProfilesForUnit(unit.id);
+                    
+                    return (
+                      <div
+                        key={unit.id}
+                        className={cn(
+                          "p-3 rounded-md transition-colors",
+                          isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'
+                        )}
                       >
-                        <div className={cn(
-                          "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
-                          isSelected ? 'bg-primary border-primary' : 'border-input'
-                        )}>
-                          {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                        <div 
+                          className="flex items-center gap-3 cursor-pointer"
+                          onClick={() => toggleUnit(unit.id)}
+                        >
+                          <div className={cn(
+                            "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
+                            isSelected ? 'bg-primary border-primary' : 'border-input'
+                          )}>
+                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{unit.name}</p>
+                            <p className="text-xs text-muted-foreground">{unit.code}</p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{unit.name}</p>
-                          <p className="text-xs text-muted-foreground">{unit.code}</p>
-                        </div>
+                        
+                        {/* Dropdown de responsável - aparece quando unidade está selecionada */}
+                        {isSelected && (
+                          <div className="mt-2 ml-7">
+                            <Select
+                              value={assignment?.assignedTo || 'none'}
+                              onValueChange={(value) => updateUnitAssignee(unit.id, value === 'none' ? null : value)}
+                            >
+                              <SelectTrigger className="w-full h-8 text-xs">
+                                <SelectValue placeholder="Selecionar responsável" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sem responsável</SelectItem>
+                                {unitProfiles.map((profile) => (
+                                  <SelectItem key={profile.id} value={profile.id}>
+                                    {profile.full_name || profile.email}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
-                      
-                      {/* Dropdown de responsável - aparece quando unidade está selecionada */}
-                      {isSelected && (
-                        <div className="mt-2 ml-7">
-                          <Select
-                            value={assignment?.assignedTo || 'none'}
-                            onValueChange={(value) => updateUnitAssignee(unit.id, value === 'none' ? null : value)}
-                          >
-                            <SelectTrigger className="w-full h-8 text-xs">
-                              <SelectValue placeholder="Selecionar responsável" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Sem responsável</SelectItem>
-                              {unitProfiles.map((profile) => (
-                                <SelectItem key={profile.id} value={profile.id}>
-                                  {profile.full_name || profile.email}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-center py-4 text-muted-foreground text-sm">
-                  Nenhuma unidade cadastrada
-                </p>
-              )}
+                    );
+                  })
+                ) : (
+                  <p className="text-center py-4 text-muted-foreground text-sm">
+                    Nenhuma unidade cadastrada
+                  </p>
+                )}
+              </div>
             </div>
+            {unitError && (
+              <p className="text-sm font-medium text-destructive mt-1">{unitError}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              Uma tarefa mãe será criada para você acompanhar o progresso geral, e tarefas individuais serão criadas para cada unidade.
+            </p>
           </div>
-          {unitError && (
-            <p className="text-sm font-medium text-destructive mt-1">{unitError}</p>
-          )}
-          <p className="text-xs text-muted-foreground mt-2">
-            Uma tarefa mãe será criada para você acompanhar o progresso geral, e tarefas individuais serão criadas para cada unidade.
-          </p>
-        </div>
+        )}
 
         {/* Subtasks / Checklist */}
         <div className="space-y-3">
