@@ -38,6 +38,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Textarea } from './ui/textarea';
 import { ProgressBar } from './ProgressBar';
 import { RoutineEditDialog } from './RoutineEditDialog';
+import { CheckinRow } from './CheckinRow';
 import {
   useCurrentPeriodCheckins,
   useCreatePeriodWithCheckins,
@@ -45,6 +46,7 @@ import {
   useUndoCheckin,
 } from '@/hooks/useRoutineCheckins';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
+import { useProfiles } from '@/hooks/useProfiles';
 import {
   Select,
   SelectContent,
@@ -143,6 +145,7 @@ export const RoutineDetailPanel = ({
 
   const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id);
   const { data: unitManagers } = useUnitManagers();
+  const { data: allProfiles } = useProfiles();
   const createPeriod = useCreatePeriodWithCheckins();
   const completeCheckin = useCompleteCheckin();
   const undoCheckin = useUndoCheckin();
@@ -444,88 +447,17 @@ export const RoutineDetailPanel = ({
                   const managers = getManagersForUnit(checkin.unit_id);
 
                   return (
-                    <div
+                    <CheckinRow
                       key={checkin.id}
-                      className={cn(
-                        'grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors hover:bg-secondary/20',
-                        isCompleted && 'bg-success/5'
-                      )}
-                    >
-                      {/* Name with checkbox */}
-                      <div className="col-span-5 flex items-center gap-3">
-                        <button
-                          onClick={() => handleToggleCheckin(checkin.id, isCompleted)}
-                          disabled={completeCheckin.isPending || undoCheckin.isPending}
-                          className={cn(
-                            'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
-                            isCompleted
-                              ? 'bg-success border-success text-success-foreground'
-                              : 'border-muted-foreground/50 hover:border-primary'
-                          )}
-                        >
-                          {isCompleted && <Check className="w-3 h-3" />}
-                        </button>
-                        <span
-                          className={cn(
-                            'font-medium text-sm',
-                            isCompleted
-                              ? 'text-muted-foreground line-through'
-                              : 'text-foreground'
-                          )}
-                        >
-                          {checkin.unit?.name || 'Unidade'}
-                        </span>
-                      </div>
-
-                      {/* Responsáveis (Avatars) */}
-                      <div className="col-span-3 flex items-center">
-                        {managers.length > 0 ? (
-                          <div className="flex -space-x-2">
-                            {managers.slice(0, 3).map((manager) => (
-                              <Avatar
-                                key={manager.id}
-                                className={cn(
-                                  'w-7 h-7 border-2 border-card',
-                                  getAvatarColor(manager.user_id)
-                                )}
-                                title={manager.profile?.full_name || manager.profile?.email}
-                              >
-                                <AvatarFallback className="text-xs text-white bg-transparent">
-                                  {getInitials(manager.profile?.full_name || manager.profile?.email)}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {managers.length > 3 && (
-                              <Avatar className="w-7 h-7 border-2 border-card bg-secondary">
-                                <AvatarFallback className="text-xs text-muted-foreground bg-transparent">
-                                  +{managers.length - 3}
-                                </AvatarFallback>
-                              </Avatar>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </div>
-
-                      {/* Prioridade */}
-                      <div className="col-span-2 flex items-center">
-                        <Flag className="w-4 h-4 text-muted-foreground/50" />
-                      </div>
-
-                      {/* Vencimento */}
-                      <div className="col-span-2 flex items-center">
-                        {periodData?.period?.period_end ? (
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(periodData.period.period_end), 'dd/MM', {
-                              locale: ptBR,
-                            })}
-                          </span>
-                        ) : (
-                          <Calendar className="w-4 h-4 text-muted-foreground/50" />
-                        )}
-                      </div>
-                    </div>
+                      checkin={checkin}
+                      isCompleted={isCompleted}
+                      managers={managers}
+                      periodEnd={periodData?.period?.period_end}
+                      onToggle={() => handleToggleCheckin(checkin.id, isCompleted)}
+                      isToggling={completeCheckin.isPending || undoCheckin.isPending}
+                      isGestorOrAdmin={isGestorOrAdmin}
+                      allProfiles={allProfiles}
+                    />
                   );
                 })}
               </div>
