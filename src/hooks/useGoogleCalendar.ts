@@ -71,79 +71,30 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
     }
   }, [getAuthHeaders]);
 
-  // Check for OAuth callback parameters and save tokens when session is ready
+  // Check for OAuth callback success and update status
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const googleAuth = params.get('google_auth');
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-    const expiresIn = params.get('expires_in');
 
-    // Only proceed if we have callback params and haven't already saved tokens
-    if (googleAuth === 'success' && accessToken && !tokensSavedRef.current) {
-      // If session is not ready yet, wait for it
-      if (!session?.access_token) {
-        console.log('Waiting for session to be ready before saving Google Calendar tokens...');
-        return;
-      }
-
-      // Mark as processing to prevent duplicate saves
+    if (googleAuth === 'success' && !tokensSavedRef.current) {
       tokensSavedRef.current = true;
-
-      const saveTokens = async () => {
-        try {
-          console.log('Saving Google Calendar tokens...');
-          const response = await fetch(
-            `${SUPABASE_URL}/functions/v1/google-calendar-auth?action=save-tokens`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                access_token: decodeURIComponent(accessToken),
-                refresh_token: refreshToken ? decodeURIComponent(refreshToken) : null,
-                expires_in: parseInt(expiresIn || '3600'),
-              }),
-            }
-          );
-
-          const result = await response.json();
-          
-          if (result.success) {
-            console.log('Google Calendar tokens saved successfully');
-            toast({
-              title: 'Google Calendar conectado!',
-              description: 'Sua conta foi vinculada com sucesso.',
-            });
-            setIsConnected(true);
-          } else {
-            console.error('Failed to save tokens:', result.error);
-            toast({
-              title: 'Erro ao conectar',
-              description: result.error || 'Não foi possível salvar a conexão.',
-              variant: 'destructive',
-            });
-            tokensSavedRef.current = false; // Allow retry
-          }
-        } catch (error) {
-          console.error('Error saving tokens:', error);
-          toast({
-            title: 'Erro ao conectar',
-            description: 'Não foi possível salvar a conexão.',
-            variant: 'destructive',
-          });
-          tokensSavedRef.current = false; // Allow retry
-        }
-
-        // Clean up URL after attempting to save
-        window.history.replaceState({}, document.title, window.location.pathname);
-      };
-
-      saveTokens();
+      
+      // Tokens were saved in the edge function callback, just show success and refresh status
+      toast({
+        title: 'Google Calendar conectado!',
+        description: 'Sua conta foi vinculada com sucesso.',
+      });
+      setIsConnected(true);
+      
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Refresh status to confirm
+      if (session) {
+        checkStatus();
+      }
     }
-  }, [session, toast]);
+  }, [session, toast, checkStatus]);
 
   // Initial status check
   useEffect(() => {
