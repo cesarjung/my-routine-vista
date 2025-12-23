@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useUnits } from '@/hooks/useUnits';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
+import { useProfiles } from '@/hooks/useProfiles';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   Building2, 
   ChevronRight, 
@@ -12,7 +15,10 @@ import {
   Pencil, 
   Trash2,
   FolderTree,
-  Loader2
+  Loader2,
+  Users,
+  UserPlus,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +48,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 
 interface Unit {
   id: string;
@@ -53,7 +61,10 @@ interface Unit {
 
 export const UnitsManagement = () => {
   const { data: units, isLoading, refetch } = useUnits();
+  const { data: unitManagers, refetch: refetchManagers } = useUnitManagers();
+  const { data: allProfiles } = useProfiles();
   const { isAdmin } = useIsAdmin();
+  const queryClient = useQueryClient();
   
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -61,12 +72,14 @@ export const UnitsManagement = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAddingManager, setIsAddingManager] = useState<string | null>(null);
+  const [selectedManagerId, setSelectedManagerId] = useState<string>('');
   
   // Form state
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formParentId, setFormParentId] = useState<string>('');
+  const [formParentId, setFormParentId] = useState<string>('none');
 
   // Get units with parent_id from raw data
   const unitsWithHierarchy = (units as Unit[]) || [];
@@ -90,11 +103,20 @@ export const UnitsManagement = () => {
     });
   };
 
+  const getManagersForUnit = (unitId: string) => {
+    return unitManagers?.filter(m => m.unit_id === unitId) || [];
+  };
+
+  const getAvailableProfilesForUnit = (unitId: string) => {
+    const existingManagerIds = getManagersForUnit(unitId).map(m => m.user_id);
+    return allProfiles?.filter(p => !existingManagerIds.includes(p.id)) || [];
+  };
+
   const openCreateDialog = (parentId?: string) => {
     setFormName('');
     setFormCode('');
     setFormDescription('');
-    setFormParentId(parentId || '');
+    setFormParentId(parentId || 'none');
     setIsCreateOpen(true);
   };
 
@@ -103,7 +125,7 @@ export const UnitsManagement = () => {
     setFormName(unit.name);
     setFormCode(unit.code);
     setFormDescription(unit.description || '');
-    setFormParentId(unit.parent_id || '');
+    setFormParentId(unit.parent_id || 'none');
     setIsEditOpen(true);
   };
 
@@ -126,12 +148,12 @@ export const UnitsManagement = () => {
           name: formName.trim(),
           code: formCode.trim().toUpperCase(),
           description: formDescription.trim() || null,
-          parent_id: formParentId || null,
+          parent_id: formParentId === 'none' ? null : formParentId,
         });
 
       if (error) throw error;
 
-      toast.success(formParentId ? 'Unidade criada com sucesso!' : 'Gerência criada com sucesso!');
+      toast.success(formParentId && formParentId !== 'none' ? 'Unidade criada com sucesso!' : 'Gerência criada com sucesso!');
       setIsCreateOpen(false);
       refetch();
     } catch (error: any) {
@@ -156,7 +178,7 @@ export const UnitsManagement = () => {
           name: formName.trim(),
           code: formCode.trim().toUpperCase(),
           description: formDescription.trim() || null,
-          parent_id: formParentId || null,
+          parent_id: formParentId === 'none' ? null : formParentId,
         })
         .eq('id', selectedUnit.id);
 
@@ -205,10 +227,55 @@ export const UnitsManagement = () => {
     }
   };
 
+  const handleAddManager = async (unitId: string) => {
+    if (!selectedManagerId) {
+      toast.error('Selecione um usuário');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('unit_managers')
+        .insert({
+          unit_id: unitId,
+          user_id: selectedManagerId,
+        });
+
+      if (error) throw error;
+
+      toast.success('Responsável adicionado com sucesso!');
+      setIsAddingManager(null);
+      setSelectedManagerId('');
+      refetchManagers();
+    } catch (error: any) {
+      console.error('Error adding manager:', error);
+      toast.error(error.message || 'Erro ao adicionar responsável');
+    }
+  };
+
+  const handleRemoveManager = async (managerId: string) => {
+    try {
+      const { error } = await supabase
+        .from('unit_managers')
+        .delete()
+        .eq('id', managerId);
+
+      if (error) throw error;
+
+      toast.success('Responsável removido!');
+      refetchManagers();
+    } catch (error: any) {
+      console.error('Error removing manager:', error);
+      toast.error(error.message || 'Erro ao remover responsável');
+    }
+  };
+
   const renderUnitItem = (unit: Unit, isGerencia: boolean = false) => {
     const children = getChildUnits(unit.id);
     const hasChildren = children.length > 0;
     const isExpanded = expandedUnits.has(unit.id);
+    const managers = getManagersForUnit(unit.id);
+    const availableProfiles = getAvailableProfilesForUnit(unit.id);
 
     return (
       <div key={unit.id} className={cn("animate-fade-in", !isGerencia && "ml-6")}>
@@ -220,7 +287,7 @@ export const UnitsManagement = () => {
               : "bg-card border-border hover:bg-secondary/30"
           )}
         >
-          {isGerencia && hasChildren ? (
+          {isGerencia || hasChildren ? (
             <button onClick={() => toggleExpand(unit.id)} className="p-1">
               {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
@@ -239,6 +306,12 @@ export const UnitsManagement = () => {
             <div className="flex items-center gap-2">
               <span className="font-medium truncate">{unit.name}</span>
               <span className="text-xs bg-secondary px-1.5 py-0.5 rounded text-muted-foreground">{unit.code}</span>
+              {managers.length > 0 && (
+                <Badge variant="secondary" className="gap-1">
+                  <Users className="w-3 h-3" />
+                  {managers.length}
+                </Badge>
+              )}
             </div>
             {unit.description && (
               <p className="text-xs text-muted-foreground truncate">{unit.description}</p>
@@ -278,9 +351,104 @@ export const UnitsManagement = () => {
           )}
         </div>
 
-        {isGerencia && isExpanded && hasChildren && (
-          <div className="mt-2 space-y-2">
-            {children.map(child => renderUnitItem(child, false))}
+        {/* Expanded content: managers and child units */}
+        {isExpanded && (
+          <div className="mt-2 ml-6 space-y-2">
+            {/* Managers list */}
+            <div className="p-3 rounded-lg bg-secondary/30 border border-border/50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Responsáveis
+                </span>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => {
+                      setIsAddingManager(unit.id);
+                      setSelectedManagerId('');
+                    }}
+                  >
+                    <UserPlus className="w-3 h-3" />
+                    Adicionar
+                  </Button>
+                )}
+              </div>
+
+              {/* Add manager form */}
+              {isAddingManager === unit.id && (
+                <div className="flex items-center gap-2 mb-3 p-2 bg-background rounded border">
+                  <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
+                    <SelectTrigger className="flex-1 h-8">
+                      <SelectValue placeholder="Selecione um usuário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableProfiles.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground text-center">
+                          Nenhum usuário disponível
+                        </div>
+                      ) : (
+                        availableProfiles.map(profile => (
+                          <SelectItem key={profile.id} value={profile.id}>
+                            {profile.full_name || profile.email}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-8" onClick={() => handleAddManager(unit.id)}>
+                    Adicionar
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0"
+                    onClick={() => setIsAddingManager(null)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Managers list */}
+              {managers.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum responsável definido</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {managers.map(manager => (
+                    <div 
+                      key={manager.id}
+                      className="flex items-center gap-2 bg-background rounded-full pl-1 pr-2 py-1 border"
+                    >
+                      <Avatar className="w-6 h-6">
+                        <AvatarImage src={manager.profile?.avatar_url || undefined} />
+                        <AvatarFallback className="text-xs">
+                          {manager.profile?.full_name?.charAt(0) || manager.profile?.email?.charAt(0) || '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{manager.profile?.full_name || manager.profile?.email}</span>
+                      {isAdmin && (
+                        <button 
+                          onClick={() => handleRemoveManager(manager.id)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Child units */}
+            {hasChildren && (
+              <div className="space-y-2">
+                {children.map(child => renderUnitItem(child, false))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -339,7 +507,7 @@ export const UnitsManagement = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {formParentId ? 'Adicionar Unidade' : 'Criar Nova Gerência'}
+              {formParentId && formParentId !== 'none' ? 'Adicionar Unidade' : 'Criar Nova Gerência'}
             </DialogTitle>
           </DialogHeader>
           
@@ -347,12 +515,11 @@ export const UnitsManagement = () => {
             <div className="space-y-2">
               <Label>Nome *</Label>
               <Input
-                placeholder={formParentId ? "Nome da unidade" : "Nome da gerência"}
+                placeholder={formParentId && formParentId !== 'none' ? "Nome da unidade" : "Nome da gerência"}
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
               />
             </div>
-            
             <div className="space-y-2">
               <Label>Código *</Label>
               <Input
@@ -371,7 +538,7 @@ export const UnitsManagement = () => {
               />
             </div>
 
-            {!formParentId && (
+            {formParentId === 'none' && (
               <div className="space-y-2">
                 <Label>Gerência (opcional)</Label>
                 <Select value={formParentId} onValueChange={setFormParentId}>
@@ -379,7 +546,7 @@ export const UnitsManagement = () => {
                     <SelectValue placeholder="Sem gerência (é uma gerência)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma (é uma gerência)</SelectItem>
+                    <SelectItem value="none">Nenhuma (é uma gerência)</SelectItem>
                     {gerencias.map(g => (
                       <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                     ))}
@@ -437,7 +604,7 @@ export const UnitsManagement = () => {
                   <SelectValue placeholder="Sem gerência (é uma gerência)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma (é uma gerência)</SelectItem>
+                  <SelectItem value="none">Nenhuma (é uma gerência)</SelectItem>
                   {gerencias.filter(g => g.id !== selectedUnit?.id).map(g => (
                     <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                   ))}
