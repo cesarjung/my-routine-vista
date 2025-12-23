@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTasks } from '@/hooks/useTasks';
+import { useRoutines } from '@/hooks/useRoutines';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
@@ -9,6 +12,10 @@ import { TaskEditDialog } from '@/components/TaskEditDialog';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
+};
+
+type RoutinePeriod = Tables<'routine_periods'> & {
+  routine?: Tables<'routines'>;
 };
 import { 
   format, 
@@ -52,8 +59,9 @@ interface CalendarItem {
   startDate: Date;
   endDate: Date;
   isAllDay: boolean;
-  type: 'task' | 'google';
+  type: 'task' | 'google' | 'routine';
   status?: string;
+  routineId?: string;
 }
 
 type ViewMode = 'day' | 'week' | 'month';
@@ -62,7 +70,8 @@ const HOUR_HEIGHT = 48;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
-  const { data: tasks, isLoading } = useTasks();
+  const { data: tasks, isLoading: isLoadingTasks } = useTasks();
+  const { data: routines } = useRoutines();
   const { user } = useAuth();
   const { isConnected, fetchEvents } = useGoogleCalendar();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -72,6 +81,27 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // Fetch active routine periods
+  const { data: routinePeriods } = useQuery({
+    queryKey: ['routine-periods-calendar', routines?.map(r => r.id)],
+    queryFn: async () => {
+      if (!routines || routines.length === 0) return [];
+      
+      const routineIds = routines.map(r => r.id);
+      const { data, error } = await supabase
+        .from('routine_periods')
+        .select('*, routine:routines(*)')
+        .in('routine_id', routineIds)
+        .eq('is_active', true);
+
+      if (error) throw error;
+      return data as RoutinePeriod[];
+    },
+    enabled: !!routines && routines.length > 0,
+  });
+
+  const isLoading = isLoadingTasks;
 
   const handleEditTask = (taskId: string) => {
     const task = tasks?.find(t => t.id === taskId);
@@ -159,6 +189,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const getItemsForDay = (date: Date): CalendarItem[] => {
     const items: CalendarItem[] = [];
 
+    // Add tasks
     tasks?.forEach(task => {
       if (!task.due_date) return;
       const matchesSector = !sectorId || (task as any).sector_id === sectorId;
@@ -180,6 +211,36 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       }
     });
 
+    // Add routine periods
+    routinePeriods?.forEach(period => {
+      if (!period.routine) return;
+      const periodStart = new Date(period.period_start);
+      const periodEnd = new Date(period.period_end);
+      
+      // Check if this day falls within the period
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      // Show routine if the day is within the period range
+      if (dayStart <= periodEnd && dayEnd >= periodStart) {
+        // Show on the period end date (deadline)
+        if (isSameDay(periodEnd, date)) {
+          items.push({
+            id: period.id,
+            title: `🔄 ${period.routine.title}`,
+            startDate: periodEnd,
+            endDate: new Date(periodEnd.getTime() + 60 * 60 * 1000),
+            isAllDay: true,
+            type: 'routine',
+            routineId: period.routine_id
+          });
+        }
+      }
+    });
+
+    // Add Google events
     if (isMyTasks) {
       googleEvents.forEach(event => {
         const startDate = new Date(event.startDate);
@@ -219,6 +280,10 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const getItemColor = (item: CalendarItem) => {
     if (item.type === 'google') {
       return 'bg-blue-500 border-blue-600';
+    }
+    
+    if (item.type === 'routine') {
+      return 'bg-purple-500 border-purple-600';
     }
     
     const statusColors: Record<string, string> = {
