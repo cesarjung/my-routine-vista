@@ -141,6 +141,7 @@ export const useDeleteDashboardPanel = () => {
 
 export const useReorderDashboardPanels = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (panels: { id: string; order_index: number }[]) => {
@@ -158,12 +159,39 @@ export const useReorderDashboardPanels = () => {
       if (errors.length > 0) {
         throw new Error('Erro ao reordenar painéis');
       }
+      
+      return panels;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-panels'] });
+    onMutate: async (newOrder) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['dashboard-panels', user?.id] });
+
+      // Snapshot the previous value
+      const previousPanels = queryClient.getQueryData<DashboardPanel[]>(['dashboard-panels', user?.id]);
+
+      // Optimistically update the cache
+      if (previousPanels) {
+        const updatedPanels = [...previousPanels].sort((a, b) => {
+          const aOrder = newOrder.find(p => p.id === a.id)?.order_index ?? a.order_index;
+          const bOrder = newOrder.find(p => p.id === b.id)?.order_index ?? b.order_index;
+          return aOrder - bOrder;
+        });
+        
+        queryClient.setQueryData(['dashboard-panels', user?.id], updatedPanels);
+      }
+
+      return { previousPanels };
     },
-    onError: (error) => {
+    onError: (error, _, context) => {
+      // Rollback on error
+      if (context?.previousPanels) {
+        queryClient.setQueryData(['dashboard-panels', user?.id], context.previousPanels);
+      }
       toast.error('Erro ao reordenar painéis: ' + error.message);
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: ['dashboard-panels', user?.id] });
     }
   });
 };
