@@ -1,10 +1,24 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { cn } from '@/lib/utils';
-import { Loader2, ExternalLink, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
+import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+  format, 
+  startOfWeek, 
+  endOfWeek, 
+  addWeeks, 
+  subWeeks, 
+  eachDayOfInterval, 
+  isSameDay, 
+  isToday,
+  addDays,
+  parseISO,
+  differenceInMinutes,
+  startOfDay,
+  isSameWeek
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 
@@ -21,32 +35,50 @@ interface CalendarViewProps {
   isMyTasks?: boolean;
 }
 
+interface CalendarItem {
+  id: string;
+  title: string;
+  startDate: Date;
+  endDate: Date;
+  isAllDay: boolean;
+  type: 'task' | 'google';
+  status?: string;
+}
+
+const HOUR_HEIGHT = 48; // pixels per hour
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
 export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const { user } = useAuth();
   const { isConnected, fetchEvents } = useGoogleCalendar();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
   const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  
-  // Get the full calendar grid (including days from prev/next month to fill weeks)
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
-  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+  const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  // Fetch Google Calendar events when in My Tasks view and connected
+  // Scroll to current time on mount
+  useEffect(() => {
+    if (scrollRef.current) {
+      const now = new Date();
+      const scrollPosition = (now.getHours() - 1) * HOUR_HEIGHT;
+      scrollRef.current.scrollTop = Math.max(0, scrollPosition);
+    }
+  }, []);
+
+  // Fetch Google Calendar events
   useEffect(() => {
     if (isMyTasks && isConnected) {
       const fetchGoogleEvents = async () => {
         setIsLoadingGoogleEvents(true);
         try {
           const events = await fetchEvents(
-            calendarStart.toISOString(),
-            calendarEnd.toISOString()
+            weekStart.toISOString(),
+            weekEnd.toISOString()
           );
           setGoogleEvents(events);
         } catch (error) {
@@ -59,51 +91,99 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     } else {
       setGoogleEvents([]);
     }
-  }, [isMyTasks, isConnected, currentMonth]);
+  }, [isMyTasks, isConnected, currentDate]);
 
-  const getTasksForDay = (date: Date) => {
-    return tasks?.filter(task => {
-      if (!task.due_date) return false;
+  const goToToday = () => setCurrentDate(new Date());
+  const goToPrevWeek = () => setCurrentDate(subWeeks(currentDate, 1));
+  const goToNextWeek = () => setCurrentDate(addWeeks(currentDate, 1));
+
+  // Get all items for a specific day
+  const getItemsForDay = (date: Date): CalendarItem[] => {
+    const items: CalendarItem[] = [];
+
+    // Add tasks
+    tasks?.forEach(task => {
+      if (!task.due_date) return;
       const matchesSector = !sectorId || (task as any).sector_id === sectorId;
       const matchesUser = !isMyTasks || task.assigned_to === user?.id;
-      return isSameDay(new Date(task.due_date), date) && matchesSector && matchesUser;
-    }) || [];
-  };
-
-  const getGoogleEventsForDay = (date: Date) => {
-    return googleEvents.filter(event => {
-      const eventStart = new Date(event.startDate);
-      return isSameDay(eventStart, date);
-    });
-  };
-
-  const getEventTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return format(date, 'HH:mm');
-  };
-
-  const statusColors: Record<string, { bg: string; text: string }> = {
-    pendente: { bg: 'bg-amber-500', text: 'text-white' },
-    em_andamento: { bg: 'bg-orange-600', text: 'text-white' },
-    concluida: { bg: 'bg-emerald-500', text: 'text-white' },
-    atrasada: { bg: 'bg-red-500', text: 'text-white' },
-  };
-
-  const toggleDayExpanded = (dayKey: string) => {
-    setExpandedDays(prev => {
-      const next = new Set(prev);
-      if (next.has(dayKey)) {
-        next.delete(dayKey);
-      } else {
-        next.add(dayKey);
+      
+      if (matchesSector && matchesUser && isSameDay(new Date(task.due_date), date)) {
+        const dueDate = new Date(task.due_date);
+        // Tasks without specific time are treated as all-day or at the due time
+        const isAllDay = dueDate.getHours() === 0 && dueDate.getMinutes() === 0;
+        
+        items.push({
+          id: task.id,
+          title: task.title,
+          startDate: dueDate,
+          endDate: new Date(dueDate.getTime() + 60 * 60 * 1000), // 1 hour duration
+          isAllDay,
+          type: 'task',
+          status: task.status
+        });
       }
-      return next;
     });
+
+    // Add Google events (only in My Tasks view)
+    if (isMyTasks) {
+      googleEvents.forEach(event => {
+        const startDate = new Date(event.startDate);
+        const endDate = new Date(event.endDate);
+        
+        if (isSameDay(startDate, date)) {
+          // Check if it's an all-day event
+          const isAllDay = startDate.getHours() === 0 && 
+                          startDate.getMinutes() === 0 && 
+                          (differenceInMinutes(endDate, startDate) >= 1440 || endDate.getHours() === 0);
+          
+          items.push({
+            id: event.id,
+            title: event.title,
+            startDate,
+            endDate,
+            isAllDay,
+            type: 'google'
+          });
+        }
+      });
+    }
+
+    return items;
   };
 
-  const isCurrentMonth = (date: Date) => {
-    return date.getMonth() === currentMonth.getMonth();
+  const getEventPosition = (item: CalendarItem) => {
+    const startMinutes = item.startDate.getHours() * 60 + item.startDate.getMinutes();
+    const endMinutes = item.endDate.getHours() * 60 + item.endDate.getMinutes();
+    const duration = Math.max(endMinutes - startMinutes, 30); // Minimum 30 min display
+
+    const top = (startMinutes / 60) * HOUR_HEIGHT;
+    const height = (duration / 60) * HOUR_HEIGHT;
+
+    return { top, height: Math.max(height, 20) };
   };
+
+  const getItemColor = (item: CalendarItem) => {
+    if (item.type === 'google') {
+      return 'bg-blue-500 border-blue-600';
+    }
+    
+    const statusColors: Record<string, string> = {
+      pendente: 'bg-amber-500 border-amber-600',
+      em_andamento: 'bg-orange-600 border-orange-700',
+      concluida: 'bg-emerald-500 border-emerald-600',
+      atrasada: 'bg-red-500 border-red-600',
+    };
+    
+    return statusColors[item.status || 'pendente'] || statusColors.pendente;
+  };
+
+  const getCurrentTimePosition = () => {
+    const now = new Date();
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    return (minutes / 60) * HOUR_HEIGHT;
+  };
+
+  const isThisWeek = isSameWeek(currentDate, new Date(), { weekStartsOn: 0 });
 
   if (isLoading) {
     return (
@@ -120,147 +200,184 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-foreground mb-1">Calendário</h1>
         <p className="text-muted-foreground">Visualize tarefas organizadas por data</p>
       </div>
 
-      {/* Month Navigation */}
-      <div className="flex items-center justify-between">
+      {/* Navigation Header */}
+      <div className="flex items-center gap-4">
         <Button
           variant="outline"
-          size="icon"
-          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+          size="sm"
+          onClick={goToToday}
+          className="font-medium"
         >
-          <ChevronLeft className="w-4 h-4" />
+          Hoje
         </Button>
-        <h2 className="text-xl font-semibold text-foreground capitalize">
-          {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={goToPrevWeek}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={goToNextWeek}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        <h2 className="text-lg font-semibold text-foreground capitalize">
+          {format(currentDate, 'MMMM \'de\' yyyy', { locale: ptBR })}
         </h2>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
       </div>
 
-      {/* Calendar Grid */}
+      {/* Calendar Container */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         {/* Week Header */}
-        <div className="grid grid-cols-7 bg-muted/30">
-          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
-            <div
-              key={day}
-              className="py-3 text-center text-sm font-medium text-muted-foreground border-b border-border"
-            >
-              {day}
-            </div>
-          ))}
-        </div>
-
-        {/* Days Grid */}
-        <div className="grid grid-cols-7">
-          {calendarDays.map((day, index) => {
-            const dayKey = day.toISOString();
-            const dayTasks = getTasksForDay(day);
-            const dayGoogleEvents = isMyTasks ? getGoogleEventsForDay(day) : [];
-            const allItems = [...dayTasks.map(t => ({ type: 'task' as const, data: t })), ...dayGoogleEvents.map(e => ({ type: 'google' as const, data: e }))];
-            const totalItems = allItems.length;
+        <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-border">
+          <div className="p-2 text-xs text-muted-foreground text-center border-r border-border">
+            GMT-03
+          </div>
+          {weekDays.map((day) => {
             const isCurrentDay = isToday(day);
-            const isExpanded = expandedDays.has(dayKey);
-            const maxVisible = 2;
-            const hiddenCount = Math.max(0, totalItems - maxVisible);
-            const isInCurrentMonth = isCurrentMonth(day);
-
             return (
               <div
-                key={dayKey}
-                className={cn(
-                  'min-h-[120px] border-b border-r border-border transition-colors relative',
-                  !isInCurrentMonth && 'bg-muted/20',
-                  isCurrentDay && 'bg-primary/5'
-                )}
+                key={day.toISOString()}
+                className="p-2 text-center border-r border-border last:border-r-0"
               >
-                {/* Day Header */}
-                <div className="flex items-start justify-between p-2">
-                  <div
-                    className={cn(
-                      'text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full',
-                      isCurrentDay && 'bg-primary text-primary-foreground',
-                      !isInCurrentMonth && 'text-muted-foreground/50'
-                    )}
-                  >
-                    {format(day, 'd')}
-                  </div>
-                  {totalItems > 0 && (
-                    <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                      {totalItems}
-                    </span>
-                  )}
+                <div className={cn(
+                  "text-xs uppercase font-medium",
+                  isCurrentDay ? "text-primary" : "text-muted-foreground"
+                )}>
+                  {format(day, 'EEE', { locale: ptBR })}.
                 </div>
-
-                {/* Events Container */}
-                <div className="px-1 pb-2 space-y-1">
-                  {allItems.slice(0, isExpanded ? undefined : maxVisible).map((item, idx) => {
-                    if (item.type === 'task') {
-                      const task = item.data;
-                      const colors = statusColors[task.status] || statusColors.pendente;
-                      return (
-                        <div
-                          key={`task-${task.id}`}
-                          className={cn(
-                            'text-xs px-2 py-1 rounded-sm truncate cursor-pointer flex items-center gap-1',
-                            colors.bg,
-                            colors.text
-                          )}
-                          title={task.title}
-                        >
-                          <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70" />
-                          <span className="truncate">{task.title}</span>
-                        </div>
-                      );
-                    } else {
-                      const event = item.data;
-                      const time = getEventTime(event.startDate);
-                      return (
-                        <div
-                          key={`google-${event.id}`}
-                          className="text-xs px-2 py-1 rounded-sm truncate cursor-pointer bg-blue-500 text-white flex items-center gap-1"
-                          title={`${time} - ${event.title}`}
-                        >
-                          <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70" />
-                          <span className="truncate">{time !== '00:00' ? `${time} - ` : ''}{event.title}</span>
-                        </div>
-                      );
-                    }
-                  })}
-
-                  {/* Expand/Collapse Button */}
-                  {hiddenCount > 0 && !isExpanded && (
-                    <button
-                      onClick={() => toggleDayExpanded(dayKey)}
-                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-1"
-                    >
-                      <ChevronDown className="w-3 h-3" />
-                      +{hiddenCount} mais
-                    </button>
-                  )}
-                  {isExpanded && totalItems > maxVisible && (
-                    <button
-                      onClick={() => toggleDayExpanded(dayKey)}
-                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-1"
-                    >
-                      <ChevronUp className="w-3 h-3" />
-                      menos
-                    </button>
-                  )}
+                <div className={cn(
+                  "text-xl font-medium mt-1",
+                  isCurrentDay && "w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center mx-auto"
+                )}>
+                  {format(day, 'd')}
                 </div>
               </div>
             );
           })}
+        </div>
+
+        {/* All-day events row */}
+        <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-border min-h-[40px]">
+          <div className="p-1 text-xs text-muted-foreground text-right pr-2 border-r border-border" />
+          {weekDays.map((day) => {
+            const allDayItems = getItemsForDay(day).filter(item => item.isAllDay);
+            return (
+              <div
+                key={`allday-${day.toISOString()}`}
+                className="p-1 border-r border-border last:border-r-0 space-y-1"
+              >
+                {allDayItems.slice(0, 2).map((item) => (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "text-xs px-2 py-1 rounded text-white truncate",
+                      getItemColor(item)
+                    )}
+                    title={item.title}
+                  >
+                    {item.title}
+                  </div>
+                ))}
+                {allDayItems.length > 2 && (
+                  <div className="text-xs text-muted-foreground px-1">
+                    +{allDayItems.length - 2} mais
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Time Grid */}
+        <div 
+          ref={scrollRef}
+          className="overflow-y-auto max-h-[600px] relative"
+        >
+          <div className="grid grid-cols-[60px_repeat(7,1fr)]">
+            {/* Hours Column */}
+            <div className="relative">
+              {HOURS.map((hour) => (
+                <div
+                  key={hour}
+                  className="border-r border-border relative"
+                  style={{ height: HOUR_HEIGHT }}
+                >
+                  <span className="absolute -top-2 right-2 text-xs text-muted-foreground">
+                    {hour.toString().padStart(2, '0')}:00
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Day Columns */}
+            {weekDays.map((day, dayIndex) => {
+              const dayItems = getItemsForDay(day).filter(item => !item.isAllDay);
+              const isCurrentDay = isToday(day);
+
+              return (
+                <div
+                  key={day.toISOString()}
+                  className="relative border-r border-border last:border-r-0"
+                >
+                  {/* Hour lines */}
+                  {HOURS.map((hour) => (
+                    <div
+                      key={hour}
+                      className="border-b border-border"
+                      style={{ height: HOUR_HEIGHT }}
+                    />
+                  ))}
+
+                  {/* Current time indicator */}
+                  {isCurrentDay && (
+                    <div
+                      className="absolute left-0 right-0 z-20 flex items-center"
+                      style={{ top: getCurrentTimePosition() }}
+                    >
+                      <div className="w-3 h-3 rounded-full bg-red-500 -ml-1.5" />
+                      <div className="flex-1 h-0.5 bg-red-500" />
+                    </div>
+                  )}
+
+                  {/* Events */}
+                  {dayItems.map((item, itemIndex) => {
+                    const { top, height } = getEventPosition(item);
+                    const timeStr = format(item.startDate, 'HH:mm');
+                    const endTimeStr = format(item.endDate, 'HH:mm');
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "absolute left-1 right-1 rounded-sm px-2 py-1 text-white text-xs overflow-hidden cursor-pointer border-l-4 z-10",
+                          getItemColor(item)
+                        )}
+                        style={{ 
+                          top: top + 1,
+                          height: height - 2,
+                          // Offset overlapping events
+                          marginLeft: itemIndex > 0 ? `${(itemIndex % 2) * 40}%` : 0,
+                          width: itemIndex > 0 ? '60%' : undefined
+                        }}
+                        title={`${item.title} (${timeStr} - ${endTimeStr})`}
+                      >
+                        <div className="font-medium truncate">{item.title}</div>
+                        {height > 30 && (
+                          <div className="text-white/80 truncate">
+                            {timeStr} - {endTimeStr}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
