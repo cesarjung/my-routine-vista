@@ -104,10 +104,8 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
 
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
+    left: panel.position.x,
     top: panel.position.y,
-    // Use full width layout - panels stack vertically
-    left: 0,
-    right: 0,
   };
 
   return (
@@ -115,7 +113,7 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
       ref={setNodeRef}
       style={style}
       className={cn(
-        'absolute transition-shadow duration-200 w-full',
+        'absolute transition-shadow duration-200 w-[calc(50%-1rem)] min-w-[300px]',
         isDragging && 'opacity-50 z-50 shadow-2xl'
       )}
     >
@@ -185,15 +183,16 @@ export const UnifiedDraggablePanels = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [containerHeight, setContainerHeight] = useState(600);
 
-  // Calculate initial grid positions (using pixel values)
+  // Calculate initial grid positions (2 columns)
   const getInitialPosition = (index: number) => {
+    const col = index % 2;
+    const row = Math.floor(index / 2);
     const panelHeight = 300;
     const gap = 16;
     
-    // Stack all panels vertically in order
     return {
-      x: 0,
-      y: index * (panelHeight + gap),
+      x: col * 400, // offset for second column
+      y: row * (panelHeight + gap),
     };
   };
 
