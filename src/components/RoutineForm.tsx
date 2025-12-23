@@ -70,6 +70,7 @@ export const RoutineForm = () => {
   const [open, setOpen] = useState(false);
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
+  const [parentAssignedTo, setParentAssignedTo] = useState<string>('');
   
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
@@ -144,10 +145,12 @@ export const RoutineForm = () => {
       description: data.description,
       frequency: data.frequency,
       unitAssignments: unitAssignments,
+      parentAssignedTo: parentAssignedTo && parentAssignedTo !== 'none' ? parentAssignedTo : null,
     });
     form.reset();
     setUnitAssignments([]);
     setUnitError(null);
+    setParentAssignedTo('');
     setOpen(false);
   };
 
@@ -335,9 +338,33 @@ export const RoutineForm = () => {
                       }}
                     />
                   </FormControl>
-                </FormItem>
-              )}
-            />
+              </FormItem>
+            )}
+          />
+
+          {/* Responsável da Rotina/Tarefa Mãe */}
+          <div className="space-y-2">
+            <FormLabel>Responsável da Rotina Mãe</FormLabel>
+            <Select
+              value={parentAssignedTo}
+              onValueChange={setParentAssignedTo}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecionar responsável (opcional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Eu mesmo (atual usuário)</SelectItem>
+                {allProfiles?.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id}>
+                    {profile.full_name || profile.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              O responsável da rotina mãe acompanha o progresso geral de todas as unidades.
+            </p>
+          </div>
 
             {/* Units Selection with Responsible per Unit */}
             <div className="flex flex-col">

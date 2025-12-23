@@ -18,6 +18,7 @@ interface CreateRoutineData {
 
 interface CreateRoutineWithUnitsData extends CreateRoutineData {
   unitAssignments: UnitAssignment[];
+  parentAssignedTo?: string | null; // Responsável da rotina/tarefa mãe
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -176,7 +177,7 @@ export const useCreateRoutineWithUnits = () => {
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
             unit_id: firstUnitId,
             routine_id: routine.id,
-            assigned_to: user.id, // Gestor responsável pela tarefa mãe
+            assigned_to: data.parentAssignedTo || user.id, // Responsável definido ou gestor atual
             created_by: user.id,
             start_date: periodStart.toISOString(),
             due_date: periodEnd.toISOString(),
