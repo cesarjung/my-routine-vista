@@ -17,8 +17,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TaskForm } from '@/components/TaskForm';
+import { UserTaskForm } from '@/components/UserTaskForm';
 import { TaskListItem } from '@/components/TaskListItem';
 import { useTasks } from '@/hooks/useTasks';
+import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import type { Enums } from '@/integrations/supabase/types';
 
 const statusFilters: { value: string; label: string }[] = [
@@ -36,6 +38,7 @@ export const TasksView = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const { data: tasks, isLoading } = useTasks();
+  const { isGestorOrAdmin, isLoading: isLoadingRole } = useIsGestorOrAdmin();
 
   const filteredTasks = tasks?.filter((task) => {
     const matchesSearch =
@@ -62,17 +65,26 @@ export const TasksView = () => {
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
-              Nova Tarefa
+              {isGestorOrAdmin ? 'Nova Tarefa Mãe' : 'Nova Tarefa'}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Criar Nova Tarefa</DialogTitle>
+              <DialogTitle>
+                {isGestorOrAdmin ? 'Criar Nova Tarefa Mãe' : 'Criar Nova Tarefa'}
+              </DialogTitle>
             </DialogHeader>
-            <TaskForm
-              onSuccess={() => setIsDialogOpen(false)}
-              onCancel={() => setIsDialogOpen(false)}
-            />
+            {isGestorOrAdmin ? (
+              <TaskForm
+                onSuccess={() => setIsDialogOpen(false)}
+                onCancel={() => setIsDialogOpen(false)}
+              />
+            ) : (
+              <UserTaskForm
+                onSuccess={() => setIsDialogOpen(false)}
+                onCancel={() => setIsDialogOpen(false)}
+              />
+            )}
           </DialogContent>
         </Dialog>
       </div>
