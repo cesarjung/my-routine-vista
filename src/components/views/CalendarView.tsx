@@ -1,13 +1,21 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar } from 'lucide-react';
+import { Loader2, Calendar, ExternalLink } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+interface GoogleCalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startDate: string;
+  endDate: string;
+}
 
 interface CalendarViewProps {
   sectorId?: string;
@@ -17,7 +25,10 @@ interface CalendarViewProps {
 export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const { user } = useAuth();
+  const { isConnected, fetchEvents } = useGoogleCalendar();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -27,6 +38,29 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const startDay = monthStart.getDay();
   const paddedDays = Array(startDay).fill(null).concat(daysInMonth);
 
+  // Fetch Google Calendar events when in My Tasks view and connected
+  useEffect(() => {
+    if (isMyTasks && isConnected) {
+      const fetchGoogleEvents = async () => {
+        setIsLoadingGoogleEvents(true);
+        try {
+          const events = await fetchEvents(
+            monthStart.toISOString(),
+            monthEnd.toISOString()
+          );
+          setGoogleEvents(events);
+        } catch (error) {
+          console.error('Error fetching Google Calendar events:', error);
+        } finally {
+          setIsLoadingGoogleEvents(false);
+        }
+      };
+      fetchGoogleEvents();
+    } else {
+      setGoogleEvents([]);
+    }
+  }, [isMyTasks, isConnected, currentMonth, fetchEvents, monthStart, monthEnd]);
+
   const getTasksForDay = (date: Date) => {
     return tasks?.filter(task => {
       if (!task.due_date) return false;
@@ -34,6 +68,13 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       const matchesUser = !isMyTasks || task.assigned_to === user?.id;
       return isSameDay(new Date(task.due_date), date) && matchesSector && matchesUser;
     }) || [];
+  };
+
+  const getGoogleEventsForDay = (date: Date) => {
+    return googleEvents.filter(event => {
+      const eventStart = new Date(event.startDate);
+      return isSameDay(eventStart, date);
+    });
   };
 
   const statusColors: Record<string, string> = {
@@ -112,6 +153,8 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
             }
 
             const dayTasks = getTasksForDay(day);
+            const dayGoogleEvents = isMyTasks ? getGoogleEventsForDay(day) : [];
+            const totalItems = dayTasks.length + dayGoogleEvents.length;
             const isCurrentDay = isToday(day);
 
             return (
@@ -131,14 +174,15 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                   >
                     {format(day, 'd')}
                   </span>
-                  {dayTasks.length > 0 && (
+                  {totalItems > 0 && (
                     <span className="text-xs text-muted-foreground">
-                      {dayTasks.length}
+                      {totalItems}
                     </span>
                   )}
                 </div>
                 <div className="space-y-1 overflow-y-auto max-h-[60px]">
-                  {dayTasks.slice(0, 3).map((task) => (
+                  {/* App Tasks */}
+                  {dayTasks.slice(0, 2).map((task) => (
                     <div
                       key={task.id}
                       className={cn(
@@ -150,9 +194,20 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                       {task.title}
                     </div>
                   ))}
-                  {dayTasks.length > 3 && (
+                  {/* Google Calendar Events */}
+                  {dayGoogleEvents.slice(0, 2).map((event) => (
+                    <div
+                      key={event.id}
+                      className="text-xs px-1.5 py-0.5 rounded truncate cursor-pointer bg-blue-500/80 text-white flex items-center gap-1"
+                      title={`Google: ${event.title}`}
+                    >
+                      <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                      {event.title}
+                    </div>
+                  ))}
+                  {totalItems > 4 && (
                     <div className="text-xs text-muted-foreground px-1.5">
-                      +{dayTasks.length - 3} mais
+                      +{totalItems - 4} mais
                     </div>
                   )}
                 </div>
@@ -180,6 +235,12 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
           <div className="w-3 h-3 rounded bg-destructive" />
           <span className="text-muted-foreground">Atrasada</span>
         </div>
+        {isMyTasks && (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-blue-500" />
+            <span className="text-muted-foreground">Google Calendar</span>
+          </div>
+        )}
       </div>
     </div>
   );
