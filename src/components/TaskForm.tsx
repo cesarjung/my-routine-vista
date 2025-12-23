@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Plus, X, Loader2 } from 'lucide-react';
+import { CalendarIcon, Plus, X, Loader2, Users, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
+import { Badge } from '@/components/ui/badge';
 import {
   Form,
   FormControl,
@@ -31,39 +32,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
 
 import { useUnits } from '@/hooks/useUnits';
 import { useProfiles } from '@/hooks/useProfiles';
-import { useRoutines, type TaskFrequency } from '@/hooks/useRoutines';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
 import { useCreateTask, type SubtaskData } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Enums } from '@/integrations/supabase/types';
-
-const taskStatusLabels: Record<Enums<'task_status'>, string> = {
-  pendente: 'Pendente',
-  em_andamento: 'Em Andamento',
-  concluida: 'Concluída',
-  atrasada: 'Atrasada',
-  cancelada: 'Cancelada',
-};
-
-const frequencyLabels: Record<TaskFrequency, string> = {
-  diaria: 'Diária',
-  semanal: 'Semanal',
-  quinzenal: 'Quinzenal',
-  mensal: 'Mensal',
-  anual: 'Anual',
-  customizada: 'Customizada',
-};
 
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório').max(200, 'Título muito longo'),
   description: z.string().max(1000, 'Descrição muito longa').optional(),
-  unit_id: z.string().min(1, 'Unidade é obrigatória'),
-  assigned_to: z.string().optional(),
-  routine_id: z.string().optional(),
-  status: z.enum(['pendente', 'em_andamento', 'concluida', 'atrasada', 'cancelada']),
   priority: z.number().min(1).max(5),
   start_date: z.date().optional(),
   due_date: z.date().optional(),
@@ -80,12 +58,13 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
   const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('');
-  const [selectedUnitId, setSelectedUnitId] = useState<string>('');
+  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [unitError, setUnitError] = useState<string | null>(null);
 
   const { user } = useAuth();
   const { data: units, isLoading: loadingUnits } = useUnits();
-  const { data: profiles, isLoading: loadingProfiles } = useProfiles(selectedUnitId || undefined);
-  const { data: routines, isLoading: loadingRoutines } = useRoutines(selectedUnitId || undefined);
+  const { data: unitManagers } = useUnitManagers();
+  const { data: allProfiles } = useProfiles();
   const createTask = useCreateTask();
 
   const form = useForm<FormData>({
@@ -93,20 +72,44 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
     defaultValues: {
       title: '',
       description: '',
-      unit_id: '',
-      assigned_to: '',
-      routine_id: '',
-      status: 'pendente',
       priority: 1,
     },
   });
 
-  const handleUnitChange = (unitId: string) => {
-    setSelectedUnitId(unitId);
-    form.setValue('unit_id', unitId);
-    form.setValue('assigned_to', '');
-    form.setValue('routine_id', '');
-  };
+  const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
+
+  const getManagersForUnit = useCallback((unitId: string) => {
+    return unitManagers?.filter((m) => m.unit_id === unitId) || [];
+  }, [unitManagers]);
+
+  // Get all profiles from selected units for subtask assignment
+  const availableProfiles = useMemo(() => {
+    if (!allProfiles || selectedUnitIds.length === 0) return [];
+    return allProfiles.filter(p => 
+      p.unit_id && selectedUnitIds.includes(p.unit_id)
+    );
+  }, [allProfiles, selectedUnitIds]);
+
+  const toggleUnit = useCallback((unitId: string) => {
+    setUnitError(null);
+    setSelectedUnitIds(prev => {
+      if (prev.includes(unitId)) {
+        return prev.filter((id) => id !== unitId);
+      }
+      return [...prev, unitId];
+    });
+  }, []);
+
+  const selectAllUnits = useCallback(() => {
+    setUnitError(null);
+    if (units) {
+      setSelectedUnitIds(units.map((u) => u.id));
+    }
+  }, [units]);
+
+  const deselectAllUnits = useCallback(() => {
+    setSelectedUnitIds([]);
+  }, []);
 
   const addSubtask = () => {
     if (newSubtaskTitle.trim()) {
@@ -125,182 +128,78 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
 
   const getProfileName = (profileId: string | null | undefined) => {
     if (!profileId) return null;
-    const profile = profiles?.find(p => p.id === profileId);
+    const profile = allProfiles?.find(p => p.id === profileId);
     return profile?.full_name || profile?.email || null;
   };
 
   const onSubmit = async (data: FormData) => {
-    await createTask.mutateAsync({
-      task: {
-        title: data.title,
-        description: data.description || null,
-        unit_id: data.unit_id,
-        assigned_to: data.assigned_to && data.assigned_to !== 'none' ? data.assigned_to : null,
-        routine_id: data.routine_id && data.routine_id !== 'none' ? data.routine_id : null,
-        status: data.status,
-        priority: data.priority,
-        start_date: data.start_date?.toISOString() || null,
-        due_date: data.due_date?.toISOString() || null,
-        created_by: user?.id || null,
-      },
-      subtasks: subtasks.length > 0 ? subtasks : undefined,
-    });
+    if (selectedUnitIds.length === 0) {
+      setUnitError('Selecione pelo menos uma unidade');
+      return;
+    }
+
+    // Create a task for each selected unit
+    for (const unitId of selectedUnitIds) {
+      await createTask.mutateAsync({
+        task: {
+          title: data.title,
+          description: data.description || null,
+          unit_id: unitId,
+          assigned_to: user?.id || null, // Gestor é o responsável principal
+          status: 'pendente',
+          priority: data.priority,
+          start_date: data.start_date?.toISOString() || null,
+          due_date: data.due_date?.toISOString() || null,
+          created_by: user?.id || null,
+        },
+        subtasks: subtasks.length > 0 ? subtasks : undefined,
+      });
+    }
 
     form.reset();
     setSubtasks([]);
+    setSelectedUnitIds([]);
+    setUnitError(null);
     onSuccess?.();
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="title"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Título da Tarefa</FormLabel>
-                <FormControl>
-                  <Input placeholder="Digite o título..." {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex flex-col">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Título da Tarefa</FormLabel>
+              <FormControl>
+                <Input placeholder="Ex: Relatório mensal" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Descrição</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Descrição detalhada da tarefa..."
-                    className="resize-none"
-                    rows={3}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Descrição (opcional)</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Descreva a tarefa..."
+                  className="resize-none"
+                  rows={2}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <FormField
-            control={form.control}
-            name="unit_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Unidade</FormLabel>
-                <Select
-                  onValueChange={handleUnitChange}
-                  defaultValue={field.value}
-                  disabled={loadingUnits}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a unidade" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {units?.filter((u) => u.id).map((unit) => (
-                      <SelectItem key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="assigned_to"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Responsável</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                  disabled={!selectedUnitId || loadingProfiles}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o responsável" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {profiles?.filter((p) => p.id).map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.full_name || profile.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="routine_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Rotina (Recorrência)</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                  disabled={!selectedUnitId || loadingRoutines}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Vincular a uma rotina" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhuma</SelectItem>
-                    {routines?.filter((r) => r.id).map((routine) => (
-                      <SelectItem key={routine.id} value={routine.id}>
-                        {routine.title} ({frequencyLabels[routine.frequency]})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Status</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {Object.entries(taskStatusLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="priority"
@@ -333,7 +232,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
             control={form.control}
             name="start_date"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel>Data de Início</FormLabel>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -341,14 +240,14 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                       <Button
                         variant="outline"
                         className={cn(
-                          'w-full pl-3 text-left font-normal',
-                          !field.value && 'text-muted-foreground'
+                          "pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
                         )}
                       >
                         {field.value ? (
-                          format(field.value, 'PPP', { locale: ptBR })
+                          format(field.value, "dd/MM/yyyy", { locale: ptBR })
                         ) : (
-                          <span>Selecione a data</span>
+                          <span>Selecione</span>
                         )}
                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                       </Button>
@@ -360,47 +259,7 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
                       selected={field.value}
                       onSelect={field.onChange}
                       initialFocus
-                      className={cn('p-3 pointer-events-auto')}
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="due_date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data de Vencimento</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          'w-full pl-3 text-left font-normal',
-                          !field.value && 'text-muted-foreground'
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, 'PPP', { locale: ptBR })
-                        ) : (
-                          <span>Selecione a data</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      initialFocus
-                      className={cn('p-3 pointer-events-auto')}
+                      className="pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
@@ -410,9 +269,129 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
           />
         </div>
 
+        <FormField
+          control={form.control}
+          name="due_date"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Data de Vencimento</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                      ) : (
+                        <span>Selecione</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) => date < (form.getValues('start_date') || new Date())}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Units Selection */}
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2">
+            <FormLabel className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Unidades ({selectedUnitIds.length} selecionadas)
+            </FormLabel>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={selectAllUnits}
+                className="text-xs h-7"
+              >
+                Selecionar todas
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={deselectAllUnits}
+                className="text-xs h-7"
+              >
+                Limpar
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-32">
+            <div className="p-3 space-y-1">
+              {loadingUnits ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : units && units.length > 0 ? (
+                units.map((unit) => {
+                  const managers = getManagersForUnit(unit.id);
+                  const isSelected = selectedSet.has(unit.id);
+                  
+                  return (
+                    <div
+                      key={unit.id}
+                      onClick={() => toggleUnit(unit.id)}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors",
+                        isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'
+                      )}
+                    >
+                      <div className={cn(
+                        "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
+                        isSelected ? 'bg-primary border-primary' : 'border-input'
+                      )}>
+                        {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{unit.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {managers.length > 0 
+                            ? `Responsável: ${managers.map(m => m.profile?.full_name || m.profile?.email).join(', ')}`
+                            : 'Sem responsável definido'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-center py-4 text-muted-foreground text-sm">
+                  Nenhuma unidade cadastrada
+                </p>
+              )}
+            </div>
+          </div>
+          {unitError && (
+            <p className="text-sm font-medium text-destructive mt-1">{unitError}</p>
+          )}
+        </div>
+
         {/* Subtasks / Checklist */}
         <div className="space-y-3">
-          <FormLabel>Subtarefas / Checklist</FormLabel>
+          <FormLabel>Subtarefas com Responsáveis</FormLabel>
           <div className="flex gap-2">
             <Input
               placeholder="Título da subtarefa..."
@@ -429,14 +408,14 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
             <Select
               value={newSubtaskAssignee}
               onValueChange={setNewSubtaskAssignee}
-              disabled={!selectedUnitId || loadingProfiles}
+              disabled={selectedUnitIds.length === 0}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Responsável" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Nenhum</SelectItem>
-                {profiles?.filter((p) => p.id).map((profile) => (
+                {availableProfiles.map((profile) => (
                   <SelectItem key={profile.id} value={profile.id}>
                     {profile.full_name || profile.email}
                   </SelectItem>
@@ -447,6 +426,9 @@ export const TaskForm = ({ onSuccess, onCancel }: TaskFormProps) => {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Os responsáveis das subtarefas só podem marcar suas próprias subtarefas como concluídas.
+          </p>
 
           {subtasks.length > 0 && (
             <div className="space-y-2 border border-border rounded-lg p-3">
