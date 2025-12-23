@@ -66,6 +66,7 @@ const formSchema = z.object({
   is_recurring: z.boolean().optional(),
   recurrence_frequency: z.enum(['diaria', 'semanal', 'quinzenal', 'mensal'] as const).optional(),
   recurrence_mode: z.enum(['schedule', 'on_completion'] as const).optional(),
+  skip_weekends_holidays: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -101,6 +102,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
       is_recurring: false,
       recurrence_frequency: 'semanal',
       recurrence_mode: 'schedule',
+      skip_weekends_holidays: false,
     },
   });
 
@@ -208,6 +210,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
       recurrence_frequency: data.is_recurring ? data.recurrence_frequency : undefined,
       recurrence_mode: data.is_recurring ? data.recurrence_mode : undefined,
       sector_id: sectorId,
+      skip_weekends_holidays: data.skip_weekends_holidays || false,
     });
 
     form.reset();
@@ -490,6 +493,29 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
                 {recurrenceModeOptions.find(o => o.value === field.value)?.description}
               </p>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="skip_weekends_holidays"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+              <div className="space-y-0.5">
+                <FormLabel className="text-sm font-medium">
+                  Ignorar feriados e finais de semana
+                </FormLabel>
+                <FormDescription className="text-xs">
+                  Tarefas não serão criadas em sábados, domingos ou feriados nacionais
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
             </FormItem>
           )}
         />
