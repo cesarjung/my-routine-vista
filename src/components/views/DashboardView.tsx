@@ -1,8 +1,19 @@
+import { useState } from 'react';
 import { FrequencyCard } from '@/components/FrequencyCard';
 import { StatsOverview } from '@/components/StatsOverview';
 import { SummaryTable } from '@/components/SummaryTable';
 import { useFrequencySummary, useUnitsSummary, useResponsiblesSummary } from '@/hooks/useDashboardData';
-import { Building2, Users, Loader2 } from 'lucide-react';
+import { useSectors } from '@/hooks/useSectors';
+import { Building2, Users, Loader2, LayoutGrid, Layers } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 const frequencyLabelsMap: Record<string, string> = {
   diaria: 'Diárias',
@@ -12,18 +23,81 @@ const frequencyLabelsMap: Record<string, string> = {
 };
 
 export const DashboardView = () => {
-  const { data: frequencySummary, isLoading: loadingFrequency } = useFrequencySummary();
-  const { data: unitsSummary, isLoading: loadingUnits } = useUnitsSummary();
-  const { data: responsiblesSummary, isLoading: loadingResponsibles } = useResponsiblesSummary();
+  const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
+  
+  const { data: sectors, isLoading: loadingSectors } = useSectors();
+  const { data: frequencySummary, isLoading: loadingFrequency } = useFrequencySummary(selectedSectorId);
+  const { data: unitsSummary, isLoading: loadingUnits } = useUnitsSummary(selectedSectorId);
+  const { data: responsiblesSummary, isLoading: loadingResponsibles } = useResponsiblesSummary(selectedSectorId);
+
+  const selectedSector = sectors?.find(s => s.id === selectedSectorId);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Dashboard</h1>
-        <p className="text-muted-foreground">Visão geral das rotinas e tarefas</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-1 flex items-center gap-2">
+            Dashboard
+            {selectedSector && (
+              <Badge 
+                variant="secondary" 
+                className="ml-2"
+                style={{ 
+                  backgroundColor: `${selectedSector.color}20`,
+                  color: selectedSector.color,
+                  borderColor: selectedSector.color
+                }}
+              >
+                {selectedSector.name}
+              </Badge>
+            )}
+          </h1>
+          <p className="text-muted-foreground">
+            {selectedSector 
+              ? `Visão do setor ${selectedSector.name}` 
+              : 'Visão geral de todos os setores'}
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-muted-foreground" />
+          <Select
+            value={selectedSectorId || 'all'}
+            onValueChange={(value) => setSelectedSectorId(value === 'all' ? null : value)}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Selecionar setor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4" />
+                  <span>Todos os Setores</span>
+                </div>
+              </SelectItem>
+              {loadingSectors ? (
+                <div className="p-2 flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </div>
+              ) : (
+                sectors?.map(sector => (
+                  <SelectItem key={sector.id} value={sector.id}>
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded-full" 
+                        style={{ backgroundColor: sector.color || '#6366f1' }}
+                      />
+                      <span>{sector.name}</span>
+                    </div>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <StatsOverview />
+      <StatsOverview sectorId={selectedSectorId} />
 
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-4">Rotinas por Frequência</h2>

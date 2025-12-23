@@ -1,9 +1,13 @@
-import { CheckCircle2, Clock, ListTodo, TrendingUp, Loader2 } from 'lucide-react';
+import { CheckCircle2, Clock, ListTodo, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOverallStats } from '@/hooks/useDashboardData';
 
-export const StatsOverview = () => {
-  const { data: statsData, isLoading } = useOverallStats();
+interface StatsOverviewProps {
+  sectorId?: string | null;
+}
+
+export const StatsOverview = ({ sectorId }: StatsOverviewProps) => {
+  const { data: statsData, isLoading } = useOverallStats(sectorId);
 
   if (isLoading) {
     return (
