@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, Users, Loader2, CheckCircle2 } from 'lucide-react';
+import { Building2, Users, Loader2, CheckCircle2, Maximize2, Minimize2, X } from 'lucide-react';
 import { useUnitRoutineStatus, useResponsibleRoutineStatus, useOverallStats } from '@/hooks/useDashboardData';
 import { useDashboardPanels } from '@/hooks/useDashboardPanels';
 import { useSectors } from '@/hooks/useSectors';
@@ -17,8 +17,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
 import { CustomPanel } from '@/components/dashboard/CustomPanel';
+import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -131,6 +133,7 @@ const ResizablePanel = ({ title, icon: Icon, count, children, defaultHeight = 28
 
 export const DashboardView = () => {
   const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const { data: sectors } = useSectors();
   const { data: statsData } = useOverallStats(selectedSectorId);
@@ -140,6 +143,123 @@ export const DashboardView = () => {
 
   const isLoading = loadingUnits || loadingResponsibles;
   const overallPercentage = statsData?.percentage || 0;
+
+  // Fullscreen view
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background overflow-auto">
+        {/* Fullscreen Header */}
+        <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-8 py-4 flex items-center justify-between">
+          <img src={sirtecLogoHeader} alt="Sirtec" className="h-12 object-contain" />
+          <h1 className="text-2xl font-bold text-foreground">Gerenciamento de Rotinas</h1>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => setIsFullscreen(false)}
+            className="hover:bg-destructive/10"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </header>
+
+        {/* Fullscreen Content */}
+        <div className="p-8 space-y-6">
+          {/* Legend */}
+          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+            <span><b>D</b>=Diária <b>S</b>=Semanal <b>Q</b>=Quinzenal <b>M</b>=Mensal</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-success/30" />100%</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-500/30" />≥70%</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-warning/30" />≥40%</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-destructive/30" />&lt;40%</span>
+          </div>
+
+          {/* Custom Panels */}
+          {customPanels && customPanels.length > 0 && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+              {customPanels.map(panel => (
+                <CustomPanel key={panel.id} panel={panel} />
+              ))}
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground font-medium">Painéis Padrão</p>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                {/* Units Panel */}
+                <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0} defaultHeight={400}>
+                  {unitStatus?.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">Sem dados</div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-card z-10">
+                        <tr className="border-b border-border">
+                          <th className="text-left p-3 font-medium text-muted-foreground">Nome</th>
+                          {FREQUENCIES.map(f => <th key={f} className="p-2 text-center font-medium text-muted-foreground w-12">{FREQUENCY_LABELS[f]}</th>)}
+                          <th className="p-3 text-right font-medium text-muted-foreground w-14">%</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {unitStatus?.map(unit => (
+                          <tr key={unit.id} className="hover:bg-secondary/20">
+                            <td className="p-3">
+                              <p className="font-medium text-foreground">{unit.name}</p>
+                            </td>
+                            {FREQUENCIES.map(f => (
+                              <td key={f} className="p-2 text-center">
+                                <StatusBadge data={unit.frequencies[f]} frequency={f} />
+                              </td>
+                            ))}
+                            <td className="p-3 text-right"><TotalBadge data={unit.totals} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </ResizablePanel>
+
+                {/* Responsibles Panel */}
+                <ResizablePanel title="Responsáveis" icon={Users} count={responsibleStatus?.length || 0} defaultHeight={400}>
+                  {responsibleStatus?.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">Sem dados</div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-card z-10">
+                        <tr className="border-b border-border">
+                          <th className="text-left p-3 font-medium text-muted-foreground">Nome</th>
+                          {FREQUENCIES.map(f => <th key={f} className="p-2 text-center font-medium text-muted-foreground w-12">{FREQUENCY_LABELS[f]}</th>)}
+                          <th className="p-3 text-right font-medium text-muted-foreground w-14">%</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {responsibleStatus?.map(person => (
+                          <tr key={person.id} className="hover:bg-secondary/20">
+                            <td className="p-3">
+                              <p className="font-medium text-foreground">{person.name}</p>
+                            </td>
+                            {FREQUENCIES.map(f => (
+                              <td key={f} className="p-2 text-center">
+                                <StatusBadge data={person.frequencies[f]} frequency={f} />
+                              </td>
+                            ))}
+                            <td className="p-3 text-right"><TotalBadge data={person.totals} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </ResizablePanel>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -158,6 +278,24 @@ export const DashboardView = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsFullscreen(true)}
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Tela cheia</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           <PanelFormDialog panelCount={customPanels?.length || 0} />
           
           <Select
