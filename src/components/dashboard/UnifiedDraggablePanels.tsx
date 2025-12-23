@@ -43,6 +43,9 @@ const useDashboardLayout = () => {
       if (error) throw error;
       return data;
     },
+    // Refetch periodically to get updates from admin
+    refetchInterval: 30000, // Every 30 seconds
+    staleTime: 10000, // Consider stale after 10 seconds
   });
 };
 
