@@ -120,37 +120,55 @@ export const UnifiedDraggablePanels = ({
   };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(index));
-    
+    // Set drag image to the current target
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 50, 50);
+    }
+    // Use setTimeout to allow the drag to start before updating state
     setTimeout(() => {
-      const element = e.target as HTMLElement;
-      element.style.opacity = '0.5';
+      setDraggedIndex(index);
     }, 0);
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    const element = e.target as HTMLElement;
-    element.style.opacity = '1';
+  const handleDragEnd = () => {
     setDraggedIndex(null);
     setDragOverIndex(null);
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    if (index !== draggedIndex && draggedIndex !== null) {
+    
+    if (draggedIndex !== null && index !== draggedIndex) {
       setDragOverIndex(index);
     }
   };
 
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
+  const handleDragEnter = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (draggedIndex !== null && index !== draggedIndex) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only clear if leaving the actual drop zone
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!e.currentTarget.contains(relatedTarget)) {
+      setDragOverIndex(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     
     if (draggedIndex === null || draggedIndex === targetIndex) {
       setDraggedIndex(null);
@@ -215,21 +233,30 @@ export const UnifiedDraggablePanels = ({
           onDragStart={(e) => handleDragStart(e, index)}
           onDragEnd={handleDragEnd}
           onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnter={(e) => handleDragEnter(e, index)}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, index)}
           className={cn(
-            'relative group transition-all duration-200 cursor-grab active:cursor-grabbing',
-            draggedIndex === index && 'opacity-50 scale-[0.98]',
-            dragOverIndex === index && draggedIndex !== index && 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg'
+            'relative transition-all duration-200 cursor-grab active:cursor-grabbing',
+            draggedIndex === index && 'opacity-40 scale-[0.98]',
+            dragOverIndex === index && draggedIndex !== index && 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg scale-[1.02]'
           )}
         >
           {/* Drag Handle - Always visible */}
-          <div className="absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center cursor-grab active:cursor-grabbing bg-gradient-to-r from-muted/80 to-transparent rounded-l-lg opacity-60 hover:opacity-100 transition-opacity">
+          <div 
+            className={cn(
+              "absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center cursor-grab active:cursor-grabbing bg-gradient-to-r from-muted/80 to-transparent rounded-l-lg opacity-60 hover:opacity-100 transition-opacity",
+              draggedIndex !== null && "pointer-events-none"
+            )}
+          >
             <GripVertical className="w-4 h-4 text-muted-foreground" />
           </div>
           
           {/* Panel with left padding to accommodate grip */}
-          <div className="pl-6">
+          <div className={cn(
+            "pl-6",
+            draggedIndex !== null && "pointer-events-none"
+          )}>
             {renderPanelContent(panel)}
           </div>
         </div>
