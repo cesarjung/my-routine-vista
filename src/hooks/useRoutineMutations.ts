@@ -233,14 +233,13 @@ export const useCreateRoutineWithUnits = () => {
 
         if (tasksError) throw tasksError;
       } else {
-        // No units selected
-        // For admin/gestor without unit_id, they MUST select at least one unit
-        if (isAdminOrGestor && !userUnitId) {
-          throw new Error('Como administrador ou gestor, você deve selecionar pelo menos uma unidade.');
-        }
-        
-        // For regular users, use their own unit_id
+        // No units selected - create a simple task for the user's own unit
+        // Regular users MUST have a unit_id
+        // Admins/Gestors can create without selecting units IF they have a unit_id
         if (!userUnitId) {
+          if (isAdminOrGestor) {
+            throw new Error('Selecione pelo menos uma unidade ou associe seu perfil a uma unidade.');
+          }
           throw new Error('Você precisa estar associado a uma unidade para criar rotinas.');
         }
 
