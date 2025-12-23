@@ -33,28 +33,39 @@ export interface ResponsibleSummary {
   total: number;
 }
 
-export const useFrequencySummary = () => {
+export const useFrequencySummary = (sectorId?: string | null) => {
   return useQuery({
-    queryKey: ['frequency-summary'],
+    queryKey: ['frequency-summary', sectorId],
     queryFn: async () => {
       const frequencies: TaskFrequency[] = ['diaria', 'semanal', 'quinzenal', 'mensal'];
       const summaries: FrequencySummary[] = [];
 
       for (const freq of frequencies) {
         // Count routines by frequency
-        const { count: routineCount } = await supabase
+        let routineQuery = supabase
           .from('routines')
           .select('*', { count: 'exact', head: true })
           .eq('frequency', freq)
           .eq('is_active', true);
+        
+        if (sectorId) {
+          routineQuery = routineQuery.eq('sector_id', sectorId);
+        }
+
+        const { count: routineCount } = await routineQuery;
 
         // Get tasks from routines with this frequency
-        const { data: routines } = await supabase
+        let routinesQuery = supabase
           .from('routines')
           .select('id')
           .eq('frequency', freq)
           .eq('is_active', true);
+        
+        if (sectorId) {
+          routinesQuery = routinesQuery.eq('sector_id', sectorId);
+        }
 
+        const { data: routines } = await routinesQuery;
         const routineIds = routines?.map(r => r.id) || [];
         
         let taskCount = 0;
@@ -62,10 +73,16 @@ export const useFrequencySummary = () => {
         let pending = 0;
 
         if (routineIds.length > 0) {
-          const { data: tasks } = await supabase
+          let tasksQuery = supabase
             .from('tasks')
             .select('status')
             .in('routine_id', routineIds);
+          
+          if (sectorId) {
+            tasksQuery = tasksQuery.eq('sector_id', sectorId);
+          }
+
+          const { data: tasks } = await tasksQuery;
 
           taskCount = tasks?.length || 0;
           completed = tasks?.filter(t => t.status === 'concluida').length || 0;
@@ -88,9 +105,9 @@ export const useFrequencySummary = () => {
   });
 };
 
-export const useUnitsSummary = () => {
+export const useUnitsSummary = (sectorId?: string | null) => {
   return useQuery({
-    queryKey: ['units-summary'],
+    queryKey: ['units-summary', sectorId],
     queryFn: async () => {
       const { data: units, error: unitsError } = await supabase
         .from('units')
@@ -102,33 +119,43 @@ export const useUnitsSummary = () => {
       const summaries: UnitSummary[] = [];
 
       for (const unit of units || []) {
-        const { data: tasks } = await supabase
+        let tasksQuery = supabase
           .from('tasks')
           .select('status')
           .eq('unit_id', unit.id);
+        
+        if (sectorId) {
+          tasksQuery = tasksQuery.eq('sector_id', sectorId);
+        }
+
+        const { data: tasks } = await tasksQuery;
 
         const completed = tasks?.filter(t => t.status === 'concluida').length || 0;
         const pending = tasks?.filter(t => t.status !== 'concluida').length || 0;
+        const total = completed + pending;
 
-        summaries.push({
-          id: unit.id,
-          name: unit.name,
-          code: unit.code,
-          description: unit.description,
-          completed,
-          pending,
-          total: completed + pending,
-        });
+        // Only include units that have tasks (for the selected sector if filtered)
+        if (total > 0 || !sectorId) {
+          summaries.push({
+            id: unit.id,
+            name: unit.name,
+            code: unit.code,
+            description: unit.description,
+            completed,
+            pending,
+            total,
+          });
+        }
       }
 
-      return summaries;
+      return summaries.filter(s => s.total > 0 || !sectorId);
     },
   });
 };
 
-export const useResponsiblesSummary = () => {
+export const useResponsiblesSummary = (sectorId?: string | null) => {
   return useQuery({
-    queryKey: ['responsibles-summary'],
+    queryKey: ['responsibles-summary', sectorId],
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
@@ -140,10 +167,16 @@ export const useResponsiblesSummary = () => {
       const summaries: ResponsibleSummary[] = [];
 
       for (const profile of profiles || []) {
-        const { data: tasks } = await supabase
+        let tasksQuery = supabase
           .from('tasks')
           .select('status')
           .eq('assigned_to', profile.id);
+        
+        if (sectorId) {
+          tasksQuery = tasksQuery.eq('sector_id', sectorId);
+        }
+
+        const { data: tasks } = await tasksQuery;
 
         const completed = tasks?.filter(t => t.status === 'concluida').length || 0;
         const pending = tasks?.filter(t => t.status !== 'concluida').length || 0;
@@ -166,18 +199,30 @@ export const useResponsiblesSummary = () => {
   });
 };
 
-export const useOverallStats = () => {
+export const useOverallStats = (sectorId?: string | null) => {
   return useQuery({
-    queryKey: ['overall-stats'],
+    queryKey: ['overall-stats', sectorId],
     queryFn: async () => {
-      const { count: routineCount } = await supabase
+      let routineQuery = supabase
         .from('routines')
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true);
+      
+      if (sectorId) {
+        routineQuery = routineQuery.eq('sector_id', sectorId);
+      }
 
-      const { data: tasks } = await supabase
+      const { count: routineCount } = await routineQuery;
+
+      let tasksQuery = supabase
         .from('tasks')
         .select('status');
+      
+      if (sectorId) {
+        tasksQuery = tasksQuery.eq('sector_id', sectorId);
+      }
+
+      const { data: tasks } = await tasksQuery;
 
       const total = tasks?.length || 0;
       const completed = tasks?.filter(t => t.status === 'concluida').length || 0;
