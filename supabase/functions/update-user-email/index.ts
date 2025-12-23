@@ -9,6 +9,20 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Input validation
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 255;
+
+function isValidUUID(str: string): boolean {
+  return UUID_REGEX.test(str);
+}
+
+function isValidEmail(email: string): boolean {
+  if (!email || email.length > MAX_EMAIL_LENGTH) return false;
+  return EMAIL_REGEX.test(email);
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -18,7 +32,10 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("Authorization header required");
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Create admin client with service role
@@ -34,8 +51,11 @@ serve(async (req) => {
     const { data: { user: requestingUser }, error: userError } = await supabaseAdmin.auth.getUser(token);
 
     if (userError || !requestingUser) {
-      console.error("User verification failed:", userError);
-      throw new Error("Unauthorized");
+      console.error("User verification failed");
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Check if requesting user is admin
@@ -46,23 +66,41 @@ serve(async (req) => {
       .single();
 
     if (roleData?.role !== "admin") {
-      throw new Error("Apenas administradores podem alterar emails");
+      return new Response(JSON.stringify({ error: "Acesso negado" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { userId, newEmail } = body;
 
-    if (!userId || !newEmail) {
-      throw new Error("userId e newEmail são obrigatórios");
+    // Validate userId
+    if (!userId || !isValidUUID(userId)) {
+      return new Response(JSON.stringify({ error: "ID do usuário inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmail)) {
-      throw new Error("Formato de email inválido");
+    // Validate email
+    if (!newEmail || !isValidEmail(newEmail)) {
+      return new Response(JSON.stringify({ error: "Formato de email inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log(`Admin ${requestingUser.email} updating email for user ${userId} to ${newEmail}`);
+    console.log(`Admin ${requestingUser.id} updating email for user ${userId}`);
 
     // Update user email using admin API
     const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
@@ -71,8 +109,11 @@ serve(async (req) => {
     );
 
     if (updateError) {
-      console.error("Error updating user email:", updateError);
-      throw new Error(updateError.message);
+      console.error("Error updating user email:", updateError.message);
+      return new Response(JSON.stringify({ error: "Erro ao atualizar email" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Also update the profiles table
@@ -82,7 +123,7 @@ serve(async (req) => {
       .eq("id", userId);
 
     if (profileError) {
-      console.error("Error updating profile email:", profileError);
+      console.error("Error updating profile email:", profileError.message);
       // Don't throw - the auth email was updated successfully
     }
 
@@ -100,12 +141,11 @@ serve(async (req) => {
     );
 
   } catch (error: unknown) {
-    console.error("Error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Error:", error instanceof Error ? error.message : "Unknown error");
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: "Erro interno. Tente novamente." }),
       {
-        status: 400,
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

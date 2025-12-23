@@ -25,6 +25,9 @@ interface UseGoogleCalendarReturn {
   importEvent: (eventId: string, unitId: string) => Promise<boolean>;
 }
 
+// Use environment variable for Supabase URL
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
 export function useGoogleCalendar(): UseGoogleCalendarReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,7 +53,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
 
     try {
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-auth?action=status`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-auth?action=status`,
         { headers }
       );
       
@@ -80,7 +83,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
       const saveTokens = async () => {
         try {
           const response = await fetch(
-            `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-auth?action=save-tokens`,
+            `${SUPABASE_URL}/functions/v1/google-calendar-auth?action=save-tokens`,
             {
               method: 'POST',
               headers: {
@@ -142,7 +145,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
       const redirectUri = window.location.origin + window.location.pathname;
       
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-auth?action=auth-url&redirect_uri=${encodeURIComponent(redirectUri)}`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-auth?action=auth-url&redirect_uri=${encodeURIComponent(redirectUri)}`,
         {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
@@ -174,7 +177,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
 
     try {
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-auth?action=disconnect`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-auth?action=disconnect`,
         {
           method: 'POST',
           headers,
@@ -212,7 +215,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
 
     try {
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-sync?action=create-event`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-sync?action=create-event`,
         {
           method: 'POST',
           headers,
@@ -260,7 +263,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
 
     try {
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-sync?action=update-event`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-sync?action=update-event`,
         {
           method: 'POST',
           headers,
@@ -288,7 +291,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
 
     try {
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-sync?action=delete-event`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-sync?action=delete-event`,
         {
           method: 'POST',
           headers,
@@ -317,7 +320,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
       if (timeMax) params.set('timeMax', timeMax);
 
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-sync?${params}`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-sync?${params}`,
         { headers }
       );
 
@@ -344,7 +347,7 @@ export function useGoogleCalendar(): UseGoogleCalendarReturn {
 
     try {
       const response = await fetch(
-        `https://djnysigashxtjfhxpzyj.supabase.co/functions/v1/google-calendar-sync?action=import-event`,
+        `${SUPABASE_URL}/functions/v1/google-calendar-sync?action=import-event`,
         {
           method: 'POST',
           headers,
