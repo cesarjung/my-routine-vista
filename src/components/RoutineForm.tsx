@@ -87,6 +87,10 @@ export const RoutineForm = () => {
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: allProfiles } = useProfiles();
+  
+  // Get current user's profile to check if they have a unit_id
+  const currentUserProfile = allProfiles?.find(p => p.id === user?.id);
+  const userHasUnit = !!currentUserProfile?.unit_id;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -158,8 +162,12 @@ export const RoutineForm = () => {
   };
 
   const onSubmit = async (data: FormValues) => {
-    // Usuários regulares precisam ter unidade associada
-    // Gestores/Admins podem criar sem unidade selecionada
+    // Admins/Gestores sem unidade no perfil DEVEM selecionar pelo menos uma unidade
+    // Usuários regulares usam sua unidade do perfil automaticamente
+    if (isGestorOrAdmin && !userHasUnit && unitAssignments.length === 0) {
+      setUnitError('Por favor, selecione pelo menos uma unidade para a rotina.');
+      return;
+    }
     
     await createRoutine.mutateAsync({
       title: data.title,
