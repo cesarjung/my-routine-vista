@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import {
   Form,
   FormControl,
@@ -38,16 +37,15 @@ import {
 import { Plus, Loader2, Users, Check, CalendarIcon, X } from 'lucide-react';
 import { useCreateRoutineWithUnits } from '@/hooks/useRoutineMutations';
 import { useUnits } from '@/hooks/useUnits';
-import { useUnitManagers } from '@/hooks/useUnitManagers';
 import { useProfiles } from '@/hooks/useProfiles';
 import { cn } from '@/lib/utils';
 import type { Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
-interface SubtaskData {
-  title: string;
-  assigned_to: string | null;
+interface UnitAssignment {
+  unitId: string;
+  assignedTo: string | null;
 }
 
 const frequencyOptions: { value: TaskFrequency; label: string }[] = [
@@ -70,15 +68,11 @@ type FormValues = z.infer<typeof formSchema>;
 
 export const RoutineForm = () => {
   const [open, setOpen] = useState(false);
-  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
-  const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>('');
   
   const createRoutine = useCreateRoutineWithUnits();
   const { data: units, isLoading: loadingUnits } = useUnits();
-  const { data: unitManagers } = useUnitManagers();
   const { data: allProfiles } = useProfiles();
 
   const form = useForm<FormValues>({
@@ -96,55 +90,42 @@ export const RoutineForm = () => {
   const repeatForever = form.watch('repeatForever');
 
   // Create a Set for O(1) lookup
+  const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
 
-  const getManagersForUnit = useCallback((unitId: string) => {
-    return unitManagers?.filter((m) => m.unit_id === unitId) || [];
-  }, [unitManagers]);
-
-  // Get all profiles from selected units for subtask assignment
-  const availableProfiles = useMemo(() => {
-    if (!allProfiles || selectedUnitIds.length === 0) return [];
-    return allProfiles.filter(p => 
-      p.unit_id && selectedUnitIds.includes(p.unit_id)
-    );
-  }, [allProfiles, selectedUnitIds]);
+  // Get profiles for a specific unit
+  const getProfilesForUnit = useCallback((unitId: string) => {
+    if (!allProfiles) return [];
+    return allProfiles.filter(p => p.unit_id === unitId);
+  }, [allProfiles]);
 
   const toggleUnit = useCallback((unitId: string) => {
     setUnitError(null);
-    setSelectedUnitIds(prev => {
-      if (prev.includes(unitId)) {
-        return prev.filter((id) => id !== unitId);
+    setUnitAssignments(prev => {
+      const exists = prev.find(a => a.unitId === unitId);
+      if (exists) {
+        return prev.filter(a => a.unitId !== unitId);
       }
-      return [...prev, unitId];
+      return [...prev, { unitId, assignedTo: null }];
     });
+  }, []);
+
+  const updateUnitAssignee = useCallback((unitId: string, assignedTo: string | null) => {
+    setUnitAssignments(prev => 
+      prev.map(a => a.unitId === unitId ? { ...a, assignedTo } : a)
+    );
   }, []);
 
   const selectAllUnits = useCallback(() => {
     setUnitError(null);
     if (units) {
-      setSelectedUnitIds(units.map((u) => u.id));
+      setUnitAssignments(units.map(u => ({ unitId: u.id, assignedTo: null })));
     }
   }, [units]);
 
   const deselectAllUnits = useCallback(() => {
-    setSelectedUnitIds([]);
+    setUnitAssignments([]);
   }, []);
-
-  const addSubtask = () => {
-    if (newSubtaskTitle.trim()) {
-      setSubtasks([...subtasks, { 
-        title: newSubtaskTitle.trim(), 
-        assigned_to: newSubtaskAssignee && newSubtaskAssignee !== 'none' ? newSubtaskAssignee : null 
-      }]);
-      setNewSubtaskTitle('');
-      setNewSubtaskAssignee('');
-    }
-  };
-
-  const removeSubtask = (index: number) => {
-    setSubtasks(subtasks.filter((_, i) => i !== index));
-  };
 
   const getProfileName = (profileId: string | null | undefined) => {
     if (!profileId) return null;
@@ -153,7 +134,7 @@ export const RoutineForm = () => {
   };
 
   const onSubmit = async (data: FormValues) => {
-    if (selectedUnitIds.length === 0) {
+    if (unitAssignments.length === 0) {
       setUnitError('Selecione pelo menos uma unidade');
       return;
     }
@@ -162,12 +143,10 @@ export const RoutineForm = () => {
       title: data.title,
       description: data.description,
       frequency: data.frequency,
-      unitIds: selectedUnitIds,
-      subtasks: subtasks.length > 0 ? subtasks : undefined,
+      unitAssignments: unitAssignments,
     });
     form.reset();
-    setSelectedUnitIds([]);
-    setSubtasks([]);
+    setUnitAssignments([]);
     setUnitError(null);
     setOpen(false);
   };
@@ -360,12 +339,12 @@ export const RoutineForm = () => {
               )}
             />
 
-            {/* Units Selection */}
+            {/* Units Selection with Responsible per Unit */}
             <div className="flex flex-col">
               <div className="flex items-center justify-between mb-2">
                 <FormLabel className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  Unidades ({selectedUnitIds.length} selecionadas)
+                  Unidades e Responsáveis ({unitAssignments.length} selecionadas)
                 </FormLabel>
                 <div className="flex gap-2">
                   <Button
@@ -390,41 +369,66 @@ export const RoutineForm = () => {
               </div>
               
               {/* Native scroll container */}
-              <div className="border border-border rounded-md overflow-y-auto max-h-32">
-                <div className="p-3 space-y-1">
+              <div className="border border-border rounded-md overflow-y-auto max-h-60">
+                <div className="p-3 space-y-2">
                   {loadingUnits ? (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                   ) : units && units.length > 0 ? (
                     units.map((unit) => {
-                      const managers = getManagersForUnit(unit.id);
                       const isSelected = selectedSet.has(unit.id);
+                      const assignment = unitAssignments.find(a => a.unitId === unit.id);
+                      const profilesForUnit = getProfilesForUnit(unit.id);
                       
                       return (
                         <div
                           key={unit.id}
-                          onClick={() => toggleUnit(unit.id)}
                           className={cn(
-                            "flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors",
-                            isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'
+                            "rounded-md border transition-colors",
+                            isSelected ? 'bg-primary/10 border-primary/30' : 'border-transparent hover:bg-secondary/50'
                           )}
                         >
-                          <div className={cn(
-                            "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
-                            isSelected ? 'bg-primary border-primary' : 'border-input'
-                          )}>
-                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                          <div
+                            onClick={() => toggleUnit(unit.id)}
+                            className="flex items-center gap-3 p-3 cursor-pointer"
+                          >
+                            <div className={cn(
+                              "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
+                              isSelected ? 'bg-primary border-primary' : 'border-input'
+                            )}>
+                              {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{unit.name}</p>
+                              <p className="text-xs text-muted-foreground">{unit.code}</p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{unit.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {managers.length > 0 
-                                ? `Responsável: ${managers.map(m => m.profile?.full_name || m.profile?.email).join(', ')}`
-                                : 'Sem responsável definido'
-                              }
-                            </p>
-                          </div>
+                          
+                          {/* Responsible dropdown - only show when unit is selected */}
+                          {isSelected && (
+                            <div className="px-3 pb-3 pt-0">
+                              <div className="flex items-center gap-2 pl-7">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">Responsável:</span>
+                                <Select
+                                  value={assignment?.assignedTo || 'none'}
+                                  onValueChange={(value) => updateUnitAssignee(unit.id, value === 'none' ? null : value)}
+                                >
+                                  <SelectTrigger className="h-8 text-xs flex-1" onClick={(e) => e.stopPropagation()}>
+                                    <SelectValue placeholder="Selecionar..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Sem responsável</SelectItem>
+                                    {profilesForUnit.map((profile) => (
+                                      <SelectItem key={profile.id} value={profile.id}>
+                                        {profile.full_name || profile.email}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -440,94 +444,20 @@ export const RoutineForm = () => {
               )}
             </div>
 
-            {/* Subtasks / Checklist */}
-            <div className="space-y-3">
-              <FormLabel>Subtarefas com Responsáveis</FormLabel>
-              
-              {selectedUnitIds.length === 0 ? (
-                <p className="text-sm text-muted-foreground p-3 border border-dashed border-border rounded-md text-center">
-                  Selecione pelo menos uma unidade acima para adicionar subtarefas
-                </p>
-              ) : (
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={createRoutine.isPending}
+            >
+              {createRoutine.isPending ? (
                 <>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Título da subtarefa..."
-                      value={newSubtaskTitle}
-                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addSubtask();
-                        }
-                      }}
-                      className="flex-1"
-                    />
-                    <Select
-                      value={newSubtaskAssignee}
-                      onValueChange={setNewSubtaskAssignee}
-                    >
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Responsável" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sem responsável</SelectItem>
-                        {availableProfiles.map((profile) => (
-                          <SelectItem key={profile.id} value={profile.id}>
-                            {profile.full_name || profile.email}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button type="button" variant="outline" size="icon" onClick={addSubtask} disabled={!newSubtaskTitle.trim()}>
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Os responsáveis só podem marcar suas próprias subtarefas
-                  </p>
-                </>
-              )}
-
-              {subtasks.length > 0 && (
-                <div className="space-y-2 border border-border rounded-lg p-3 max-h-32 overflow-y-auto">
-                  {subtasks.map((subtask, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded"
-                    >
-                      <span className="flex-1 text-sm">{subtask.title}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {getProfileName(subtask.assigned_to) || 'Sem responsável'}
-                      </Badge>
-                      <button
-                        type="button"
-                        onClick={() => removeSubtask(index)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-border">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={createRoutine.isPending}>
-                {createRoutine.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Criar Rotina
-              </Button>
-            </div>
+                  Criando...
+                </>
+              ) : (
+                'Criar Rotina'
+              )}
+            </Button>
           </form>
         </Form>
       </DialogContent>

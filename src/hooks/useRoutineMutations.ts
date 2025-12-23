@@ -5,9 +5,9 @@ import type { Enums } from '@/integrations/supabase/types';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
-interface SubtaskData {
-  title: string;
-  assigned_to: string | null;
+interface UnitAssignment {
+  unitId: string;
+  assignedTo: string | null;
 }
 
 interface CreateRoutineData {
@@ -17,8 +17,7 @@ interface CreateRoutineData {
 }
 
 interface CreateRoutineWithUnitsData extends CreateRoutineData {
-  unitIds: string[];
-  subtasks?: SubtaskData[];
+  unitAssignments: UnitAssignment[];
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -145,24 +144,19 @@ export const useCreateRoutineWithUnits = () => {
 
       if (periodError) throw periodError;
 
-      // Get managers for each unit to assign tasks
-      const { data: unitManagers } = await supabase
-        .from('unit_managers')
-        .select('unit_id, user_id')
-        .in('unit_id', data.unitIds);
+      // Extract unit IDs from assignments
+      const unitIds = data.unitAssignments.map(a => a.unitId);
 
-      // Create a map of unit_id -> first manager user_id
-      const unitManagerMap = new Map<string, string>();
-      unitManagers?.forEach(um => {
-        if (!unitManagerMap.has(um.unit_id)) {
-          unitManagerMap.set(um.unit_id, um.user_id);
-        }
+      // Create a map of unit_id -> assigned_to from user selection
+      const unitAssigneeMap = new Map<string, string | null>();
+      data.unitAssignments.forEach(a => {
+        unitAssigneeMap.set(a.unitId, a.assignedTo);
       });
 
       // Create checkins AND tasks for each selected unit
-      if (data.unitIds.length > 0) {
+      if (unitIds.length > 0) {
         // Create checkins
-        const checkins = data.unitIds.map((unitId) => ({
+        const checkins = unitIds.map((unitId) => ({
           routine_period_id: period.id,
           unit_id: unitId,
         }));
@@ -173,13 +167,13 @@ export const useCreateRoutineWithUnits = () => {
 
         if (checkinsError) throw checkinsError;
 
-        // Create tasks for each unit (so managers see them as pending tasks)
-        const tasks = data.unitIds.map((unitId) => ({
+        // Create tasks for each unit with the selected responsible
+        const tasks = unitIds.map((unitId) => ({
           title: `[Rotina] ${routine.title}`,
           description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
           unit_id: unitId,
           routine_id: routine.id,
-          assigned_to: unitManagerMap.get(unitId) || null,
+          assigned_to: unitAssigneeMap.get(unitId) || null,
           created_by: user.id,
           start_date: periodStart.toISOString(),
           due_date: periodEnd.toISOString(),
@@ -187,31 +181,11 @@ export const useCreateRoutineWithUnits = () => {
           priority: 2,
         }));
 
-        const { data: createdTasks, error: tasksError } = await supabase
+        const { error: tasksError } = await supabase
           .from('tasks')
-          .insert(tasks)
-          .select();
+          .insert(tasks);
 
         if (tasksError) throw tasksError;
-
-        // Create subtasks for each created task if subtasks were provided
-        if (data.subtasks && data.subtasks.length > 0 && createdTasks) {
-          const allSubtasks = createdTasks.flatMap((task, index) => 
-            data.subtasks!.map((subtask, subtaskIndex) => ({
-              task_id: task.id,
-              title: subtask.title,
-              assigned_to: subtask.assigned_to,
-              order_index: subtaskIndex,
-              is_completed: false,
-            }))
-          );
-
-          const { error: subtasksError } = await supabase
-            .from('subtasks')
-            .insert(allSubtasks);
-
-          if (subtasksError) throw subtasksError;
-        }
       }
 
       return routine;
