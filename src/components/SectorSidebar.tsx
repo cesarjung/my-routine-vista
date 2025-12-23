@@ -223,10 +223,10 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
       )}
     >
       {/* Header */}
-      <div className="px-3 pb-3 border-b border-sidebar-border relative">
+      <div className="px-3 pb-2 border-b border-sidebar-border relative">
         {!collapsed ? (
           <div className="flex flex-col">
-            <img src={sirtecLogo} alt="Sirtec" className="h-16 w-16 object-contain mb-1" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-16 w-16 object-contain -mt-1" />
             <span className="text-base font-semibold text-sidebar-foreground text-center">Gestão CCM</span>
           </div>
         ) : (
