@@ -28,7 +28,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import sirtecLogo from '@/assets/sirtec-logo.jpg';
+import sirtecLogo from '@/assets/sirtec-logo-transparent.png';
 
 interface SectorSidebarProps {
   context: NavigationContext;
@@ -226,11 +226,11 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         {!collapsed ? (
           <div className="flex items-center gap-2">
-            <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain mix-blend-darken" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
             <span className="font-semibold text-sidebar-foreground">Gestão CCM</span>
           </div>
         ) : (
-          <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain mix-blend-darken" />
+          <img src={sirtecLogo} alt="Sirtec" className="h-8 w-8 object-contain" />
         )}
         <button
           onClick={() => onCollapseChange(!collapsed)}
