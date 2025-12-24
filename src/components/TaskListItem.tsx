@@ -16,6 +16,8 @@ import {
   Clock,
   MinusCircle,
   Ban,
+  Check,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -276,45 +278,39 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="focus:outline-none">
-                              {isCompleted ? (
-                                <CheckCircle2 className="w-5 h-5 text-success" />
-                              ) : isNA ? (
-                                <MinusCircle className="w-5 h-5 text-muted-foreground" />
-                              ) : (
-                                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
-                              )}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start">
-                            <DropdownMenuItem
-                              onClick={() => handleChildTaskStatusChange(childTask.id, 'concluida')}
-                              className="gap-2"
-                            >
-                              <CheckCircle2 className="w-4 h-4 text-success" />
-                              Concluída
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleChildTaskStatusChange(childTask.id, 'nao_aplicavel')}
-                              className="gap-2"
-                            >
-                              <MinusCircle className="w-4 h-4 text-muted-foreground" />
-                              N/A (Não se Aplica)
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleChildTaskStatusChange(childTask.id, 'pendente')}
-                              className="gap-2"
-                            >
-                              <Circle className="w-4 h-4 text-warning" />
-                              Pendente
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {/* Green checkbox for completing */}
+                        <button
+                          onClick={() => handleChildTaskStatusChange(childTask.id, isCompleted ? 'pendente' : 'concluida')}
+                          className={cn(
+                            'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                            isCompleted 
+                              ? 'bg-success border-success text-white' 
+                              : 'border-success/50 hover:border-success hover:bg-success/10'
+                          )}
+                          title="Concluída"
+                        >
+                          {isCompleted && <Check className="h-3 w-3" />}
+                        </button>
+                        
+                        {/* Red checkbox for N/A */}
+                        <button
+                          onClick={() => handleChildTaskStatusChange(childTask.id, isNA ? 'pendente' : 'nao_aplicavel')}
+                          className={cn(
+                            'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                            isNA 
+                              ? 'bg-destructive border-destructive text-white' 
+                              : 'border-destructive/50 hover:border-destructive hover:bg-destructive/10'
+                          )}
+                          title="Não se Aplica"
+                        >
+                          {isNA && <X className="h-3 w-3" />}
+                        </button>
+                        
                         <div>
-                          <p className="text-sm font-medium text-foreground">
+                          <p className={cn(
+                            'text-sm font-medium text-foreground',
+                            isDone && 'line-through text-muted-foreground'
+                          )}>
                             {(childTask as any).unit?.name || 'Unidade'}
                           </p>
                           <p className="text-xs text-muted-foreground">
