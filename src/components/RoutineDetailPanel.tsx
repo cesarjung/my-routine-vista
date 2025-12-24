@@ -348,17 +348,63 @@ export const RoutineDetailPanel = ({
           <div className="flex items-center gap-3">
             <Circle className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Status</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                'ml-auto',
-                total > 0 && completed === total
-                  ? 'bg-success/20 text-success border-success/30'
-                  : 'bg-warning/20 text-warning border-warning/30'
-              )}
-            >
-              {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
-            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'ml-auto cursor-pointer hover:opacity-80 transition-opacity',
+                    total > 0 && completed === total
+                      ? 'bg-success/20 text-success border-success/30'
+                      : 'bg-warning/20 text-warning border-warning/30'
+                  )}
+                >
+                  {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Badge>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-popover">
+                <DropdownMenuItem
+                  onClick={() => {
+                    childTasks.forEach((task) => {
+                      if (task.status !== 'concluida') {
+                        updateTask.mutate({ id: task.id, status: 'concluida' });
+                      }
+                    });
+                  }}
+                  className="gap-2"
+                >
+                  <Check className="h-4 w-4 text-success" />
+                  <span>Concluir Todas</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    childTasks.forEach((task) => {
+                      if (task.status !== 'pendente') {
+                        updateTask.mutate({ id: task.id, status: 'pendente' });
+                      }
+                    });
+                  }}
+                  className="gap-2"
+                >
+                  <Circle className="h-4 w-4 text-warning" />
+                  <span>Marcar Todas Pendente</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    childTasks.forEach((task) => {
+                      if (task.status !== 'nao_aplicavel') {
+                        updateTask.mutate({ id: task.id, status: 'nao_aplicavel' });
+                      }
+                    });
+                  }}
+                  className="gap-2"
+                >
+                  <MinusCircle className="h-4 w-4 text-muted-foreground" />
+                  <span>Marcar Todas N/A</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <div className="flex items-center gap-3">
