@@ -17,6 +17,8 @@ import {
   Pencil,
   Plus,
   X,
+  MinusCircle,
+  MoreVertical,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -33,6 +35,7 @@ import {
   AlertDialogTrigger,
 } from './ui/alert-dialog';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
+import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Textarea } from './ui/textarea';
@@ -57,6 +60,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 import {
   startOfDay,
@@ -146,6 +155,7 @@ export const RoutineDetailPanel = ({
   const [description, setDescription] = useState(routine.description || '');
   const [frequency, setFrequency] = useState<TaskFrequency>(routine.frequency);
 
+  const { user } = useAuth();
   const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id);
   const { data: routineTasksData, isLoading: isLoadingTasks } = useRoutineTasks(routine.id);
   const { data: unitManagers } = useUnitManagers();
@@ -158,6 +168,24 @@ export const RoutineDetailPanel = ({
   const deleteRoutine = useDeleteRoutine();
   const updateRoutine = useUpdateRoutine();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
+
+  // Get current user's unit_id
+  const userProfile = allProfiles?.find(p => p.id === user?.id);
+  const userUnitId = userProfile?.unit_id;
+  
+  // Check if user is a manager for a given unit
+  const isUserUnitManager = (unitId: string) => {
+    return unitManagers?.some(m => m.user_id === user?.id && m.unit_id === unitId) || false;
+  };
+
+  // Check if user can edit a task (is gestor/admin, is unit manager, or task is in their unit)
+  const canEditTask = (task: any) => {
+    if (isGestorOrAdmin) return true;
+    if (task.unit_id && isUserUnitManager(task.unit_id)) return true;
+    if (task.unit_id && task.unit_id === userUnitId) return true;
+    if (task.assigned_to === user?.id) return true;
+    return false;
+  };
 
   const handleDeleteRoutine = async () => {
     await deleteRoutine.mutateAsync(routine.id);
@@ -191,14 +219,16 @@ export const RoutineDetailPanel = ({
   // Use tasks instead of checkins when available
   const childTasks = routineTasksData?.childTasks || [];
   const completedTasks = childTasks.filter((t) => t.status === 'concluida').length;
+  const naTasks = childTasks.filter((t) => t.status === 'nao_aplicavel').length;
   const totalTasks = childTasks.length;
+  const effectiveCompletedTasks = completedTasks + naTasks;
   
   // Fallback to checkins if no tasks yet
   const checkins = periodData?.period?.routine_checkins || [];
   const completedOrNotCompleted = checkins.filter((c) => c.status === 'completed' || c.status === 'not_completed').length;
   const completedCount = checkins.filter((c) => c.status === 'completed').length;
   const total = totalTasks > 0 ? totalTasks : checkins.length;
-  const completed = totalTasks > 0 ? completedTasks : completedCount;
+  const completed = totalTasks > 0 ? effectiveCompletedTasks : completedCount;
 
   const handleStartPeriod = async () => {
     const dates = getPeriodDates(routine.frequency);
@@ -449,47 +479,44 @@ export const RoutineDetailPanel = ({
               <div className="divide-y divide-border">
                 {/* Table Header */}
                 <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
-                  <div className="col-span-5">Responsável</div>
+                  <div className="col-span-4">Responsável</div>
                   <div className="col-span-3">Unidade</div>
-                  <div className="col-span-2">Status</div>
+                  <div className="col-span-3">Status</div>
                   <div className="col-span-2">Vencimento</div>
                 </div>
 
                 {/* Task Rows */}
                 {childTasks.map((task) => {
                   const isTaskCompleted = task.status === 'concluida';
+                  const isTaskNA = task.status === 'nao_aplicavel';
                   const assignee = (task as any).assignee;
+                  const userCanEdit = canEditTask(task);
+                  
+                  const statusConfig: Record<string, { label: string; className: string }> = {
+                    concluida: { label: 'Concluída', className: 'bg-success/20 text-success border-success/30' },
+                    pendente: { label: 'Pendente', className: 'bg-warning/20 text-warning border-warning/30' },
+                    em_andamento: { label: 'Andamento', className: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
+                    nao_aplicavel: { label: 'N/A', className: 'bg-muted text-muted-foreground border-muted-foreground/30' },
+                  };
+                  
+                  const currentStatus = statusConfig[task.status] || statusConfig.pendente;
                   
                   return (
                     <div
                       key={task.id}
                       className={cn(
                         'grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors hover:bg-secondary/20 group',
-                        isTaskCompleted && 'bg-success/5'
+                        isTaskCompleted && 'bg-success/5',
+                        isTaskNA && 'bg-muted/20'
                       )}
                     >
-                      {/* Assignee name with checkbox */}
-                      <div className="col-span-5 flex items-center gap-3">
-                        <button
-                          onClick={() => {
-                            const newStatus = isTaskCompleted ? 'pendente' : 'concluida';
-                            updateTask.mutate({ id: task.id, status: newStatus });
-                          }}
-                          disabled={updateTask.isPending}
-                          className={cn(
-                            'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
-                            isTaskCompleted
-                              ? 'bg-success border-success text-success-foreground'
-                              : 'border-muted-foreground/50 hover:border-primary'
-                          )}
-                        >
-                          {isTaskCompleted && <Check className="w-3 h-3" />}
-                        </button>
+                      {/* Assignee name */}
+                      <div className="col-span-4 flex items-center gap-3">
                         <div className="flex flex-col min-w-0">
                           <span
                             className={cn(
                               'font-medium text-sm truncate',
-                              isTaskCompleted && 'text-muted-foreground line-through'
+                              (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
                             )}
                           >
                             {assignee?.full_name || assignee?.email || 'Sem responsável'}
@@ -504,20 +531,58 @@ export const RoutineDetailPanel = ({
                         </span>
                       </div>
 
-                      {/* Status Badge */}
-                      <div className="col-span-2 flex items-center">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-xs',
-                            task.status === 'concluida' && 'bg-success/20 text-success border-success/30',
-                            task.status === 'pendente' && 'bg-warning/20 text-warning border-warning/30',
-                            task.status === 'em_andamento' && 'bg-blue-500/20 text-blue-500 border-blue-500/30'
-                          )}
-                        >
-                          {task.status === 'concluida' ? 'Concluída' : 
-                           task.status === 'em_andamento' ? 'Andamento' : 'Pendente'}
-                        </Badge>
+                      {/* Status - Dropdown for users with permission */}
+                      <div className="col-span-3 flex items-center">
+                        {userCanEdit ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 gap-1 px-2"
+                                disabled={updateTask.isPending}
+                              >
+                                <Badge
+                                  variant="outline"
+                                  className={cn('text-xs', currentStatus.className)}
+                                >
+                                  {currentStatus.label}
+                                </Badge>
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => updateTask.mutate({ id: task.id, status: 'concluida' })}
+                                className="gap-2"
+                              >
+                                <Check className="h-4 w-4 text-success" />
+                                <span>Concluída</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => updateTask.mutate({ id: task.id, status: 'pendente' })}
+                                className="gap-2"
+                              >
+                                <Circle className="h-4 w-4 text-warning" />
+                                <span>Pendente</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => updateTask.mutate({ id: task.id, status: 'nao_aplicavel' })}
+                                className="gap-2"
+                              >
+                                <MinusCircle className="h-4 w-4 text-muted-foreground" />
+                                <span>Não se Aplica</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className={cn('text-xs', currentStatus.className)}
+                          >
+                            {currentStatus.label}
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Due Date */}
