@@ -40,6 +40,7 @@ const statusLabels: Record<string, string> = {
   concluida: 'Concluída',
   atrasada: 'Atrasada',
   cancelada: 'Cancelada',
+  nao_aplicavel: 'N/A',
 };
 
 const statusColors: Record<string, string> = {
@@ -48,6 +49,7 @@ const statusColors: Record<string, string> = {
   concluida: 'bg-success/10 text-success border-success/30',
   atrasada: 'bg-destructive/10 text-destructive border-destructive/30',
   cancelada: 'bg-muted text-muted-foreground border-muted',
+  nao_aplicavel: 'bg-secondary text-muted-foreground border-secondary',
 };
 
 const frequencyLabels: Record<string, string> = {

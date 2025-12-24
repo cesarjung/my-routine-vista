@@ -358,11 +358,21 @@ export const useUpdateTask = () => {
         await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'completed');
       }
 
+      // If task was set to NA and is linked to a routine, update the checkin
+      if (
+        existingTask?.routine_id &&
+        updates.status === 'nao_aplicavel' &&
+        existingTask?.status !== 'nao_aplicavel' &&
+        existingTask?.assigned_to
+      ) {
+        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'not_completed');
+      }
+
       // If task was uncompleted and is linked to a routine, revert the checkin
       if (
         existingTask?.routine_id &&
-        existingTask?.status === 'concluida' &&
-        updates.status && updates.status !== 'concluida' &&
+        (existingTask?.status === 'concluida' || existingTask?.status === 'nao_aplicavel') &&
+        updates.status && updates.status !== 'concluida' && updates.status !== 'nao_aplicavel' &&
         existingTask?.assigned_to
       ) {
         await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'pending');
@@ -380,10 +390,21 @@ export const useUpdateTask = () => {
         ).catch(console.error);
       }
 
-      // Handle recurring task completion (on_completion mode)
+      // If this is a child task being completed/NA, check if all siblings are done
+      if (
+        existingTask?.parent_task_id &&
+        (updates.status === 'concluida' || updates.status === 'nao_aplicavel') &&
+        existingTask?.status !== 'concluida' &&
+        existingTask?.status !== 'nao_aplicavel'
+      ) {
+        await checkAndCompleteParentTask(existingTask.parent_task_id);
+      }
+
+      // Handle recurring task completion (on_completion mode) - only for parent tasks
       if (
         existingTask?.is_recurring &&
         existingTask?.recurrence_mode === 'on_completion' &&
+        !existingTask?.parent_task_id && // Only for parent/standalone tasks
         updates.status === 'concluida' &&
         existingTask?.status !== 'concluida' &&
         existingTask?.start_date &&
@@ -466,6 +487,158 @@ async function updateRoutineCheckinFromTask(
   } catch (error) {
     console.error('Error updating routine checkin:', error);
   }
+}
+
+// Helper function to check and complete parent task when all children are done
+async function checkAndCompleteParentTask(parentTaskId: string): Promise<void> {
+  try {
+    // Get all child tasks
+    const { data: childTasks, error } = await supabase
+      .from('tasks')
+      .select('id, status')
+      .eq('parent_task_id', parentTaskId);
+
+    if (error) throw error;
+    if (!childTasks || childTasks.length === 0) return;
+
+    // Check if all child tasks are either 'concluida' or 'nao_aplicavel'
+    const allDone = childTasks.every(
+      (t) => t.status === 'concluida' || t.status === 'nao_aplicavel'
+    );
+
+    if (!allDone) return;
+
+    // Get parent task info
+    const { data: parentTask, error: parentError } = await supabase
+      .from('tasks')
+      .select('id, status, is_recurring, recurrence_frequency, recurrence_mode, start_date, due_date, title, description, unit_id, sector_id, assigned_to, created_by, priority')
+      .eq('id', parentTaskId)
+      .single();
+
+    if (parentError) throw parentError;
+    if (!parentTask || parentTask.status === 'concluida') return;
+
+    // Complete the parent task
+    await supabase
+      .from('tasks')
+      .update({
+        status: 'concluida',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', parentTaskId);
+
+    console.log('Parent task auto-completed:', parentTaskId);
+
+    // If parent is recurring (on_completion mode), create next instance
+    if (
+      parentTask.is_recurring &&
+      parentTask.recurrence_mode === 'on_completion' &&
+      parentTask.start_date &&
+      parentTask.due_date &&
+      parentTask.recurrence_frequency
+    ) {
+      await createNextRecurringInstanceWithChildren(parentTask, childTasks);
+    }
+  } catch (error) {
+    console.error('Error checking/completing parent task:', error);
+  }
+}
+
+// Helper function to create next recurring task instance with children
+async function createNextRecurringInstanceWithChildren(
+  parentTask: {
+    id: string;
+    title: string;
+    description: string | null;
+    start_date: string;
+    due_date: string;
+    recurrence_frequency: string;
+    unit_id: string | null;
+    sector_id: string | null;
+    assigned_to: string | null;
+    created_by: string | null;
+    priority: number | null;
+  },
+  childTasks: { id: string; status: string }[]
+): Promise<void> {
+  const startDate = new Date(parentTask.start_date);
+  const dueDate = new Date(parentTask.due_date);
+  const duration = dueDate.getTime() - startDate.getTime();
+  
+  const now = new Date();
+  const nextStart = new Date(now);
+  nextStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+  
+  if (nextStart <= now) {
+    nextStart.setDate(nextStart.getDate() + 1);
+  }
+  
+  const nextDue = new Date(nextStart.getTime() + duration);
+
+  // Create new parent task
+  const { data: newParentTask, error: parentError } = await supabase
+    .from('tasks')
+    .insert({
+      title: parentTask.title,
+      description: parentTask.description,
+      unit_id: parentTask.unit_id,
+      sector_id: parentTask.sector_id,
+      assigned_to: parentTask.assigned_to,
+      created_by: parentTask.created_by,
+      start_date: nextStart.toISOString(),
+      due_date: nextDue.toISOString(),
+      priority: parentTask.priority || 1,
+      status: 'pendente',
+      is_recurring: true,
+      recurrence_frequency: parentTask.recurrence_frequency as 'diaria' | 'semanal' | 'quinzenal' | 'mensal',
+      recurrence_mode: 'on_completion',
+      parent_task_id: null,
+    })
+    .select('id')
+    .single();
+
+  if (parentError || !newParentTask) {
+    console.error('Error creating next parent task:', parentError);
+    return;
+  }
+
+  // Get original child tasks with full details
+  const { data: originalChildren, error: childError } = await supabase
+    .from('tasks')
+    .select('title, description, unit_id, sector_id, assigned_to, created_by, priority')
+    .eq('parent_task_id', parentTask.id);
+
+  if (childError || !originalChildren) {
+    console.error('Error fetching original children:', childError);
+    return;
+  }
+
+  // Create new child tasks
+  const newChildTasks = originalChildren.map((child) => ({
+    title: child.title,
+    description: child.description,
+    unit_id: child.unit_id,
+    sector_id: child.sector_id,
+    assigned_to: child.assigned_to,
+    created_by: child.created_by,
+    start_date: nextStart.toISOString(),
+    due_date: nextDue.toISOString(),
+    priority: child.priority || 1,
+    status: 'pendente' as const,
+    parent_task_id: newParentTask.id,
+  }));
+
+  if (newChildTasks.length > 0) {
+    const { error: insertError } = await supabase
+      .from('tasks')
+      .insert(newChildTasks);
+
+    if (insertError) {
+      console.error('Error creating child tasks:', insertError);
+    }
+  }
+
+  console.log('Next recurring task created with children:', newParentTask.id);
 }
 
 // Helper function to create next recurring task instance
