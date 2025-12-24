@@ -141,8 +141,7 @@ export const useCurrentPeriodCheckins = (routineId: string) => {
 
       if (routineError) throw routineError;
 
-      // Check if there's an active period for today
-      const now = new Date().toISOString();
+      // Get the most recent active period for this routine (current or future)
       let { data: period, error: periodError } = await supabase
         .from('routine_periods')
         .select(`
@@ -154,8 +153,8 @@ export const useCurrentPeriodCheckins = (routineId: string) => {
         `)
         .eq('routine_id', routineId)
         .eq('is_active', true)
-        .lte('period_start', now)
-        .gte('period_end', now)
+        .order('period_start', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (periodError) throw periodError;

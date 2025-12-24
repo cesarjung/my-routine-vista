@@ -178,12 +178,15 @@ export const RoutineDetailPanel = ({
     return unitManagers?.some(m => m.user_id === user?.id && m.unit_id === unitId) || false;
   };
 
-  // Check if user can edit a task (is gestor/admin, is unit manager, or task is in their unit)
+  // Check if user can edit a task (is gestor/admin, is unit manager, is assigned, or task is in their unit)
   const canEditTask = (task: any) => {
     if (isGestorOrAdmin) return true;
     if (task.unit_id && isUserUnitManager(task.unit_id)) return true;
-    if (task.unit_id && task.unit_id === userUnitId) return true;
     if (task.assigned_to === user?.id) return true;
+    // Check task_assignees table (through the assignee relation)
+    if (task.assignee?.id === user?.id) return true;
+    // Allow if user is in the same unit as the task
+    if (task.unit_id && task.unit_id === userUnitId) return true;
     return false;
   };
 
