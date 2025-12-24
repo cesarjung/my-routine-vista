@@ -63,12 +63,13 @@ const statusOptions = [
   { value: 'concluida', label: 'Concluída' },
   { value: 'atrasada', label: 'Atrasada' },
   { value: 'cancelada', label: 'Cancelada' },
+  { value: 'nao_aplicavel', label: 'N/A (Não se Aplica)' },
 ];
 
 const formSchema = z.object({
   title: z.string().min(1, 'Título é obrigatório').max(200, 'Título muito longo'),
   description: z.string().max(1000, 'Descrição muito longa').optional().nullable(),
-  status: z.enum(['pendente', 'em_andamento', 'concluida', 'atrasada', 'cancelada']),
+  status: z.enum(['pendente', 'em_andamento', 'concluida', 'atrasada', 'cancelada', 'nao_aplicavel']),
   priority: z.number().min(1).max(5),
   due_date: z.date().optional().nullable(),
 });

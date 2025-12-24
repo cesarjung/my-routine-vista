@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Clock, AlertCircle, Play, Loader2, GripVertical, Pencil } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Play, Loader2, GripVertical, Pencil, MinusCircle } from 'lucide-react';
 import type { Enums, Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
 
@@ -25,6 +25,7 @@ const columns: Column[] = [
   { id: 'em_andamento', title: 'Em Andamento', icon: Play, color: 'text-primary', bgColor: 'bg-primary/10' },
   { id: 'concluida', title: 'Concluídas', icon: CheckCircle2, color: 'text-success', bgColor: 'bg-success/10' },
   { id: 'atrasada', title: 'Atrasadas', icon: AlertCircle, color: 'text-destructive', bgColor: 'bg-destructive/10' },
+  { id: 'nao_aplicavel', title: 'N/A', icon: MinusCircle, color: 'text-muted-foreground', bgColor: 'bg-secondary' },
 ];
 
 interface KanbanViewProps {
@@ -72,7 +73,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
         <p className="text-muted-foreground">Visualize e gerencie tarefas por status</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 min-h-[600px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 min-h-[600px]">
         {columns.map((column) => {
           const columnTasks = getTasksByStatus(column.id);
           const Icon = column.icon;

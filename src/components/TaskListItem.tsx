@@ -14,6 +14,8 @@ import {
   MoreVertical,
   Users,
   Clock,
+  MinusCircle,
+  Ban,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +27,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -52,6 +55,7 @@ const statusConfig: Record<
   concluida: { label: 'Concluída', className: 'bg-success/20 text-success border-success/30' },
   atrasada: { label: 'Atrasada', className: 'bg-destructive/20 text-destructive border-destructive/30' },
   cancelada: { label: 'Cancelada', className: 'bg-muted text-muted-foreground border-muted' },
+  nao_aplicavel: { label: 'N/A', className: 'bg-secondary text-muted-foreground border-secondary' },
 };
 
 const priorityConfig: Record<number, { label: string; className: string }> = {
@@ -84,7 +88,9 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
 
   // Child tasks stats
   const completedChildTasks = childTasks?.filter((t) => t.status === 'concluida').length || 0;
+  const naChildTasks = childTasks?.filter((t) => t.status === 'nao_aplicavel').length || 0;
   const totalChildTasks = childTasks?.length || 0;
+  const doneChildTasks = completedChildTasks + naChildTasks;
   const hasChildTasks = totalChildTasks > 0;
 
   const handleToggleSubtask = (subtaskId: string, currentState: boolean | null) => {
@@ -220,14 +226,20 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
                   </span>
                   <span className="flex items-center gap-1 text-success">
                     <CheckCircle2 className="w-3 h-3" />
-                    {completedChildTasks}
+                    {completedChildTasks} concluída{completedChildTasks !== 1 ? 's' : ''}
                   </span>
+                  {naChildTasks > 0 && (
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <MinusCircle className="w-3 h-3" />
+                      {naChildTasks} N/A
+                    </span>
+                  )}
                   <span className="flex items-center gap-1 text-warning">
                     <Clock className="w-3 h-3" />
-                    {totalChildTasks - completedChildTasks}
+                    {totalChildTasks - doneChildTasks} pendente{totalChildTasks - doneChildTasks !== 1 ? 's' : ''}
                   </span>
                 </div>
-                <ProgressBar completed={completedChildTasks} total={totalChildTasks} />
+                <ProgressBar completed={doneChildTasks} total={totalChildTasks} />
                 <button
                   onClick={() => setChildTasksExpanded(!childTasksExpanded)}
                   className="flex items-center gap-2 mt-2 text-sm text-primary hover:underline"
@@ -238,7 +250,7 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
                     <ChevronDown className="h-4 w-4" />
                   )}
                   <span>
-                    Ver tarefas das unidades ({completedChildTasks}/{totalChildTasks})
+                    Ver tarefas das unidades ({doneChildTasks}/{totalChildTasks})
                   </span>
                 </button>
               </div>
@@ -249,31 +261,58 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
               <div className="mt-3 space-y-2 border-l-2 border-primary/30 pl-3">
                 {childTasks.map((childTask) => {
                   const childStatusInfo = statusConfig[childTask.status];
+                  const isCompleted = childTask.status === 'concluida';
+                  const isNA = childTask.status === 'nao_aplicavel';
+                  const isDone = isCompleted || isNA;
+                  
                   return (
                     <div
                       key={childTask.id}
                       className={cn(
                         'flex items-center justify-between p-3 rounded-lg border transition-colors',
-                        childTask.status === 'concluida'
-                          ? 'bg-success/5 border-success/20'
-                          : 'bg-secondary/30 border-border'
+                        isCompleted && 'bg-success/5 border-success/20',
+                        isNA && 'bg-secondary/50 border-secondary',
+                        !isDone && 'bg-secondary/30 border-border'
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <button
-                          onClick={() =>
-                            handleChildTaskStatusChange(
-                              childTask.id,
-                              childTask.status === 'concluida' ? 'pendente' : 'concluida'
-                            )
-                          }
-                        >
-                          {childTask.status === 'concluida' ? (
-                            <CheckCircle2 className="w-5 h-5 text-success" />
-                          ) : (
-                            <Circle className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
-                          )}
-                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="focus:outline-none">
+                              {isCompleted ? (
+                                <CheckCircle2 className="w-5 h-5 text-success" />
+                              ) : isNA ? (
+                                <MinusCircle className="w-5 h-5 text-muted-foreground" />
+                              ) : (
+                                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
+                              )}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem
+                              onClick={() => handleChildTaskStatusChange(childTask.id, 'concluida')}
+                              className="gap-2"
+                            >
+                              <CheckCircle2 className="w-4 h-4 text-success" />
+                              Concluída
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleChildTaskStatusChange(childTask.id, 'nao_aplicavel')}
+                              className="gap-2"
+                            >
+                              <MinusCircle className="w-4 h-4 text-muted-foreground" />
+                              N/A (Não se Aplica)
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleChildTaskStatusChange(childTask.id, 'pendente')}
+                              className="gap-2"
+                            >
+                              <Circle className="w-4 h-4 text-warning" />
+                              Pendente
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <div>
                           <p className="text-sm font-medium text-foreground">
                             {(childTask as any).unit?.name || 'Unidade'}
