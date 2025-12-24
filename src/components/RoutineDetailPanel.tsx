@@ -548,9 +548,9 @@ export const RoutineDetailPanel = ({
               <div className="divide-y divide-border">
                 {/* Table Header */}
                 <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
-                  <div className="col-span-4">Responsável</div>
+                  <div className="col-span-5">Nome</div>
                   <div className="col-span-3">Unidade</div>
-                  <div className="col-span-3">Status</div>
+                  <div className="col-span-2">Ações</div>
                   <div className="col-span-2">Vencimento</div>
                 </div>
 
@@ -561,15 +561,6 @@ export const RoutineDetailPanel = ({
                   const assignee = (task as any).assignee;
                   const userCanEdit = canEditTask(task);
                   
-                  const statusConfig: Record<string, { label: string; className: string }> = {
-                    concluida: { label: 'Concluída', className: 'bg-success/20 text-success border-success/30' },
-                    pendente: { label: 'Pendente', className: 'bg-warning/20 text-warning border-warning/30' },
-                    em_andamento: { label: 'Andamento', className: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
-                    nao_aplicavel: { label: 'N/A', className: 'bg-muted text-muted-foreground border-muted-foreground/30' },
-                  };
-                  
-                  const currentStatus = statusConfig[task.status] || statusConfig.pendente;
-                  
                   return (
                     <div
                       key={task.id}
@@ -579,18 +570,16 @@ export const RoutineDetailPanel = ({
                         isTaskNA && 'bg-muted/20'
                       )}
                     >
-                      {/* Assignee name */}
-                      <div className="col-span-4 flex items-center gap-3">
-                        <div className="flex flex-col min-w-0">
-                          <span
-                            className={cn(
-                              'font-medium text-sm truncate',
-                              (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
-                            )}
-                          >
-                            {assignee?.full_name || assignee?.email || 'Sem responsável'}
-                          </span>
-                        </div>
+                      {/* Name with inline action buttons */}
+                      <div className="col-span-5 flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'font-medium text-sm truncate',
+                            (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
+                          )}
+                        >
+                          {assignee?.full_name || assignee?.email || 'Sem responsável'}
+                        </span>
                       </div>
 
                       {/* Unit */}
@@ -600,11 +589,11 @@ export const RoutineDetailPanel = ({
                         </span>
                       </div>
 
-                      {/* Status - Checkbox + clickable badge dropdown */}
-                      <div className="col-span-3 flex items-center gap-2">
+                      {/* Actions - Checkbox for complete + N/A button */}
+                      <div className="col-span-2 flex items-center gap-2">
                         {userCanEdit ? (
                           <>
-                            {/* Quick checkbox for completing */}
+                            {/* Checkbox for completing */}
                             <button
                               onClick={() => {
                                 const newStatus = isTaskCompleted ? 'pendente' : 'concluida';
@@ -612,72 +601,45 @@ export const RoutineDetailPanel = ({
                               }}
                               disabled={updateTask.isPending}
                               className={cn(
-                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                                'w-6 h-6 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
                                 isTaskCompleted 
                                   ? 'bg-success border-success text-success-foreground' 
-                                  : isTaskNA
-                                  ? 'bg-muted border-muted-foreground/30'
                                   : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
                               )}
                               title={isTaskCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
                             >
-                              {isTaskCompleted && <Check className="h-3 w-3" />}
-                              {isTaskNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
+                              {isTaskCompleted && <Check className="h-4 w-4" />}
                             </button>
                             
-                            {/* Clickable status badge dropdown */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-xs cursor-pointer hover:opacity-80 transition-opacity',
-                                    currentStatus.className
-                                  )}
-                                >
-                                  {currentStatus.label}
-                                  <ChevronDown className="h-3 w-3 ml-1" />
-                                </Badge>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="bg-popover">
-                                <DropdownMenuItem
-                                  onClick={() => updateTask.mutate({ id: task.id, status: 'concluida' })}
-                                  className="gap-2"
-                                >
-                                  <Check className="h-4 w-4 text-success" />
-                                  <span>Concluída</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => updateTask.mutate({ id: task.id, status: 'pendente' })}
-                                  className="gap-2"
-                                >
-                                  <Circle className="h-4 w-4 text-warning" />
-                                  <span>Pendente</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => updateTask.mutate({ id: task.id, status: 'em_andamento' })}
-                                  className="gap-2"
-                                >
-                                  <Loader2 className="h-4 w-4 text-blue-500" />
-                                  <span>Em Andamento</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => updateTask.mutate({ id: task.id, status: 'nao_aplicavel' })}
-                                  className="gap-2"
-                                >
-                                  <MinusCircle className="h-4 w-4 text-muted-foreground" />
-                                  <span>Não se Aplica</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            {/* N/A button */}
+                            <button
+                              onClick={() => {
+                                const newStatus = isTaskNA ? 'pendente' : 'nao_aplicavel';
+                                updateTask.mutate({ id: task.id, status: newStatus });
+                              }}
+                              disabled={updateTask.isPending}
+                              className={cn(
+                                'w-6 h-6 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 text-xs font-bold',
+                                isTaskNA 
+                                  ? 'bg-muted border-muted-foreground/50 text-muted-foreground' 
+                                  : 'border-muted-foreground/40 hover:border-muted-foreground hover:bg-muted/50 text-muted-foreground/60'
+                              )}
+                              title={isTaskNA ? 'Marcar como pendente' : 'Marcar como N/A'}
+                            >
+                              {isTaskNA ? <MinusCircle className="h-4 w-4" /> : 'NA'}
+                            </button>
                           </>
                         ) : (
-                          <Badge
-                            variant="outline"
-                            className={cn('text-xs', currentStatus.className)}
-                          >
-                            {currentStatus.label}
-                          </Badge>
+                          <span className={cn(
+                            'text-xs px-2 py-0.5 rounded-full border',
+                            isTaskCompleted 
+                              ? 'bg-success/20 text-success border-success/30' 
+                              : isTaskNA 
+                              ? 'bg-muted text-muted-foreground border-muted-foreground/30'
+                              : 'bg-warning/20 text-warning border-warning/30'
+                          )}>
+                            {isTaskCompleted ? 'Concluída' : isTaskNA ? 'N/A' : 'Pendente'}
+                          </span>
                         )}
                       </div>
 
@@ -685,10 +647,10 @@ export const RoutineDetailPanel = ({
                       <div className="col-span-2 flex items-center">
                         {task.due_date ? (
                           <span className="text-xs text-muted-foreground">
-                            {format(new Date(task.due_date), 'dd/MM HH:mm', { locale: ptBR })}
+                            {format(new Date(task.due_date), 'dd/MM', { locale: ptBR })}
                           </span>
                         ) : (
-                          <Calendar className="w-4 h-4 text-muted-foreground/50" />
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </div>
                     </div>
