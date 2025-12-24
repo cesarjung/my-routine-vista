@@ -594,6 +594,31 @@ export const useDeleteTask = () => {
         .eq('id', taskId)
         .single();
 
+      // Get all child tasks (tarefas filhas) to delete their calendar events too
+      const { data: childTasks } = await supabase
+        .from('tasks')
+        .select('id, google_event_id')
+        .eq('parent_task_id', taskId);
+
+      // Delete child tasks first (cascade delete)
+      if (childTasks && childTasks.length > 0) {
+        // Delete calendar events for child tasks
+        for (const child of childTasks) {
+          if (child.google_event_id) {
+            deleteCalendarEvent(child.google_event_id).catch(console.error);
+          }
+        }
+
+        // Delete all child tasks
+        const { error: childError } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('parent_task_id', taskId);
+        
+        if (childError) throw childError;
+      }
+
+      // Delete the parent task
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) throw error;
 
@@ -605,7 +630,7 @@ export const useDeleteTask = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
-      toast.success('Tarefa excluída!');
+      toast.success('Tarefa e tarefas filhas excluídas!');
     },
     onError: (error) => {
       console.error('Error deleting task:', error);
