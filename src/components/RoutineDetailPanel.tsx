@@ -149,6 +149,7 @@ export const RoutineDetailPanel = ({
   const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [closeConfirmDialogOpen, setCloseConfirmDialogOpen] = useState(false);
   
   // Editable fields
   const [title, setTitle] = useState(routine.title);
@@ -240,6 +241,29 @@ export const RoutineDetailPanel = ({
       periodStart: dates.start,
       periodEnd: dates.end,
     });
+  };
+
+  const handleCloseRoutineResolving = async () => {
+    // Mark all pending tasks as completed
+    const pendingTasks = childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel');
+    for (const task of pendingTasks) {
+      await updateTask.mutateAsync({ id: task.id, status: 'concluida' });
+    }
+    // Mark parent task as completed if exists
+    if (routineTasksData?.parentTask) {
+      await updateTask.mutateAsync({ id: routineTasksData.parentTask.id, status: 'concluida' });
+    }
+    toast.success('Rotina encerrada! Todas as tarefas foram marcadas como concluídas.');
+    setCloseConfirmDialogOpen(false);
+  };
+
+  const handleCloseRoutineWithoutResolving = async () => {
+    // Just mark parent task as completed without changing child tasks
+    if (routineTasksData?.parentTask) {
+      await updateTask.mutateAsync({ id: routineTasksData.parentTask.id, status: 'concluida' });
+    }
+    toast.success('Rotina encerrada! Tarefas pendentes mantidas.');
+    setCloseConfirmDialogOpen(false);
   };
 
   const handleToggleCheckin = async (checkinId: string, status: string) => {
@@ -348,64 +372,61 @@ export const RoutineDetailPanel = ({
           <div className="flex items-center gap-3">
             <Circle className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Status</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    'ml-auto px-2 py-0.5 text-xs font-medium rounded-full border inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity',
-                    total > 0 && completed === total
-                      ? 'bg-success/20 text-success border-success/30'
-                      : 'bg-warning/20 text-warning border-warning/30'
+            <button
+              onClick={() => setCloseConfirmDialogOpen(true)}
+              className={cn(
+                'ml-auto px-2 py-0.5 text-xs font-medium rounded-full border inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity',
+                total > 0 && completed === total
+                  ? 'bg-success/20 text-success border-success/30'
+                  : 'bg-warning/20 text-warning border-warning/30'
+              )}
+            >
+              {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            
+            {/* Close Routine Confirmation Dialog */}
+            <AlertDialog open={closeConfirmDialogOpen} onOpenChange={setCloseConfirmDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Encerrar Rotina</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length > 0 ? (
+                      <>
+                        Existem <strong>{childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length} tarefa(s) pendente(s)</strong>. 
+                        Como deseja encerrar esta rotina?
+                      </>
+                    ) : (
+                      'Todas as tarefas já estão concluídas. Deseja encerrar a rotina?'
+                    )}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  {childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={handleCloseRoutineWithoutResolving}
+                      disabled={updateTask.isPending}
+                    >
+                      {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Encerrar Sem Resolver
+                    </Button>
                   )}
-                >
-                  {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-popover z-50">
-                <DropdownMenuItem
-                  onClick={() => {
-                    childTasks.forEach((task) => {
-                      if (task.status !== 'concluida') {
-                        updateTask.mutate({ id: task.id, status: 'concluida' });
-                      }
-                    });
-                  }}
-                  className="gap-2"
-                >
-                  <Check className="h-4 w-4 text-success" />
-                  <span>Concluir Todas</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    childTasks.forEach((task) => {
-                      if (task.status !== 'pendente') {
-                        updateTask.mutate({ id: task.id, status: 'pendente' });
-                      }
-                    });
-                  }}
-                  className="gap-2"
-                >
-                  <Circle className="h-4 w-4 text-warning" />
-                  <span>Marcar Todas Pendente</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    childTasks.forEach((task) => {
-                      if (task.status !== 'nao_aplicavel') {
-                        updateTask.mutate({ id: task.id, status: 'nao_aplicavel' });
-                      }
-                    });
-                  }}
-                  className="gap-2"
-                >
-                  <MinusCircle className="h-4 w-4 text-muted-foreground" />
-                  <span>Marcar Todas N/A</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <Button
+                    onClick={handleCloseRoutineResolving}
+                    disabled={updateTask.isPending}
+                    className="bg-success hover:bg-success/90"
+                  >
+                    {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                    {childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length > 0 
+                      ? 'Encerrar Resolvendo Todas' 
+                      : 'Encerrar'}
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
-
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Responsáveis</span>
