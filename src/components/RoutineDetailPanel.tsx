@@ -534,7 +534,7 @@ export const RoutineDetailPanel = ({
                         </span>
                       </div>
 
-                      {/* Status - Checkbox + dropdown for more options */}
+                      {/* Status - Checkbox + clickable badge dropdown */}
                       <div className="col-span-3 flex items-center gap-2">
                         {userCanEdit ? (
                           <>
@@ -546,7 +546,7 @@ export const RoutineDetailPanel = ({
                               }}
                               disabled={updateTask.isPending}
                               className={cn(
-                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
+                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
                                 isTaskCompleted 
                                   ? 'bg-success border-success text-success-foreground' 
                                   : isTaskNA
@@ -559,19 +559,21 @@ export const RoutineDetailPanel = ({
                               {isTaskNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
                             </button>
                             
-                            {/* Dropdown for more options */}
+                            {/* Clickable status badge dropdown */}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  disabled={updateTask.isPending}
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-xs cursor-pointer hover:opacity-80 transition-opacity',
+                                    currentStatus.className
+                                  )}
                                 >
-                                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                                </Button>
+                                  {currentStatus.label}
+                                  <ChevronDown className="h-3 w-3 ml-1" />
+                                </Badge>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start">
+                              <DropdownMenuContent align="start" className="bg-popover">
                                 <DropdownMenuItem
                                   onClick={() => updateTask.mutate({ id: task.id, status: 'concluida' })}
                                   className="gap-2"
@@ -585,6 +587,13 @@ export const RoutineDetailPanel = ({
                                 >
                                   <Circle className="h-4 w-4 text-warning" />
                                   <span>Pendente</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => updateTask.mutate({ id: task.id, status: 'em_andamento' })}
+                                  className="gap-2"
+                                >
+                                  <Loader2 className="h-4 w-4 text-blue-500" />
+                                  <span>Em Andamento</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => updateTask.mutate({ id: task.id, status: 'nao_aplicavel' })}
