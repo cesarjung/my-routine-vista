@@ -442,15 +442,14 @@ async function updateRoutineCheckinFromTask(
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
-    // Find the active period for this routine
-    const now = new Date().toISOString();
+    // Find the most recent active period for this routine
     const { data: activePeriod } = await supabase
       .from('routine_periods')
       .select('id')
       .eq('routine_id', routineId)
       .eq('is_active', true)
-      .lte('period_start', now)
-      .gte('period_end', now)
+      .order('period_start', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (!activePeriod) return;
