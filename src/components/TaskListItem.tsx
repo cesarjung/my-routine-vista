@@ -12,12 +12,15 @@ import {
   Circle,
   Trash2,
   MoreVertical,
+  Users,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ProgressBar } from '@/components/ProgressBar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +39,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 import type { TaskWithDetails } from '@/hooks/useTasks';
+import { useChildTasks } from '@/hooks/useTasks';
 import { useToggleSubtask, useDeleteTask, useUpdateTask } from '@/hooks/useTaskMutations';
 import type { Enums } from '@/integrations/supabase/types';
 
@@ -64,14 +68,24 @@ interface TaskListItemProps {
 
 export const TaskListItem = ({ task }: TaskListItemProps) => {
   const [expanded, setExpanded] = useState(false);
+  const [childTasksExpanded, setChildTasksExpanded] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const toggleSubtask = useToggleSubtask();
   const deleteTask = useDeleteTask();
   const updateTask = useUpdateTask();
+  
+  // Fetch child tasks if this is a parent task (no parent_task_id)
+  const isParentTask = !task.parent_task_id;
+  const { data: childTasks } = useChildTasks(isParentTask ? task.id : null);
 
   const completedSubtasks = task.subtasks?.filter((s) => s.is_completed).length || 0;
   const totalSubtasks = task.subtasks?.length || 0;
+
+  // Child tasks stats
+  const completedChildTasks = childTasks?.filter((t) => t.status === 'concluida').length || 0;
+  const totalChildTasks = childTasks?.length || 0;
+  const hasChildTasks = totalChildTasks > 0;
 
   const handleToggleSubtask = (subtaskId: string, currentState: boolean | null) => {
     toggleSubtask.mutate({ subtaskId, isCompleted: !currentState });
@@ -80,6 +94,14 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
   const handleStatusChange = (newStatus: Enums<'task_status'>) => {
     updateTask.mutate({
       id: task.id,
+      status: newStatus,
+      completed_at: newStatus === 'concluida' ? new Date().toISOString() : null,
+    });
+  };
+
+  const handleChildTaskStatusChange = (childTaskId: string, newStatus: Enums<'task_status'>) => {
+    updateTask.mutate({
+      id: childTaskId,
       status: newStatus,
       completed_at: newStatus === 'concluida' ? new Date().toISOString() : null,
     });
@@ -188,6 +210,88 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
               </span>
             </div>
 
+            {/* Child Tasks Summary (for parent tasks) */}
+            {hasChildTasks && (
+              <div className="mt-3">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
+                  <span className="flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    {totalChildTasks} unidade{totalChildTasks !== 1 ? 's' : ''}
+                  </span>
+                  <span className="flex items-center gap-1 text-success">
+                    <CheckCircle2 className="w-3 h-3" />
+                    {completedChildTasks}
+                  </span>
+                  <span className="flex items-center gap-1 text-warning">
+                    <Clock className="w-3 h-3" />
+                    {totalChildTasks - completedChildTasks}
+                  </span>
+                </div>
+                <ProgressBar completed={completedChildTasks} total={totalChildTasks} />
+                <button
+                  onClick={() => setChildTasksExpanded(!childTasksExpanded)}
+                  className="flex items-center gap-2 mt-2 text-sm text-primary hover:underline"
+                >
+                  {childTasksExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                  <span>
+                    Ver tarefas das unidades ({completedChildTasks}/{totalChildTasks})
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* Child Tasks List */}
+            {childTasksExpanded && childTasks && childTasks.length > 0 && (
+              <div className="mt-3 space-y-2 border-l-2 border-primary/30 pl-3">
+                {childTasks.map((childTask) => {
+                  const childStatusInfo = statusConfig[childTask.status];
+                  return (
+                    <div
+                      key={childTask.id}
+                      className={cn(
+                        'flex items-center justify-between p-3 rounded-lg border transition-colors',
+                        childTask.status === 'concluida'
+                          ? 'bg-success/5 border-success/20'
+                          : 'bg-secondary/30 border-border'
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() =>
+                            handleChildTaskStatusChange(
+                              childTask.id,
+                              childTask.status === 'concluida' ? 'pendente' : 'concluida'
+                            )
+                          }
+                        >
+                          {childTask.status === 'concluida' ? (
+                            <CheckCircle2 className="w-5 h-5 text-success" />
+                          ) : (
+                            <Circle className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
+                          )}
+                        </button>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {(childTask as any).unit?.name || 'Unidade'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {(childTask as any).assignee?.full_name || 'Sem responsável'}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className={cn('text-xs', childStatusInfo.className)}>
+                        {childStatusInfo.label}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Subtasks Toggle */}
             {totalSubtasks > 0 && (
               <button
@@ -239,7 +343,7 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. A tarefa e suas subtarefas serão
+              Esta ação não pode ser desfeita. A tarefa e suas {hasChildTasks ? 'tarefas filhas' : 'subtarefas'} serão
               excluídas permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>

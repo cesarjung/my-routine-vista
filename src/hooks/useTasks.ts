@@ -221,3 +221,27 @@ export const useRoutineTasks = (routineId: string) => {
     enabled: !!routineId,
   });
 };
+
+// Hook to get child tasks for a parent task
+export const useChildTasks = (parentTaskId: string | null | undefined) => {
+  return useQuery({
+    queryKey: ['child-tasks', parentTaskId],
+    queryFn: async () => {
+      if (!parentTaskId) return [];
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          unit:units(id, name, code),
+          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email)
+        `)
+        .eq('parent_task_id', parentTaskId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!parentTaskId,
+  });
+};
