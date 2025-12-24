@@ -549,9 +549,8 @@ export const RoutineDetailPanel = ({
                 {/* Table Header */}
                 <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
                   <div className="col-span-5">Nome</div>
-                  <div className="col-span-3">Unidade</div>
-                  <div className="col-span-2">Ações</div>
-                  <div className="col-span-2">Vencimento</div>
+                  <div className="col-span-4">Responsável</div>
+                  <div className="col-span-3">Vencimento</div>
                 </div>
 
                 {/* Task Rows */}
@@ -570,30 +569,11 @@ export const RoutineDetailPanel = ({
                         isTaskNA && 'bg-muted/20'
                       )}
                     >
-                      {/* Name with inline action buttons */}
+                      {/* Name with checkboxes */}
                       <div className="col-span-5 flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'font-medium text-sm truncate',
-                            (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
-                          )}
-                        >
-                          {assignee?.full_name || assignee?.email || 'Sem responsável'}
-                        </span>
-                      </div>
-
-                      {/* Unit */}
-                      <div className="col-span-3 flex items-center">
-                        <span className="text-sm text-muted-foreground truncate">
-                          {(task as any).unit?.name || '—'}
-                        </span>
-                      </div>
-
-                      {/* Actions - Checkbox for complete + N/A button */}
-                      <div className="col-span-2 flex items-center gap-2">
-                        {userCanEdit ? (
+                        {userCanEdit && (
                           <>
-                            {/* Checkbox for completing */}
+                            {/* Green checkbox for completing */}
                             <button
                               onClick={() => {
                                 const newStatus = isTaskCompleted ? 'pendente' : 'concluida';
@@ -601,17 +581,17 @@ export const RoutineDetailPanel = ({
                               }}
                               disabled={updateTask.isPending}
                               className={cn(
-                                'w-6 h-6 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
                                 isTaskCompleted 
-                                  ? 'bg-success border-success text-success-foreground' 
-                                  : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
+                                  ? 'bg-success border-success text-white' 
+                                  : 'border-success/50 hover:border-success hover:bg-success/10'
                               )}
-                              title={isTaskCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
+                              title="Concluída"
                             >
-                              {isTaskCompleted && <Check className="h-4 w-4" />}
+                              {isTaskCompleted && <Check className="h-3 w-3" />}
                             </button>
                             
-                            {/* N/A button */}
+                            {/* Red checkbox for N/A */}
                             <button
                               onClick={() => {
                                 const newStatus = isTaskNA ? 'pendente' : 'nao_aplicavel';
@@ -619,32 +599,44 @@ export const RoutineDetailPanel = ({
                               }}
                               disabled={updateTask.isPending}
                               className={cn(
-                                'w-6 h-6 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 text-xs font-bold',
+                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
                                 isTaskNA 
-                                  ? 'bg-muted border-muted-foreground/50 text-muted-foreground' 
-                                  : 'border-muted-foreground/40 hover:border-muted-foreground hover:bg-muted/50 text-muted-foreground/60'
+                                  ? 'bg-destructive border-destructive text-white' 
+                                  : 'border-destructive/50 hover:border-destructive hover:bg-destructive/10'
                               )}
-                              title={isTaskNA ? 'Marcar como pendente' : 'Marcar como N/A'}
+                              title="Não se Aplica"
                             >
-                              {isTaskNA ? <MinusCircle className="h-4 w-4" /> : 'NA'}
+                              {isTaskNA && <X className="h-3 w-3" />}
                             </button>
                           </>
-                        ) : (
-                          <span className={cn(
-                            'text-xs px-2 py-0.5 rounded-full border',
-                            isTaskCompleted 
-                              ? 'bg-success/20 text-success border-success/30' 
-                              : isTaskNA 
-                              ? 'bg-muted text-muted-foreground border-muted-foreground/30'
-                              : 'bg-warning/20 text-warning border-warning/30'
-                          )}>
-                            {isTaskCompleted ? 'Concluída' : isTaskNA ? 'N/A' : 'Pendente'}
-                          </span>
                         )}
+                        
+                        <span
+                          className={cn(
+                            'font-medium text-sm truncate',
+                            (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
+                          )}
+                        >
+                          {(task as any).unit?.name || 'Sem unidade'}
+                        </span>
+                      </div>
+
+                      {/* Responsible */}
+                      <div className="col-span-4 flex items-center gap-1">
+                        {assignee && (
+                          <Avatar className={cn('h-6 w-6', getAvatarColor(assignee.id))}>
+                            <AvatarFallback className="text-xs text-white">
+                              {getInitials(assignee.full_name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+                        <span className="text-sm text-muted-foreground truncate">
+                          {assignee?.full_name || assignee?.email || '—'}
+                        </span>
                       </div>
 
                       {/* Due Date */}
-                      <div className="col-span-2 flex items-center">
+                      <div className="col-span-3 flex items-center">
                         {task.due_date ? (
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(task.due_date), 'dd/MM', { locale: ptBR })}
