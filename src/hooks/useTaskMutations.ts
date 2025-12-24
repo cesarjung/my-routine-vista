@@ -399,6 +399,7 @@ export const useUpdateTask = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['child-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
       toast.success('Tarefa atualizada!');
