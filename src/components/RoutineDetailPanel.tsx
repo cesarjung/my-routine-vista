@@ -350,20 +350,19 @@ export const RoutineDetailPanel = ({
             <span className="text-muted-foreground">Status</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Badge
-                  variant="outline"
+                <button
                   className={cn(
-                    'ml-auto cursor-pointer hover:opacity-80 transition-opacity',
+                    'ml-auto px-2 py-0.5 text-xs font-medium rounded-full border inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity',
                     total > 0 && completed === total
                       ? 'bg-success/20 text-success border-success/30'
                       : 'bg-warning/20 text-warning border-warning/30'
                   )}
                 >
                   {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
-                  <ChevronDown className="h-3 w-3 ml-1" />
-                </Badge>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-popover">
+              <DropdownMenuContent align="start" className="bg-popover z-50">
                 <DropdownMenuItem
                   onClick={() => {
                     childTasks.forEach((task) => {
