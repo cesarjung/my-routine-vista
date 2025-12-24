@@ -534,50 +534,68 @@ export const RoutineDetailPanel = ({
                         </span>
                       </div>
 
-                      {/* Status - Dropdown for users with permission */}
-                      <div className="col-span-3 flex items-center">
+                      {/* Status - Checkbox + dropdown for more options */}
+                      <div className="col-span-3 flex items-center gap-2">
                         {userCanEdit ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 gap-1 px-2"
-                                disabled={updateTask.isPending}
-                              >
-                                <Badge
-                                  variant="outline"
-                                  className={cn('text-xs', currentStatus.className)}
+                          <>
+                            {/* Quick checkbox for completing */}
+                            <button
+                              onClick={() => {
+                                const newStatus = isTaskCompleted ? 'pendente' : 'concluida';
+                                updateTask.mutate({ id: task.id, status: newStatus });
+                              }}
+                              disabled={updateTask.isPending}
+                              className={cn(
+                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
+                                isTaskCompleted 
+                                  ? 'bg-success border-success text-success-foreground' 
+                                  : isTaskNA
+                                  ? 'bg-muted border-muted-foreground/30'
+                                  : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
+                              )}
+                              title={isTaskCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
+                            >
+                              {isTaskCompleted && <Check className="h-3 w-3" />}
+                              {isTaskNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
+                            </button>
+                            
+                            {/* Dropdown for more options */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  disabled={updateTask.isPending}
                                 >
-                                  {currentStatus.label}
-                                </Badge>
-                                <ChevronDown className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuItem
-                                onClick={() => updateTask.mutate({ id: task.id, status: 'concluida' })}
-                                className="gap-2"
-                              >
-                                <Check className="h-4 w-4 text-success" />
-                                <span>Concluída</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => updateTask.mutate({ id: task.id, status: 'pendente' })}
-                                className="gap-2"
-                              >
-                                <Circle className="h-4 w-4 text-warning" />
-                                <span>Pendente</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => updateTask.mutate({ id: task.id, status: 'nao_aplicavel' })}
-                                className="gap-2"
-                              >
-                                <MinusCircle className="h-4 w-4 text-muted-foreground" />
-                                <span>Não se Aplica</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start">
+                                <DropdownMenuItem
+                                  onClick={() => updateTask.mutate({ id: task.id, status: 'concluida' })}
+                                  className="gap-2"
+                                >
+                                  <Check className="h-4 w-4 text-success" />
+                                  <span>Concluída</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => updateTask.mutate({ id: task.id, status: 'pendente' })}
+                                  className="gap-2"
+                                >
+                                  <Circle className="h-4 w-4 text-warning" />
+                                  <span>Pendente</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => updateTask.mutate({ id: task.id, status: 'nao_aplicavel' })}
+                                  className="gap-2"
+                                >
+                                  <MinusCircle className="h-4 w-4 text-muted-foreground" />
+                                  <span>Não se Aplica</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
                         ) : (
                           <Badge
                             variant="outline"
