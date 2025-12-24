@@ -1,17 +1,26 @@
 import { useMemo, useState } from 'react';
 import { useTasks } from '@/hooks/useTasks';
+import { useUpdateTask } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Pencil, Check, MinusCircle, MoreVertical, Circle, Play } from 'lucide-react';
 import { format, differenceInDays, startOfDay, addDays, subDays, max, min } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import type { Tables } from '@/integrations/supabase/types';
+import type { Tables, Enums } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
 };
+
+type TaskStatus = Enums<'task_status'>;
 
 interface GanttViewProps {
   sectorId?: string;
@@ -20,6 +29,7 @@ interface GanttViewProps {
 
 export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   const { data: tasks, isLoading } = useTasks();
+  const updateTask = useUpdateTask();
   const { user } = useAuth();
   const [viewStart, setViewStart] = useState(() => subDays(new Date(), 7));
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -28,6 +38,15 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
     setEditDialogOpen(true);
+  };
+
+  const handleStatusChange = (taskId: string, newStatus: TaskStatus, e: React.MouseEvent) => {
+    e.stopPropagation();
+    updateTask.mutate({
+      id: taskId,
+      status: newStatus,
+      completed_at: newStatus === 'concluida' ? new Date().toISOString() : null,
+    });
   };
 
   const daysToShow = 30;
@@ -66,6 +85,7 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
     em_andamento: 'bg-primary',
     concluida: 'bg-success',
     atrasada: 'bg-destructive',
+    nao_aplicavel: 'bg-muted',
   };
 
   if (isLoading) {
@@ -120,24 +140,76 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex">
             {/* Task Names Column */}
-            <div className="min-w-[200px] border-r border-border flex-shrink-0">
+            <div className="min-w-[240px] border-r border-border flex-shrink-0">
               <div className="h-14 bg-secondary/50 border-b border-border p-3 font-medium text-foreground">
                 Tarefa
               </div>
-              {tasksWithDates.map((task, index) => (
-                <div
-                  key={task.id}
-                  className="h-12 border-b border-border px-3 flex items-center group cursor-pointer hover:bg-secondary/30"
-                  style={{ animationDelay: `${index * 30}ms` }}
-                  onClick={() => handleEditTask(task as Task)}
-                >
-                  <div className="truncate flex-1">
-                    <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{task.unit?.name}</p>
+              {tasksWithDates.map((task, index) => {
+                const isCompleted = task.status === 'concluida';
+                const isNA = task.status === 'nao_aplicavel';
+                
+                return (
+                  <div
+                    key={task.id}
+                    className="h-12 border-b border-border px-3 flex items-center gap-2 group cursor-pointer hover:bg-secondary/30"
+                    style={{ animationDelay: `${index * 30}ms` }}
+                    onClick={() => handleEditTask(task as Task)}
+                  >
+                    {/* Quick checkbox */}
+                    <button
+                      onClick={(e) => handleStatusChange(task.id, isCompleted ? 'pendente' : 'concluida', e)}
+                      className={cn(
+                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                        isCompleted 
+                          ? 'bg-success border-success text-success-foreground' 
+                          : isNA
+                          ? 'bg-muted border-muted-foreground/30'
+                          : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
+                      )}
+                      title={isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
+                    >
+                      {isCompleted && <Check className="h-3 w-3" />}
+                      {isNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
+                    </button>
+                    
+                    <div className="truncate flex-1">
+                      <p className={cn(
+                        "text-sm font-medium text-foreground truncate",
+                        isCompleted && "line-through text-muted-foreground"
+                      )}>{task.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{task.unit?.name}</p>
+                    </div>
+                    
+                    {/* More options */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'concluida', e as any)}>
+                          <Check className="h-4 w-4 mr-2 text-success" />
+                          Concluída
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'pendente', e as any)}>
+                          <Circle className="h-4 w-4 mr-2 text-warning" />
+                          Pendente
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'nao_aplicavel', e as any)}>
+                          <MinusCircle className="h-4 w-4 mr-2 text-muted-foreground" />
+                          Não se Aplica
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <Pencil className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                </div>
-              ))}
+                );
+              })}
             </div>
 
           {/* Timeline */}
@@ -254,6 +326,10 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded bg-destructive" />
           <span className="text-muted-foreground">Atrasada</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded bg-muted" />
+          <span className="text-muted-foreground">N/A</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-0.5 h-4 bg-primary" />
