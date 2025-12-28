@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Building2, Users, Loader2, CheckCircle2, Maximize2, X, ExternalLink } from 'lucide-react';
 import { useUnitRoutineStatus, useResponsibleRoutineStatus, useOverallStats } from '@/hooks/useDashboardData';
 import { useDashboardPanels } from '@/hooks/useDashboardPanels';
-import { useSectors } from '@/hooks/useSectors';
 import { useTasks } from '@/hooks/useTasks';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { cn } from '@/lib/utils';
@@ -147,9 +146,9 @@ const ResizablePanel = ({ title, icon: Icon, count, children, defaultHeight = 28
   return (
     <div
       className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
-      style={{ 
-        minHeight: 150, 
-        minWidth: 280, 
+      style={{
+        minHeight: 150,
+        minWidth: 280,
         height: defaultHeight,
         width: defaultWidth,
         maxWidth: '100%'
@@ -193,7 +192,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
     // Note: We need to check if the task has a routine with the matching frequency
     // For now, we show all tasks for the entity since we don't have routine data here
     // This will be filtered in the hook if needed
-    
+
     return true;
   }) || [];
 
@@ -215,7 +214,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
             )}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="flex-1 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -244,9 +243,9 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
                     <Badge
                       variant={
                         task.status === 'concluida' ? 'default' :
-                        task.status === 'atrasada' ? 'destructive' :
-                        task.status === 'em_andamento' ? 'secondary' :
-                        'outline'
+                          task.status === 'atrasada' ? 'destructive' :
+                            task.status === 'em_andamento' ? 'secondary' :
+                              'outline'
                       }
                       className="shrink-0"
                     >
@@ -268,8 +267,15 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
   );
 };
 
-export const DashboardView = () => {
-  const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
+import { useSectors } from '@/hooks/useSectors';
+
+export interface DashboardViewProps {
+  forcedSectorId?: string;
+  hideHeader?: boolean;
+}
+
+export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps) => {
+  const [selectedSectorId, setSelectedSectorId] = useState<string | null>(forcedSectorId || null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
     isOpen: false,
@@ -278,7 +284,14 @@ export const DashboardView = () => {
     entityType: 'unit',
     frequency: '',
   });
-  
+
+  // Effect to update selectedSectorId if forcedSectorId changes
+  useEffect(() => {
+    if (forcedSectorId) {
+      setSelectedSectorId(forcedSectorId);
+    }
+  }, [forcedSectorId]);
+
   const { data: sectors } = useSectors();
   const { data: statsData } = useOverallStats(selectedSectorId);
   const { data: unitStatus, isLoading: loadingUnits } = useUnitRoutineStatus(selectedSectorId);
@@ -316,8 +329,8 @@ export const DashboardView = () => {
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-8 py-4 flex items-center justify-between">
           <img src={sirtecLogoHeader} alt="Sirtec" className="h-12 object-contain" />
           <h1 className="text-2xl font-bold text-foreground">Gerenciamento de Rotinas</h1>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={() => setIsFullscreen(false)}
             className="hover:bg-destructive/10"
@@ -375,10 +388,10 @@ export const DashboardView = () => {
                             </td>
                             {FREQUENCIES.map(f => (
                               <td key={f} className="p-2 text-center">
-                                <StatusBadge 
-                                  data={unit.frequencies[f]} 
+                                <StatusBadge
+                                  data={unit.frequencies[f]}
                                   frequency={f}
-                                  onClick={unit.frequencies[f].total > 0 
+                                  onClick={unit.frequencies[f].total > 0
                                     ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
                                     : undefined
                                   }
@@ -414,10 +427,10 @@ export const DashboardView = () => {
                             </td>
                             {FREQUENCIES.map(f => (
                               <td key={f} className="p-2 text-center">
-                                <StatusBadge 
-                                  data={person.frequencies[f]} 
+                                <StatusBadge
+                                  data={person.frequencies[f]}
                                   frequency={f}
-                                  onClick={person.frequencies[f].total > 0 
+                                  onClick={person.frequencies[f].total > 0
                                     ? () => openTasksDialog(person.id, person.name, 'responsible', f)
                                     : undefined
                                   }
@@ -437,8 +450,8 @@ export const DashboardView = () => {
         </div>
 
         {/* Tasks Dialog */}
-        <TasksDialog 
-          state={tasksDialog} 
+        <TasksDialog
+          state={tasksDialog}
           onClose={closeTasksDialog}
           sectorId={selectedSectorId}
         />
@@ -455,13 +468,13 @@ export const DashboardView = () => {
           <div className={cn(
             'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold',
             overallPercentage >= 70 ? 'bg-success/20 text-success' :
-            overallPercentage >= 40 ? 'bg-warning/20 text-warning' :
-            'bg-destructive/20 text-destructive'
+              overallPercentage >= 40 ? 'bg-warning/20 text-warning' :
+                'bg-destructive/20 text-destructive'
           )}>
             {overallPercentage}%
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <TooltipProvider>
             <Tooltip>
@@ -482,26 +495,28 @@ export const DashboardView = () => {
           </TooltipProvider>
 
           {isAdmin && <PanelFormDialog panelCount={customPanels?.length || 0} />}
-          
-          <Select
-            value={selectedSectorId || 'all'}
-            onValueChange={(value) => setSelectedSectorId(value === 'all' ? null : value)}
-          >
-            <SelectTrigger className="h-8 w-[150px] text-xs">
-              <SelectValue placeholder="Setor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {sectors?.map(sector => (
-                <SelectItem key={sector.id} value={sector.id}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sector.color || '#6366f1' }} />
-                    {sector.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+          {!forcedSectorId && (
+            <Select
+              value={selectedSectorId || 'all'}
+              onValueChange={(value) => setSelectedSectorId(value === 'all' ? null : value)}
+            >
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue placeholder="Setor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {sectors?.map(sector => (
+                  <SelectItem key={sector.id} value={sector.id}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sector.color || '#6366f1' }} />
+                      {sector.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
@@ -543,10 +558,10 @@ export const DashboardView = () => {
                         </td>
                         {FREQUENCIES.map(f => (
                           <td key={f} className="p-1 text-center">
-                            <StatusBadge 
-                              data={unit.frequencies[f]} 
+                            <StatusBadge
+                              data={unit.frequencies[f]}
                               frequency={f}
-                              onClick={unit.frequencies[f].total > 0 
+                              onClick={unit.frequencies[f].total > 0
                                 ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
                                 : undefined
                               }
@@ -582,10 +597,10 @@ export const DashboardView = () => {
                         </td>
                         {FREQUENCIES.map(f => (
                           <td key={f} className="p-1 text-center">
-                            <StatusBadge 
-                              data={person.frequencies[f]} 
+                            <StatusBadge
+                              data={person.frequencies[f]}
                               frequency={f}
-                              onClick={person.frequencies[f].total > 0 
+                              onClick={person.frequencies[f].total > 0
                                 ? () => openTasksDialog(person.id, person.name, 'responsible', f)
                                 : undefined
                               }
@@ -604,8 +619,8 @@ export const DashboardView = () => {
       )}
 
       {/* Tasks Dialog */}
-      <TasksDialog 
-        state={tasksDialog} 
+      <TasksDialog
+        state={tasksDialog}
         onClose={closeTasksDialog}
         sectorId={selectedSectorId}
       />

@@ -10,17 +10,19 @@ const Index = () => {
 
   return (
     <div className="flex min-h-screen bg-background w-full">
-      <SectorSidebar 
-        context={context} 
-        onNavigate={setContext} 
+      <SectorSidebar
+        context={context}
+        onNavigate={setContext}
         collapsed={collapsed}
         onCollapseChange={setCollapsed}
       />
-      <ContentArea 
-        context={context} 
-        viewMode={viewMode} 
-        onViewModeChange={setViewMode} 
-      />
+      <div className="flex-1 w-full overflow-hidden">
+        <ContentArea
+          context={context}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
+      </div>
     </div>
   );
 };

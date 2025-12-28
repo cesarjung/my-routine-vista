@@ -41,7 +41,7 @@ export const useCreateRoutine = () => {
   return useMutation({
     mutationFn: async (data: CreateRoutineData) => {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) throw new Error('Usuário não autenticado');
 
       const { data: routine, error } = await supabase
@@ -83,7 +83,7 @@ export const useCreateRoutineWithUnits = () => {
   return useMutation({
     mutationFn: async (data: CreateRoutineWithUnitsData) => {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) throw new Error('Usuário não autenticado');
 
       // Get the user's unit_id and role
@@ -129,7 +129,7 @@ export const useCreateRoutineWithUnits = () => {
         // User provided specific dates
         periodStart = new Date(data.startDate);
         periodEnd = new Date(data.dueDate);
-        
+
         // Adjust for weekends/holidays if enabled
         if (data.skipWeekendsHolidays) {
           if (isWeekendOrHoliday(periodStart)) {
@@ -142,7 +142,7 @@ export const useCreateRoutineWithUnits = () => {
       } else {
         // Calculate based on frequency (fallback to current date)
         let now = new Date();
-        
+
         // Se ignorar feriados/fins de semana, ajustar a data inicial
         if (data.skipWeekendsHolidays && isWeekendOrHoliday(now)) {
           now = getNextBusinessDay(now);
@@ -241,6 +241,9 @@ export const useCreateRoutineWithUnits = () => {
             status: 'pendente' as const,
             priority: 2,
             parent_task_id: null,
+            is_recurring: true, // Routines are always recurring if created via this flow with frequency
+            recurrence_frequency: data.frequency,
+            recurrence_mode: data.recurrenceMode || 'schedule',
           })
           .select()
           .single();
@@ -248,10 +251,10 @@ export const useCreateRoutineWithUnits = () => {
         if (parentTaskError) throw parentTaskError;
 
         // Add routine assignees
-        const routineAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0 
-          ? data.parentAssignees 
+        const routineAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0
+          ? data.parentAssignees
           : [data.parentAssignedTo || user.id].filter(Boolean);
-        
+
         if (routineAssigneeIds.length > 0) {
           await supabase
             .from('routine_assignees')

@@ -25,13 +25,17 @@ interface UserWithRole extends Profile {
   role?: AppRole;
 }
 
-export const SettingsView = () => {
+interface SettingsViewProps {
+  hideHeader?: boolean;
+}
+
+export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
   const { canManageUsers, isLoading: isLoadingRole } = useCanManageUsers();
   const { isAdmin } = useIsAdmin();
   const { user } = useAuth();
   const { data: units } = useUnits();
   const { data: profiles, refetch: refetchProfiles } = useProfiles();
-  
+
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
@@ -69,28 +73,28 @@ export const SettingsView = () => {
     setEditingUser(profile);
     setEditName(profile.full_name || '');
     setEditEmail(profile.email || '');
-    
+
     // Fetch user's managed units
     const { data: managedUnits } = await supabase
       .from('unit_managers')
       .select('unit_id')
       .eq('user_id', profile.id);
-    
+
     const managedUnitIds = managedUnits?.map(u => u.unit_id) || [];
     // Include profile unit_id if exists and not already in managed units
     const allUnits = profile.unit_id && !managedUnitIds.includes(profile.unit_id)
       ? [profile.unit_id, ...managedUnitIds]
       : managedUnitIds.length > 0 ? managedUnitIds : (profile.unit_id ? [profile.unit_id] : []);
-    
+
     setEditUnits(allUnits);
-    
+
     // Fetch user role
     const { data: roleData } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', profile.id)
       .maybeSingle();
-    
+
     setEditRole((roleData?.role as AppRole) || 'usuario');
   };
 
@@ -214,9 +218,9 @@ export const SettingsView = () => {
       const primaryUnitId = editUnits.length > 0 ? editUnits[0] : null;
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ 
-          full_name: editName.trim(), 
-          unit_id: primaryUnitId 
+        .update({
+          full_name: editName.trim(),
+          unit_id: primaryUnitId
         })
         .eq('id', editingUser.id);
 
@@ -227,13 +231,13 @@ export const SettingsView = () => {
         .from('unit_managers')
         .delete()
         .eq('user_id', editingUser.id);
-      
+
       if (editUnits.length > 0) {
         await supabase
           .from('unit_managers')
-          .insert(editUnits.map(unitId => ({ 
-            user_id: editingUser.id, 
-            unit_id: unitId 
+          .insert(editUnits.map(unitId => ({
+            user_id: editingUser.id,
+            unit_id: unitId
           })));
       }
 
@@ -339,7 +343,7 @@ export const SettingsView = () => {
   // For regular users (not admin or gestor), show only their profile settings
   if (!canManageUsers) {
     const userUnit = units?.find(u => u.id === myProfile?.unit_id);
-    
+
     return (
       <div className="p-6 space-y-6">
         <div>
@@ -391,8 +395,8 @@ export const SettingsView = () => {
                 />
               </div>
 
-              <Button 
-                onClick={handleUpdateMyProfile} 
+              <Button
+                onClick={handleUpdateMyProfile}
                 disabled={isUpdatingProfile || !myName.trim()}
               >
                 {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
@@ -434,8 +438,8 @@ export const SettingsView = () => {
                 />
               </div>
 
-              <Button 
-                onClick={handleChangePassword} 
+              <Button
+                onClick={handleChangePassword}
                 disabled={isChangingPassword || !newPassword || !confirmPassword}
               >
                 {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
@@ -452,10 +456,12 @@ export const SettingsView = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-        <p className="text-muted-foreground">Gerencie usuários, unidades e permissões</p>
-      </div>
+      {!hideHeader && (
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
+          <p className="text-muted-foreground">Gerencie usuários, unidades e permissões</p>
+        </div>
+      )}
 
       <Tabs defaultValue="profile" className="space-y-4">
         <TabsList className="flex-wrap">
@@ -526,8 +532,8 @@ export const SettingsView = () => {
                   />
                 </div>
 
-                <Button 
-                  onClick={handleUpdateMyProfile} 
+                <Button
+                  onClick={handleUpdateMyProfile}
                   disabled={isUpdatingProfile || !myName.trim()}
                 >
                   {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
@@ -569,8 +575,8 @@ export const SettingsView = () => {
                   />
                 </div>
 
-                <Button 
-                  onClick={handleChangePassword} 
+                <Button
+                  onClick={handleChangePassword}
                   disabled={isChangingPassword || !newPassword || !confirmPassword}
                 >
                   {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
@@ -732,7 +738,7 @@ export const SettingsView = () => {
               Altere os dados do usuário {editingUser?.email}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Nome Completo</Label>
@@ -759,7 +765,7 @@ export const SettingsView = () => {
                 )}
               </div>
             )}
-            
+
             <div className="space-y-2">
               <Label>Unidades</Label>
               <MultiAssigneeSelect
@@ -769,7 +775,7 @@ export const SettingsView = () => {
                 placeholder="Selecione as unidades"
               />
             </div>
-            
+
             {isAdmin && (
               <div className="space-y-2">
                 <Label htmlFor="edit-role">Função</Label>
@@ -786,7 +792,7 @@ export const SettingsView = () => {
               </div>
             )}
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingUser(null)}>
               Cancelar

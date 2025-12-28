@@ -3,10 +3,19 @@ import { useTasks } from '@/hooks/useTasks';
 import { useUpdateTask } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Clock, AlertCircle, Play, Loader2, GripVertical, Pencil, MinusCircle, Check, Circle, MoreVertical } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Play, Loader2, Plus, Check, MinusCircle, Circle, MoreVertical } from 'lucide-react';
 import type { Enums, Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { TaskForm } from '@/components/TaskForm';
+import { RoutineForm } from '@/components/RoutineForm';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,14 +48,17 @@ const columns: Column[] = [
 interface KanbanViewProps {
   sectorId?: string;
   isMyTasks?: boolean;
+  type?: 'tasks' | 'routines';
+  hideHeader?: boolean;
 }
 
-export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
+export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = false }: KanbanViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const { user } = useAuth();
   const updateTask = useUpdateTask();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
@@ -86,12 +98,45 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Kanban</h1>
-        <p className="text-muted-foreground">Visualize e gerencie tarefas por status</p>
-      </div>
+      {!hideHeader && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground mb-1">
+              Kanban {type === 'routines' ? '(Rotinas)' : ''}
+            </h1>
+            <p className="text-muted-foreground">Visualize e gerencie {type === 'routines' ? 'rotinas' : 'tarefas'} por status</p>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 min-h-[600px]">
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                {type === 'routines' ? 'Nova Rotina' : 'Nova Tarefa'}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {type === 'routines' ? 'Criar Nova Rotina' : 'Criar Nova Tarefa'}
+                </DialogTitle>
+              </DialogHeader>
+              {type === 'routines' ? (
+                <RoutineForm
+                  sectorId={sectorId}
+                />
+              ) : (
+                <TaskForm
+                  sectorId={sectorId}
+                  onSuccess={() => setIsCreateDialogOpen(false)}
+                  onCancel={() => setIsCreateDialogOpen(false)}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px] items-start">
         {columns.map((column) => {
           const columnTasks = getTasksByStatus(column.id);
           const Icon = column.icon;
@@ -99,7 +144,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
           return (
             <div
               key={column.id}
-              className="rounded-xl border border-border bg-card/50 flex flex-col"
+              className="min-w-[300px] w-[300px] rounded-xl border border-border bg-card/50 flex flex-col flex-shrink-0"
             >
               {/* Column Header */}
               <div className={cn('p-4 rounded-t-xl border-b border-border', column.bgColor)}>
@@ -124,7 +169,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                   columnTasks.map((task, index) => {
                     const isCompleted = task.status === 'concluida';
                     const isNA = task.status === 'nao_aplicavel';
-                    
+
                     return (
                       <div
                         key={task.id}
@@ -138,18 +183,18 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                             onClick={(e) => handleStatusChange(task.id, isCompleted ? 'pendente' : 'concluida', e)}
                             className={cn(
                               'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 mt-0.5',
-                              isCompleted 
-                                ? 'bg-success border-success text-success-foreground' 
+                              isCompleted
+                                ? 'bg-success border-success text-success-foreground'
                                 : isNA
-                                ? 'bg-muted border-muted-foreground/30'
-                                : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
+                                  ? 'bg-muted border-muted-foreground/30'
+                                  : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
                             )}
                             title={isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
                           >
                             {isCompleted && <Check className="h-3 w-3" />}
                             {isNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
                           </button>
-                          
+
                           <div className="flex-1 min-w-0">
                             <p className={cn(
                               "text-sm font-medium text-foreground truncate",
@@ -168,7 +213,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                               </p>
                             )}
                           </div>
-                          
+
                           {/* More options dropdown */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

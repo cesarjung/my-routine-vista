@@ -106,7 +106,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [parentAssignees, setParentAssignees] = useState<string[]>([]);
-  
+
   const updateRoutine = useUpdateRoutine();
   const deleteRoutine = useDeleteRoutine();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
@@ -114,7 +114,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
   const { data: allProfiles } = useProfiles();
   const { data: unitManagers } = useUnitManagers();
 
-  // Fetch routine assignees
+  // Fetch routine assignees (parent task assignees)
   const { data: routineAssignees } = useQuery({
     queryKey: ['routine-assignees', routine?.id],
     queryFn: async () => {
@@ -125,6 +125,112 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
         .eq('routine_id', routine.id);
       if (error) throw error;
       return data.map(ra => ra.user_id);
+    },
+    enabled: !!routine?.id && open,
+  });
+
+  // Fetch actual unit assignments from the latest child tasks for this routine
+  useQuery({
+    queryKey: ['routine-child-tasks-assignments', routine?.id],
+    queryFn: async () => {
+      if (!routine?.id) return null;
+
+      // Get the most recent Parent Task for this routine
+      const { data: parentTask } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('routine_id', routine.id)
+        .is('parent_task_id', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!parentTask) return null;
+
+      // Get child tasks and their assignees
+      const { data: childTasks } = await supabase
+        .from('tasks')
+        .select('id, unit_id, assigned_to')
+        .eq('parent_task_id', parentTask.id);
+
+      if (!childTasks || childTasks.length === 0) return null;
+
+      const taskIds = childTasks.map(t => t.id);
+
+      // Get additional assignees from task_assignees
+      const { data: taskAssignees } = await supabase
+        .from('task_assignees')
+        .select('task_id, user_id')
+        .in('task_id', taskIds);
+
+      // Construct the unitAssignments map
+      const assignments: UnitAssignment[] = childTasks.map(task => {
+        const assignees = new Set<string>();
+        if (task.assigned_to) assignees.add(task.assigned_to);
+
+        taskAssignees
+          ?.filter(ta => ta.task_id === task.id)
+          .forEach(ta => assignees.add(ta.user_id));
+
+        return {
+          unitId: task.unit_id,
+          assignedToIds: Array.from(assignees)
+        };
+      });
+
+      return assignments;
+    },
+    enabled: !!routine?.id && open,
+  }).data;
+
+  // Use a separate effect to load the fetched assignments into state
+  // We need to capture the data from the query above.
+  // Since I cannot easily assign it to a variable without breaking the rules of hooks if I conditionally call it, 
+  // I will refactor to put the query result into a variable and use useEffect.
+
+  const { data: existingAssignments } = useQuery({
+    queryKey: ['routine-child-tasks-assignments', routine?.id],
+    queryFn: async () => {
+      if (!routine?.id) return [];
+
+      const { data: parentTask } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('routine_id', routine.id)
+        .is('parent_task_id', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!parentTask) return [];
+
+      const { data: childTasks } = await supabase
+        .from('tasks')
+        .select('id, unit_id, assigned_to')
+        .eq('parent_task_id', parentTask.id);
+
+      if (!childTasks) return [];
+
+      const taskIds = childTasks.map(t => t.id);
+
+      const { data: taskAssignees } = await supabase
+        .from('task_assignees')
+        .select('task_id, user_id')
+        .in('task_id', taskIds);
+
+      return childTasks.map(task => {
+        const assignees = new Set<string>();
+        if (task.assigned_to) assignees.add(task.assigned_to);
+
+        taskAssignees
+          ?.filter(ta => ta.task_id === task.id)
+          .forEach(ta => assignees.add(ta.user_id));
+
+        return {
+          unitId: task.unit_id,
+          assignedToIds: Array.from(assignees)
+        };
+      });
     },
     enabled: !!routine?.id && open,
   });
@@ -146,13 +252,18 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
 
   // Reset unit assignments when routine changes and load saved data
   useEffect(() => {
-    if (routine?.unit_id) {
+    if (existingAssignments && existingAssignments.length > 0) {
+      setUnitAssignments(existingAssignments);
+    } else if (routine?.unit_id) {
+      // Fallback for legacy or manually created routines without tasks yet
       setUnitAssignments([{ unitId: routine.unit_id, assignedToIds: routineAssignees || [] }]);
     } else {
       setUnitAssignments([]);
     }
+
+    // Always sync parent assignees
     setParentAssignees(routineAssignees || []);
-  }, [routine, routineAssignees]);
+  }, [routine, routineAssignees, existingAssignments]);
 
   const selectedUnitIds = useMemo(() => unitAssignments.map(a => a.unitId), [unitAssignments]);
   const selectedSet = useMemo(() => new Set(selectedUnitIds), [selectedUnitIds]);
@@ -162,7 +273,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
     const managerUserIds = unitManagers
       ?.filter(um => um.unit_id === unitId)
       ?.map(um => um.user_id) || [];
-    return allProfiles.filter(p => 
+    return allProfiles.filter(p =>
       p.unit_id === unitId || managerUserIds.includes(p.id)
     );
   }, [allProfiles, unitManagers]);
@@ -178,7 +289,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
   }, []);
 
   const updateUnitAssignees = useCallback((unitId: string, assignedToIds: string[]) => {
-    setUnitAssignments(prev => 
+    setUnitAssignments(prev =>
       prev.map(a => a.unitId === unitId ? { ...a, assignedToIds } : a)
     );
   }, []);
@@ -515,7 +626,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="border border-border rounded-md overflow-y-auto max-h-48">
                     <div className="p-3 space-y-2">
                       {loadingUnits ? (
@@ -527,7 +638,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                           const isSelected = selectedSet.has(unit.id);
                           const assignment = unitAssignments.find(a => a.unitId === unit.id);
                           const profilesForUnit = getProfilesForUnit(unit.id);
-                          
+
                           return (
                             <div
                               key={unit.id}
@@ -551,7 +662,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                                   <p className="text-xs text-muted-foreground">{unit.code}</p>
                                 </div>
                               </div>
-                              
+
                               {isSelected && (
                                 <div className="px-3 pb-3 pt-0">
                                   <div className="flex items-center gap-2 pl-7">

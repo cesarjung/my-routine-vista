@@ -1,55 +1,56 @@
 import { useState } from 'react';
 import { useTasks } from '@/hooks/useTasks';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useRoutines } from '@/hooks/useRoutines';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSectors } from '@/hooks/useSectors';
 import { cn } from '@/lib/utils';
-import { 
-  CheckCircle2, 
-  Clock, 
-  User, 
-  Loader2, 
+import {
+  Loader2,
   Calendar,
   ClipboardList,
   ChevronDown,
   ChevronRight,
-  Building2,
-  List,
-  Columns3,
-  CalendarDays,
-  GanttChart,
-  Pencil
+  User,
+  Search,
+  Plus,
+  Filter,
+  CheckCircle2,
+  Trash2,
+  X
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ViewMode } from '@/types/navigation';
 import { KanbanView } from './KanbanView';
 import { CalendarView } from './CalendarView';
 import { GanttView } from './GanttView';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
-import type { Tables } from '@/integrations/supabase/types';
+import { TaskForm } from '@/components/TaskForm';
+import type { Tables, Enums } from '@/integrations/supabase/types';
+import { TaskRowItem } from '@/components/TaskRowItem';
+import { RoutineListItem } from '@/components/RoutineListItem';
+import { TaskDetailPanel } from '@/components/TaskDetailPanel';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
-};
-
-const statusLabels: Record<string, string> = {
-  pendente: 'Pendente',
-  em_andamento: 'Em Andamento',
-  concluida: 'Concluída',
-  atrasada: 'Atrasada',
-  cancelada: 'Cancelada',
-  nao_aplicavel: 'N/A',
-};
-
-const statusColors: Record<string, string> = {
-  pendente: 'bg-warning/10 text-warning border-warning/30',
-  em_andamento: 'bg-primary/10 text-primary border-primary/30',
-  concluida: 'bg-success/10 text-success border-success/30',
-  atrasada: 'bg-destructive/10 text-destructive border-destructive/30',
-  cancelada: 'bg-muted text-muted-foreground border-muted',
-  nao_aplicavel: 'bg-secondary text-muted-foreground border-secondary',
 };
 
 const frequencyLabels: Record<string, string> = {
@@ -60,31 +61,123 @@ const frequencyLabels: Record<string, string> = {
   anual: 'Anual',
 };
 
-const VIEW_OPTIONS = [
-  { value: 'list' as ViewMode, label: 'Lista', icon: List },
-  { value: 'kanban' as ViewMode, label: 'Quadro', icon: Columns3 },
-  { value: 'calendar' as ViewMode, label: 'Calendário', icon: CalendarDays },
-  { value: 'gantt' as ViewMode, label: 'Gantt', icon: GanttChart },
+// Config from TasksView for reuse
+const statusFilters: {
+  value: Enums<'task_status'>;
+  label: string;
+  chipClass: string;
+}[] = [
+    { value: 'pendente', label: 'Pendente', chipClass: 'bg-yellow-100 text-yellow-800 border border-yellow-300' },
+    { value: 'em_andamento', label: 'Em Andamento', chipClass: 'bg-orange-100 text-orange-800 border border-orange-300' },
+    { value: 'concluida', label: 'Concluída', chipClass: 'bg-green-100 text-green-800 border border-green-300' },
+    { value: 'atrasada', label: 'Atrasada', chipClass: 'bg-red-100 text-red-800 border border-red-300' },
+    { value: 'cancelada', label: 'Cancelada', chipClass: 'bg-slate-100 text-slate-700 border border-slate-300' },
+  ];
+
+const frequencies: { value: string; label: string }[] = [
+  { value: 'all', label: 'Todas' },
+  { value: 'diaria', label: 'Diárias' },
+  { value: 'semanal', label: 'Semanais' },
+  { value: 'quinzenal', label: 'Quinzenais' },
+  { value: 'mensal', label: 'Mensais' },
+
 ];
 
-export const MyTasksView = () => {
+export const MyTasksView = ({
+  hideHeader,
+  viewMode = 'list'
+}: {
+  hideHeader?: boolean;
+  viewMode?: ViewMode;
+}) => {
   const { user } = useAuth();
   const { data: tasks, isLoading: tasksLoading } = useTasks();
   const { data: routines, isLoading: routinesLoading } = useRoutines();
   const { data: sectors } = useSectors();
-  
+
+  // Filters State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [frequencyFilter, setFrequencyFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [selectedStatuses, setSelectedStatuses] = useState<Enums<'task_status'>[]>(statusFilters.map((f) => f.value));
+
+  // UI State
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set(['all']));
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('tasks');
+
+  // Selection State
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>([]);
 
   const isLoading = tasksLoading || routinesLoading;
 
-  // Filter tasks assigned to current user
-  const myTasks = tasks?.filter(t => t.assigned_to === user?.id) || [];
-  
+  const handleToggleTaskSelect = (id: string) => {
+    setSelectedTaskIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleToggleRoutineSelect = (id: string) => {
+    setSelectedRoutineIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAllTasks = (filteredTasks: Task[]) => {
+    if (!filteredTasks.length) return;
+    const allSelected = filteredTasks.every(t => selectedTaskIds.includes(t.id));
+    if (allSelected) setSelectedTaskIds([]);
+    else setSelectedTaskIds(filteredTasks.map(t => t.id));
+  };
+
+  const toggleSelectAllRoutines = (filteredRoutines: any[]) => {
+    if (!filteredRoutines.length) return;
+    const allSelected = filteredRoutines.every(r => selectedRoutineIds.includes(r.id));
+    if (allSelected) setSelectedRoutineIds([]);
+    else setSelectedRoutineIds(filteredRoutines.map(r => r.id));
+  };
+  const myTasks = tasks?.filter(task => {
+    if (!user?.id) return false;
+
+    // 1. Assignment Check
+    let isAssigned = false;
+    if (task.assigned_to === user.id) isAssigned = true;
+    else if (task.assignees && Array.isArray(task.assignees)) {
+      isAssigned = task.assignees.some((a: any) => a.id === user.id);
+    }
+    if (!isAssigned) return false;
+
+    // 2. Search Filter
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    // 3. Status Filter
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status);
+    if (!matchesStatus) return false;
+
+    // 4. Frequency Filter
+    if (frequencyFilter !== 'all') return false;
+
+
+    // 5. Priority Filter
+    const matchesPriority = priorityFilter === 'all' || task.priority.toString() === priorityFilter;
+    if (!matchesPriority) return false;
+
+    return true;
+  }) || [];
+
   // Filter routines created by current user
-  const myRoutines = routines?.filter(r => r.created_by === user?.id) || [];
+  const myRoutines = routines?.filter(r => {
+    if (r.created_by !== user?.id) return false;
+
+    const matchesSearch = r.title.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    const matchesFrequency = frequencyFilter === 'all' || r.frequency === frequencyFilter;
+    if (!matchesFrequency) return false;
+
+    return true;
+  }) || [];
 
   // Group tasks by sector
   const tasksBySector = myTasks.reduce((acc, task) => {
@@ -124,40 +217,20 @@ export const MyTasksView = () => {
     return sectors?.find(s => s.id === sectorId)?.color || '#6366f1';
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Minhas Tarefas</h1>
-          <p className="text-muted-foreground">Tarefas e rotinas atribuídas a você</p>
-        </div>
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </div>
-    );
-  }
-
   const allSectorIds = [...new Set([...Object.keys(tasksBySector), ...Object.keys(routinesBySector)])];
 
   // Render different views based on viewMode
   const renderTasksContent = () => {
-    if (viewMode === 'kanban') {
-      return <KanbanView isMyTasks />;
-    }
-    if (viewMode === 'calendar') {
-      return <CalendarView isMyTasks />;
-    }
-    if (viewMode === 'gantt') {
-      return <GanttView isMyTasks />;
-    }
+    if (viewMode === 'kanban') return <KanbanView isMyTasks hideHeader />;
+    if (viewMode === 'calendar') return <CalendarView isMyTasks />;
+    if (viewMode === 'gantt') return <GanttView isMyTasks hideHeader />;
 
     // Default list view
     if (myTasks.length === 0) {
       return (
         <div className="text-center py-12 text-muted-foreground">
           <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>Nenhuma tarefa atribuída a você</p>
+          <p>Nenhuma tarefa encontrada</p>
         </div>
       );
     }
@@ -166,7 +239,7 @@ export const MyTasksView = () => {
       <div className="space-y-4">
         {allSectorIds.filter(id => tasksBySector[id]?.length > 0).map((sectorId) => {
           const sectorTasks = tasksBySector[sectorId] || [];
-          const isExpanded = expandedSectors.has(sectorId);
+          const isExpanded = expandedSectors.has('all') || expandedSectors.has(sectorId);
           const pendingCount = sectorTasks.filter(t => t.status === 'pendente' || t.status === 'em_andamento').length;
 
           return (
@@ -176,7 +249,7 @@ export const MyTasksView = () => {
                 className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary/30 transition-colors"
               >
                 {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                <div 
+                <div
                   className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white"
                   style={{ backgroundColor: getSectorColor(sectorId) }}
                 >
@@ -194,40 +267,19 @@ export const MyTasksView = () => {
               {isExpanded && (
                 <div className="border-t border-border divide-y divide-border">
                   {sectorTasks.map((task) => (
-                    <div 
-                      key={task.id} 
-                      className="px-4 py-3 flex items-center gap-3 hover:bg-secondary/20 transition-colors cursor-pointer group"
+                    <TaskRowItem
+                      key={task.id}
+                      task={task}
+                      isSelected={selectedTask?.id === task.id || selectedTaskIds.includes(task.id)}
+                      onToggleSelect={handleToggleTaskSelect}
                       onClick={() => {
                         setSelectedTask(task as Task);
-                        setIsEditDialogOpen(true);
+                        setSelectedRoutine(null);
                       }}
-                    >
-                      <div className={cn(
-                        "w-2 h-2 rounded-full",
-                        task.status === 'pendente' && "bg-warning",
-                        task.status === 'em_andamento' && "bg-primary",
-                        task.status === 'concluida' && "bg-success",
-                        task.status === 'atrasada' && "bg-destructive"
-                      )} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">{task.title}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Building2 className="w-3 h-3" />
-                          <span>{task.unit?.name}</span>
-                          {task.due_date && (
-                            <>
-                              <span>•</span>
-                              <Clock className="w-3 h-3" />
-                              <span>{new Date(task.due_date).toLocaleDateString('pt-BR')}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <Badge variant="outline" className={cn("text-xs", statusColors[task.status])}>
-                        {statusLabels[task.status]}
-                      </Badge>
-                      <Pencil className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
+                      onStatusChange={async (id, status) => {
+                        console.log("Status change requested", id, status);
+                      }}
+                    />
                   ))}
                 </div>
               )}
@@ -238,120 +290,311 @@ export const MyTasksView = () => {
     );
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Minhas Tarefas</h1>
-          <p className="text-muted-foreground">
-            {myTasks.length} tarefa{myTasks.length !== 1 ? 's' : ''} e {myRoutines.length} rotina{myRoutines.length !== 1 ? 's' : ''} atribuídas a você
-          </p>
+  const renderRoutinesContent = () => {
+    if (myRoutines.length === 0) {
+      return (
+        <div className="text-center py-12 text-muted-foreground">
+          <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>Nenhuma rotina atribuída a você</p>
         </div>
-        
-        {/* View Mode Toggle */}
-        <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
-          {VIEW_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            return (
-              <ToggleGroupItem
-                key={option.value}
-                value={option.value}
-                aria-label={option.label}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 text-sm',
-                  viewMode === option.value && 'bg-primary/10 text-primary'
-                )}
+      );
+    }
+    return (
+      <div className="space-y-4">
+        {allSectorIds.filter(id => routinesBySector[id]?.length > 0).map((sectorId) => {
+          const sectorRoutines = routinesBySector[sectorId] || [];
+          const isExpanded = expandedSectors.has(sectorId);
+
+          return (
+            <div key={sectorId} className="rounded-xl border border-border bg-card overflow-hidden">
+              <button
+                onClick={() => toggleSector(sectorId)}
+                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary/30 transition-colors"
               >
-                <Icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{option.label}</span>
-              </ToggleGroupItem>
-            );
-          })}
-        </ToggleGroup>
-      </div>
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                <div
+                  className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white"
+                  style={{ backgroundColor: getSectorColor(sectorId) }}
+                >
+                  {getSectorName(sectorId).charAt(0)}
+                </div>
+                <span className="font-medium flex-1 text-left">{getSectorName(sectorId)}</span>
+                <Badge variant="secondary">{sectorRoutines.length}</Badge>
+              </button>
 
-      <Tabs defaultValue="tasks" className="w-full">
-        <TabsList>
-          <TabsTrigger value="tasks" className="gap-2">
-            <ClipboardList className="w-4 h-4" />
-            Tarefas ({myTasks.length})
-          </TabsTrigger>
-          <TabsTrigger value="routines" className="gap-2">
-            <Calendar className="w-4 h-4" />
-            Rotinas ({myRoutines.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="tasks" className="mt-4">
-          {renderTasksContent()}
-        </TabsContent>
-
-        <TabsContent value="routines" className="mt-4">
-          {myRoutines.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhuma rotina atribuída a você</p>
+              {isExpanded && (
+                <div className="border-t border-border divide-y divide-border">
+                  {sectorRoutines.map((routine) => (
+                    <RoutineListItem
+                      key={routine.id}
+                      routine={routine}
+                      isSelected={selectedRoutine?.id === routine.id}
+                      isMultiSelected={selectedRoutineIds.includes(routine.id)}
+                      onToggleSelect={handleToggleRoutineSelect}
+                      onClick={() => {
+                        setSelectedRoutine(routine);
+                        setSelectedTask(null);
+                      }}
+                      onEdit={() => { }}
+                      canEdit={false}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="space-y-4">
-              {allSectorIds.filter(id => routinesBySector[id]?.length > 0).map((sectorId) => {
-                const sectorRoutines = routinesBySector[sectorId] || [];
-                const isExpanded = expandedSectors.has(sectorId);
+          );
+        })}
+      </div>
+    );
+  }
 
-                return (
-                  <div key={sectorId} className="rounded-xl border border-border bg-card overflow-hidden">
-                    <button
-                      onClick={() => toggleSector(sectorId)}
-                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary/30 transition-colors"
-                    >
-                      {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      <div 
-                        className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white"
-                        style={{ backgroundColor: getSectorColor(sectorId) }}
-                      >
-                        {getSectorName(sectorId).charAt(0)}
-                      </div>
-                      <span className="font-medium flex-1 text-left">{getSectorName(sectorId)}</span>
-                      <Badge variant="secondary">{sectorRoutines.length}</Badge>
-                    </button>
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
-                    {isExpanded && (
-                      <div className="border-t border-border divide-y divide-border">
-                        {sectorRoutines.map((routine) => (
-                          <div key={routine.id} className="px-4 py-3 flex items-center gap-3 hover:bg-secondary/20 transition-colors">
-                            <Calendar className="w-4 h-4 text-primary" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-foreground truncate">{routine.title}</p>
-                              {routine.description && (
-                                <p className="text-xs text-muted-foreground truncate">{routine.description}</p>
-                              )}
-                            </div>
-                            <Badge variant="outline" className="text-xs">
-                              {frequencyLabels[routine.frequency]}
-                            </Badge>
-                            {routine.is_active ? (
-                              <Badge className="bg-success/10 text-success border-success/30 text-xs">Ativa</Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-xs">Inativa</Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+
+
+  const isDetailOpen = !!selectedTask || !!selectedRoutine;
+
+  return (
+    <div className="flex h-full">
+      <div className="w-full flex flex-col transition-all duration-300">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col overflow-hidden">
+
+          {/* Header Container V3 - Single Line Forced */}
+          {!hideHeader && ((activeTab === 'tasks' && selectedTaskIds.length > 0) || (activeTab === 'routines' && selectedRoutineIds.length > 0)) ? (
+            <div className="flex items-center gap-2 p-2 bg-primary/5 border-b border-primary/20 shadow-sm overflow-x-auto shrink-0 min-h-[50px] mb-4 rounded-lg animate-in fade-in slide-in-from-top-1">
+              <span className="text-sm font-medium text-primary ml-2 whitespace-nowrap">
+                {activeTab === 'tasks' ? selectedTaskIds.length : selectedRoutineIds.length} selecionado(s)
+              </span>
+
+              <div className="h-5 w-px bg-primary/20 shrink-0 mx-2" />
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => activeTab === 'tasks' ? toggleSelectAllTasks(myTasks) : toggleSelectAllRoutines(myRoutines)}
+                className="h-8 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10"
+              >
+                Selecionar Tudo
+              </Button>
+
+              <div className="flex items-center gap-1 ml-auto">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
+                  onClick={() => {
+                    if (activeTab === 'tasks') {
+                      console.log("Bulk Complete Tasks", selectedTaskIds);
+                      setSelectedTaskIds([]);
+                    } else {
+                      console.log("Bulk Complete Routines", selectedRoutineIds);
+                      setSelectedRoutineIds([]);
+                    }
+                  }}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Concluir
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
+                  onClick={() => {
+                    if (activeTab === 'tasks') {
+                      console.log("Bulk Delete Tasks", selectedTaskIds);
+                      setSelectedTaskIds([]);
+                    } else {
+                      console.log("Bulk Delete Routines", selectedRoutineIds);
+                      setSelectedRoutineIds([]);
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Excluir
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 ml-1 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setSelectedTaskIds([]);
+                    setSelectedRoutineIds([]);
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ) : !hideHeader && (
+            <div className="flex items-center gap-2 p-2 bg-card border-b border-border shadow-sm overflow-x-auto shrink-0 min-h-[50px] no-scrollbar">
+
+              {/* Group 1: Navigation & Search */}
+              <div className="flex items-center gap-2 shrink-0">
+                <TabsList className="justify-start h-8 bg-secondary/50 p-0.5">
+                  <TabsTrigger value="tasks" className="gap-1.5 h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                    <ClipboardList className="w-3.5 h-3.5" />
+                    Tarefas ({myTasks.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="routines" className="gap-1.5 h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Rotinas ({myRoutines.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                <div className="relative w-36 md:w-48 shrink-0">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 bg-background h-8 text-xs w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="h-5 w-px bg-border shrink-0 mx-0.5" />
+
+              {/* Group 2: Frequencies */}
+              <div className="flex items-center gap-0.5 bg-secondary/30 p-0.5 rounded-lg border border-border shrink-0">
+                {frequencies.map((freq) => (
+                  <button
+                    key={freq.value}
+                    onClick={() => setFrequencyFilter(freq.value)}
+                    className={cn(
+                      'h-7 px-2.5 rounded-md text-xs font-medium transition-all outline-none whitespace-nowrap',
+                      frequencyFilter === freq.value
+                        ? 'bg-black text-white shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-black/5'
                     )}
-                  </div>
-                );
-              })}
+                  >
+                    {freq.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="h-5 w-px bg-border shrink-0 mx-0.5" />
+
+              {/* Group 3: Statuses */}
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedStatuses(selectedStatuses.length > 0 ? [] : statusFilters.map(f => f.value))}
+                  className="h-7 px-2 text-xs font-medium text-muted-foreground hover:text-foreground whitespace-nowrap"
+                >
+                  {selectedStatuses.length === statusFilters.length ? "Limpar" : "Todos"}
+                </Button>
+                {statusFilters.map((filter) => {
+                  const isActive = selectedStatuses.includes(filter.value);
+                  return (
+                    <button
+                      key={filter.value}
+                      onClick={() => setSelectedStatuses(prev => prev.includes(filter.value) ? prev.filter(v => v !== filter.value) : [...prev, filter.value])}
+                      className={cn(
+                        'rounded-full px-2.5 py-0.5 text-xs font-medium border transition-all whitespace-nowrap',
+                        isActive ? filter.chipClass : 'bg-muted/50 text-muted-foreground hover:bg-muted border-transparent'
+                      )}
+                    >
+                      {filter.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Spacer */}
+              <div className="flex-1 min-w-2" />
+
+              {/* Group 4: Priority & New */}
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto bg-card pl-2 sticky right-0 shadow-[glue_left_shadow]">
+                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <SelectTrigger className="w-[110px] h-8 text-xs text-muted-foreground bg-background px-2">
+                    <SelectValue placeholder="Prioridade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="4">Alta</SelectItem>
+                    <SelectItem value="3">Média</SelectItem>
+                    <SelectItem value="1">Baixa</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="h-8 gap-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs px-3">
+                      <Plus className="h-3.5 w-3.5" />
+                      Nova
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Criar Nova Tarefa</DialogTitle>
+                    </DialogHeader>
+                    <TaskForm
+                      onSuccess={() => setIsCreateDialogOpen(false)}
+                      onCancel={() => setIsCreateDialogOpen(false)}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
+
             </div>
           )}
-        </TabsContent>
-      </Tabs>
 
-      {/* Task Edit Dialog */}
+          <TabsContent value="tasks" className="flex-1 overflow-auto p-6 mt-0">
+            {renderTasksContent()}
+          </TabsContent>
+
+          <TabsContent value="routines" className="flex-1 overflow-auto p-6 mt-0">
+            {renderRoutinesContent()}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Detail Panel via Sheet */}
+      <Sheet open={isDetailOpen} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedTask(null);
+          setSelectedRoutine(null);
+        }
+      }}>
+        <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
+          <div className="h-full overflow-y-auto">
+            {selectedTask && (
+              <TaskDetailPanel
+                task={selectedTask}
+                onClose={() => setSelectedTask(null)}
+              />
+            )}
+            {selectedRoutine && (
+              <RoutineDetailPanel
+                routine={selectedRoutine}
+                onClose={() => setSelectedRoutine(null)}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+
+      {/* Task Edit Dialog (Kept just in case, but primary interaction is Detail Panel) */}
       <TaskEditDialog
         task={selectedTask}
         open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) setSelectedTask(null);
+        }}
       />
-    </div>
+    </div >
   );
 };

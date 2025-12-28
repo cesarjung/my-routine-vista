@@ -11,7 +11,64 @@ export interface TaskWithDetails extends Task {
   routine?: Tables<'routines'> | null;
   unit?: Tables<'units'> | null;
   subtasks?: Tables<'subtasks'>[];
+  assignees?: any[]; // Array of profiles
 }
+
+// Helper function to fetch and merge assignees for a list of tasks
+const fetchAndMergeAssignees = async (tasks: TaskWithDetails[]) => {
+  if (!tasks || tasks.length === 0) return [];
+
+  const taskIds = tasks.map(t => t.id);
+
+  // 1. Fetch from task_assignees table
+  const { data: multipleAssignees } = await supabase
+    .from('task_assignees')
+    .select('task_id, user_id')
+    .in('task_id', taskIds);
+
+  // Collect all unique user IDs involved
+  const allUserIds = new Set<string>();
+  tasks.forEach(t => {
+    if (t.assigned_to) allUserIds.add(t.assigned_to);
+  });
+  multipleAssignees?.forEach(ma => allUserIds.add(ma.user_id));
+
+  const uniqueUserIds = Array.from(allUserIds);
+  let profileMap: Record<string, any> = {};
+
+  if (uniqueUserIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', uniqueUserIds);
+
+    if (profiles) {
+      profiles.forEach(p => {
+        profileMap[p.id] = p;
+      });
+    }
+  }
+
+  // Merge profiles into tasks
+  return tasks.map(t => {
+    const taskUserIds = new Set<string>();
+    if (t.assigned_to) taskUserIds.add(t.assigned_to);
+
+    multipleAssignees
+      ?.filter(ma => ma.task_id === t.id)
+      .forEach(ma => taskUserIds.add(ma.user_id));
+
+    const assignees = Array.from(taskUserIds)
+      .map(uid => profileMap[uid])
+      .filter(Boolean);
+
+    return {
+      ...t,
+      assignee: t.assigned_to ? profileMap[t.assigned_to] : null,
+      assignees: assignees
+    };
+  });
+};
 
 export const useTasks = (unitId?: string) => {
   const { user } = useAuth();
@@ -38,18 +95,18 @@ export const useTasks = (unitId?: string) => {
 
       if (error) throw error;
 
-      // Se usuário não é admin/gestor, filtrar para mostrar apenas suas tarefas ou tarefas da sua unidade
+      let filteredTasks = data as TaskWithDetails[];
+
+      // Permission Filtering
       if (role === 'usuario' && user?.id) {
-        // Buscar unit_id do usuário
         const { data: profile } = await supabase
           .from('profiles')
           .select('unit_id')
           .eq('id', user.id)
           .single();
-        
+
         const userUnitId = profile?.unit_id;
 
-        // Buscar tarefas atribuídas ao usuário
         const { data: taskAssignees } = await supabase
           .from('task_assignees')
           .select('task_id')
@@ -57,18 +114,16 @@ export const useTasks = (unitId?: string) => {
 
         const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
 
-        return (data as TaskWithDetails[]).filter(task => {
-          // Mostrar se o usuário é o assigned_to
+        filteredTasks = filteredTasks.filter(task => {
           if (task.assigned_to === user.id) return true;
-          // Mostrar se o usuário está na tabela task_assignees
           if (assignedTaskIds.has(task.id)) return true;
-          // Mostrar se a tarefa é da unidade do usuário
           if (userUnitId && task.unit_id === userUnitId) return true;
           return false;
         });
       }
 
-      return data as TaskWithDetails[];
+      // Fetch and merge assignees for the filtered tasks
+      return await fetchAndMergeAssignees(filteredTasks);
     },
     enabled: !!user?.id,
   });
@@ -94,14 +149,16 @@ export const useTasksByStatus = (status: TaskStatus) => {
 
       if (error) throw error;
 
-      // Se usuário não é admin/gestor, filtrar
+      let filteredTasks = data as TaskWithDetails[];
+
+      // Permission Filtering
       if (role === 'usuario' && user?.id) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('unit_id')
           .eq('id', user.id)
           .single();
-        
+
         const userUnitId = profile?.unit_id;
 
         const { data: taskAssignees } = await supabase
@@ -111,7 +168,7 @@ export const useTasksByStatus = (status: TaskStatus) => {
 
         const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
 
-        return (data as TaskWithDetails[]).filter(task => {
+        filteredTasks = filteredTasks.filter(task => {
           if (task.assigned_to === user.id) return true;
           if (assignedTaskIds.has(task.id)) return true;
           if (userUnitId && task.unit_id === userUnitId) return true;
@@ -119,7 +176,8 @@ export const useTasksByStatus = (status: TaskStatus) => {
         });
       }
 
-      return data as TaskWithDetails[];
+      // Fetch and merge assignees for the filtered tasks
+      return await fetchAndMergeAssignees(filteredTasks);
     },
     enabled: !!user?.id,
   });
@@ -147,7 +205,7 @@ export const useTaskStats = () => {
           .select('unit_id')
           .eq('id', user.id)
           .single();
-        
+
         const userUnitId = profile?.unit_id;
 
         const { data: taskAssignees } = await supabase
@@ -205,17 +263,19 @@ export const useRoutineTasks = (routineId: string) => {
         .from('tasks')
         .select(`
           *,
-          unit:units(id, name, code),
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email)
+          unit:units(id, name, code)
         `)
         .eq('parent_task_id', parentTask.id)
         .order('created_at', { ascending: true });
 
       if (childError) throw childError;
 
+      // Use the helper to fetch and merge assignees
+      const tasksWithAssignees = await fetchAndMergeAssignees(childTasks as TaskWithDetails[]);
+
       return {
         parentTask,
-        childTasks: childTasks || [],
+        childTasks: tasksWithAssignees || [],
       };
     },
     enabled: !!routineId,
@@ -229,18 +289,19 @@ export const useChildTasks = (parentTaskId: string | null | undefined) => {
     queryFn: async () => {
       if (!parentTaskId) return [];
 
-      const { data, error } = await supabase
+      const { data: tasks, error } = await supabase
         .from('tasks')
         .select(`
           *,
-          unit:units(id, name, code),
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email)
+          unit:units(id, name, code)
         `)
         .eq('parent_task_id', parentTaskId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return data || [];
+
+      // Use the helper to fetch and merge assignees
+      return await fetchAndMergeAssignees(tasks as TaskWithDetails[]);
     },
     enabled: !!parentTaskId,
   });

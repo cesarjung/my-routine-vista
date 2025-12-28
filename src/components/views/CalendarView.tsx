@@ -6,10 +6,19 @@ import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
+import { TaskForm } from '@/components/TaskForm';
+import { RoutineForm } from '@/components/RoutineForm';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
@@ -20,20 +29,20 @@ type Routine = Tables<'routines'>;
 type RoutinePeriod = Tables<'routine_periods'> & {
   routine?: Tables<'routines'>;
 };
-import { 
-  format, 
-  startOfWeek, 
-  endOfWeek, 
+import {
+  format,
+  startOfWeek,
+  endOfWeek,
   startOfMonth,
   endOfMonth,
-  addWeeks, 
+  addWeeks,
   subWeeks,
   addMonths,
   subMonths,
   addDays,
   subDays,
-  eachDayOfInterval, 
-  isSameDay, 
+  eachDayOfInterval,
+  isSameDay,
   isToday,
   isSameMonth,
   isSameWeek,
@@ -54,6 +63,8 @@ interface GoogleCalendarEvent {
 interface CalendarViewProps {
   sectorId?: string;
   isMyTasks?: boolean;
+  type?: 'tasks' | 'routines';
+  hideHeader?: boolean;
 }
 
 interface CalendarItem {
@@ -72,7 +83,7 @@ type ViewMode = 'day' | 'week' | 'month';
 const HOUR_HEIGHT = 48;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
+export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }: CalendarViewProps) => {
   const { data: tasks, isLoading: isLoadingTasks } = useTasks();
   const { data: routines } = useRoutines();
   const { user } = useAuth();
@@ -86,13 +97,14 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [routineDialogOpen, setRoutineDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   // Fetch active routine periods
   const { data: routinePeriods } = useQuery({
     queryKey: ['routine-periods-calendar', routines?.map(r => r.id)],
     queryFn: async () => {
       if (!routines || routines.length === 0) return [];
-      
+
       const routineIds = routines.map(r => r.id);
       const { data, error } = await supabase
         .from('routine_periods')
@@ -130,23 +142,23 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       case 'day':
         return { start: currentDate, end: currentDate };
       case 'week':
-        return { 
-          start: startOfWeek(currentDate, { weekStartsOn: 0 }), 
-          end: endOfWeek(currentDate, { weekStartsOn: 0 }) 
+        return {
+          start: startOfWeek(currentDate, { weekStartsOn: 0 }),
+          end: endOfWeek(currentDate, { weekStartsOn: 0 })
         };
       case 'month':
         const monthStart = startOfMonth(currentDate);
         const monthEnd = endOfMonth(currentDate);
-        return { 
-          start: startOfWeek(monthStart, { weekStartsOn: 0 }), 
-          end: endOfWeek(monthEnd, { weekStartsOn: 0 }) 
+        return {
+          start: startOfWeek(monthStart, { weekStartsOn: 0 }),
+          end: endOfWeek(monthEnd, { weekStartsOn: 0 })
         };
     }
   };
 
   const { start: rangeStart, end: rangeEnd } = getDateRange();
-  const daysToShow = viewMode === 'day' 
-    ? [currentDate] 
+  const daysToShow = viewMode === 'day'
+    ? [currentDate]
     : eachDayOfInterval({ start: rangeStart, end: rangeEnd });
 
   // Scroll to current time on mount (for day/week views)
@@ -182,7 +194,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   }, [isMyTasks, isConnected, currentDate, viewMode]);
 
   const goToToday = () => setCurrentDate(new Date());
-  
+
   const goToPrev = () => {
     switch (viewMode) {
       case 'day': setCurrentDate(subDays(currentDate, 1)); break;
@@ -190,7 +202,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       case 'month': setCurrentDate(subMonths(currentDate, 1)); break;
     }
   };
-  
+
   const goToNext = () => {
     switch (viewMode) {
       case 'day': setCurrentDate(addDays(currentDate, 1)); break;
@@ -209,21 +221,21 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       if (!task.due_date) return;
       const matchesSector = !sectorId || (task as any).sector_id === sectorId;
       const matchesUser = !isMyTasks || task.assigned_to === user?.id;
-      
+
       // Skip parent tasks that have children (to avoid duplicates)
       // Parent tasks have parent_task_id === null but may have children
-      const hasChildren = task.parent_task_id === null && 
+      const hasChildren = task.parent_task_id === null &&
         tasks.some(t => t.parent_task_id === task.id);
-      
+
       // If this is a parent task with children, skip it (children will show instead)
       if (hasChildren && !isMyTasks) {
         return;
       }
-      
+
       if (matchesSector && matchesUser && isSameDay(new Date(task.due_date), date)) {
         const dueDate = new Date(task.due_date);
         const isAllDay = dueDate.getHours() === 0 && dueDate.getMinutes() === 0;
-        
+
         items.push({
           id: task.id,
           title: task.title,
@@ -241,13 +253,13 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       if (!period.routine) return;
       const periodStart = new Date(period.period_start);
       const periodEnd = new Date(period.period_end);
-      
+
       // Check if this day falls within the period
       const dayStart = new Date(date);
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
-      
+
       // Show routine if the day is within the period range
       if (dayStart <= periodEnd && dayEnd >= periodStart) {
         // Show on the period end date (deadline)
@@ -270,12 +282,12 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
       googleEvents.forEach(event => {
         const startDate = new Date(event.startDate);
         const endDate = new Date(event.endDate);
-        
+
         if (isSameDay(startDate, date)) {
-          const isAllDay = startDate.getHours() === 0 && 
-                          startDate.getMinutes() === 0 && 
-                          (differenceInMinutes(endDate, startDate) >= 1440 || endDate.getHours() === 0);
-          
+          const isAllDay = startDate.getHours() === 0 &&
+            startDate.getMinutes() === 0 &&
+            (differenceInMinutes(endDate, startDate) >= 1440 || endDate.getHours() === 0);
+
           items.push({
             id: event.id,
             title: event.title,
@@ -306,18 +318,18 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
     if (item.type === 'google') {
       return 'bg-blue-500 border-blue-600';
     }
-    
+
     if (item.type === 'routine') {
       return 'bg-purple-500 border-purple-600';
     }
-    
+
     const statusColors: Record<string, string> = {
       pendente: 'bg-amber-500 border-amber-600',
       em_andamento: 'bg-orange-600 border-orange-700',
       concluida: 'bg-emerald-500 border-emerald-600',
       atrasada: 'bg-red-500 border-red-600',
     };
-    
+
     return statusColors[item.status || 'pendente'] || statusColors.pendente;
   };
 
@@ -517,7 +529,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         </div>
 
         {/* Time Grid */}
-        <div 
+        <div
           ref={scrollRef}
           className="overflow-y-auto max-h-[600px] relative"
         >
@@ -577,7 +589,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
                           'absolute left-1 right-1 rounded-sm px-2 py-1 text-white text-xs overflow-hidden cursor-pointer border-l-4 z-10 hover:opacity-90',
                           getItemColor(item)
                         )}
-                        style={{ 
+                        style={{
                           top: top + 1,
                           height: height - 2,
                           marginLeft: itemIndex > 0 ? `${(itemIndex % 2) * 40}%` : 0,
@@ -612,12 +624,45 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
 
   return (
     <div className="space-y-4">
-      {!isMyTasks && (
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Calendário</h1>
-          <p className="text-muted-foreground">Visualize tarefas organizadas por data</p>
+      {!isMyTasks && !hideHeader && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground mb-1">
+              Calendário {type === 'routines' ? '(Rotinas)' : ''}
+            </h1>
+            <p className="text-muted-foreground">Visualize {type === 'routines' ? 'rotinas' : 'tarefas'} organizadas por data</p>
+          </div>
+
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                {type === 'routines' ? 'Nova Rotina' : 'Nova Tarefa'}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {type === 'routines' ? 'Criar Nova Rotina' : 'Criar Nova Tarefa'}
+                </DialogTitle>
+              </DialogHeader>
+              {type === 'routines' ? (
+                <RoutineForm
+                  sectorId={sectorId}
+                  onSuccess={() => setIsCreateDialogOpen(false)}
+                />
+              ) : (
+                <TaskForm
+                  sectorId={sectorId}
+                  onSuccess={() => setIsCreateDialogOpen(false)}
+                  onCancel={() => setIsCreateDialogOpen(false)}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       )}
+
 
       {/* Navigation Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -644,9 +689,9 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         </div>
 
         {/* View Mode Toggle */}
-        <ToggleGroup 
-          type="single" 
-          value={viewMode} 
+        <ToggleGroup
+          type="single"
+          value={viewMode}
           onValueChange={(value) => value && setViewMode(value as ViewMode)}
           className="border rounded-lg"
         >

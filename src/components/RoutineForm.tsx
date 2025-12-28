@@ -91,7 +91,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
   const [parentAssignees, setParentAssignees] = useState<string[]>([]);
-  
+
   const { user } = useAuth();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
   const createRoutine = useCreateRoutineWithUnits();
@@ -129,7 +129,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     const managerUserIds = unitManagers
       ?.filter(um => um.unit_id === unitId)
       ?.map(um => um.user_id) || [];
-    return allProfiles.filter(p => 
+    return allProfiles.filter(p =>
       p.unit_id === unitId || managerUserIds.includes(p.id)
     );
   }, [allProfiles, unitManagers]);
@@ -146,9 +146,18 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
   }, []);
 
   const updateUnitAssignees = useCallback((unitId: string, assignedToIds: string[]) => {
-    setUnitAssignments(prev => 
-      prev.map(a => a.unitId === unitId ? { ...a, assignedToIds } : a)
-    );
+    setUnitAssignments(prev => {
+      const updated = prev.map(a => {
+        if (a.unitId === unitId) {
+          return {
+            ...a,
+            assignedToIds: [...assignedToIds] // Create copy to ensure new reference
+          };
+        }
+        return a;
+      });
+      return updated;
+    });
   }, []);
 
   const selectAllUnits = useCallback(() => {
@@ -175,13 +184,41 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     const effectiveParentAssignees = isGestorOrAdmin
       ? (parentAssignees.length > 0 ? parentAssignees : [user?.id || ''].filter(Boolean))
       : [user?.id || ''].filter(Boolean);
-    
+
+    // Deep copy unitAssignments to avoid mutation issues
+    const currentAssignments = [...unitAssignments];
+
+    console.log('[RoutineForm] 1. Initial State:', currentAssignments);
+
+    // Process assignments to include defaults
+    const resolvedUnitAssignments = currentAssignments.map(ua => {
+      // 1. If we have manual assignments, USE THEM.
+      if (ua.assignedToIds && ua.assignedToIds.length > 0) {
+        console.log(`[RoutineForm] Unit ${ua.unitId} has manual assignees:`, ua.assignedToIds);
+        return { ...ua };
+      }
+
+      // 2. If NO manual assignments, use ALL Unit Managers for that unit.
+      const defaultManagers = unitManagers
+        ?.filter(um => um.unit_id === ua.unitId)
+        .map(um => um.user_id) || [];
+
+      console.log(`[RoutineForm] Unit ${ua.unitId} using default managers:`, defaultManagers);
+
+      return {
+        ...ua,
+        assignedToIds: defaultManagers
+      };
+    });
+
+    console.log('[RoutineForm] 2. Final Payload to Mutation:', resolvedUnitAssignments);
+
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
       frequency: data.isRecurring ? (data.recurrenceFrequency || 'semanal') : 'semanal',
       recurrenceMode: data.isRecurring ? (data.recurrenceMode || 'schedule') : 'schedule',
-      unitAssignments: unitAssignments,
+      unitAssignments: resolvedUnitAssignments,
       parentAssignedTo: effectiveParentAssignees[0] || null,
       parentAssignees: effectiveParentAssignees as string[],
       sectorId: sectorId,
@@ -189,6 +226,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
       startDate: combineDateAndTime(data.startDate, data.startTime),
       dueDate: combineDateAndTime(data.dueDate, data.dueTime),
     });
+
     form.reset();
     setUnitAssignments([]);
     setUnitError(null);
@@ -199,8 +237,8 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
+        <Button className="h-8 gap-1.5 text-xs px-3 whitespace-nowrap shrink-0">
+          <Plus className="h-3.5 w-3.5" />
           Nova Rotina
         </Button>
       </DialogTrigger>
@@ -627,7 +665,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                     </Button>
                   </div>
                 </div>
-                
+
                 <div className="border border-border rounded-md overflow-y-auto max-h-60">
                   <div className="p-3 space-y-2">
                     {loadingUnits ? (
@@ -639,7 +677,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                         const isSelected = selectedSet.has(unit.id);
                         const assignment = unitAssignments.find(a => a.unitId === unit.id);
                         const profilesForUnit = getProfilesForUnit(unit.id);
-                        
+
                         return (
                           <div
                             key={unit.id}
@@ -663,7 +701,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                                 <p className="text-xs text-muted-foreground">{unit.code}</p>
                               </div>
                             </div>
-                            
+
                             {isSelected && (
                               <div className="px-3 pb-3 pt-0">
                                 <div className="flex items-center gap-2 pl-7">

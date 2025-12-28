@@ -41,6 +41,7 @@ import { useProfiles } from '@/hooks/useProfiles';
 import { useCreateTaskWithUnits, type SubtaskData, type UnitAssignment } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
 import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
 
 const frequencyOptions = [
@@ -90,6 +91,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
   const { user } = useAuth();
   const { data: units, isLoading: loadingUnits } = useUnits();
   const { data: allProfiles } = useProfiles();
+  const { data: unitManagers } = useUnitManagers();
   const createTaskWithUnits = useCreateTaskWithUnits();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
 
@@ -134,7 +136,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
   // Get all profiles from selected units for subtask assignment
   const availableProfiles = useMemo(() => {
     if (!allProfiles || selectedUnitIds.length === 0) return [];
-    return allProfiles.filter(p => 
+    return allProfiles.filter(p =>
       p.unit_id && selectedUnitIds.includes(p.unit_id)
     );
   }, [allProfiles, selectedUnitIds]);
@@ -150,11 +152,11 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
   }, []);
 
   const updateUnitAssignees = useCallback((unitId: string, assignedToIds: string[]) => {
-    setUnitAssignments(prev => 
-      prev.map(a => a.unitId === unitId ? { 
-        ...a, 
+    setUnitAssignments(prev =>
+      prev.map(a => a.unitId === unitId ? {
+        ...a,
         assignedTo: assignedToIds.length > 0 ? assignedToIds[0] : null,
-        assignedToIds 
+        assignedToIds
       } : a)
     );
   }, []);
@@ -172,8 +174,8 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
 
   const addSubtask = () => {
     if (newSubtaskTitle.trim()) {
-      setSubtasks([...subtasks, { 
-        title: newSubtaskTitle.trim(), 
+      setSubtasks([...subtasks, {
+        title: newSubtaskTitle.trim(),
         assigned_to: newSubtaskAssignees.length > 0 ? newSubtaskAssignees[0] : null,
         assigned_to_ids: newSubtaskAssignees.length > 0 ? newSubtaskAssignees : undefined,
       }]);
@@ -195,11 +197,29 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
   const onSubmit = async (data: FormData) => {
     // Admins/Gestores podem criar tarefas sem selecionar unidade
     // Usuários regulares precisam ter unidade no perfil
-    
+
     // Se não for gestor/admin, força o usuário como responsável
     const effectiveParentAssignees = isGestorOrAdmin
       ? (parentAssignees.length > 0 ? parentAssignees : [user?.id || ''].filter(Boolean))
       : [user?.id || ''].filter(Boolean);
+
+    // Process assignments to include defaults
+    const resolvedUnitAssignments = unitAssignments.map(ua => {
+      // If manually assigned (even if it's the same as manager), keep it.
+      // Current Logic: if assignedToIds is populated, use it.
+      if (ua.assignedToIds && ua.assignedToIds.length > 0) return ua;
+
+      // If empty, fetch defaults from Unit Managers
+      const defaultManagers = unitManagers
+        ?.filter(um => um.unit_id === ua.unitId)
+        .map(um => um.user_id) || [];
+
+      return {
+        ...ua,
+        assignedToIds: defaultManagers,
+        assignedTo: defaultManagers.length > 0 ? defaultManagers[0] : null
+      };
+    });
 
     await createTaskWithUnits.mutateAsync({
       title: data.title,
@@ -209,7 +229,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
       due_date: combineDateAndTime(data.due_date, data.due_time),
       parentAssignedTo: effectiveParentAssignees[0] || null,
       parentAssignees: effectiveParentAssignees as string[],
-      unitAssignments,
+      unitAssignments: resolvedUnitAssignments,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
       is_recurring: data.is_recurring || false,
       recurrence_frequency: data.is_recurring ? data.recurrence_frequency : undefined,
@@ -421,170 +441,19 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
           />
         </div>
 
-    {/* Tarefa Recorrente */}
-    <FormField
-      control={form.control}
-      name="is_recurring"
-      render={({ field }) => (
-        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-          <div className="space-y-0.5">
-            <FormLabel className="text-sm font-medium flex items-center gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Tarefa Recorrente
-            </FormLabel>
-            <FormDescription className="text-xs">
-              Esta tarefa se repetirá automaticamente conforme a frequência definida
-            </FormDescription>
-          </div>
-          <FormControl>
-            <Switch
-              checked={field.value}
-              onCheckedChange={field.onChange}
-            />
-          </FormControl>
-        </FormItem>
-      )}
-    />
-
-    {/* Opções de Recorrência */}
-    {isRecurring && (
-      <div className="space-y-4 rounded-lg border p-4 bg-secondary/20">
+        {/* Tarefa Recorrente */}
         <FormField
           control={form.control}
-          name="recurrence_frequency"
+          name="is_recurring"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Frequência</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a frequência" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {frequencyOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="recurrence_mode"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Modo de Recorrência</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o modo" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {recurrenceModeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                {recurrenceModeOptions.find(o => o.value === field.value)?.description}
-              </p>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="repeat_forever"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
-                <FormLabel className="text-sm font-medium">Repetir para sempre</FormLabel>
-                <FormDescription className="text-xs">
-                  Se desativado, defina até quando a tarefa deve se repetir
-                </FormDescription>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={(checked) => {
-                    field.onChange(checked);
-                    if (checked) {
-                      form.setValue('recurrence_end_date', undefined);
-                    }
-                  }}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-
-        {!repeatForever && (
-          <FormField
-            control={form.control}
-            name="recurrence_end_date"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Repetir até</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, "dd/MM/yyyy", { locale: ptBR })
-                        ) : (
-                          <span>Selecione a data final</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) => date < (form.getValues('due_date') || new Date())}
-                      initialFocus
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormDescription className="text-xs">
-                  A tarefa se repetirá até esta data
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
-        <FormField
-          control={form.control}
-          name="skip_weekends_holidays"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
-              <div className="space-y-0.5">
-                <FormLabel className="text-sm font-medium">
-                  Ignorar feriados e finais de semana
+                <FormLabel className="text-sm font-medium flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  Tarefa Recorrente
                 </FormLabel>
                 <FormDescription className="text-xs">
-                  Tarefas não serão criadas em sábados, domingos ou feriados nacionais
+                  Esta tarefa se repetirá automaticamente conforme a frequência definida
                 </FormDescription>
               </div>
               <FormControl>
@@ -596,23 +465,174 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
             </FormItem>
           )}
         />
-      </div>
-    )}
 
-    {isGestorOrAdmin && (
-      <div className="space-y-2">
-        <FormLabel>Responsáveis da Tarefa Mãe</FormLabel>
-        <MultiAssigneeSelect
-          profiles={allProfiles || []}
-          selectedIds={parentAssignees}
-          onChange={setParentAssignees}
-          placeholder="Selecionar responsáveis (opcional)"
-        />
-        <p className="text-xs text-muted-foreground">
-          Os responsáveis da tarefa mãe acompanham o progresso geral de todas as unidades.
-        </p>
-      </div>
-    )}
+        {/* Opções de Recorrência */}
+        {isRecurring && (
+          <div className="space-y-4 rounded-lg border p-4 bg-secondary/20">
+            <FormField
+              control={form.control}
+              name="recurrence_frequency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Frequência</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a frequência" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {frequencyOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="recurrence_mode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Modo de Recorrência</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o modo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {recurrenceModeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {recurrenceModeOptions.find(o => o.value === field.value)?.description}
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="repeat_forever"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-sm font-medium">Repetir para sempre</FormLabel>
+                    <FormDescription className="text-xs">
+                      Se desativado, defina até quando a tarefa deve se repetir
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (checked) {
+                          form.setValue('recurrence_end_date', undefined);
+                        }
+                      }}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            {!repeatForever && (
+              <FormField
+                control={form.control}
+                name="recurrence_end_date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Repetir até</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                            ) : (
+                              <span>Selecione a data final</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < (form.getValues('due_date') || new Date())}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormDescription className="text-xs">
+                      A tarefa se repetirá até esta data
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <FormField
+              control={form.control}
+              name="skip_weekends_holidays"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-background">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-sm font-medium">
+                      Ignorar feriados e finais de semana
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      Tarefas não serão criadas em sábados, domingos ou feriados nacionais
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
+        {isGestorOrAdmin && (
+          <div className="space-y-2">
+            <FormLabel>Responsáveis da Tarefa Mãe</FormLabel>
+            <MultiAssigneeSelect
+              profiles={allProfiles || []}
+              selectedIds={parentAssignees}
+              onChange={setParentAssignees}
+              placeholder="Selecionar responsáveis (opcional)"
+            />
+            <p className="text-xs text-muted-foreground">
+              Os responsáveis da tarefa mãe acompanham o progresso geral de todas as unidades.
+            </p>
+          </div>
+        )}
 
         {/* Units Selection with Responsible - Apenas para Gestor/Admin */}
         {isGestorOrAdmin && (
@@ -643,7 +663,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
                 </Button>
               </div>
             </div>
-            
+
             <div className="flex-1 border border-border rounded-md overflow-y-auto min-h-0 max-h-48">
               <div className="p-3 space-y-2">
                 {loadingUnits ? (
@@ -655,7 +675,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
                     const isSelected = selectedSet.has(unit.id);
                     const assignment = unitAssignments.find(a => a.unitId === unit.id);
                     const unitProfiles = getProfilesForUnit(unit.id);
-                    
+
                     return (
                       <div
                         key={unit.id}
@@ -664,7 +684,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
                           isSelected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-secondary/50 border border-transparent'
                         )}
                       >
-                        <div 
+                        <div
                           className="flex items-center gap-3 cursor-pointer"
                           onClick={() => toggleUnit(unit.id)}
                         >
@@ -679,7 +699,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
                             <p className="text-xs text-muted-foreground">{unit.code}</p>
                           </div>
                         </div>
-                        
+
                         {/* Dropdown de responsáveis - aparece quando unidade está selecionada */}
                         {isSelected && (
                           <div className="mt-2 ml-7">

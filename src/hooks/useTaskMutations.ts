@@ -2,10 +2,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
-import { 
-  syncTaskToCalendar, 
-  updateCalendarEvent, 
-  deleteCalendarEvent 
+import {
+  syncTaskToCalendar,
+  updateCalendarEvent,
+  deleteCalendarEvent
 } from '@/services/googleCalendarSync';
 import { isWeekendOrHoliday, getNextBusinessDay } from '@/utils/holidays';
 
@@ -132,7 +132,7 @@ export const useCreateTaskWithUnits = () => {
       const adjustDate = (dateStr: string | null | undefined): string | null => {
         if (!dateStr) return null;
         if (!data.skip_weekends_holidays) return dateStr;
-        
+
         const date = new Date(dateStr);
         if (isWeekendOrHoliday(date)) {
           return getNextBusinessDay(date).toISOString();
@@ -172,10 +172,10 @@ export const useCreateTaskWithUnits = () => {
         if (parentError) throw parentError;
 
         // Add multiple assignees to task_assignees table
-        const parentAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0 
-          ? data.parentAssignees 
+        const parentAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0
+          ? data.parentAssignees
           : [data.parentAssignedTo || user.id].filter(Boolean);
-        
+
         if (parentAssigneeIds.length > 0) {
           await supabase
             .from('task_assignees')
@@ -212,7 +212,7 @@ export const useCreateTaskWithUnits = () => {
             const assigneeIds = assignment.assignedToIds && assignment.assignedToIds.length > 0
               ? assignment.assignedToIds
               : assignment.assignedTo ? [assignment.assignedTo] : [];
-            
+
             if (assigneeIds.length > 0) {
               await supabase
                 .from('task_assignees')
@@ -224,7 +224,7 @@ export const useCreateTaskWithUnits = () => {
         // Criar subtarefas para cada tarefa filha se houver
         if (data.subtasks && data.subtasks.length > 0 && createdChildTasks) {
           const allSubtasks: SubtaskInsert[] = [];
-          
+
           for (const childTask of createdChildTasks) {
             data.subtasks.forEach((subtask, index) => {
               allSubtasks.push({
@@ -441,7 +441,7 @@ async function updateRoutineCheckinFromTask(
 ): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     // Find the most recent active period for this routine
     const { data: activePeriod } = await supabase
       .from('routine_periods')
@@ -564,15 +564,15 @@ async function createNextRecurringInstanceWithChildren(
   const startDate = new Date(parentTask.start_date);
   const dueDate = new Date(parentTask.due_date);
   const duration = dueDate.getTime() - startDate.getTime();
-  
+
   const now = new Date();
   const nextStart = new Date(now);
   nextStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
-  
+
   if (nextStart <= now) {
     nextStart.setDate(nextStart.getDate() + 1);
   }
-  
+
   const nextDue = new Date(nextStart.getTime() + duration);
 
   // Create new parent task
@@ -662,25 +662,25 @@ async function createNextRecurringInstance(
   const startDate = new Date(existingTask.start_date);
   const dueDate = new Date(existingTask.due_date);
   const duration = dueDate.getTime() - startDate.getTime();
-  
+
   // Calculate next start date based on frequency
   const now = new Date();
   const nextStart = new Date(now);
   nextStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
-  
+
   // If the calculated time has already passed today, start tomorrow
   if (nextStart <= now) {
     nextStart.setDate(nextStart.getDate() + 1);
   }
-  
+
   const nextDue = new Date(nextStart.getTime() + duration);
-  
+
   // Check if instance already exists
   const startOfDay = new Date(nextStart);
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(nextStart);
   endOfDay.setHours(23, 59, 59, 999);
-  
+
   const { data: existingInstance } = await supabase
     .from('tasks')
     .select('id')
@@ -688,12 +688,12 @@ async function createNextRecurringInstance(
     .gte('start_date', startOfDay.toISOString())
     .lte('start_date', endOfDay.toISOString())
     .limit(1);
-  
+
   if (existingInstance && existingInstance.length > 0) {
     console.log('Next recurring instance already exists');
     return;
   }
-  
+
   // Create new task instance
   const { data: newTask, error } = await supabase
     .from('tasks')
@@ -715,31 +715,31 @@ async function createNextRecurringInstance(
     })
     .select('id')
     .single();
-  
+
   if (error) {
     console.error('Error creating next recurring instance:', error);
     return;
   }
-  
+
   if (newTask) {
     // Copy task assignees
     const { data: assignees } = await supabase
       .from('task_assignees')
       .select('user_id')
       .eq('task_id', currentTaskId);
-    
+
     if (assignees && assignees.length > 0) {
       await supabase
         .from('task_assignees')
         .insert(assignees.map(a => ({ task_id: newTask.id, user_id: a.user_id })));
     }
-    
+
     // Copy subtasks
     const { data: subtasks } = await supabase
       .from('subtasks')
       .select('title, assigned_to, order_index')
       .eq('task_id', currentTaskId);
-    
+
     if (subtasks && subtasks.length > 0) {
       await supabase
         .from('subtasks')
@@ -751,7 +751,7 @@ async function createNextRecurringInstance(
           is_completed: false,
         })));
     }
-    
+
     toast.success('Próxima tarefa recorrente criada!');
   }
 }
@@ -788,7 +788,7 @@ export const useDeleteTask = () => {
           .from('tasks')
           .delete()
           .eq('parent_task_id', taskId);
-        
+
         if (childError) throw childError;
       }
 
@@ -833,6 +833,99 @@ export const useToggleSubtask = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+};
+
+export const useBulkDeleteTasks = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskIds: string[]) => {
+      if (!taskIds || taskIds.length === 0) return;
+
+      const { data: tasksToDelete } = await supabase
+        .from('tasks')
+        .select('id, google_event_id')
+        .in('id', taskIds);
+
+      if (tasksToDelete) {
+        for (const task of tasksToDelete) {
+          if (task.google_event_id) {
+            deleteCalendarEvent(task.google_event_id).catch(console.error);
+          }
+        }
+      }
+
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .in('id', taskIds);
+
+      if (error) throw error;
+
+      return taskIds;
+    },
+    onSuccess: (deletedIds) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['child-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+      toast.success(`${deletedIds?.length || 0} tarefas excluídas`);
+    },
+    onError: (error) => {
+      console.error('Error deleting tasks:', error);
+      toast.error('Erro ao excluir tarefas');
+    },
+  });
+};
+
+export const useBulkUpdateStatus = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ taskIds, status }: { taskIds: string[], status: TablesInsert<'tasks'>['status'] }) => {
+      if (!taskIds || taskIds.length === 0) return;
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({
+          status,
+          completed_at: status === 'concluida' ? new Date().toISOString() : null,
+          completed_by: status === 'concluida' ? (await supabase.auth.getUser()).data.user?.id : null
+        })
+        .in('id', taskIds)
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        for (const task of data) {
+          if (task.google_event_id) {
+            updateCalendarEvent(
+              task.google_event_id,
+              task.title,
+              task.description,
+              task.start_date,
+              task.due_date,
+              task.status
+            ).catch(console.error);
+          }
+        }
+      }
+
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['child-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+      toast.success(`${data?.length || 0} tarefas atualizadas`);
+    },
+    onError: (error) => {
+      console.error('Error updating tasks:', error);
+      toast.error('Erro ao atualizar tarefas');
     },
   });
 };

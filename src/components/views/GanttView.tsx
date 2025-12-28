@@ -3,7 +3,7 @@ import { useTasks } from '@/hooks/useTasks';
 import { useUpdateTask } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight, Pencil, Check, MinusCircle, MoreVertical, Circle, Play } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Pencil, Check, MinusCircle, MoreVertical, Circle, Play, Plus } from 'lucide-react';
 import { format, differenceInDays, startOfDay, addDays, subDays, max, min } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { TaskForm } from '@/components/TaskForm';
+import { RoutineForm } from '@/components/RoutineForm';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
@@ -25,15 +34,18 @@ type TaskStatus = Enums<'task_status'>;
 interface GanttViewProps {
   sectorId?: string;
   isMyTasks?: boolean;
+  type?: 'tasks' | 'routines';
+  hideHeader?: boolean;
 }
 
-export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
+export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = false }: GanttViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const updateTask = useUpdateTask();
   const { user } = useAuth();
   const [viewStart, setViewStart] = useState(() => subDays(new Date(), 7));
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
@@ -69,7 +81,7 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
 
     const dueDate = startOfDay(new Date(task.due_date));
     const startDate = task.start_date ? startOfDay(new Date(task.start_date)) : subDays(dueDate, 2);
-    
+
     const daysDiff = differenceInDays(startDate, viewStart);
     const duration = differenceInDays(dueDate, startDate) + 1;
 
@@ -91,10 +103,12 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Gantt</h1>
-          <p className="text-muted-foreground">Timeline de tarefas</p>
-        </div>
+        {!hideHeader && (
+          <div>
+            <h1 className="text-2xl font-bold text-foreground mb-1">Gantt</h1>
+            <p className="text-muted-foreground">Timeline de tarefas</p>
+          </div>
+        )}
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -106,111 +120,151 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
   const todayPosition = differenceInDays(today, viewStart) * dayWidth;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Gantt</h1>
-          <p className="text-muted-foreground">Visualize a timeline de tarefas</p>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="space-y-4">
+      <div className={cn("flex items-center", hideHeader ? "justify-end" : "justify-between")}>
+        {!hideHeader && (
+          <div className="flex-1">
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-foreground mb-1">
+                  Gantt {type === 'routines' ? '(Rotinas)' : ''}
+                </h1>
+                <p className="text-muted-foreground">Visualize a timeline de {type === 'routines' ? 'rotinas' : 'tarefas'}</p>
+              </div>
+
+              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    {type === 'routines' ? 'Nova Rotina' : 'Nova Tarefa'}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {type === 'routines' ? 'Criar Nova Rotina' : 'Criar Nova Tarefa'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  {type === 'routines' ? (
+                    <RoutineForm
+                      sectorId={sectorId}
+                      onSuccess={() => setIsCreateDialogOpen(false)}
+                    />
+                  ) : (
+                    <TaskForm
+                      sectorId={sectorId}
+                      onSuccess={() => setIsCreateDialogOpen(false)}
+                      onCancel={() => setIsCreateDialogOpen(false)}
+                    />
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1 bg-background/50 p-1 rounded-lg border border-border">
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={() => setViewStart(subDays(viewStart, 7))}
+            className="h-7 w-7"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => setViewStart(subDays(new Date(), 7))}
+            className="h-7 text-xs px-2 font-medium"
           >
             Hoje
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={() => setViewStart(addDays(viewStart, 7))}
+            className="h-7 w-7"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex">
-            {/* Task Names Column */}
-            <div className="min-w-[240px] border-r border-border flex-shrink-0">
-              <div className="h-14 bg-secondary/50 border-b border-border p-3 font-medium text-foreground">
-                Tarefa
-              </div>
-              {tasksWithDates.map((task, index) => {
-                const isCompleted = task.status === 'concluida';
-                const isNA = task.status === 'nao_aplicavel';
-                
-                return (
-                  <div
-                    key={task.id}
-                    className="h-12 border-b border-border px-3 flex items-center gap-2 group cursor-pointer hover:bg-secondary/30"
-                    style={{ animationDelay: `${index * 30}ms` }}
-                    onClick={() => handleEditTask(task as Task)}
-                  >
-                    {/* Quick checkbox */}
-                    <button
-                      onClick={(e) => handleStatusChange(task.id, isCompleted ? 'pendente' : 'concluida', e)}
-                      className={cn(
-                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
-                        isCompleted 
-                          ? 'bg-success border-success text-success-foreground' 
-                          : isNA
+          {/* Task Names Column */}
+          <div className="min-w-[240px] border-r border-border flex-shrink-0">
+            <div className="h-14 bg-secondary/50 border-b border-border p-3 font-medium text-foreground">
+              Tarefa
+            </div>
+            {tasksWithDates.map((task, index) => {
+              const isCompleted = task.status === 'concluida';
+              const isNA = task.status === 'nao_aplicavel';
+
+              return (
+                <div
+                  key={task.id}
+                  className="h-12 border-b border-border px-3 flex items-center gap-2 group cursor-pointer hover:bg-secondary/30"
+                  style={{ animationDelay: `${index * 30}ms` }}
+                  onClick={() => handleEditTask(task as Task)}
+                >
+                  {/* Quick checkbox */}
+                  <button
+                    onClick={(e) => handleStatusChange(task.id, isCompleted ? 'pendente' : 'concluida', e)}
+                    className={cn(
+                      'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                      isCompleted
+                        ? 'bg-success border-success text-success-foreground'
+                        : isNA
                           ? 'bg-muted border-muted-foreground/30'
                           : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
-                      )}
-                      title={isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
-                    >
-                      {isCompleted && <Check className="h-3 w-3" />}
-                      {isNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
-                    </button>
-                    
-                    <div className="truncate flex-1">
-                      <p className={cn(
-                        "text-sm font-medium text-foreground truncate",
-                        isCompleted && "line-through text-muted-foreground"
-                      )}>{task.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">{task.unit?.name}</p>
-                    </div>
-                    
-                    {/* More options */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'concluida', e as any)}>
-                          <Check className="h-4 w-4 mr-2 text-success" />
-                          Concluída
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'pendente', e as any)}>
-                          <Circle className="h-4 w-4 mr-2 text-warning" />
-                          Pendente
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'nao_aplicavel', e as any)}>
-                          <MinusCircle className="h-4 w-4 mr-2 text-muted-foreground" />
-                          Não se Aplica
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    )}
+                    title={isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
+                  >
+                    {isCompleted && <Check className="h-3 w-3" />}
+                    {isNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
+                  </button>
+
+                  <div className="truncate flex-1">
+                    <p className={cn(
+                      "text-sm font-medium text-foreground truncate",
+                      isCompleted && "line-through text-muted-foreground"
+                    )}>{task.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{task.unit?.name}</p>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* More options */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'concluida', e as any)}>
+                        <Check className="h-4 w-4 mr-2 text-success" />
+                        Concluída
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'pendente', e as any)}>
+                        <Circle className="h-4 w-4 mr-2 text-warning" />
+                        Pendente
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => handleStatusChange(task.id, 'nao_aplicavel', e as any)}>
+                        <MinusCircle className="h-4 w-4 mr-2 text-muted-foreground" />
+                        Não se Aplica
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              );
+            })}
+          </div>
 
           {/* Timeline */}
           <div className="overflow-x-auto flex-1">
@@ -220,7 +274,7 @@ export const GanttView = ({ sectorId, isMyTasks }: GanttViewProps) => {
                 {dates.map((date, index) => {
                   const isCurrentDay = differenceInDays(date, today) === 0;
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                  
+
                   return (
                     <div
                       key={date.toISOString()}

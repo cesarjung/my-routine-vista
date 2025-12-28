@@ -150,7 +150,7 @@ export const RoutineDetailPanel = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [closeConfirmDialogOpen, setCloseConfirmDialogOpen] = useState(false);
-  
+
   // Editable fields
   const [title, setTitle] = useState(routine.title);
   const [description, setDescription] = useState(routine.description || '');
@@ -173,7 +173,7 @@ export const RoutineDetailPanel = ({
   // Get current user's unit_id
   const userProfile = allProfiles?.find(p => p.id === user?.id);
   const userUnitId = userProfile?.unit_id;
-  
+
   // Check if user is a manager for a given unit
   const isUserUnitManager = (unitId: string) => {
     return unitManagers?.some(m => m.user_id === user?.id && m.unit_id === unitId) || false;
@@ -226,7 +226,7 @@ export const RoutineDetailPanel = ({
   const naTasks = childTasks.filter((t) => t.status === 'nao_aplicavel').length;
   const totalTasks = childTasks.length;
   const effectiveCompletedTasks = completedTasks + naTasks;
-  
+
   // Fallback to checkins if no tasks yet
   const checkins = periodData?.period?.routine_checkins || [];
   const completedOrNotCompleted = checkins.filter((c) => c.status === 'completed' || c.status === 'not_completed').length;
@@ -384,7 +384,7 @@ export const RoutineDetailPanel = ({
               {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
               <ChevronDown className="h-3 w-3" />
             </button>
-            
+
             {/* Close Routine Confirmation Dialog */}
             <AlertDialog open={closeConfirmDialogOpen} onOpenChange={setCloseConfirmDialogOpen}>
               <AlertDialogContent>
@@ -393,7 +393,7 @@ export const RoutineDetailPanel = ({
                   <AlertDialogDescription>
                     {childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length > 0 ? (
                       <>
-                        Existem <strong>{childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length} tarefa(s) pendente(s)</strong>. 
+                        Existem <strong>{childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length} tarefa(s) pendente(s)</strong>.
                         Como deseja encerrar esta rotina?
                       </>
                     ) : (
@@ -401,13 +401,15 @@ export const RoutineDetailPanel = ({
                     )}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogFooter className="flex flex-col sm:flex-col gap-2 sm:space-x-0 w-full">
+                  <div className="flex-1" /> {/* Spacer */}
+                  <AlertDialogCancel className="mt-0 w-full sm:w-auto">Cancelar</AlertDialogCancel>
                   {childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length > 0 && (
                     <Button
                       variant="outline"
                       onClick={handleCloseRoutineWithoutResolving}
                       disabled={updateTask.isPending}
+                      className="w-full sm:w-auto"
                     >
                       {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       Encerrar Sem Resolver
@@ -416,11 +418,11 @@ export const RoutineDetailPanel = ({
                   <Button
                     onClick={handleCloseRoutineResolving}
                     disabled={updateTask.isPending}
-                    className="bg-success hover:bg-success/90"
+                    className="bg-success hover:bg-success/90 w-full sm:w-auto whitespace-nowrap"
                   >
                     {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-                    {childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length > 0 
-                      ? 'Encerrar Resolvendo Todas' 
+                    {childTasks.filter((t) => t.status !== 'concluida' && t.status !== 'nao_aplicavel').length > 0
+                      ? 'Encerrar Resolvendo Todas'
                       : 'Encerrar'}
                   </Button>
                 </AlertDialogFooter>
@@ -466,7 +468,7 @@ export const RoutineDetailPanel = ({
             )}
           </div>
         </div>
-        
+
         {/* Quick edit button */}
         {isGestorOrAdmin && !isEditing && (
           <Button
@@ -559,7 +561,7 @@ export const RoutineDetailPanel = ({
                   const isTaskNA = task.status === 'nao_aplicavel';
                   const assignee = (task as any).assignee;
                   const userCanEdit = canEditTask(task);
-                  
+
                   return (
                     <div
                       key={task.id}
@@ -582,15 +584,15 @@ export const RoutineDetailPanel = ({
                               disabled={updateTask.isPending}
                               className={cn(
                                 'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
-                                isTaskCompleted 
-                                  ? 'bg-success border-success text-white' 
+                                isTaskCompleted
+                                  ? 'bg-success border-success text-white'
                                   : 'border-success/50 hover:border-success hover:bg-success/10'
                               )}
                               title="Concluída"
                             >
                               {isTaskCompleted && <Check className="h-3 w-3" />}
                             </button>
-                            
+
                             {/* Red checkbox for N/A */}
                             <button
                               onClick={() => {
@@ -600,8 +602,8 @@ export const RoutineDetailPanel = ({
                               disabled={updateTask.isPending}
                               className={cn(
                                 'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
-                                isTaskNA 
-                                  ? 'bg-destructive border-destructive text-white' 
+                                isTaskNA
+                                  ? 'bg-destructive border-destructive text-white'
                                   : 'border-destructive/50 hover:border-destructive hover:bg-destructive/10'
                               )}
                               title="Não se Aplica"
@@ -610,7 +612,7 @@ export const RoutineDetailPanel = ({
                             </button>
                           </>
                         )}
-                        
+
                         <span
                           className={cn(
                             'font-medium text-sm truncate',
@@ -623,16 +625,41 @@ export const RoutineDetailPanel = ({
 
                       {/* Responsible */}
                       <div className="col-span-4 flex items-center gap-1">
-                        {assignee && (
-                          <Avatar className={cn('h-6 w-6', getAvatarColor(assignee.id))}>
-                            <AvatarFallback className="text-xs text-white">
-                              {getInitials(assignee.full_name)}
-                            </AvatarFallback>
-                          </Avatar>
+                        {(task as any).assignees && (task as any).assignees.length > 0 ? (
+                          <div className="flex -space-x-2 overflow-hidden">
+                            {(task as any).assignees.slice(0, 3).map((assignee: any) => (
+                              <Avatar key={assignee.id} className={cn('h-6 w-6 border-2 border-background', getAvatarColor(assignee.id))} title={assignee.full_name}>
+                                <AvatarFallback className="text-[10px] text-white">
+                                  {getInitials(assignee.full_name)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {(task as any).assignees.length > 3 && (
+                              <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center border-2 border-background text-[10px] font-medium" title={`+${(task as any).assignees.length - 3} outros`}>
+                                +{(task as any).assignees.length - 3}
+                              </div>
+                            )}
+                          </div>
+                        ) : assignee ? (
+                          <div className="flex items-center gap-1">
+                            <Avatar className={cn('h-6 w-6', getAvatarColor(assignee.id))}>
+                              <AvatarFallback className="text-[10px] text-white">
+                                {getInitials(assignee.full_name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm text-muted-foreground truncate">
+                              {assignee.full_name || assignee.email}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground truncate">—</span>
                         )}
-                        <span className="text-sm text-muted-foreground truncate">
-                          {assignee?.full_name || assignee?.email || '—'}
-                        </span>
+                        {/* Show name if only one assignee in list mode to keep consistency if needed, but avatar group is better for multi */}
+                        {(task as any).assignees && (task as any).assignees.length === 1 && (
+                          <span className="text-sm text-muted-foreground truncate ml-1">
+                            {(task as any).assignees[0].full_name}
+                          </span>
+                        )}
                       </div>
 
                       {/* Due Date */}
