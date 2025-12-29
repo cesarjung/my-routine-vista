@@ -2,6 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+export interface SectorSection {
+  id: string;
+  sector_id: string;
+  title: string;
+  type: string;
+  order_index: number;
+}
+
 export interface Sector {
   id: string;
   name: string;
@@ -11,6 +19,7 @@ export interface Sector {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  sections?: SectorSection[];
 }
 
 export const useSectors = () => {
@@ -19,7 +28,7 @@ export const useSectors = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sectors')
-        .select('*')
+        .select('*, sections:sector_sections(*)')
         .order('name');
 
       if (error) throw error;
@@ -34,7 +43,7 @@ export const useSectorMutations = () => {
   const createSector = useMutation({
     mutationFn: async (sector: { name: string; description?: string; color?: string; icon?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       const { data, error } = await supabase
         .from('sectors')
         .insert({
@@ -102,4 +111,50 @@ export const useSectorMutations = () => {
   });
 
   return { createSector, updateSector, deleteSector };
+};
+
+export const useSectionMutations = () => {
+  const queryClient = useQueryClient();
+
+  const createSection = useMutation({
+    mutationFn: async (section: { sector_id: string; title: string; type: string; order_index?: number }) => {
+      const { data, error } = await supabase
+        .from('sector_sections')
+        .insert(section)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sectors'] });
+      toast.success('Seção criada!');
+    },
+    onError: (error) => {
+      console.error('Erro ao criar seção:', error);
+      toast.error('Erro ao criar seção');
+    }
+  });
+
+  const deleteSection = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('sector_sections')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sectors'] });
+      toast.success('Seção removida!');
+    },
+    onError: (error) => {
+      console.error('Erro ao remover seção:', error);
+      toast.error('Erro ao remover seção');
+    }
+  });
+
+  return { createSection, deleteSection };
 };

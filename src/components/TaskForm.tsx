@@ -235,6 +235,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
       recurrence_frequency: data.is_recurring ? data.recurrence_frequency : undefined,
       recurrence_mode: data.is_recurring ? data.recurrence_mode : undefined,
       sector_id: sectorId,
+      section_id: sectorId && sectorId !== 'tasks' ? sectorId : undefined, // If sectorId is 'tasks' (default), don't set section_id (it's null)
       skip_weekends_holidays: data.skip_weekends_holidays || false,
     });
 

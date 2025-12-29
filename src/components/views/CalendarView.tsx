@@ -12,6 +12,8 @@ import { TaskEditDialog } from '@/components/TaskEditDialog';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
 import { TaskForm } from '@/components/TaskForm';
 import { RoutineForm } from '@/components/RoutineForm';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import {
   Dialog,
   DialogContent,
@@ -98,6 +100,7 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [routineDialogOpen, setRoutineDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
 
   // Fetch active routine periods
   const { data: routinePeriods } = useQuery({
@@ -128,11 +131,10 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
     }
   };
 
-  const handleEditRoutine = (routineId: string) => {
+  const handleSelectRoutine = (routineId: string) => {
     const routine = routines?.find(r => r.id === routineId);
     if (routine) {
-      setEditingRoutine(routine);
-      setRoutineDialogOpen(true);
+      setSelectedRoutine(routine);
     }
   };
 
@@ -220,7 +222,10 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
     tasks?.forEach(task => {
       if (!task.due_date) return;
       const matchesSector = !sectorId || (task as any).sector_id === sectorId;
-      const matchesUser = !isMyTasks || task.assigned_to === user?.id;
+      // Update MatchesUser to include assignees
+      const matchesUser = !isMyTasks ||
+        task.assigned_to === user?.id ||
+        task.assignees?.some((a: any) => a.id === user?.id);
 
       // Skip parent tasks that have children (to avoid duplicates)
       // Parent tasks have parent_task_id === null but may have children
@@ -234,23 +239,36 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
 
       if (matchesSector && matchesUser && isSameDay(new Date(task.due_date), date)) {
         const dueDate = new Date(task.due_date);
-        const isAllDay = dueDate.getHours() === 0 && dueDate.getMinutes() === 0;
+        // Use start_date if available (for routine tasks with duration), otherwise default to 1 hour before due date
+        const startDate = (task as any).start_date
+          ? new Date((task as any).start_date)
+          : new Date(dueDate.getTime() - 60 * 60 * 1000);
+
+        // If start date is same as due date (legacy), default to 1 hour duration
+        const finalStartDate = startDate.getTime() === dueDate.getTime()
+          ? new Date(dueDate.getTime() - 60 * 60 * 1000)
+          : startDate;
+
+        const isAllDay = finalStartDate.getHours() === 0 && finalStartDate.getMinutes() === 0 &&
+          (dueDate.getHours() === 0 || dueDate.getHours() === 23);
 
         items.push({
           id: task.id,
           title: task.title,
-          startDate: dueDate,
-          endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
+          startDate: finalStartDate,
+          endDate: dueDate,
           isAllDay,
           type: 'task',
-          status: task.status
+          status: task.status,
+          routineId: task.routine_id,
         });
       }
     });
 
-    // Add routine periods
+    // Routine periods rendering restored (shows in "All Day" / Top section)
     routinePeriods?.forEach(period => {
       if (!period.routine) return;
+
       const periodStart = new Date(period.period_start);
       const periodEnd = new Date(period.period_end);
 
@@ -262,16 +280,37 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
 
       // Show routine if the day is within the period range
       if (dayStart <= periodEnd && dayEnd >= periodStart) {
-        // Show on the period end date (deadline)
+        // Only show strictly on the end date to avoid spanning weirdness, 
+        // OR simply show if it's the active period. 
+        // Showing on deadline day is a safe default for "Top" items.
         if (isSameDay(periodEnd, date)) {
+
+          // Calculate status based on parent task (same logic as before)
+          const parentTask = tasks?.find(t =>
+            t.routine_id === period.routine_id &&
+            t.parent_task_id === null &&
+            t.due_date && isSameDay(new Date(t.due_date), periodEnd)
+          );
+
+          let computedStatus = 'pendente';
+          if (parentTask) {
+            computedStatus = parentTask.status;
+            // Add extra logic for partial completion if needed, but keeping it simple for now or reusing the logic if available
+            const childTasks = tasks?.filter(t => t.parent_task_id === parentTask.id) || [];
+            if (parentTask.status === 'concluida' && childTasks.length > 0 && childTasks.some(t => t.status !== 'concluida' && t.status !== 'nao_aplicavel')) {
+              computedStatus = 'concluida_parcial';
+            }
+          }
+
           items.push({
             id: period.id,
             title: `🔄 ${period.routine.title}`,
-            startDate: periodEnd,
-            endDate: new Date(periodEnd.getTime() + 60 * 60 * 1000),
-            isAllDay: true,
+            startDate: periodEnd, // Keeps the date reference
+            endDate: new Date(periodEnd.getTime() + 60 * 60 * 1000), // Dummy duration
+            isAllDay: true, // Forces it to the top
             type: 'routine',
-            routineId: period.routine_id
+            routineId: period.routine_id,
+            status: computedStatus
           });
         }
       }
@@ -319,15 +358,19 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
       return 'bg-blue-500 border-blue-600';
     }
 
-    if (item.type === 'routine') {
-      return 'bg-purple-500 border-purple-600';
-    }
+    // Routine type now uses status colors
+    // if (item.type === 'routine') {
+    //   return 'bg-purple-500 border-purple-600';
+    // }
 
     const statusColors: Record<string, string> = {
-      pendente: 'bg-amber-500 border-amber-600',
-      em_andamento: 'bg-orange-600 border-orange-700',
-      concluida: 'bg-emerald-500 border-emerald-600',
+      pendente: 'bg-yellow-500 border-yellow-600',
+      em_andamento: 'bg-primary border-primary', // Changed to match "Em Andamento" blue theme
+      concluida: 'bg-green-500 border-green-600',
       atrasada: 'bg-red-500 border-red-600',
+      cancelada: 'bg-slate-500 border-slate-600',
+      concluida_parcial: 'bg-green-800 border-green-900',
+      nao_aplicavel: 'bg-slate-400 border-slate-500',
     };
 
     return statusColors[item.status || 'pendente'] || statusColors.pendente;
@@ -418,7 +461,7 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                     )}
                   </div>
                   <div className="space-y-1">
-                    {dayItems.slice(0, 3).map((item) => (
+                    {dayItems.map((item) => (
                       <div
                         key={item.id}
                         className={cn(
@@ -429,20 +472,19 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                         onClick={(e) => {
                           e.stopPropagation();
                           if (item.type === 'task') {
-                            handleEditTask(item.id);
+                            if (item.routineId) {
+                              handleSelectRoutine(item.routineId);
+                            } else {
+                              handleEditTask(item.id);
+                            }
                           } else if (item.type === 'routine' && item.routineId) {
-                            handleEditRoutine(item.routineId);
+                            handleSelectRoutine(item.routineId);
                           }
                         }}
                       >
                         {item.title}
                       </div>
                     ))}
-                    {dayItems.length > 3 && (
-                      <div className="text-xs text-muted-foreground px-1">
-                        +{dayItems.length - 3} mais
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -498,7 +540,7 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                 key={`allday-${day.toISOString()}`}
                 className="p-1 border-r border-border last:border-r-0 space-y-1"
               >
-                {allDayItems.slice(0, 2).map((item) => (
+                {allDayItems.map((item) => (
                   <div
                     key={item.id}
                     className={cn(
@@ -509,20 +551,19 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                     onClick={(e) => {
                       e.stopPropagation();
                       if (item.type === 'task') {
-                        handleEditTask(item.id);
+                        if (item.routineId) {
+                          handleSelectRoutine(item.routineId);
+                        } else {
+                          handleEditTask(item.id);
+                        }
                       } else if (item.type === 'routine' && item.routineId) {
-                        handleEditRoutine(item.routineId);
+                        handleSelectRoutine(item.routineId);
                       }
                     }}
                   >
                     {item.title}
                   </div>
                 ))}
-                {allDayItems.length > 2 && (
-                  <div className="text-xs text-muted-foreground px-1">
-                    +{allDayItems.length - 2} mais
-                  </div>
-                )}
               </div>
             );
           })}
@@ -598,9 +639,13 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                         title={`${item.title} (${timeStr} - ${endTimeStr})`}
                         onClick={() => {
                           if (item.type === 'task') {
-                            handleEditTask(item.id);
+                            if (item.routineId) {
+                              handleSelectRoutine(item.routineId);
+                            } else {
+                              handleEditTask(item.id);
+                            }
                           } else if (item.type === 'routine' && item.routineId) {
-                            handleEditRoutine(item.routineId);
+                            handleSelectRoutine(item.routineId);
                           }
                         }}
                       >
@@ -649,7 +694,6 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
               {type === 'routines' ? (
                 <RoutineForm
                   sectorId={sectorId}
-                  onSuccess={() => setIsCreateDialogOpen(false)}
                 />
               ) : (
                 <TaskForm
@@ -713,20 +757,28 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-sm">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-amber-500" />
+          <div className="w-3 h-3 rounded-sm bg-yellow-500" />
           <span className="text-muted-foreground">Pendente</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-orange-600" />
+          <div className="w-3 h-3 rounded-sm bg-orange-500" />
           <span className="text-muted-foreground">Em Andamento</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+          <div className="w-3 h-3 rounded-sm bg-green-500" />
           <span className="text-muted-foreground">Concluída</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-red-500" />
           <span className="text-muted-foreground">Atrasada</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-sm bg-green-800" />
+          <span className="text-muted-foreground">Encerrada (Parcial)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-sm bg-slate-500" />
+          <span className="text-muted-foreground">Cancelada</span>
         </div>
         {isMyTasks && (
           <div className="flex items-center gap-2">
@@ -747,6 +799,19 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
         open={routineDialogOpen}
         onOpenChange={setRoutineDialogOpen}
       />
+
+      <Sheet open={!!selectedRoutine} onOpenChange={(open) => !open && setSelectedRoutine(null)}>
+        <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
+          {selectedRoutine && (
+            <div className="h-full overflow-y-auto">
+              <RoutineDetailPanel
+                routine={selectedRoutine}
+                onClose={() => setSelectedRoutine(null)}
+              />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

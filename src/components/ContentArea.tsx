@@ -112,8 +112,10 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     const { sectorId, folder, frequency } = context;
     const sector = sectors?.find(s => s.id === sectorId);
 
+    const currentSection = sector?.sections?.find(s => s.id === folder || s.type === folder);
+
     // Handle Dashboard folder specifically
-    if (folder === 'dashboard') {
+    if (folder === 'dashboard' || currentSection?.type === 'dashboard') {
       return (
         <div className="h-full flex flex-col p-6">
           <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
@@ -138,12 +140,13 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     }
 
     const getTitle = () => {
-
       if (context.type === 'sector') {
         return sector ? sector.name : 'Setor';
       }
       return 'Gestão CCM';
     };
+
+    const sectionTitle = currentSection ? currentSection.title : (folder === 'routines' ? 'Rotinas' : folder === 'tasks' ? 'Tarefas' : folder);
 
     const showViewToggle = folder !== 'units';
 
@@ -159,7 +162,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
               </h1>
               {sector && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-                  <span className="capitalize">{folder === 'routines' ? 'Rotinas' : folder === 'tasks' ? 'Tarefas' : folder}</span>
+                  <span className="capitalize">{sectionTitle}</span>
                   {frequency && (
                     <>
                       <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
@@ -190,6 +193,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
           ) : (
             <TasksView
               sectorId={sectorId}
+              sectionId={folder}
               viewMode={viewMode}
             />
           )}

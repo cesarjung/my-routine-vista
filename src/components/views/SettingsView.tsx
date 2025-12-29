@@ -288,23 +288,27 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
         throw new Error('Sessão não encontrada');
       }
 
-      // Call edge function to create user (doesn't change current session)
-      const response = await supabase.functions.invoke('admin-create-user', {
-        body: {
-          email: newUserEmail,
-          password: newUserPassword,
-          fullName: newUserName,
-          unitIds: newUserUnits.length > 0 ? newUserUnits : null,
-          role: newUserRole,
-        },
+      // Call Postgres function directly (bypassing Edge Function)
+      const { data, error } = await supabase.rpc('create_user_admin' as any, {
+        email: newUserEmail,
+        password: newUserPassword,
+        full_name: newUserName,
+        role: newUserRole,
+        unit_ids: newUserUnits.length > 0 ? newUserUnits : null,
       });
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Erro ao criar usuário');
+      if (error) {
+        throw new Error(error.message || 'Erro ao criar usuário');
       }
 
-      if (response.data?.error) {
-        throw new Error(response.data.error);
+      const result = data as any;
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
+
+      // Check for success (RPC returns json with id on success)
+      if (!result || !result.id) {
+        throw new Error('Falha desconhecida ao criar usuário');
       }
 
       toast({

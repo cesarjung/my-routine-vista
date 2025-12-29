@@ -26,12 +26,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useTasks } from '@/hooks/useTasks';
+import { useTasks, useDeleteTasks, useBulkUpdateTasks } from '@/hooks/useTasks';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserRole } from '@/hooks/useUserRole';
+import { toast } from 'sonner';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { TaskForm } from '@/components/TaskForm';
 import { cn } from '@/lib/utils';
 import type { Enums } from '@/integrations/supabase/types';
 import { TaskDetailPanel } from '@/components/TaskDetailPanel';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import { TaskRowItem } from '@/components/TaskRowItem';
 import { ViewMode } from '@/types/navigation';
 import { KanbanView } from './KanbanView';
@@ -52,7 +56,8 @@ const statusFilters: {
     { value: 'cancelada', label: 'Cancelada', chipClass: 'bg-slate-100 text-slate-700 border border-slate-300' },
   ];
 
-const frequencies: { value: string; label: string }[] = [
+// Local Frequency constant
+const frequencies = [
   { value: 'all', label: 'Todas' },
   { value: 'diaria', label: 'Diárias' },
   { value: 'semanal', label: 'Semanais' },
@@ -62,23 +67,34 @@ const frequencies: { value: string; label: string }[] = [
 
 interface TasksViewProps {
   sectorId?: string;
+  sectionId?: string; // New prop
   hideHeader?: boolean;
   viewMode?: ViewMode;
 }
 
 export const TasksView = ({
   sectorId,
+  sectionId,
   hideHeader,
   viewMode = 'list'
 }: TasksViewProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [activeFrequency, setActiveFrequency] = useState<string>('all');
+  const [activeStatusFilter, setActiveStatusFilter] = useState<string>('active');
   const [selectedStatuses, setSelectedStatuses] = useState<Enums<'task_status'>[]>(statusFilters.map((f) => f.value));
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [selectedRoutine, setSelectedRoutine] = useState<any | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
 
+  const { user } = useAuth();
+  const { data: role } = useUserRole();
+  const isGestorOrAdmin = role === 'admin' || role === 'gestor';
+
   const { data: tasks, isLoading } = useTasks();
+  const deleteTasks = useDeleteTasks();
+  const bulkUpdateTasks = useBulkUpdateTasks();
 
   const handleToggleSelect = (id: string) => {
     setSelectedTaskIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -96,9 +112,32 @@ export const TasksView = ({
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status);
     const matchesSector = !sectorId || task.sector_id === sectorId;
+
+    // Filter by Section ID
+    const matchesSection = !sectionId
+      ? true
+      : sectionId === 'tasks'
+        ? ((task as any).section_id === null || (task as any).section_id === 'tasks')
+        : (task as any).section_id === sectionId;
+
     const matchesPriority = priorityFilter === 'all' || task.priority.toString() === priorityFilter;
 
-    return matchesSearch && matchesStatus && matchesSector && matchesPriority;
+    // Check specific frequency from routine if available
+    const routineFrequency = task.routine?.frequency;
+    const matchesFrequency = activeFrequency === 'all' || routineFrequency === activeFrequency;
+
+    // Check routine active status
+    const matchesActiveStatus = activeStatusFilter === 'all'
+      ? true
+      : activeStatusFilter === 'active'
+        ? (task.routine?.is_active !== false) // Treat null routine (ad-hoc) as active? Or strictly routine-based? Ad-hoc tasks don't have is_active. Let's assume active unless routine is false.
+        : (task.routine?.is_active === false);
+
+    // Show only "Main" items: Standalone Tasks or Routine Parents (Containers)
+    // Hide Routine Child Tasks (Subtasks) from the main list
+    const isRoutineSubtask = task.routine_id && task.parent_task_id;
+
+    return matchesSearch && matchesStatus && matchesSector && matchesSection && matchesPriority && matchesFrequency && matchesActiveStatus && !isRoutineSubtask;
   }) || [];
 
   const allFilteredSelected = filteredTasks && filteredTasks.length > 0
@@ -142,7 +181,15 @@ export const TasksView = ({
             onToggleSelect={handleToggleSelect}
             onDelete={handleDelete}
             onStatusChange={handleStatusChange}
-            onClick={() => setSelectedTask(task)}
+            onClick={() => {
+              if (task.routine_id && task.routine) {
+                setSelectedRoutine(task.routine);
+                setSelectedTask(null);
+              } else {
+                setSelectedTask(task);
+                setSelectedRoutine(null);
+              }
+            }}
           />
         ))}
       </div>
@@ -153,7 +200,7 @@ export const TasksView = ({
     <div className="flex h-full">
       <div className="w-full flex flex-col transition-all duration-300">
 
-        {/* Header Container V3 - Single Line */}
+        {/* Header Container V3 - Multi-line Local Layout */}
         {!hideHeader && selectedTaskIds.length > 0 ? (
           <div className="flex items-center gap-2 p-2 bg-primary/5 border-b border-primary/20 shadow-sm overflow-x-auto shrink-0 min-h-[50px] mb-4 rounded-lg animate-in fade-in slide-in-from-top-1">
             <span className="text-sm font-medium text-primary ml-2 whitespace-nowrap">
@@ -176,10 +223,27 @@ export const TasksView = ({
                 variant="secondary"
                 size="sm"
                 className="h-8 text-xs gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
-                onClick={() => {
-                  // Bulk Complete Logic (Placeholder - integrate with mutations later)
-                  console.log("Bulk Complete", selectedTaskIds);
-                  setSelectedTaskIds([]);
+                onClick={async () => {
+                  try {
+                    // Permission Check
+                    if (!isGestorOrAdmin) {
+                      const tasksToComplete = tasks?.filter(t => selectedTaskIds.includes(t.id));
+                      const forbiddenTask = tasksToComplete?.find(t => {
+                        const isAssigned = t.assigned_to === user?.id || t.assignees?.some((a: any) => a.id === user?.id);
+                        return !isAssigned;
+                      });
+
+                      if (forbiddenTask) {
+                        toast.error("Você só pode concluir tarefas nas quais é responsável.");
+                        return;
+                      }
+                    }
+
+                    await bulkUpdateTasks.mutateAsync({ taskIds: selectedTaskIds, status: 'concluida' });
+                    setSelectedTaskIds([]);
+                  } catch (e) {
+                    console.error("Bulk complete failed", e);
+                  }
                 }}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -190,10 +254,13 @@ export const TasksView = ({
                 variant="secondary"
                 size="sm"
                 className="h-8 text-xs gap-1.5 bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
-                onClick={() => {
-                  // Bulk Delete Logic
-                  console.log("Bulk Delete", selectedTaskIds);
-                  setSelectedTaskIds([]);
+                onClick={async () => {
+                  try {
+                    await deleteTasks.mutateAsync(selectedTaskIds);
+                    setSelectedTaskIds([]);
+                  } catch (e) {
+                    console.error("Bulk delete failed", e);
+                  }
                 }}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -213,10 +280,10 @@ export const TasksView = ({
         ) : !hideHeader && (
           <div className="flex flex-col gap-2 p-2 bg-card border-b border-border shadow-sm mb-4 rounded-lg">
 
-            {/* ROW 1: Search + New */}
-            <div className="flex items-center gap-2 w-full">
-              {/* Search - Expanded */}
-              <div className="relative flex-1">
+            {/* ROW 1: Search (Small) + Frequency + New */}
+            <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
+              {/* Search - Condensed */}
+              <div className="relative w-[180px] shrink-0">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Buscar..."
@@ -225,6 +292,27 @@ export const TasksView = ({
                   className="pl-8 bg-background h-8 text-xs w-full"
                 />
               </div>
+
+              {/* Frequency Filters - Right next to search */}
+              <div className="flex items-center gap-0.5 bg-secondary/30 p-0.5 rounded-lg border border-border shrink-0">
+                {frequencies.map((freq) => (
+                  <button
+                    key={freq.value}
+                    onClick={() => setActiveFrequency(freq.value)}
+                    className={cn(
+                      'h-7 px-2.5 rounded-md text-xs font-medium transition-all outline-none whitespace-nowrap',
+                      activeFrequency === freq.value
+                        ? 'bg-black text-white shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-black/5'
+                    )}
+                  >
+                    {freq.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Spacer */}
+              <div className="flex-1" />
 
               {/* New Task Button */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -240,6 +328,7 @@ export const TasksView = ({
                   </DialogHeader>
                   <TaskForm
                     sectorId={sectorId}
+                    sectionId={sectionId}
                     onSuccess={() => setIsDialogOpen(false)}
                     onCancel={() => setIsDialogOpen(false)}
                   />
@@ -247,7 +336,7 @@ export const TasksView = ({
               </Dialog>
             </div>
 
-            {/* ROW 2: Filters */}
+            {/* ROW 2: Status + Priority + Active Filter */}
             <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
 
               {/* Status Chips */}
@@ -280,6 +369,18 @@ export const TasksView = ({
               {/* Spacer */}
               <div className="flex-1 min-w-2" />
 
+              {/* Active Status Filter */}
+              <Select value={activeStatusFilter} onValueChange={setActiveStatusFilter}>
+                <SelectTrigger className="w-[100px] h-8 text-xs text-muted-foreground bg-background px-2 shrink-0">
+                  <SelectValue placeholder="Situação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativos</SelectItem>
+                  <SelectItem value="inactive">Inativos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+
               {/* Priority */}
               <Select value={priorityFilter} onValueChange={setPriorityFilter}>
                 <SelectTrigger className="w-[110px] h-8 text-xs text-muted-foreground bg-background px-2 shrink-0">
@@ -303,13 +404,27 @@ export const TasksView = ({
       </div>
 
       {/* Detail Panel via Sheet */}
-      <Sheet open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
+      <Sheet open={!!selectedTask || !!selectedRoutine} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedTask(null);
+          setSelectedRoutine(null);
+        }
+      }}>
         <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
-          {selectedTask && (
-            <div className="h-full overflow-y-auto">
-              <TaskDetailPanel task={selectedTask} onClose={() => setSelectedTask(null)} />
-            </div>
-          )}
+          <div className="h-full overflow-y-auto">
+            {selectedTask && (
+              <TaskDetailPanel
+                task={selectedTask}
+                onClose={() => setSelectedTask(null)}
+              />
+            )}
+            {selectedRoutine && (
+              <RoutineDetailPanel
+                routine={selectedRoutine}
+                onClose={() => setSelectedRoutine(null)}
+              />
+            )}
+          </div>
         </SheetContent>
       </Sheet>
     </div>

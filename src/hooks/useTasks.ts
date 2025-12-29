@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -97,6 +97,12 @@ export const useTasks = (unitId?: string) => {
 
       let filteredTasks = data as TaskWithDetails[];
 
+      // Filter out tasks from inactive routines
+      filteredTasks = filteredTasks.filter(task => {
+        if (!task.routine) return true; // Standalone task
+        return (task.routine as any).is_active !== false; // Active routine
+      });
+
       // Permission Filtering
       if (role === 'usuario' && user?.id) {
         const { data: profile } = await supabase
@@ -129,6 +135,47 @@ export const useTasks = (unitId?: string) => {
   });
 };
 
+export const useDeleteTasks = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskIds: string[]) => {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .in('id', taskIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+    },
+  });
+};
+
+export const useBulkUpdateTasks = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ taskIds, status }: { taskIds: string[], status: TaskStatus }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status })
+        .in('id', taskIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['routines'] });
+    },
+  });
+};
+
 export const useTasksByStatus = (status: TaskStatus) => {
   const { user } = useAuth();
   const { data: role } = useUserRole();
@@ -150,6 +197,12 @@ export const useTasksByStatus = (status: TaskStatus) => {
       if (error) throw error;
 
       let filteredTasks = data as TaskWithDetails[];
+
+      // Filter out tasks from inactive routines
+      filteredTasks = filteredTasks.filter(task => {
+        if (!task.routine) return true; // Standalone task
+        return (task.routine as any).is_active !== false; // Active routine
+      });
 
       // Permission Filtering
       if (role === 'usuario' && user?.id) {

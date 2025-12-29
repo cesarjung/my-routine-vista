@@ -1,5 +1,5 @@
 
-import { CheckCircle2, Circle, Building2, Calendar, RefreshCw, MoreVertical, Check, Trash2, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Circle, Building2, Calendar, RefreshCw, MoreVertical, Check, Trash2, ChevronRight, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,14 @@ const priorityConfig: Record<number, { label: string; className: string }> = {
     5: { label: 'Urgente', className: 'text-destructive' },
 };
 
+const frequencyLabels: Record<string, string> = {
+    diaria: 'Diária',
+    semanal: 'Semanal',
+    quinzenal: 'Quinzenal',
+    mensal: 'Mensal',
+    anual: 'Anual',
+};
+
 interface TaskRowItemProps {
     task: any;
     isSelected?: boolean;
@@ -39,6 +47,7 @@ interface TaskRowItemProps {
     onStatusChange?: (id: string, status: Enums<'task_status'>) => void;
     onClick?: () => void;
     hideSelection?: boolean;
+    comment?: string | null;
 }
 
 export const TaskRowItem = ({
@@ -48,7 +57,8 @@ export const TaskRowItem = ({
     onDelete,
     onStatusChange,
     onClick,
-    hideSelection = false
+    hideSelection = false,
+    comment
 }: TaskRowItemProps) => {
 
     const statusInfo = statusConfig[task.status as Enums<'task_status'>] || statusConfig.pendente;
@@ -89,10 +99,31 @@ export const TaskRowItem = ({
                     <h3 className={cn('font-medium text-foreground', task.status === 'concluida' && 'line-through text-muted-foreground')}>
                         {task.title}
                     </h3>
-                    <Badge variant="outline" className={statusInfo.className}>{statusInfo.label}</Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className={statusInfo.className}>{statusInfo.label}</Badge>
+                        {/* Recurrence Badge */}
+                        {task.is_recurring && (
+                            <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 shrink-0">
+                                <RefreshCw className="w-3 h-3" />
+                                <span className="truncate max-w-[80px]">
+                                    {frequencyLabels[task.recurrence_frequency] || task.recurrence_frequency}
+                                </span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
+                {/* Comment Display */}
+                {comment && (
+                    <div className="flex items-start gap-1 mt-1 ml-0">
+                        <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                        <span className="text-xs text-blue-600 font-medium break-words leading-tight">
+                            {comment}
+                        </span>
+                    </div>
+                )}
+
+                <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
                     {task.unit && (
                         <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{task.unit.name}</span>
                     )}

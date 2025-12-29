@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSectors, useSectorMutations, Sector } from '@/hooks/useSectors';
+import { useSectors, useSectorMutations, useSectionMutations, Sector, SectorSection } from '@/hooks/useSectors';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { NavigationContext, ViewMode } from '@/types/navigation';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const { user, signOut } = useAuth();
   const { data: sectors = [], isLoading } = useSectors();
   const { createSector } = useSectorMutations();
+  const { createSection, deleteSection } = useSectionMutations();
   const { isAdmin } = useIsAdmin();
 
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
@@ -57,6 +58,11 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const [isRotinasExpanded, setIsRotinasExpanded] = useState(true);
   const [newSectorName, setNewSectorName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Section Creation State
+  const [activeSectorIdForSection, setActiveSectorIdForSection] = useState<string | null>(null);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
 
   const toggleSector = (sectorId: string) => {
     const newExpanded = new Set(expandedSectors);
@@ -95,6 +101,29 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
     setIsDialogOpen(false);
   };
 
+  const handleCreateSection = async () => {
+    if (!activeSectorIdForSection || !newSectionTitle.trim()) return;
+
+    // Default to 'custom_tasks' type for new custom sections
+    await createSection.mutateAsync({
+      sector_id: activeSectorIdForSection,
+      title: newSectionTitle.trim(),
+      type: 'custom_tasks',
+      order_index: 99 // Append to end
+    });
+
+    setNewSectionTitle('');
+    setIsSectionDialogOpen(false);
+    setActiveSectorIdForSection(null);
+  };
+
+  const handleDeleteSection = async (e: React.MouseEvent, sectionId: string) => {
+    e.stopPropagation();
+    if (confirm('Tem certeza que deseja excluir esta seção?')) {
+      await deleteSection.mutateAsync(sectionId);
+    }
+  };
+
   const isActive = (ctx: NavigationContext) => {
     if (ctx.type !== context.type) return false;
     if (ctx.type === 'sector' && context.type === 'sector') {
@@ -110,120 +139,157 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
     const routinesKey = `${sector.id}-routines`;
     const isRoutinesExpanded = expandedFolders.has(routinesKey);
 
+    // Fallback if sections haven't loaded yet or query is cached without them
+    const sections = sector.sections?.sort((a, b) => a.order_index - b.order_index) || [
+      { id: 'dashboard', sector_id: sector.id, title: 'Dashboard', type: 'dashboard', order_index: 0 },
+      { id: 'tasks', sector_id: sector.id, title: 'Tarefas', type: 'tasks', order_index: 1 },
+      { id: 'routines', sector_id: sector.id, title: 'Rotinas', type: 'routines', order_index: 2 },
+      { id: 'units', sector_id: sector.id, title: 'Unidades', type: 'units', order_index: 3 },
+    ];
+
     return (
       <div key={sector.id} className="ml-2">
-        <button
-          onClick={() => toggleSector(sector.id)}
-          className={cn(
-            'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors',
-            'text-gray-200 hover:bg-sidebar-accent/50 hover:text-white'
-          )}
-        >
-          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          <div
-            className="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold"
-            style={{ backgroundColor: sector.color || '#6366f1' }}
+        <div className="flex items-center gap-1 w-full pr-2 group/sector">
+          <button
+            onClick={() => toggleSector(sector.id)}
+            className={cn(
+              'flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors',
+              'text-gray-200 hover:bg-sidebar-accent/50 hover:text-white'
+            )}
           >
-            {sector.name.charAt(0).toUpperCase()}
-          </div>
-          {!collapsed && <span className="truncate text-sm">{sector.name}</span>}
-        </button>
+            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            <div
+              className="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold"
+              style={{ backgroundColor: sector.color || '#6366f1' }}
+            >
+              {sector.name.charAt(0).toUpperCase()}
+            </div>
+            {!collapsed && <span className="truncate text-sm">{sector.name}</span>}
+          </button>
+
+          {/* Add Section Button */}
+          {isAdmin && !collapsed && (
+            <button
+              onClick={() => {
+                setActiveSectorIdForSection(sector.id);
+                setIsSectionDialogOpen(true);
+              }}
+              className="opacity-0 group-hover/sector:opacity-100 p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-white transition-opacity"
+              title="Adicionar Seção"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          )}
+        </div>
 
         {isExpanded && !collapsed && (
           <div className="ml-4 space-y-0.5 border-l border-sidebar-border/50 pl-1 mt-0.5">
-            {/* Dashboard Setor */}
-            <button
-              onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'dashboard' })}
-              className={cn(
-                'w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs transition-colors',
-                context.type === 'sector' && context.sectorId === sector.id && context.folder === 'dashboard'
-                  ? 'bg-sidebar-accent text-white font-medium'
-                  : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
-              )}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Dashboard</span>
-            </button>
+            {sections.map(section => {
+              // Special handling for Routines
+              if (section.type === 'routines') {
+                return (
+                  <div key={section.id} className="relative group/section">
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'routines' })}
+                        className={cn(
+                          'flex-1 flex items-center gap-2 px-2 py-1 rounded-l-md text-xs transition-colors',
+                          context.type === 'sector' && context.sectorId === sector.id && context.folder === 'routines'
+                            ? 'bg-sidebar-accent text-white font-medium'
+                            : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
+                        )}
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>{section.title}</span>
+                      </button>
 
-            {/* Tarefas - clicável direto */}
-            <button
-              onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'tasks' })}
-              className={cn(
-                'w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs transition-colors',
-                context.type === 'sector' && context.sectorId === sector.id && context.folder === 'tasks'
-                  ? 'bg-sidebar-accent text-white font-medium'
-                  : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
-              )}
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              <span>Tarefas</span>
-            </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFolder(routinesKey);
+                        }}
+                        className={cn(
+                          'px-1 py-1 rounded-r-md text-xs transition-colors',
+                          isRoutinesExpanded
+                            ? 'bg-sidebar-accent text-white'
+                            : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
+                        )}
+                      >
+                        {isRoutinesExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      </button>
 
-            {/* Rotinas - clicável com dropdown para frequências */}
-            <div className="relative">
-              <div className="flex items-center">
-                <button
-                  onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'routines' })}
-                  className={cn(
-                    'flex-1 flex items-center gap-2 px-2 py-1 rounded-l-md text-xs transition-colors',
-                    context.type === 'sector' && context.sectorId === sector.id && context.folder === 'routines'
-                      ? 'bg-sidebar-accent text-white font-medium'
-                      : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
-                  )}
-                >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Rotinas</span>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFolder(routinesKey);
-                  }}
-                  className={cn(
-                    'px-1 py-1 rounded-r-md text-xs transition-colors',
-                    isRoutinesExpanded
-                      ? 'bg-sidebar-accent text-white'
-                      : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
-                  )}
-                >
-                  {isRoutinesExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                </button>
-              </div>
-
-              {isRoutinesExpanded && (
-                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-sidebar-border/30 pl-1">
-                  {FREQUENCIES.map((freq) => (
-                    <button
-                      key={freq.id}
-                      onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'routines', frequency: freq.id })}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-2 py-0.5 rounded-md text-[11px] transition-colors',
-                        context.type === 'sector' && context.sectorId === sector.id && context.folder === 'routines' && context.frequency === freq.id
-                          ? 'bg-sidebar-accent text-white font-medium'
-                          : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => handleDeleteSection(e, section.id)}
+                          className="ml-1 p-0.5 text-gray-500 hover:text-destructive transition-colors"
+                          title="Excluir seção"
+                        >
+                          <LogOut className="w-3 h-3 rotate-180" />
+                        </button>
                       )}
-                    >
-                      <span className="w-1 h-1 rounded-full bg-current opacity-50" />
-                      <span>{freq.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                    </div>
 
-            {/* Unidades */}
-            <button
-              onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'units' })}
-              className={cn(
-                'w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs transition-colors',
-                isActive({ type: 'sector', sectorId: sector.id, folder: 'units' })
-                  ? 'bg-sidebar-accent text-white font-medium'
-                  : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
-              )}
-            >
-              <Building2 className="w-3.5 h-3.5" />
-              <span>Unidades</span>
-            </button>
+                    {isRoutinesExpanded && (
+                      <div className="ml-3 mt-0.5 space-y-0.5 border-l border-sidebar-border/30 pl-1">
+                        {FREQUENCIES.map((freq) => (
+                          <button
+                            key={freq.id}
+                            onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'routines', frequency: freq.id })}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-2 py-0.5 rounded-md text-[11px] transition-colors',
+                              context.type === 'sector' && context.sectorId === sector.id && context.folder === 'routines' && context.frequency === freq.id
+                                ? 'bg-sidebar-accent text-white font-medium'
+                                : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
+                            )}
+                          >
+                            <span className="w-1 h-1 rounded-full bg-current opacity-50" />
+                            <span>{freq.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // Generic Handling
+              let Icon = ClipboardList;
+              if (section.type === 'dashboard') Icon = LayoutDashboard;
+              if (section.type === 'units') Icon = Building2;
+              if (section.type === 'custom_tasks') Icon = ClipboardList;
+
+              const isCustom = !['dashboard', 'tasks', 'routines', 'units'].includes(section.id); // Check if it's a legacy default ID
+
+              return (
+                <div key={section.id} className="flex items-center group/section">
+                  <button
+                    onClick={() => onNavigate({
+                      type: 'sector',
+                      sectorId: sector.id,
+                      folder: isCustom ? section.id : section.type // Use ID for custom, type for legacy defaults mapping 
+                    })}
+                    className={cn(
+                      'flex-1 flex items-center gap-2 px-2 py-1 rounded-md text-xs transition-colors',
+                      context.type === 'sector' && context.sectorId === sector.id && context.folder === (isCustom ? section.id : section.type)
+                        ? 'bg-sidebar-accent text-white font-medium'
+                        : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{section.title}</span>
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => handleDeleteSection(e, section.id)}
+                      className="ml-1 p-0.5 text-gray-500 hover:text-destructive transition-colors"
+                      title="Excluir seção"
+                    >
+                      <LogOut className="w-3 h-3 rotate-180" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -391,6 +457,26 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
           {!collapsed && <span className="text-sm">Sair</span>}
         </button>
       </div>
+
+      {/* Dialog for Creating New Section */}
+      <Dialog open={isSectionDialogOpen} onOpenChange={setIsSectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Seção</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <Input
+              placeholder="Nome da seção"
+              value={newSectionTitle}
+              onChange={(e) => setNewSectionTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateSection()}
+            />
+            <Button onClick={handleCreateSection} disabled={!newSectionTitle.trim()}>
+              Criar Seção
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 };

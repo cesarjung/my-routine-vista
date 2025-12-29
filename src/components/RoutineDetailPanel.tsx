@@ -19,9 +19,22 @@ import {
   X,
   MinusCircle,
   MoreVertical,
+  Search,
+  Filter,
+  RefreshCw,
+  CheckCircle2,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 import { useDeleteRoutine, useUpdateRoutine } from '@/hooks/useRoutineMutations';
 import {
   AlertDialog,
@@ -150,6 +163,9 @@ export const RoutineDetailPanel = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [closeConfirmDialogOpen, setCloseConfirmDialogOpen] = useState(false);
+  const [taskStatusDialogOpen, setTaskStatusDialogOpen] = useState(false);
+  const [selectedTaskForStatus, setSelectedTaskForStatus] = useState<{ id: string, status: 'concluida' | 'nao_aplicavel' } | null>(null);
+  const [taskComment, setTaskComment] = useState('');
 
   // Editable fields
   const [title, setTitle] = useState(routine.title);
@@ -222,6 +238,28 @@ export const RoutineDetailPanel = ({
 
   // Use tasks instead of checkins when available
   const childTasks = routineTasksData?.childTasks || [];
+  const handleReopenRoutine = async () => {
+    if (!routineTasksData?.parentTask) return;
+
+    try {
+      await updateTask.mutateAsync({
+        id: routineTasksData.parentTask.id,
+        status: 'pendente'
+      });
+      toast.success('Rotina reaberta com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao reabrir rotina');
+    }
+  };
+
+  // This variable seems to be intended to check if there's an active parent task for the current routine.
+  // However, `tasks` is not defined in the provided context. Assuming it refers to a collection of tasks
+  // that would include the parent task for the routine.
+  // For now, I'll use `routineTasksData?.parentTask` for status checks.
+  const activeParentTasks = routineTasksData?.parentTask &&
+    (routineTasksData.parentTask.status === 'pendente' ||
+      routineTasksData.parentTask.status === 'em_andamento' ||
+      routineTasksData.parentTask.status === 'atrasada');
   const completedTasks = childTasks.filter((t) => t.status === 'concluida').length;
   const naTasks = childTasks.filter((t) => t.status === 'nao_aplicavel').length;
   const totalTasks = childTasks.length;
@@ -285,6 +323,15 @@ export const RoutineDetailPanel = ({
   const periodLabel = periodData?.period
     ? `${format(new Date(periodData.period.period_start), "dd/MM", { locale: ptBR })} → ${format(new Date(periodData.period.period_end), "dd/MM", { locale: ptBR })}`
     : null;
+
+  // Determine Routine Status
+  const isRoutineCompleted = routineTasksData?.parentTask?.status === 'concluida' || (total > 0 && completed === total);
+  const isRoutineInProgress = !isRoutineCompleted && (
+    routineTasksData?.parentTask?.status === 'em_andamento' ||
+    (completed > 0 && total > 0)
+  );
+
+  const canEditRoutine = isGestorOrAdmin || isUserUnitManager(routine.unit_id || '');
 
   return (
     <div className="bg-card border-l border-border h-full flex flex-col overflow-hidden animate-fade-in">
@@ -376,12 +423,14 @@ export const RoutineDetailPanel = ({
               onClick={() => setCloseConfirmDialogOpen(true)}
               className={cn(
                 'ml-auto px-2 py-0.5 text-xs font-medium rounded-full border inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity',
-                total > 0 && completed === total
+                isRoutineCompleted
                   ? 'bg-success/20 text-success border-success/30'
-                  : 'bg-warning/20 text-warning border-warning/30'
+                  : isRoutineInProgress
+                    ? 'bg-primary/20 text-primary border-primary/30'
+                    : 'bg-warning/20 text-warning border-warning/30'
               )}
             >
-              {total > 0 && completed === total ? 'CONCLUÍDA' : 'PENDENTE'}
+              {isRoutineCompleted ? 'CONCLUÍDA' : isRoutineInProgress ? 'EM ANDAMENTO' : 'PENDENTE'}
               <ChevronDown className="h-3 w-3" />
             </button>
 
@@ -470,7 +519,28 @@ export const RoutineDetailPanel = ({
         </div>
 
         {/* Quick edit button */}
-        {isGestorOrAdmin && !isEditing && (
+        {canEditRoutine && !isEditing && (
+          isRoutineCompleted ? (
+            <Button
+              className="mt-4 w-full gap-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+              onClick={handleReopenRoutine}
+              disabled={updateTask.isPending}
+            >
+              {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Reabrir Rotina
+            </Button>
+          ) : (
+            <Button
+              className="mt-4 w-full gap-2 bg-green-600 hover:bg-green-700"
+              onClick={() => setCloseConfirmDialogOpen(true)} // Changed to setCloseConfirmDialogOpen
+              disabled={updateTask.isPending}
+            >
+              {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              Encerrar Rotina
+            </Button>
+          )
+        )}
+        {isGestorOrAdmin && !isEditing && !canEditRoutine && ( // Fallback for quick edit if not completed and not covered by above
           <Button
             variant="outline"
             size="sm"
@@ -547,6 +617,7 @@ export const RoutineDetailPanel = ({
                 </Button>
               </div>
             ) : childTasks.length > 0 ? (
+
               <div className="divide-y divide-border">
                 {/* Table Header */}
                 <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
@@ -561,6 +632,22 @@ export const RoutineDetailPanel = ({
                   const isTaskNA = task.status === 'nao_aplicavel';
                   const assignee = (task as any).assignee;
                   const userCanEdit = canEditTask(task);
+
+                  // Debuging
+                  // console.log('Task:', task.id, assignee?.full_name, assignee?.id); 
+                  // console.log('Checkins:', checkins.map(c => ({ id: c.id, user: c.assignee_user_id, notes: c.notes })));
+
+                  // Find associated checkin to get notes
+
+                  // Find associated checkin to get notes - Robust lookup
+                  // Find associated checkin to get notes - Robust lookup
+                  const assignees = (task as any).assignees as any[];
+                  const taskCheckin = checkins.find(c =>
+                    (assignee?.id && c.assignee_user_id === assignee.id) ||
+                    (assignees && assignees.some(a => a.id === c.assignee_user_id)) ||
+                    (c.unit_id === task.unit_id && !c.assignee_user_id) // Fallback for unit-only assignments
+                  );
+                  const taskComment = taskCheckin?.notes;
 
                   return (
                     <div
@@ -578,8 +665,13 @@ export const RoutineDetailPanel = ({
                             {/* Green checkbox for completing */}
                             <button
                               onClick={() => {
-                                const newStatus = isTaskCompleted ? 'pendente' : 'concluida';
-                                updateTask.mutate({ id: task.id, status: newStatus });
+                                if (isTaskCompleted) {
+                                  updateTask.mutate({ id: task.id, status: 'pendente' });
+                                } else {
+                                  setSelectedTaskForStatus({ id: task.id, status: 'concluida' });
+                                  setTaskComment('');
+                                  setTaskStatusDialogOpen(true);
+                                }
                               }}
                               disabled={updateTask.isPending}
                               className={cn(
@@ -596,8 +688,13 @@ export const RoutineDetailPanel = ({
                             {/* Red checkbox for N/A */}
                             <button
                               onClick={() => {
-                                const newStatus = isTaskNA ? 'pendente' : 'nao_aplicavel';
-                                updateTask.mutate({ id: task.id, status: newStatus });
+                                if (isTaskNA) {
+                                  updateTask.mutate({ id: task.id, status: 'pendente' });
+                                } else {
+                                  setSelectedTaskForStatus({ id: task.id, status: 'nao_aplicavel' });
+                                  setTaskComment('');
+                                  setTaskStatusDialogOpen(true);
+                                }
                               }}
                               disabled={updateTask.isPending}
                               className={cn(
@@ -613,14 +710,24 @@ export const RoutineDetailPanel = ({
                           </>
                         )}
 
-                        <span
-                          className={cn(
-                            'font-medium text-sm truncate',
-                            (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
+                        <div className="flex flex-col overflow-hidden">
+                          <span
+                            className={cn(
+                              'font-medium text-sm truncate',
+                              (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
+                            )}
+                          >
+                            {(task as any).unit?.name || 'Sem unidade'}
+                          </span>
+                          {taskComment && (
+                            <div className="flex items-start gap-1 mt-1">
+                              <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-xs text-blue-600 font-medium break-words leading-tight">
+                                {taskComment}
+                              </span>
+                            </div>
                           )}
-                        >
-                          {(task as any).unit?.name || 'Sem unidade'}
-                        </span>
+                        </div>
                       </div>
 
                       {/* Responsible */}
@@ -707,6 +814,7 @@ export const RoutineDetailPanel = ({
                   );
                 })}
               </div>
+
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 Nenhum responsável atribuído à rotina
@@ -715,6 +823,61 @@ export const RoutineDetailPanel = ({
           </div>
         )}
       </div>
+
+      {/* Task Status Dialog with Comment */}
+      <Dialog open={taskStatusDialogOpen} onOpenChange={setTaskStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {selectedTaskForStatus?.status === 'concluida' ? 'Concluir Tarefa' : 'Marcar como Não se Aplica'}
+            </DialogTitle>
+            <DialogDescription>
+              Deseja adicionar um comentário a esta ação?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder="Digite seu comentário (opcional)..."
+              value={taskComment}
+              onChange={(e) => setTaskComment(e.target.value)}
+              className="resize-none"
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTaskStatusDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedTaskForStatus) {
+                  updateTask.mutate({
+                    id: selectedTaskForStatus.id,
+                    status: selectedTaskForStatus.status,
+                    comment: taskComment
+                  });
+                  setTaskStatusDialogOpen(false);
+                }
+              }}
+              disabled={updateTask.isPending}
+              className={cn(
+                selectedTaskForStatus?.status === 'concluida'
+                  ? 'bg-success hover:bg-success/90'
+                  : 'bg-destructive hover:bg-destructive/90'
+              )}
+            >
+              {updateTask.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : selectedTaskForStatus?.status === 'concluida' ? (
+                <Check className="h-4 w-4 mr-2" />
+              ) : (
+                <X className="h-4 w-4 mr-2" />
+              )}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Full Edit Dialog */}
       <RoutineEditDialog

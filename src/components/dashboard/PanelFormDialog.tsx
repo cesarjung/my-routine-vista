@@ -43,6 +43,7 @@ const GROUP_BY_OPTIONS = [
   { value: 'unit', label: 'Por Unidade' },
   { value: 'responsible', label: 'Por Responsável' },
   { value: 'sector', label: 'Por Setor' },
+  { value: 'task_matrix', label: 'Por Tarefa (Matriz)' },
 ];
 
 interface PanelFormDialogProps {
@@ -57,8 +58,10 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
   const [sectorId, setSectorId] = useState<string>(panel?.filters.sector_id || '');
   const [unitId, setUnitId] = useState<string>(panel?.filters.unit_id || '');
   const [selectedStatus, setSelectedStatus] = useState<string[]>(panel?.filters.status || []);
+  const [selectedFrequencies, setSelectedFrequencies] = useState<string[]>(panel?.filters.task_frequency || []);
+  const [titleFilter, setTitleFilter] = useState<string>(panel?.filters.title_filter || '');
   const [period, setPeriod] = useState<string>(panel?.filters.period || 'all');
-  const [groupBy, setGroupBy] = useState<'unit' | 'responsible' | 'sector'>(panel?.filters.group_by || 'unit');
+  const [groupBy, setGroupBy] = useState<'unit' | 'responsible' | 'sector' | 'task_matrix'>(panel?.filters.group_by || 'unit');
 
   const { data: sectors } = useSectors();
   const { data: units } = useUnits();
@@ -73,6 +76,14 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
     );
   };
 
+  const handleFrequencyToggle = (status: string) => {
+    setSelectedFrequencies(prev =>
+      prev.includes(status)
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    );
+  };
+
   const handleSubmit = () => {
     if (!title.trim()) return;
 
@@ -80,6 +91,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
       sector_id: sectorId || null,
       unit_id: unitId || null,
       status: selectedStatus.length > 0 ? selectedStatus : undefined,
+      task_frequency: selectedFrequencies.length > 0 ? selectedFrequencies : undefined,
+      title_filter: titleFilter || undefined,
       period: period as PanelFilters['period'],
       group_by: groupBy
     };
@@ -113,6 +126,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
     setSectorId('');
     setUnitId('');
     setSelectedStatus([]);
+    setSelectedFrequencies([]);
+    setTitleFilter('');
     setPeriod('all');
     setGroupBy('unit');
   };
@@ -131,7 +146,7 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
         <DialogHeader>
           <DialogTitle>{panel ? 'Editar Painel' : 'Criar Painel Customizado'}</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="title">Nome do Painel</Label>
@@ -144,8 +159,18 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="titleFilter">Filtrar por Nome da Tarefa</Label>
+            <Input
+              id="titleFilter"
+              value={titleFilter}
+              onChange={(e) => setTitleFilter(e.target.value)}
+              placeholder="Ex: Checklist"
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label>Agrupar por</Label>
-            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'unit' | 'responsible' | 'sector')}>
+            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'unit' | 'responsible' | 'sector' | 'task_matrix')}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -190,6 +215,32 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Frequência da Rotina</Label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'diaria', label: 'Diária' },
+                { value: 'semanal', label: 'Semanal' },
+                { value: 'quinzenal', label: 'Quinzenal' },
+                { value: 'mensal', label: 'Mensal' },
+              ].map(opt => (
+                <div key={opt.value} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`freq-${opt.value}`}
+                    checked={selectedFrequencies.includes(opt.value)}
+                    onCheckedChange={() => handleFrequencyToggle(opt.value)}
+                  />
+                  <Label htmlFor={`freq-${opt.value}`} className="text-sm font-normal cursor-pointer">
+                    {opt.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            {selectedFrequencies.length === 0 && (
+              <p className="text-xs text-muted-foreground">Nenhuma selecionada = todas as frequências</p>
+            )}
           </div>
 
           <div className="space-y-2">

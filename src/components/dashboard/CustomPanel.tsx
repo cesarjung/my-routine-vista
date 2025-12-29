@@ -82,8 +82,8 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       const periodDates = getPeriodDates(filters.period || 'all');
 
       // Build tasks query
-      let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at');
-      
+      let tasksQuery = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, sector_id');
+
       if (filters.sector_id) {
         tasksQuery = tasksQuery.eq('sector_id', filters.sector_id);
       }
@@ -93,39 +93,52 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       if (filters.status && filters.status.length > 0) {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
+      if (filters.title_filter) {
+        tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
+      }
       if (periodDates) {
         tasksQuery = tasksQuery
           .gte('created_at', periodDates.start.toISOString())
           .lte('created_at', periodDates.end.toISOString());
       }
 
-      const { data: tasks, error: tasksError } = await tasksQuery;
+      const { data: rawTasks, error: tasksError } = await tasksQuery;
       if (tasksError) throw tasksError;
 
       // Get routines for frequency mapping
-      const routineIds = [...new Set(tasks?.filter(t => t.routine_id).map(t => t.routine_id) || [])];
+      const routineIds = [...new Set(rawTasks?.filter(t => t.routine_id).map(t => t.routine_id) || [])];
       let routinesMap: Record<string, string> = {};
-      
+
       if (routineIds.length > 0) {
         const { data: routines } = await supabase
           .from('routines')
           .select('id, frequency')
           .in('id', routineIds);
-        
+
         routinesMap = (routines || []).reduce((acc, r) => {
           acc[r.id] = r.frequency;
           return acc;
         }, {} as Record<string, string>);
       }
 
+      // Filter tasks by frequency if specified
+      const tasks = rawTasks?.filter(t => {
+        if (!filters.task_frequency || filters.task_frequency.length === 0) return true;
+        if (!t.routine_id) return false; // Non-routine tasks don't have frequency
+        const freq = routinesMap[t.routine_id];
+        return filters.task_frequency.includes(freq);
+      });
+
       // Group data based on group_by
+      let results: any[] = [];
+
       if (filters.group_by === 'unit') {
         const { data: units } = await supabase.from('units').select('id, name');
-        
-        return (units || []).map(unit => {
+
+        results = (units || []).map(unit => {
           const unitTasks = tasks?.filter(t => t.unit_id === unit.id) || [];
           const frequencies: Record<string, StatusData> = {};
-          
+
           FREQUENCIES.forEach(f => {
             const freqTasks = unitTasks.filter(t => t.routine_id && routinesMap[t.routine_id] === f);
             frequencies[f] = {
@@ -143,15 +156,13 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
           return { id: unit.id, name: unit.name, frequencies, totals };
         }).filter(u => u.totals.total > 0);
-      }
-
-      if (filters.group_by === 'responsible') {
+      } else if (filters.group_by === 'responsible') {
         const { data: profiles } = await supabase.from('profiles').select('id, full_name, email');
-        
-        return (profiles || []).map(profile => {
+
+        results = (profiles || []).map(profile => {
           const profileTasks = tasks?.filter(t => t.assigned_to === profile.id) || [];
           const frequencies: Record<string, StatusData> = {};
-          
+
           FREQUENCIES.forEach(f => {
             const freqTasks = profileTasks.filter(t => t.routine_id && routinesMap[t.routine_id] === f);
             frequencies[f] = {
@@ -169,21 +180,19 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
           return { id: profile.id, name: profile.full_name || profile.email, frequencies, totals };
         }).filter(p => p.totals.total > 0);
-      }
-
-      if (filters.group_by === 'sector') {
+      } else if (filters.group_by === 'sector') {
         const { data: sectors } = await supabase.from('sectors').select('id, name, color');
-        
+
         // Get tasks with sector
         const { data: tasksWithSector } = await supabase
           .from('tasks')
           .select('id, status, sector_id, routine_id, created_at')
           .not('sector_id', 'is', null);
 
-        return (sectors || []).map(sector => {
+        results = (sectors || []).map(sector => {
           const sectorTasks = tasksWithSector?.filter(t => t.sector_id === sector.id) || [];
           const frequencies: Record<string, StatusData> = {};
-          
+
           FREQUENCIES.forEach(f => {
             const freqTasks = sectorTasks.filter(t => t.routine_id && routinesMap[t.routine_id] === f);
             frequencies[f] = {
@@ -201,9 +210,50 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
           return { id: sector.id, name: sector.name, color: sector.color, frequencies, totals };
         }).filter(s => s.totals.total > 0);
+      } else if (filters.group_by === 'task_matrix') {
+        const { data: units } = await supabase.from('units').select('id, name, code').order('name');
+
+        // Group tasks by routine (or title if no routine)
+        const routineMap = new Map<string, { id: string, name: string, units: Record<string, any> }>();
+
+        // Pre-fill with routines if we have them in the filtered set
+        const distinctRoutineIds = [...new Set(tasks?.map(t => t.routine_id).filter(Boolean))];
+
+        if (distinctRoutineIds.length > 0) {
+          const { data: routines } = await supabase
+            .from('routines')
+            .select('id, title')
+            .in('id', distinctRoutineIds as string[]);
+
+          routines?.forEach(r => {
+            routineMap.set(r.id, { id: r.id, name: r.title, units: {} });
+          });
+        }
+
+        // Also handle ad-hoc tasks by grouping by title
+        tasks?.forEach(task => {
+          let key = task.routine_id || `title:${task.title}`;
+          let name = task.title;
+
+          if (task.routine_id && routineMap.has(task.routine_id)) {
+            name = routineMap.get(task.routine_id)!.name;
+          } else if (!routineMap.has(key)) {
+            routineMap.set(key, { id: key, name: name, units: {} });
+          }
+
+          const entry = routineMap.get(key)!;
+          entry.units[task.unit_id || 'unassigned'] = {
+            status: task.status,
+            taskId: task.id,
+            date: task.created_at
+          };
+        });
+
+        results = Array.from(routineMap.values());
+        return { results, routinesMap, units: units || [] };
       }
 
-      return [];
+      return { results, routinesMap };
     }
   });
 };
@@ -304,12 +354,12 @@ interface CustomPanelProps {
 }
 
 export const CustomPanel = ({ panel }: CustomPanelProps) => {
-  const { data, isLoading } = useCustomPanelData(panel);
+  const { data: panelData, isLoading } = useCustomPanelData(panel);
   const { data: allTasks } = useTasks();
   const deletePanel = useDeleteDashboardPanel();
   const { isAdmin } = useIsAdmin();
   const Icon = getGroupIcon(panel.filters.group_by);
-  
+
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
     isOpen: false,
     title: '',
@@ -340,7 +390,7 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
   // Filter tasks based on dialog state
   const filteredTasks = allTasks?.filter(task => {
     if (!tasksDialog.isOpen) return false;
-    
+
     // Filter by entity type
     if (tasksDialog.entityType === 'unit') {
       if (task.unit_id !== tasksDialog.entityId) return false;
@@ -349,20 +399,141 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
     } else if (tasksDialog.entityType === 'sector') {
       if (task.sector_id !== tasksDialog.entityId) return false;
     }
-    
+
     // Filter by panel's sector if set
     if (panel.filters.sector_id && task.sector_id !== panel.filters.sector_id) return false;
-    
+
+    // Filter by panel's title filter if set
+    if (panel.filters.title_filter && !task.title.toLowerCase().includes(panel.filters.title_filter.toLowerCase())) return false;
+
+    // Filter by frequency (using routine map from panel data)
+    if (tasksDialog.frequency && panelData?.routinesMap) {
+      if (!task.routine_id) return false;
+      const freq = panelData.routinesMap[task.routine_id];
+      if (freq !== tasksDialog.frequency) return false;
+    }
+
     return true;
   }) || [];
+
+  // Determine visible frequencies
+  const visibleFrequencies = panel.filters.task_frequency && panel.filters.task_frequency.length > 0
+    ? FREQUENCIES.filter(f => panel.filters.task_frequency?.includes(f))
+    : FREQUENCIES;
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-primary" />
+        </div>
+      );
+    }
+
+    if (!panelData?.results.length) {
+      return <div className="p-4 text-center text-muted-foreground text-xs">Sem dados para os filtros selecionados</div>;
+    }
+
+    if (panel.filters.group_by === 'task_matrix') {
+      return (
+        <table className="w-full text-xs border-collapse">
+          <thead className="sticky top-0 bg-card z-10 shadow-sm">
+            <tr className="border-b border-border">
+              <th className="text-left p-2 font-medium text-muted-foreground min-w-[200px] sticky left-0 bg-card z-20 border-r">Tarefa</th>
+              {panelData.units?.map((u: any) => (
+                <th key={u.id} className="p-2 text-center font-medium text-muted-foreground min-w-[60px] whitespace-nowrap" title={u.name}>
+                  {u.code || u.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            {panelData.results.map((row: any) => (
+              <tr key={row.id} className="hover:bg-secondary/20">
+                <td className="p-2 font-medium text-foreground sticky left-0 bg-card z-10 border-r group-hover:bg-secondary/20 truncate max-w-[200px]" title={row.name}>
+                  {row.name}
+                </td>
+                {panelData.units?.map((u: any) => {
+                  const cell = row.units[u.id];
+                  return (
+                    <td key={u.id} className="p-2 text-center border-l border-border/30">
+                      {cell ? (
+                        <div className="flex justify-center">
+                          {cell.status === 'concluida' ? (
+                            <div className="w-6 h-6 rounded-full bg-success/20 text-success flex items-center justify-center">
+                              <CheckCircle2 className="w-4 h-4" />
+                            </div>
+                          ) : (
+                            <div className={cn(
+                              "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                              cell.status === 'atrasada' ? "bg-destructive/20 text-destructive" :
+                                cell.status === 'em_andamento' ? "bg-warning/20 text-warning" :
+                                  "bg-secondary text-muted-foreground"
+                            )}>
+                              {cell.status === 'atrasada' ? '!' : '-'}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground/30 text-[10px]">-</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    return (
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-card z-10">
+          <tr className="border-b border-border">
+            <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
+            {visibleFrequencies.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground min-w-[36px]">{FREQUENCY_LABELS[f]}</th>)}
+            <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/50">
+          {panelData?.results.map((item: { id: string; name: string; frequencies: Record<string, StatusData>; totals: StatusData }) => (
+            <tr key={item.id} className="hover:bg-secondary/20">
+              <td className="p-2">
+                <p className="font-medium text-foreground" title={item.name}>{item.name}</p>
+              </td>
+              {visibleFrequencies.map(f => (
+                <td key={f} className="p-1 text-center">
+                  <StatusBadge
+                    data={item.frequencies[f]}
+                    frequency={f}
+                    onClick={item.frequencies[f].total > 0
+                      ? () => openTasksDialog(
+                        item.id,
+                        item.name,
+                        panel.filters.group_by as 'unit' | 'responsible' | 'sector',
+                        f
+                      )
+                      : undefined
+                    }
+                  />
+                </td>
+              ))}
+              <td className="p-2 text-right"><TotalBadge data={item.totals} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
 
   return (
     <>
       <div
         className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
-        style={{ 
-          minHeight: 150, 
-          minWidth: 280, 
+        style={{
+          minHeight: 150,
+          minWidth: 280,
           height: 280,
           maxWidth: '100%'
         }}
@@ -370,8 +541,8 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30 flex-shrink-0">
           <Icon className="w-4 h-4 text-primary" />
           <span className="font-medium text-sm truncate">{panel.title}</span>
-          <span className="text-[10px] text-muted-foreground ml-auto">{data?.length || 0}</span>
-          
+          <span className="text-[10px] text-muted-foreground ml-auto">{panelData?.results.length || 0}</span>
+
           {isAdmin && (
             <div className="flex items-center gap-1 ml-2">
               <PanelFormDialog
@@ -382,7 +553,7 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
                   </Button>
                 }
               />
-              
+
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
@@ -407,52 +578,9 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
             </div>
           )}
         </div>
-        
+
         <div className="overflow-auto flex-1">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            </div>
-          ) : data?.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground text-xs">Sem dados para os filtros selecionados</div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-card z-10">
-                <tr className="border-b border-border">
-                  <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
-                  {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
-                  <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {data?.map((item: { id: string; name: string; frequencies: Record<string, StatusData>; totals: StatusData }) => (
-                  <tr key={item.id} className="hover:bg-secondary/20">
-                    <td className="p-2">
-                      <p className="font-medium text-foreground" title={item.name}>{item.name}</p>
-                    </td>
-                    {FREQUENCIES.map(f => (
-                      <td key={f} className="p-1 text-center">
-                        <StatusBadge 
-                          data={item.frequencies[f]} 
-                          frequency={f}
-                          onClick={item.frequencies[f].total > 0 
-                            ? () => openTasksDialog(
-                                item.id, 
-                                item.name, 
-                                panel.filters.group_by as 'unit' | 'responsible' | 'sector',
-                                f
-                              )
-                            : undefined
-                          }
-                        />
-                      </td>
-                    ))}
-                    <td className="p-2 text-right"><TotalBadge data={item.totals} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          {renderContent()}
         </div>
       </div>
 
@@ -470,7 +598,7 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
               )}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="flex-1 overflow-auto">
             {filteredTasks.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -495,9 +623,9 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
                       <Badge
                         variant={
                           task.status === 'concluida' ? 'default' :
-                          task.status === 'atrasada' ? 'destructive' :
-                          task.status === 'em_andamento' ? 'secondary' :
-                          'outline'
+                            task.status === 'atrasada' ? 'destructive' :
+                              task.status === 'em_andamento' ? 'secondary' :
+                                'outline'
                         }
                         className="shrink-0"
                       >

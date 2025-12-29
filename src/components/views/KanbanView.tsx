@@ -16,6 +16,9 @@ import {
 } from '@/components/ui/dialog';
 import { TaskForm } from '@/components/TaskForm';
 import { RoutineForm } from '@/components/RoutineForm';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { TaskDetailPanel } from '@/components/TaskDetailPanel';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +62,20 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  // Detail Panel State
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedRoutine, setSelectedRoutine] = useState<any | null>(null);
+
+  const handleTaskClick = (task: Task) => {
+    if (task.routine_id && (task as any).routine) {
+      setSelectedRoutine((task as any).routine);
+      setSelectedTask(null);
+    } else {
+      setSelectedTask(task);
+      setSelectedRoutine(null);
+    }
+  };
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
@@ -175,7 +192,7 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
                         key={task.id}
                         className="bg-card rounded-lg border border-border p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer group animate-fade-in"
                         style={{ animationDelay: `${index * 50}ms` }}
-                        onClick={() => handleEditTask(task as Task)}
+                        onClick={() => handleTaskClick(task as Task)}
                       >
                         <div className="flex items-start gap-2">
                           {/* Quick completion checkbox */}
@@ -261,6 +278,36 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
       />
+      <TaskEditDialog
+        task={editingTask}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
+
+      {/* Detail Panel via Sheet */}
+      <Sheet open={!!selectedTask || !!selectedRoutine} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedTask(null);
+          setSelectedRoutine(null);
+        }
+      }}>
+        <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
+          <div className="h-full overflow-y-auto">
+            {selectedTask && (
+              <TaskDetailPanel
+                task={selectedTask}
+                onClose={() => setSelectedTask(null)}
+              />
+            )}
+            {selectedRoutine && (
+              <RoutineDetailPanel
+                routine={selectedRoutine}
+                onClose={() => setSelectedRoutine(null)}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

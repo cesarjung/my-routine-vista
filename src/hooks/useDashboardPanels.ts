@@ -9,7 +9,9 @@ export interface PanelFilters {
   unit_id?: string | null;
   status?: string[];
   period?: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
-  group_by: 'unit' | 'responsible' | 'sector';
+  group_by: 'unit' | 'responsible' | 'sector' | 'task_matrix';
+  title_filter?: string;
+  task_frequency?: string[];
 }
 
 export interface DashboardPanel {
@@ -35,7 +37,7 @@ export const useDashboardPanels = () => {
     queryKey: ['dashboard-panels'],
     queryFn: async () => {
       if (!user) return [];
-      
+
       // Fetch all panels (RLS now allows everyone to view all)
       const { data, error } = await supabase
         .from('dashboard_panels')
@@ -43,7 +45,7 @@ export const useDashboardPanels = () => {
         .order('order_index', { ascending: true });
 
       if (error) throw error;
-      
+
       return (data || []).map(panel => ({
         ...panel,
         filters: { ...defaultFilters, ...(panel.filters as unknown as Partial<PanelFilters>) } as PanelFilters,
@@ -98,7 +100,7 @@ export const useUpdateDashboardPanel = () => {
       const updateData: Record<string, unknown> = { ...updates };
       if (filters) updateData.filters = filters as unknown as Json;
       if (display_config) updateData.display_config = display_config as unknown as Json;
-      
+
       const { data, error } = await supabase
         .from('dashboard_panels')
         .update(updateData)
@@ -148,7 +150,7 @@ export const useReorderDashboardPanels = () => {
   return useMutation({
     mutationFn: async (panels: { id: string; order_index: number }[]) => {
       // Update all panels in parallel
-      const updates = panels.map(panel => 
+      const updates = panels.map(panel =>
         supabase
           .from('dashboard_panels')
           .update({ order_index: panel.order_index })
@@ -157,11 +159,11 @@ export const useReorderDashboardPanels = () => {
 
       const results = await Promise.all(updates);
       const errors = results.filter(r => r.error);
-      
+
       if (errors.length > 0) {
         throw new Error('Erro ao reordenar painéis');
       }
-      
+
       return panels;
     },
     onMutate: async (newOrder) => {
@@ -178,7 +180,7 @@ export const useReorderDashboardPanels = () => {
           const bOrder = newOrder.find(p => p.id === b.id)?.order_index ?? b.order_index;
           return aOrder - bOrder;
         });
-        
+
         queryClient.setQueryData(['dashboard-panels'], updatedPanels);
       }
 

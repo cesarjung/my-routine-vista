@@ -46,6 +46,8 @@ export interface CreateTaskWithUnitsData {
   recurrence_mode?: 'schedule' | 'on_completion';
   // Setor
   sector_id?: string;
+  // Seção do Setor (Dynamic Sections)
+  section_id?: string;
   // Ignorar feriados e finais de semana
   skip_weekends_holidays?: boolean;
 }
@@ -155,6 +157,7 @@ export const useCreateTaskWithUnits = () => {
             description: data.description || null,
             unit_id: firstUnitId,
             sector_id: data.sector_id || null,
+            section_id: data.section_id || null,
             assigned_to: data.parentAssignedTo || user.id,
             status: 'pendente',
             priority: data.priority,
@@ -188,6 +191,7 @@ export const useCreateTaskWithUnits = () => {
           description: data.description || null,
           unit_id: assignment.unitId,
           sector_id: data.sector_id || null,
+          section_id: data.section_id || null, // Propagate section_id to children
           assigned_to: assignment.assignedTo,
           status: 'pendente' as const,
           priority: data.priority,
@@ -331,7 +335,7 @@ export const useUpdateTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: TaskUpdate & { id: string }) => {
+    mutationFn: async ({ id, comment, ...updates }: TaskUpdate & { id: string, comment?: string }) => {
       // First, get the current task to check for google_event_id and recurring info
       const { data: existingTask } = await supabase
         .from('tasks')
@@ -352,30 +356,27 @@ export const useUpdateTask = () => {
       if (
         existingTask?.routine_id &&
         updates.status === 'concluida' &&
-        existingTask?.status !== 'concluida' &&
-        existingTask?.assigned_to
+        existingTask?.status !== 'concluida'
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'completed');
+        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, existingTask.unit_id, 'completed', comment);
       }
 
       // If task was set to NA and is linked to a routine, update the checkin
       if (
         existingTask?.routine_id &&
         updates.status === 'nao_aplicavel' &&
-        existingTask?.status !== 'nao_aplicavel' &&
-        existingTask?.assigned_to
+        existingTask?.status !== 'nao_aplicavel'
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'not_completed');
+        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, existingTask.unit_id, 'not_completed', comment);
       }
 
       // If task was uncompleted and is linked to a routine, revert the checkin
       if (
         existingTask?.routine_id &&
         (existingTask?.status === 'concluida' || existingTask?.status === 'nao_aplicavel') &&
-        updates.status && updates.status !== 'concluida' && updates.status !== 'nao_aplicavel' &&
-        existingTask?.assigned_to
+        updates.status && updates.status !== 'concluida' && updates.status !== 'nao_aplicavel'
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, 'pending');
+        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, existingTask.unit_id, 'pending');
       }
 
       // Sync to Google Calendar if connected
@@ -390,13 +391,10 @@ export const useUpdateTask = () => {
         ).catch(console.error);
       }
 
-      // If this is a child task being completed/NA, check if all siblings are done
-      if (
-        existingTask?.parent_task_id &&
-        (updates.status === 'concluida' || updates.status === 'nao_aplicavel') &&
-        existingTask?.status !== 'concluida' &&
-        existingTask?.status !== 'nao_aplicavel'
-      ) {
+      // If this is a child task, check and update parent task status
+      if (existingTask?.parent_task_id && updates.status) {
+        // We delay slightly to ensure the current update is committed before checking siblings
+        // Or we can rely on the fact that we awaited the update above.
         await checkAndCompleteParentTask(existingTask.parent_task_id);
       }
 
@@ -436,8 +434,10 @@ export const useUpdateTask = () => {
 // Helper function to update routine checkin when a task is completed
 async function updateRoutineCheckinFromTask(
   routineId: string,
-  assigneeUserId: string,
-  status: 'completed' | 'pending' | 'not_completed'
+  assigneeUserId: string | null | undefined,
+  unitId: string | null,
+  status: 'completed' | 'pending' | 'not_completed',
+  note?: string
 ): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -455,14 +455,33 @@ async function updateRoutineCheckinFromTask(
     if (!activePeriod) return;
 
     // Find the checkin for this user in this period
-    const { data: checkin } = await supabase
-      .from('routine_checkins')
-      .select('id')
-      .eq('routine_period_id', activePeriod.id)
-      .eq('assignee_user_id', assigneeUserId)
-      .maybeSingle();
+    let targetCheckin = null;
 
-    if (!checkin) return;
+    if (assigneeUserId) {
+      const { data: checkin } = await supabase
+        .from('routine_checkins')
+        .select('id')
+        .eq('routine_period_id', activePeriod.id)
+        .eq('assignee_user_id', assigneeUserId)
+        .maybeSingle();
+
+      targetCheckin = checkin;
+    }
+
+    // Fallback: If no checkin found for user, look for checkin for unit with null user
+    if (!targetCheckin && unitId) {
+      const { data: unitCheckin } = await supabase
+        .from('routine_checkins')
+        .select('id')
+        .eq('routine_period_id', activePeriod.id)
+        .eq('unit_id', unitId)
+        .is('assignee_user_id', null)
+        .maybeSingle();
+
+      targetCheckin = unitCheckin;
+    }
+
+    if (!targetCheckin) return;
 
     // Update the checkin status
     if (status === 'pending') {
@@ -472,8 +491,9 @@ async function updateRoutineCheckinFromTask(
           status: 'pending',
           completed_at: null,
           completed_by: null,
+          notes: null,
         })
-        .eq('id', checkin.id);
+        .eq('id', targetCheckin.id);
     } else {
       await supabase
         .from('routine_checkins')
@@ -481,8 +501,9 @@ async function updateRoutineCheckinFromTask(
           status,
           completed_at: new Date().toISOString(),
           completed_by: user?.id || assigneeUserId,
+          notes: note || undefined,
         })
-        .eq('id', checkin.id);
+        .eq('id', targetCheckin.id);
     }
   } catch (error) {
     console.error('Error updating routine checkin:', error);
@@ -501,12 +522,19 @@ async function checkAndCompleteParentTask(parentTaskId: string): Promise<void> {
     if (error) throw error;
     if (!childTasks || childTasks.length === 0) return;
 
-    // Check if all child tasks are either 'concluida' or 'nao_aplicavel'
-    const allDone = childTasks.every(
-      (t) => t.status === 'concluida' || t.status === 'nao_aplicavel'
-    );
+    // Check statuses
+    const total = childTasks.length;
+    const completed = childTasks.filter(t => t.status === 'concluida').length;
+    const na = childTasks.filter(t => t.status === 'nao_aplicavel').length;
+    const effectiveCompleted = completed + na;
 
-    if (!allDone) return;
+    let newStatus: 'pendente' | 'em_andamento' | 'concluida' = 'pendente';
+
+    if (effectiveCompleted === total) {
+      newStatus = 'concluida';
+    } else if (effectiveCompleted > 0) {
+      newStatus = 'em_andamento';
+    }
 
     // Get parent task info
     const { data: parentTask, error: parentError } = await supabase
@@ -516,21 +544,26 @@ async function checkAndCompleteParentTask(parentTaskId: string): Promise<void> {
       .single();
 
     if (parentError) throw parentError;
-    if (!parentTask || parentTask.status === 'concluida') return;
+    if (!parentTask) return;
 
-    // Complete the parent task
-    await supabase
-      .from('tasks')
-      .update({
-        status: 'concluida',
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', parentTaskId);
+    // Only update if status changed
+    if (parentTask.status !== newStatus) {
+      // Update the parent task
+      await supabase
+        .from('tasks')
+        .update({
+          status: newStatus,
+          completed_at: newStatus === 'concluida' ? new Date().toISOString() : null,
+        })
+        .eq('id', parentTaskId);
 
-    console.log('Parent task auto-completed:', parentTaskId);
+      console.log(`Parent task ${parentTaskId} updated to ${newStatus}`);
+    }
 
-    // If parent is recurring (on_completion mode), create next instance
+    // If completed and is recurring (on_completion mode), create next instance
     if (
+      newStatus === 'concluida' &&
+      parentTask.status !== 'concluida' && // Only if it wasn't already completed
       parentTask.is_recurring &&
       parentTask.recurrence_mode === 'on_completion' &&
       parentTask.start_date &&

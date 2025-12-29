@@ -29,23 +29,42 @@ interface UnifiedDraggablePanelsProps {
   customPanels: DashboardPanel[];
   renderUnitsPanel: () => React.ReactNode;
   renderResponsiblesPanel: () => React.ReactNode;
+  sectorId?: string | null;
 }
 
 // Hook to fetch dashboard layout from database
-const useDashboardLayout = () => {
+const useDashboardLayout = (sectorId?: string | null) => {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ['dashboard-layout'],
+    queryKey: ['dashboard-layout', sectorId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      if (!user) return [];
+
+      let query = supabase
         .from('dashboard_layout')
-        .select('*');
-      
-      if (error) throw error;
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (sectorId) {
+        query = query.eq('sector_id', sectorId);
+      } else {
+        query = query.is('sector_id', null);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        // Build empty array if table doesn't exist yet to avoid crash
+        console.error('Error fetching layout:', error);
+        return [];
+      }
       return data;
     },
-    // Refetch periodically to get updates from admin
-    refetchInterval: 30000, // Every 30 seconds
-    staleTime: 10000, // Consider stale after 10 seconds
+    enabled: !!user,
+    // Refetch periodically to get updates
+    refetchInterval: 30000,
+    staleTime: 10000,
   });
 };
 
@@ -55,30 +74,94 @@ const useSaveDashboardLayout = () => {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (panels: UnifiedPanel[]) => {
+    mutationFn: async ({ panels, sectorId }: { panels: UnifiedPanel[], sectorId?: string | null }) => {
       if (!user) throw new Error('User not authenticated');
 
-      // Upsert each panel position
-      for (const panel of panels) {
-        const { error } = await supabase
-          .from('dashboard_layout')
-          .upsert({
-            panel_id: panel.id,
-            position_x: Math.round(panel.position.x),
-            position_y: Math.round(panel.position.y),
-            updated_by: user.id,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'panel_id' });
+      console.log('Saving layout for sector:', sectorId, 'Panels:', panels.length);
 
-        if (error) throw error;
+      // 1. Delete existing layout for this context
+      let deleteQuery = supabase
+        .from('dashboard_layout')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (sectorId) {
+        deleteQuery = deleteQuery.eq('sector_id', sectorId);
+      } else {
+        deleteQuery = deleteQuery.is('sector_id', null);
+      }
+
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        throw deleteError;
+      }
+
+      // 2. Insert new positions
+      if (panels.length > 0) {
+        const updates = panels.map(panel => ({
+          user_id: user.id,
+          sector_id: sectorId || null,
+          panel_id: panel.id,
+          position_x: Math.round(panel.position.x),
+          position_y: Math.round(panel.position.y),
+          updated_by: user.id,
+          updated_at: new Date().toISOString(),
+        }));
+
+        const { error: insertError } = await supabase
+          .from('dashboard_layout')
+          .insert(updates);
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw insertError;
+        }
+      }
+    },
+    onMutate: async ({ panels, sectorId }) => {
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ['dashboard-layout', sectorId] });
+
+      // Snapshot the previous value
+      const previousLayout = queryClient.getQueryData(['dashboard-layout', sectorId]);
+
+      // Optimistically update to the new value
+      const optimisticLayout = panels.map(p => ({
+        panel_id: p.id,
+        position_x: Math.round(p.position.x),
+        position_y: Math.round(p.position.y),
+        user_id: user.id,
+        sector_id: sectorId || null,
+      }));
+
+      // We need to merge this with existing layout items that weren't in the panels array (if any)
+      // But for this view, 'panels' contains everything we care about for this user/sector
+      queryClient.setQueryData(['dashboard-layout', sectorId], (old: any[] | undefined) => {
+        if (!old) return optimisticLayout;
+
+        // Create a map of the new positions
+        const newPositionsMap = new Map(optimisticLayout.map(i => [i.panel_id, i]));
+
+        // return merged array: items in old that aren't in new (preserve them) + all new items
+        const preserved = old.filter(item => !newPositionsMap.has(item.panel_id));
+        return [...preserved, ...optimisticLayout];
+      });
+
+      return { previousLayout };
+    },
+    onError: (err, variables, context) => {
+      console.error('Error saving layout:', err);
+      toast.error(`Erro ao salvar layout: ${err.message}`);
+      if (context?.previousLayout) {
+        queryClient.setQueryData(['dashboard-layout', variables.sectorId], context.previousLayout);
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-layout'] });
-      toast.success('Layout do dashboard salvo para todos os usuários');
+      toast.success('Layout salvo!');
     },
-    onError: (error) => {
-      toast.error('Erro ao salvar layout: ' + error.message);
+    onSettled: (_, __, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-layout', variables.sectorId] });
     },
   });
 };
@@ -97,7 +180,7 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
     setNodeRef,
     transform,
     isDragging,
-  } = useDraggable({ 
+  } = useDraggable({
     id: panel.id,
     disabled: !canDrag,
   });
@@ -118,12 +201,12 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
       )}
     >
       {/* Drag Handle */}
-      <div 
+      <div
         {...(canDrag ? { ...attributes, ...listeners } : {})}
         className={cn(
           "absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center bg-gradient-to-r from-muted/80 to-transparent rounded-l-lg transition-opacity touch-none",
-          canDrag 
-            ? "cursor-grab active:cursor-grabbing opacity-60 hover:opacity-100" 
+          canDrag
+            ? "cursor-grab active:cursor-grabbing opacity-60 hover:opacity-100"
             : "cursor-not-allowed opacity-40"
         )}
         title={canDrag ? "Arraste para reposicionar" : "Somente administradores podem reorganizar"}
@@ -134,7 +217,7 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
           <Lock className="w-3 h-3 text-muted-foreground" />
         )}
       </div>
-      
+
       <div className="pl-6">
         {renderContent()}
       </div>
@@ -175,10 +258,11 @@ export const UnifiedDraggablePanels = ({
   customPanels,
   renderUnitsPanel,
   renderResponsiblesPanel,
+  sectorId,
 }: UnifiedDraggablePanelsProps) => {
   const { user } = useAuth();
   const { isAdmin, isLoading: isLoadingRole } = useIsAdmin();
-  const { data: savedLayout, isLoading: isLoadingLayout } = useDashboardLayout();
+  const { data: savedLayout, isLoading: isLoadingLayout } = useDashboardLayout(sectorId);
   const saveLayout = useSaveDashboardLayout();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [containerHeight, setContainerHeight] = useState(600);
@@ -189,7 +273,7 @@ export const UnifiedDraggablePanels = ({
     const row = Math.floor(index / 2);
     const panelHeight = 300;
     const gap = 16;
-    
+
     return {
       x: col * 400, // offset for second column
       y: row * (panelHeight + gap),
@@ -204,7 +288,7 @@ export const UnifiedDraggablePanels = ({
 
     const panels: UnifiedPanel[] = [];
     let index = 0;
-    
+
     customPanels.forEach(panel => {
       panels.push({
         id: panel.id,
@@ -214,20 +298,20 @@ export const UnifiedDraggablePanels = ({
       });
       index++;
     });
-    
+
     panels.push({
       id: 'default-units',
       type: 'units',
       position: layoutMap['default-units'] || getInitialPosition(index),
     });
     index++;
-    
+
     panels.push({
       id: 'default-responsibles',
       type: 'responsibles',
       position: layoutMap['default-responsibles'] || getInitialPosition(index),
     });
-    
+
     return panels;
   }, [customPanels, savedLayout]);
 
@@ -237,10 +321,10 @@ export const UnifiedDraggablePanels = ({
   // Rebuild panels whenever savedLayout or customPanels changes
   useEffect(() => {
     if (isLoadingLayout) return;
-    
+
     // Don't update while dragging
     if (activeId !== null) return;
-    
+
     const newPanels = buildPanelList();
     setPanels(newPanels);
     setInitialized(true);
@@ -282,7 +366,8 @@ export const UnifiedDraggablePanels = ({
     setPanels(newPanels);
 
     // Save to database (admin only - RLS will enforce this)
-    saveLayout.mutate(newPanels);
+    console.log('handleDragEnd sectorId:', sectorId);
+    saveLayout.mutate({ panels: newPanels, sectorId });
   };
 
   const renderPanelContent = (panel: UnifiedPanel) => {
@@ -311,8 +396,8 @@ export const UnifiedDraggablePanels = ({
           <span>Layout definido pelo administrador</span>
         </div>
       )}
-      
-      <div 
+
+      <div
         className="relative w-full"
         style={{ minHeight: containerHeight }}
       >
@@ -325,7 +410,7 @@ export const UnifiedDraggablePanels = ({
           />
         ))}
       </div>
-      
+
       <DragOverlay>
         {activePanel && isAdmin && (
           <DragOverlayContent

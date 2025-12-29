@@ -84,9 +84,10 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface RoutineFormProps {
   sectorId?: string;
+  onSuccess?: () => void;
 }
 
-export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
+export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
   const [open, setOpen] = useState(false);
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
@@ -232,6 +233,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     setUnitError(null);
     setParentAssignees([]);
     setOpen(false);
+    onSuccess?.();
   };
 
   return (

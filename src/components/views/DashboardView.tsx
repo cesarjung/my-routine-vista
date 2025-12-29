@@ -537,6 +537,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       ) : (
         <UnifiedDraggablePanels
           customPanels={customPanels || []}
+          sectorId={selectedSectorId}
           renderUnitsPanel={() => (
             <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
               {unitStatus?.length === 0 ? (

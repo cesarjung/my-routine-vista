@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -18,10 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useRoutines } from '@/hooks/useRoutines';
+import { useRoutines, useDeleteRoutines } from '@/hooks/useRoutines';
+import { useBulkUpdateTasks } from '@/hooks/useTasks';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { RoutineForm } from '@/components/RoutineForm';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import { RoutineListItem } from '@/components/RoutineListItem';
@@ -30,6 +32,8 @@ import { KanbanView } from './KanbanView';
 import { GanttView } from './GanttView';
 import { CalendarView } from './CalendarView';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
+import { BulkRoutineCompletionDialog } from '@/components/BulkRoutineCompletionDialog';
+import { useUserRole } from '@/hooks/useUserRole';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
@@ -67,16 +71,30 @@ export const RoutinesView = ({
   viewMode = 'list'
 }: RoutinesViewProps) => {
   const [activeFrequency, setActiveFrequency] = useState<string>(frequency || 'all');
+
+  // Sync activeFrequency with frequency prop from navigation changes
+  useEffect(() => {
+    if (frequency) {
+      setActiveFrequency(frequency);
+    } else {
+      setActiveFrequency('all');
+    }
+  }, [frequency]);
   const [search, setSearch] = useState('');
   const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
   const [editingRoutine, setEditingRoutine] = useState<Tables<'routines'> | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(statusFilters.map((f) => f.value));
+  const [activeStatusFilter, setActiveStatusFilter] = useState<string>('active'); // Added state
 
   const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>([]);
+  const [isBulkCompleteDialogOpen, setIsBulkCompleteDialogOpen] = useState(false);
 
-  const isGestorOrAdmin = true; // Assuming permission
+  const { data: userRole } = useUserRole(); // Assuming this hook exists
+  const isGestorOrAdmin = userRole === 'admin' || userRole === 'gestor';
   const { data: routines, isLoading } = useRoutines();
+  const deleteRoutines = useDeleteRoutines();
+  const bulkUpdateTasks = useBulkUpdateTasks();
 
   const filteredRoutines = routines?.filter(r => {
     const matchesFrequency = activeFrequency === 'all' || r.frequency === activeFrequency;
@@ -120,7 +138,14 @@ export const RoutinesView = ({
     // Use loose check for priority as it might not be strictly typed yet
     const matchesPriority = priorityFilter === 'all' || (r as any).priority?.toString() === priorityFilter;
 
-    return matchesFrequency && matchesSector && matchesSearch && matchesPriority;
+    // Check routine active status
+    const matchesActiveStatus = activeStatusFilter === 'all'
+      ? true
+      : activeStatusFilter === 'active'
+        ? (r.is_active !== false)
+        : (r.is_active === false);
+
+    return matchesFrequency && matchesSector && matchesSearch && matchesPriority && matchesActiveStatus;
   }) || [];
 
   const allFilteredSelected = filteredRoutines && filteredRoutines.length > 0
@@ -200,28 +225,30 @@ export const RoutinesView = ({
             </Button>
 
             <div className="flex items-center gap-1 ml-auto">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8 text-xs gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
-                onClick={() => {
-                  // Bulk Action (e.g., Activate/Deactivate)
-                  console.log("Bulk Complete/Action", selectedRoutineIds);
-                  setSelectedRoutineIds([]);
-                }}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Concluir
-              </Button>
+              {isGestorOrAdmin && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
+                  onClick={() => setIsBulkCompleteDialogOpen(true)}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Concluir
+                </Button>
+              )}
+
 
               <Button
                 variant="secondary"
                 size="sm"
                 className="h-8 text-xs gap-1.5 bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
-                onClick={() => {
-                  // Bulk Delete Logic
-                  console.log("Bulk Delete", selectedRoutineIds);
-                  setSelectedRoutineIds([]);
+                onClick={async () => {
+                  try {
+                    await deleteRoutines.mutateAsync(selectedRoutineIds);
+                    setSelectedRoutineIds([]);
+                  } catch (e) {
+                    console.error("Bulk delete failed", e);
+                  }
                 }}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -241,9 +268,9 @@ export const RoutinesView = ({
         ) : !hideHeader && (
           <div className="flex flex-col gap-2 p-2 bg-card border-b border-border shadow-sm mb-4 rounded-lg">
 
-            {/* ROW 1: Search + New */}
-            <div className="flex items-center gap-2 w-full">
-              <div className="relative flex-1">
+            {/* ROW 1: Search (Small) + Frequency + New */}
+            <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
+              <div className="relative w-[180px] shrink-0">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Buscar..."
@@ -253,17 +280,7 @@ export const RoutinesView = ({
                 />
               </div>
 
-              {isGestorOrAdmin && (
-                <div className="shrink-0">
-                  <RoutineForm sectorId={sectorId} />
-                </div>
-              )}
-            </div>
-
-            {/* ROW 2: Filters */}
-            <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
-
-              {/* Frequency Filter */}
+              {/* Frequency Filters - Right next to search */}
               <div className="flex items-center gap-0.5 bg-secondary/30 p-0.5 rounded-lg border border-border shrink-0">
                 {frequencies.map((freq) => (
                   <button
@@ -280,6 +297,19 @@ export const RoutinesView = ({
                   </button>
                 ))}
               </div>
+
+              {/* Spacer */}
+              <div className="flex-1" />
+
+              {isGestorOrAdmin && (
+                <div className="shrink-0">
+                  <RoutineForm sectorId={sectorId} />
+                </div>
+              )}
+            </div>
+
+            {/* ROW 2: Status + Priority + Active Filter */}
+            <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
 
               <div className="flex items-center gap-1 shrink-0">
                 <Button
@@ -309,6 +339,18 @@ export const RoutinesView = ({
 
               {/* Spacer */}
               <div className="flex-1 min-w-2" />
+
+              {/* Active Status Filter */}
+              <Select value={activeStatusFilter} onValueChange={setActiveStatusFilter}>
+                <SelectTrigger className="w-[100px] h-8 text-xs text-muted-foreground bg-background px-2 shrink-0">
+                  <SelectValue placeholder="Situação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativos</SelectItem>
+                  <SelectItem value="inactive">Inativos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
 
               <Select value={priorityFilter} onValueChange={setPriorityFilter}>
                 <SelectTrigger className="w-[110px] h-8 text-xs text-muted-foreground bg-background px-2 shrink-0">
@@ -345,11 +387,17 @@ export const RoutinesView = ({
         </SheetContent>
       </Sheet>
 
-      {/* Edit Dialog */}
       <RoutineEditDialog
         routine={editingRoutine}
         open={!!editingRoutine}
         onOpenChange={(open) => !open && setEditingRoutine(null)}
+      />
+
+      <BulkRoutineCompletionDialog
+        open={isBulkCompleteDialogOpen}
+        onOpenChange={setIsBulkCompleteDialogOpen}
+        selectedRoutineIds={selectedRoutineIds}
+        onSuccess={() => setSelectedRoutineIds([])}
       />
     </div>
   );

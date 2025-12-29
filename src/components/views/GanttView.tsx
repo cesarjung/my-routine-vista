@@ -24,6 +24,9 @@ import {
 } from '@/components/ui/dialog';
 import { TaskForm } from '@/components/TaskForm';
 import { RoutineForm } from '@/components/RoutineForm';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { TaskDetailPanel } from '@/components/TaskDetailPanel';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
@@ -46,6 +49,20 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  // Detail Panel State
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedRoutine, setSelectedRoutine] = useState<any | null>(null);
+
+  const handleTaskClick = (task: Task) => {
+    if (task.routine_id && (task as any).routine) {
+      setSelectedRoutine((task as any).routine);
+      setSelectedTask(null);
+    } else {
+      setSelectedTask(task);
+      setSelectedRoutine(null);
+    }
+  };
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
@@ -207,7 +224,7 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
                   key={task.id}
                   className="h-12 border-b border-border px-3 flex items-center gap-2 group cursor-pointer hover:bg-secondary/30"
                   style={{ animationDelay: `${index * 30}ms` }}
-                  onClick={() => handleEditTask(task as Task)}
+                  onClick={() => handleTaskClick(task as Task)}
                 >
                   {/* Quick checkbox */}
                   <button
@@ -396,6 +413,31 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
       />
+
+      {/* Detail Panel via Sheet */}
+      <Sheet open={!!selectedTask || !!selectedRoutine} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedTask(null);
+          setSelectedRoutine(null);
+        }
+      }}>
+        <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
+          <div className="h-full overflow-y-auto">
+            {selectedTask && (
+              <TaskDetailPanel
+                task={selectedTask}
+                onClose={() => setSelectedTask(null)}
+              />
+            )}
+            {selectedRoutine && (
+              <RoutineDetailPanel
+                routine={selectedRoutine}
+                onClose={() => setSelectedRoutine(null)}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

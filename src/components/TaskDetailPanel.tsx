@@ -36,6 +36,14 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from './ui/alert-dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from './ui/dialog';
 
 interface TaskDetailPanelProps {
     task: any; // Using any for now to handle Joined Task type easily, or refine to TaskWithDetails
@@ -69,11 +77,40 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
     const [title, setTitle] = useState(task.title);
     const [description, setDescription] = useState(task.description || '');
 
+    // Comment Dialog State
+    const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+    const [pendingStatus, setPendingStatus] = useState<'concluida' | 'nao_aplicavel' | null>(null);
+    const [comment, setComment] = useState('');
+
+    const handleQuickStatusChange = (newStatus: 'concluida' | 'nao_aplicavel') => {
+        // Only for routine subtasks
+        if (task.routine_id) {
+            setPendingStatus(newStatus);
+            setComment('');
+            setStatusDialogOpen(true);
+        } else {
+            // Standalone tasks - direct update (or handle differently)
+            updateMutation.mutate({ id: task.id, status: newStatus });
+        }
+    };
+
+    const confirmStatusChange = () => {
+        if (pendingStatus) {
+            updateMutation.mutate({
+                id: task.id,
+                status: pendingStatus,
+                comment: comment
+            });
+            setStatusDialogOpen(false);
+        }
+    };
+
     const handleSaveChanges = async () => {
         try {
             await updateMutation.mutateAsync({
                 id: task.id,
-                updates: { title, description }
+                title,
+                description
             });
             setIsEditing(false);
         } catch (e) {
@@ -147,7 +184,32 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                     <div className="flex items-center gap-3">
                         <Circle className="w-4 h-4 text-muted-foreground" />
                         <span className="text-muted-foreground">Status</span>
-                        <Badge variant="outline" className={cn("ml-auto", statusInfo.className)}>{statusInfo.label}</Badge>
+                        <div className="ml-auto flex items-center gap-2">
+                            <Badge variant="outline" className={statusInfo.className}>{statusInfo.label}</Badge>
+                            {/* Quick Actions for Routine Subtasks */}
+                            {task.routine_id && task.status === 'pendente' && !isEditing && (
+                                <div className="flex gap-1">
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                        title="Concluir"
+                                        onClick={() => handleQuickStatusChange('concluida')}
+                                    >
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                        title="Não se Aplica"
+                                        onClick={() => handleQuickStatusChange('nao_aplicavel')}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Priority */}
@@ -222,6 +284,52 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                 open={editDialogOpen}
                 onOpenChange={setEditDialogOpen}
             />
+
+            {/* Comment Dialog */}
+            <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {pendingStatus === 'concluida' ? 'Concluir Tarefa' : 'Marcar como Não se Aplica'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Deseja adicionar um comentário a esta ação?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Textarea
+                            placeholder="Digite seu comentário (opcional)..."
+                            value={comment}
+                            onChange={(e) => setComment(e.target.value)}
+                            className="resize-none"
+                            rows={3}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={confirmStatusChange}
+                            disabled={updateMutation.isPending}
+                            className={cn(
+                                pendingStatus === 'concluida'
+                                    ? 'bg-success hover:bg-success/90'
+                                    : 'bg-destructive hover:bg-destructive/90'
+                            )}
+                        >
+                            {updateMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : pendingStatus === 'concluida' ? (
+                                <Check className="h-4 w-4 mr-2" />
+                            ) : (
+                                <X className="h-4 w-4 mr-2" />
+                            )}
+                            Confirmar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
