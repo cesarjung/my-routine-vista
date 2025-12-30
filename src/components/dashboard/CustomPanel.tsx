@@ -86,10 +86,18 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       let tasksQuery = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, sector_id');
 
       if (filters.sector_id) {
-        tasksQuery = tasksQuery.eq('sector_id', filters.sector_id);
+        if (Array.isArray(filters.sector_id)) {
+          if (filters.sector_id.length > 0) tasksQuery = tasksQuery.in('sector_id', filters.sector_id);
+        } else {
+          tasksQuery = tasksQuery.eq('sector_id', filters.sector_id);
+        }
       }
       if (filters.unit_id) {
-        tasksQuery = tasksQuery.eq('unit_id', filters.unit_id);
+        if (Array.isArray(filters.unit_id)) {
+          if (filters.unit_id.length > 0) tasksQuery = tasksQuery.in('unit_id', filters.unit_id);
+        } else {
+          tasksQuery = tasksQuery.eq('unit_id', filters.unit_id);
+        }
       }
       if (filters.status && filters.status.length > 0) {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
@@ -134,7 +142,15 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       let results: any[] = [];
 
       if (filters.group_by === 'unit') {
-        const { data: units } = await supabase.from('units').select('id, name');
+        let unitsQuery = supabase.from('units').select('id, name');
+        if (filters.unit_id) {
+          if (Array.isArray(filters.unit_id) && filters.unit_id.length > 0) {
+            unitsQuery = unitsQuery.in('id', filters.unit_id);
+          } else if (!Array.isArray(filters.unit_id)) {
+            unitsQuery = unitsQuery.eq('id', filters.unit_id);
+          }
+        }
+        const { data: units } = await unitsQuery;
 
         results = (units || []).map(unit => {
           const unitTasks = tasks?.filter(t => t.unit_id === unit.id) || [];
@@ -182,7 +198,15 @@ const useCustomPanelData = (panel: DashboardPanel) => {
           return { id: profile.id, name: profile.full_name || profile.email, frequencies, totals };
         }).filter(p => p.totals.total > 0);
       } else if (filters.group_by === 'sector') {
-        const { data: sectors } = await supabase.from('sectors').select('id, name, color');
+        let sectorsQuery = supabase.from('sectors').select('id, name, color');
+        if (filters.sector_id) {
+          if (Array.isArray(filters.sector_id) && filters.sector_id.length > 0) {
+            sectorsQuery = sectorsQuery.in('id', filters.sector_id);
+          } else if (!Array.isArray(filters.sector_id)) {
+            sectorsQuery = sectorsQuery.eq('id', filters.sector_id);
+          }
+        }
+        const { data: sectors } = await sectorsQuery;
 
         // Get tasks with sector
         const { data: tasksWithSector } = await supabase
@@ -212,7 +236,15 @@ const useCustomPanelData = (panel: DashboardPanel) => {
           return { id: sector.id, name: sector.name, color: sector.color, frequencies, totals };
         }).filter(s => s.totals.total > 0);
       } else if (filters.group_by === 'task_matrix') {
-        const { data: units } = await supabase.from('units').select('id, name, code').order('name');
+        let unitsQuery = supabase.from('units').select('id, name, code').order('name');
+        if (filters.unit_id) {
+          if (Array.isArray(filters.unit_id) && filters.unit_id.length > 0) {
+            unitsQuery = unitsQuery.in('id', filters.unit_id);
+          } else if (!Array.isArray(filters.unit_id)) {
+            unitsQuery = unitsQuery.eq('id', filters.unit_id);
+          }
+        }
+        const { data: units } = await unitsQuery;
 
         // Group tasks by routine (or title if no routine)
         const routineMap = new Map<string, { id: string, name: string, units: Record<string, any> }>();
@@ -402,7 +434,13 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
     }
 
     // Filter by panel's sector if set
-    if (panel.filters.sector_id && task.sector_id !== panel.filters.sector_id) return false;
+    if (panel.filters.sector_id) {
+      if (Array.isArray(panel.filters.sector_id)) {
+        if (!panel.filters.sector_id.includes(task.sector_id)) return false;
+      } else if (task.sector_id !== panel.filters.sector_id) {
+        return false;
+      }
+    }
 
     // Filter by panel's title filter if set
     if (panel.filters.title_filter && !task.title.toLowerCase().includes(panel.filters.title_filter.toLowerCase())) return false;

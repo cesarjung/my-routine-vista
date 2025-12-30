@@ -21,6 +21,7 @@ import {
 import { useSectors } from '@/hooks/useSectors';
 import { useUnits } from '@/hooks/useUnits';
 import { useCreateDashboardPanel, useUpdateDashboardPanel, PanelFilters, DashboardPanel } from '@/hooks/useDashboardPanels';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 const STATUS_OPTIONS = [
   { value: 'pendente', label: 'Pendente' },
@@ -55,8 +56,24 @@ interface PanelFormDialogProps {
 export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDialogProps) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(panel?.title || '');
-  const [sectorId, setSectorId] = useState<string>(panel?.filters.sector_id || '');
-  const [unitId, setUnitId] = useState<string>(panel?.filters.unit_id || '');
+
+  // Initialize ids as array, handling legacy string values
+  const [sectorIds, setSectorIds] = useState<string[]>(
+    Array.isArray(panel?.filters.sector_id)
+      ? panel.filters.sector_id
+      : panel?.filters.sector_id
+        ? [panel.filters.sector_id]
+        : []
+  );
+
+  const [unitIds, setUnitIds] = useState<string[]>(
+    Array.isArray(panel?.filters.unit_id)
+      ? panel.filters.unit_id
+      : panel?.filters.unit_id
+        ? [panel.filters.unit_id]
+        : []
+  );
+
   const [selectedStatus, setSelectedStatus] = useState<string[]>(panel?.filters.status || []);
   const [selectedFrequencies, setSelectedFrequencies] = useState<string[]>(panel?.filters.task_frequency || []);
   const [titleFilter, setTitleFilter] = useState<string>(panel?.filters.title_filter || '');
@@ -88,8 +105,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
     if (!title.trim()) return;
 
     const filters: PanelFilters = {
-      sector_id: sectorId || null,
-      unit_id: unitId || null,
+      sector_id: sectorIds.length > 0 ? sectorIds : undefined,
+      unit_id: unitIds.length > 0 ? unitIds : undefined,
       status: selectedStatus.length > 0 ? selectedStatus : undefined,
       task_frequency: selectedFrequencies.length > 0 ? selectedFrequencies : undefined,
       title_filter: titleFilter || undefined,
@@ -123,8 +140,9 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
   const resetForm = () => {
     setTitle('');
-    setSectorId('');
-    setUnitId('');
+    setTitle('');
+    setSectorIds([]);
+    setUnitIds([]);
     setSelectedStatus([]);
     setSelectedFrequencies([]);
     setTitleFilter('');
@@ -184,37 +202,28 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
           <div className="space-y-2">
             <Label>Filtrar por Setor</Label>
-            <Select value={sectorId || 'all'} onValueChange={(v) => setSectorId(v === 'all' ? '' : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos os setores" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os setores</SelectItem>
-                {sectors?.map(sector => (
-                  <SelectItem key={sector.id} value={sector.id}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sector.color || '#6366f1' }} />
-                      {sector.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={sectors?.map(s => ({
+                label: s.name,
+                value: s.id,
+                icon: ({ className }) => <div className={`w-2 h-2 rounded-full mr-2 ${className}`} style={{ backgroundColor: s.color || '#6366f1' }} />
+              })) || []}
+              selected={sectorIds}
+              onChange={setSectorIds}
+              placeholder="Todos os setores"
+              searchPlaceholder="Buscar setor..."
+            />
           </div>
 
           <div className="space-y-2">
             <Label>Filtrar por Unidade</Label>
-            <Select value={unitId || 'all'} onValueChange={(v) => setUnitId(v === 'all' ? '' : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas as unidades" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as unidades</SelectItem>
-                {units?.map(unit => (
-                  <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={units?.map(u => ({ label: u.name, value: u.id })) || []}
+              selected={unitIds}
+              onChange={setUnitIds}
+              placeholder="Todas as unidades"
+              searchPlaceholder="Buscar unidade..."
+            />
           </div>
 
           <div className="space-y-2">

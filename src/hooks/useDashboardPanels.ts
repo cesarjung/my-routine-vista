@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 
 export interface PanelFilters {
-  sector_id?: string | null;
-  unit_id?: string | null;
+  sector_id?: string | string[] | null;
+  unit_id?: string | string[] | null;
   status?: string[];
   period?: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
   group_by: 'unit' | 'responsible' | 'sector' | 'task_matrix';
