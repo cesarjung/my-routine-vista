@@ -93,11 +93,19 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
     }) || [];
   }, [tasks, sectorId, isMyTasks, user?.id]);
 
+  // Helper to parse date string as local time to avoid timezone offset
+  const parseLocal = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    // If format is YYYY-MM-DD, append time to force local timezone
+    if (dateStr.length === 10) return new Date(dateStr + 'T00:00:00');
+    return new Date(dateStr);
+  };
+
   const getTaskPosition = (task: typeof tasksWithDates[0]) => {
     if (!task.due_date) return null;
 
-    const dueDate = startOfDay(new Date(task.due_date));
-    const startDate = task.start_date ? startOfDay(new Date(task.start_date)) : subDays(dueDate, 2);
+    const dueDate = startOfDay(parseLocal(task.due_date));
+    const startDate = task.start_date ? startOfDay(parseLocal(task.start_date)) : subDays(dueDate, 2);
 
     const daysDiff = differenceInDays(startDate, viewStart);
     const duration = differenceInDays(dueDate, startDate) + 1;

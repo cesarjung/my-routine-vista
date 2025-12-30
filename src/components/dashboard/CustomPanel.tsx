@@ -77,6 +77,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
   return useQuery({
     queryKey: ['custom-panel-data', panel.id, filters],
+    refetchInterval: 5000,
     queryFn: async () => {
       // Get period dates
       const periodDates = getPeriodDates(filters.period || 'all');

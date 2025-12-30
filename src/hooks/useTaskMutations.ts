@@ -335,11 +335,29 @@ export const useUpdateTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, comment, ...updates }: TaskUpdate & { id: string, comment?: string }) => {
+    mutationFn: async ({ id, comment, assigneeIds, ...updates }: TaskUpdate & { id: string, comment?: string, assigneeIds?: string[] }) => {
       // First, get the current task to check for google_event_id and recurring info
       const { data: existingTask } = await supabase
         .from('tasks')
-        .select('google_event_id, title, description, start_date, due_date, status, is_recurring, recurrence_frequency, recurrence_mode, unit_id, sector_id, assigned_to, created_by, priority, parent_task_id, routine_id')
+        .select(`
+          google_event_id, 
+          title, 
+          description, 
+          start_date, 
+          due_date, 
+          status, 
+          is_recurring, 
+          recurrence_frequency, 
+          recurrence_mode, 
+          unit_id, 
+          sector_id, 
+          assigned_to, 
+          created_by, 
+          priority, 
+          parent_task_id, 
+          routine_id,
+          task_assignees(user_id)
+        `)
         .eq('id', id)
         .single();
 
@@ -352,13 +370,48 @@ export const useUpdateTask = () => {
 
       if (error) throw error;
 
+      // Update assignees if provided
+      if (assigneeIds !== undefined) {
+        // Delete existing assignees
+        const { error: deleteError } = await supabase
+          .from('task_assignees')
+          .delete()
+          .eq('task_id', id);
+
+        if (deleteError) throw deleteError;
+
+        // Insert new assignees
+        if (assigneeIds.length > 0) {
+          const { error: insertError } = await supabase
+            .from('task_assignees')
+            .insert(assigneeIds.map(userId => ({ task_id: id, user_id: userId })));
+
+          if (insertError) throw insertError;
+        }
+
+        // Update legacy assigned_to field if not explicitly in updates
+        if (updates.assigned_to === undefined) {
+          const newAssignedTo = assigneeIds.length > 0 ? assigneeIds[0] : null;
+          if (newAssignedTo !== existingTask?.assigned_to) {
+            await supabase.from('tasks').update({ assigned_to: newAssignedTo }).eq('id', id);
+          }
+        }
+      }
+
+      // Determine effective assignee for routine sync
+      // Prefer legacy assigned_to, fallback to first mult-assignee
+      let effectiveAssigneeId = existingTask?.assigned_to;
+      if (!effectiveAssigneeId && existingTask?.task_assignees && existingTask.task_assignees.length > 0) {
+        effectiveAssigneeId = existingTask.task_assignees[0].user_id;
+      }
+
       // If task is being completed and is linked to a routine, update the routine checkin
       if (
         existingTask?.routine_id &&
         updates.status === 'concluida' &&
         existingTask?.status !== 'concluida'
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, existingTask.unit_id, 'completed', comment);
+        await updateRoutineCheckinFromTask(existingTask.routine_id, effectiveAssigneeId, existingTask.unit_id, 'completed', comment);
       }
 
       // If task was set to NA and is linked to a routine, update the checkin
@@ -367,7 +420,7 @@ export const useUpdateTask = () => {
         updates.status === 'nao_aplicavel' &&
         existingTask?.status !== 'nao_aplicavel'
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, existingTask.unit_id, 'not_completed', comment);
+        await updateRoutineCheckinFromTask(existingTask.routine_id, effectiveAssigneeId, existingTask.unit_id, 'not_completed', comment);
       }
 
       // If task was uncompleted and is linked to a routine, revert the checkin
@@ -376,7 +429,7 @@ export const useUpdateTask = () => {
         (existingTask?.status === 'concluida' || existingTask?.status === 'nao_aplicavel') &&
         updates.status && updates.status !== 'concluida' && updates.status !== 'nao_aplicavel'
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, existingTask.assigned_to, existingTask.unit_id, 'pending');
+        await updateRoutineCheckinFromTask(existingTask.routine_id, effectiveAssigneeId, existingTask.unit_id, 'pending');
       }
 
       // Sync to Google Calendar if connected
@@ -415,18 +468,64 @@ export const useUpdateTask = () => {
 
       return data;
     },
-    onSuccess: () => {
+    onMutate: async ({ id, ...updates }) => {
+      // Cancelar queries para não sobreescrever o otimismo
+      await queryClient.cancelQueries({ queryKey: ['routine-tasks'] });
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+
+      // Snapshot do estado anterior
+      const previousRoutineTasks = queryClient.getQueriesData({ queryKey: ['routine-tasks'] });
+      const previousTasks = queryClient.getQueryData(['tasks']);
+
+      // 1. Atualizar cache de 'routine-tasks' (onde a lista de tarefas da rotina vive)
+      queryClient.setQueriesData({ queryKey: ['routine-tasks'] }, (oldData: any) => {
+        if (!oldData || !oldData.childTasks) return oldData;
+
+        return {
+          ...oldData,
+          childTasks: oldData.childTasks.map((task: any) =>
+            task.id === id ? { ...task, ...updates } : task
+          ),
+          parentTask: oldData.parentTask?.id === id
+            ? { ...oldData.parentTask, ...updates }
+            : oldData.parentTask
+        };
+      });
+
+      // 2. Atualizar cache de 'tasks' (lista geral)
+      queryClient.setQueryData(['tasks'], (old: any[] | undefined) => {
+        if (!old) return old;
+        return old.map(task => task.id === id ? { ...task, ...updates } : task);
+      });
+
+      return { previousRoutineTasks, previousTasks };
+    },
+    onError: (err, newTodo, context) => {
+      toast.error('Erro ao atualizar tarefa');
+      // Reverter em caso de erro
+      if (context?.previousRoutineTasks) {
+        context.previousRoutineTasks.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousTasks) {
+        queryClient.setQueryData(['tasks'], context.previousTasks);
+      }
+    },
+    onSettled: () => {
+      // Invalidar tudo para garantir consitência final
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
       queryClient.invalidateQueries({ queryKey: ['child-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
-      toast.success('Tarefa atualizada!');
+
+      // Invalidar TUDO para garantir que não haja chaves esquecidas
+      queryClient.invalidateQueries();
     },
-    onError: (error) => {
-      console.error('Error updating task:', error);
-      toast.error('Erro ao atualizar tarefa');
+    onSuccess: () => {
+      toast.success('Tarefa atualizada!');
     },
   });
 };
@@ -495,15 +594,28 @@ async function updateRoutineCheckinFromTask(
         })
         .eq('id', targetCheckin.id);
     } else {
-      await supabase
+      // Prepare updates object
+      const updates: any = {
+        status,
+        completed_at: new Date().toISOString(),
+        completed_by: user?.id || assigneeUserId,
+        notes: note || null, // Ensure we send null if empty string/undefined to clear or value if present
+      };
+
+      // If we know the assignee, enforce it on the checkin record (claims the checkin if it was null)
+      if (assigneeUserId) {
+        updates.assignee_user_id = assigneeUserId;
+      }
+
+      const { error: updateError } = await supabase
         .from('routine_checkins')
-        .update({
-          status,
-          completed_at: new Date().toISOString(),
-          completed_by: user?.id || assigneeUserId,
-          notes: note || undefined,
-        })
+        .update(updates)
         .eq('id', targetCheckin.id);
+
+      if (updateError) {
+        console.error('Failed to update routine checkin:', updateError);
+        throw updateError;
+      }
     }
   } catch (error) {
     console.error('Error updating routine checkin:', error);

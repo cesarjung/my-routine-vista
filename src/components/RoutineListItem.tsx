@@ -33,13 +33,13 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
         if (!periodDates) return null;
         const start = new Date(periodDates.period_start);
         const end = new Date(periodDates.period_end);
-        return `${format(start, "dd/MM HH:mm", { locale: ptBR })} → ${format(end, "dd/MM HH:mm", { locale: ptBR })}`;
+        return `${format(start, "dd/MM", { locale: ptBR })} → ${format(end, "dd/MM", { locale: ptBR })}`;
     };
 
     return (
         <div
             className={cn(
-                'w-full text-left p-4 border-b border-border transition-colors group flex items-start gap-4',
+                'w-full text-left p-3 border-b border-border transition-colors group flex items-start gap-3',
                 isSelected ? 'bg-primary/10' : 'hover:bg-secondary/50',
                 onClick && 'cursor-pointer'
             )}

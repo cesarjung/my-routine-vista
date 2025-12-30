@@ -18,7 +18,7 @@ export const useRoutines = (unitId?: string) => {
     queryFn: async () => {
       let query = supabase
         .from('routines')
-        .select('*')
+        .select('*, routine_periods(id, period_start, period_end, is_active)')
         .eq('is_active', true)
         .order('title');
 

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -7,7 +6,6 @@ import {
     Calendar,
     Users,
     Flag,
-    Clock,
     Check,
     Circle,
     Loader2,
@@ -15,14 +13,18 @@ import {
     Pencil,
     X,
     Building2,
-    RefreshCw
+    CheckCircle2,
+    ChevronDown,
+    RefreshCw,
+    MessageSquare,
+    Clock
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
-import type { Tables, Enums } from '@/integrations/supabase/types';
+import type { Tables } from '@/integrations/supabase/types';
 import { useUpdateTask, useDeleteTask } from '@/hooks/useTaskMutations';
 import { TaskEditDialog } from './TaskEditDialog';
 import {
@@ -44,9 +46,20 @@ import {
     DialogHeader,
     DialogTitle,
 } from './ui/dialog';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from './ui/select';
 
 interface TaskDetailPanelProps {
-    task: any; // Using any for now to handle Joined Task type easily, or refine to TaskWithDetails
+    task: Tables<'tasks'> & {
+        unit?: { name: string; code: string } | null;
+        assignees?: { id: string; full_name: string | null; email: string | null; avatar_url: string | null }[];
+    };
     onClose: () => void;
 }
 
@@ -58,40 +71,57 @@ const priorityConfig: Record<number, { label: string; className: string }> = {
     5: { label: 'Urgente', className: 'text-destructive' },
 };
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-    pendente: { label: 'Pendente', className: 'bg-warning/20 text-warning border-warning/30' },
-    em_andamento: { label: 'Em Andamento', className: 'bg-primary/20 text-primary border-primary/30' },
-    concluida: { label: 'Concluída', className: 'bg-success/20 text-success border-success/30' },
-    atrasada: { label: 'Atrasada', className: 'bg-destructive/20 text-destructive border-destructive/30' },
-    cancelada: { label: 'Cancelada', className: 'bg-muted text-muted-foreground border-muted' },
-    nao_aplicavel: { label: 'N/A', className: 'bg-secondary text-muted-foreground border-secondary' },
+const getInitials = (name: string | null | undefined): string => {
+    if (!name) return '?';
+    return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
 };
+
+const avatarColors = [
+    'bg-pink-500',
+    'bg-purple-500',
+    'bg-indigo-500',
+    'bg-blue-500',
+    'bg-teal-500',
+    'bg-green-500',
+    'bg-yellow-500',
+    'bg-orange-500',
+    'bg-red-500',
+];
+
+const getAvatarColor = (id: string): string => {
+    const index = id.charCodeAt(0) % avatarColors.length;
+    return avatarColors[index];
+};
+
 
 export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const deleteMutation = useDeleteTask();
     const updateMutation = useUpdateTask();
+    const { user } = useAuth();
 
     // Local state for quick edit
     const [title, setTitle] = useState(task.title);
     const [description, setDescription] = useState(task.description || '');
+    const [priority, setPriority] = useState<string>(task.priority?.toString() || '1');
+    const [dueDate, setDueDate] = useState<string>(task.due_date?.split('T')[0] || '');
+
 
     // Comment Dialog State
     const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-    const [pendingStatus, setPendingStatus] = useState<'concluida' | 'nao_aplicavel' | null>(null);
+    const [pendingStatus, setPendingStatus] = useState<'concluida' | 'nao_aplicavel' | 'pendente' | null>(null);
     const [comment, setComment] = useState('');
 
-    const handleQuickStatusChange = (newStatus: 'concluida' | 'nao_aplicavel') => {
-        // Only for routine subtasks
-        if (task.routine_id) {
-            setPendingStatus(newStatus);
-            setComment('');
-            setStatusDialogOpen(true);
-        } else {
-            // Standalone tasks - direct update (or handle differently)
-            updateMutation.mutate({ id: task.id, status: newStatus });
-        }
+    const handleStatusChangeRequest = (newStatus: 'concluida' | 'nao_aplicavel' | 'pendente') => {
+        setPendingStatus(newStatus);
+        setComment('');
+        setStatusDialogOpen(true);
     };
 
     const confirmStatusChange = () => {
@@ -110,7 +140,9 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
             await updateMutation.mutateAsync({
                 id: task.id,
                 title,
-                description
+                description,
+                priority: parseInt(priority),
+                due_date: dueDate || null
             });
             setIsEditing(false);
         } catch (e) {
@@ -118,7 +150,21 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
         }
     };
 
-    const statusInfo = statusConfig[task.status] || statusConfig.pendente;
+    const handleCancelEdit = () => {
+        setTitle(task.title);
+        setDescription(task.description || '');
+        setPriority(task.priority?.toString() || '1');
+        setDueDate(task.due_date?.split('T')[0] || '');
+        setIsEditing(false);
+    };
+
+
+    const isCompleted = task.status === 'concluida';
+    const isNA = task.status === 'nao_aplicavel';
+    const isInProgress = task.status === 'em_andamento';
+    const isPending = task.status === 'pendente';
+    const isLate = task.status === 'atrasada';
+
     const priorityInfo = priorityConfig[task.priority || 1] || priorityConfig[1];
 
     return (
@@ -140,12 +186,12 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                     <div className="flex items-center gap-2">
                         {!isEditing && (
                             <>
-                                <Button variant="ghost" size="sm" onClick={() => setEditDialogOpen(true)} title="Edição completa">
+                                <Button variant="ghost" size="sm" onClick={() => setEditDialogOpen(true)} title="Edição completa" className="text-primary hover:text-primary hover:bg-primary/10">
                                     <Pencil className="h-4 w-4" />
                                 </Button>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10">
+                                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </AlertDialogTrigger>
@@ -166,7 +212,7 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                         )}
                         {isEditing && (
                             <>
-                                <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                                <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
                                     <X className="h-4 w-4" />
                                 </Button>
                                 <Button size="sm" onClick={handleSaveChanges}>
@@ -178,37 +224,24 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                     </div>
                 </div>
 
-                {/* Quick Info Grid */}
-                <div className="grid grid-cols-2 gap-4 text-sm mt-4">
+                {/* Metadata Grid (Matching Routine Layout) */}
+                <div className="grid grid-cols-2 gap-4 text-sm">
                     {/* Status */}
                     <div className="flex items-center gap-3">
                         <Circle className="w-4 h-4 text-muted-foreground" />
                         <span className="text-muted-foreground">Status</span>
-                        <div className="ml-auto flex items-center gap-2">
-                            <Badge variant="outline" className={statusInfo.className}>{statusInfo.label}</Badge>
-                            {/* Quick Actions for Routine Subtasks */}
-                            {task.routine_id && task.status === 'pendente' && !isEditing && (
-                                <div className="flex gap-1">
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-100"
-                                        title="Concluir"
-                                        onClick={() => handleQuickStatusChange('concluida')}
-                                    >
-                                        <Check className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-6 w-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                                        title="Não se Aplica"
-                                        onClick={() => handleQuickStatusChange('nao_aplicavel')}
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            )}
+                        <div className={cn(
+                            'ml-auto px-2 py-0.5 text-xs font-medium rounded-full border inline-flex items-center gap-1',
+                            isCompleted ? 'bg-success/20 text-success border-success/30' :
+                                isNA ? 'bg-muted text-muted-foreground border-muted' :
+                                    isLate ? 'bg-destructive/20 text-destructive border-destructive/30' :
+                                        isInProgress ? 'bg-primary/20 text-primary border-primary/30' :
+                                            'bg-warning/20 text-warning border-warning/30'
+                        )}>
+                            {isCompleted ? 'CONCLUÍDA' :
+                                isNA ? 'NÃO SE APLICA' :
+                                    isLate ? 'ATRASADA' :
+                                        isInProgress ? 'EM ANDAMENTO' : 'PENDENTE'}
                         </div>
                     </div>
 
@@ -216,7 +249,22 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                     <div className="flex items-center gap-3">
                         <Flag className="w-4 h-4 text-muted-foreground" />
                         <span className="text-muted-foreground">Prioridade</span>
-                        <span className={cn("ml-auto font-medium", priorityInfo.className)}>{priorityInfo.label}</span>
+                        {isEditing ? (
+                            <Select value={priority} onValueChange={setPriority}>
+                                <SelectTrigger className="ml-auto w-32 h-8">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1">Baixa</SelectItem>
+                                    <SelectItem value="2">Normal</SelectItem>
+                                    <SelectItem value="3">Média</SelectItem>
+                                    <SelectItem value="4">Alta</SelectItem>
+                                    <SelectItem value="5">Urgente</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <span className={cn("ml-auto font-medium", priorityInfo.className)}>{priorityInfo.label}</span>
+                        )}
                     </div>
 
                     {/* Unit */}
@@ -230,52 +278,100 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                     <div className="flex items-center gap-3">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
                         <span className="text-muted-foreground">Vencimento</span>
-                        <span className="ml-auto text-foreground">{task.due_date ? format(new Date(task.due_date), 'dd/MM', { locale: ptBR }) : '---'}</span>
+                        {isEditing ? (
+                            <Input
+                                type="date"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                className="ml-auto w-32 h-8"
+                            />
+                        ) : (
+                            <span className="ml-auto text-foreground">{task.due_date ? format(new Date(task.due_date), 'dd/MM', { locale: ptBR }) : '---'}</span>
+                        )}
                     </div>
                 </div>
 
+                {/* Big Action Button (Like Routine Panel) */}
                 {!isEditing && (
-                    <Button variant="outline" size="sm" className="mt-4 w-full" onClick={() => setIsEditing(true)}>
-                        <Pencil className="h-4 w-4 mr-2" /> Editar rapidamente
-                    </Button>
+                    <div className="mt-4 flex gap-2">
+                        {isCompleted || isNA ? (
+                            <Button
+                                className="flex-1 gap-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                                onClick={() => handleStatusChangeRequest('pendente')}
+                                disabled={updateMutation.isPending}
+                            >
+                                {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                Reabrir Tarefa
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+                                    onClick={() => handleStatusChangeRequest('concluida')}
+                                    disabled={updateMutation.isPending}
+                                >
+                                    {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                    Concluir Tarefa
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => handleStatusChangeRequest('nao_aplicavel')}
+                                    disabled={updateMutation.isPending}
+                                    title="Marcar como Não se Aplica"
+                                >
+                                    <X className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 )}
             </div>
 
-            {/* Description */}
-            <div className="p-6 border-b border-border flex-1 overflow-auto">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">Descrição</h3>
+            {/* Description Section */}
+            <div className="p-6 border-b border-border">
                 {isEditing ? (
                     <Textarea
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        rows={6}
+                        rows={4}
                         className="resize-none"
+                        placeholder="Descrição da tarefa..."
                     />
                 ) : (
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'Sem descrição.'}</p>
-                )}
-
-                {/* Assignees List */}
-                <div className="mt-8">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-3">Responsáveis</h3>
-                    <div className="space-y-3">
-                        {task.assignees && task.assignees.length > 0 ? (
-                            task.assignees.map((assignee: any) => (
-                                <div key={assignee.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary/30">
-                                    <Avatar className="h-8 w-8">
-                                        <AvatarFallback>{assignee.full_name?.substring(0, 2).toUpperCase()}</AvatarFallback>
-                                        {assignee.avatar_url && <img src={assignee.avatar_url} alt={assignee.full_name} />}
-                                    </Avatar>
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-medium">{assignee.full_name}</span>
-                                        <span className="text-xs text-muted-foreground">Responsável</span>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-sm text-muted-foreground">Nenhum responsável atribuído.</p>
-                        )}
+                    <div className="text-sm">
+                        <p className="text-muted-foreground mb-1 font-medium">Descrição</p>
+                        <p className="text-foreground whitespace-pre-wrap">{task.description || 'Sem descrição.'}</p>
                     </div>
+                )}
+            </div>
+
+            {/* Responsibles / Content Section */}
+            <div className="flex-1 overflow-auto p-4">
+                <div className="flex items-center gap-2 mb-4">
+                    <Users className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">Responsáveis</span>
+                </div>
+
+                <div className="space-y-2">
+                    {task.assignees && task.assignees.length > 0 ? (
+                        task.assignees.map((assignee: any) => (
+                            <div key={assignee.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-secondary/20 transition-colors">
+                                <Avatar className={cn('h-8 w-8', getAvatarColor(assignee.id))}>
+                                    <AvatarFallback className="text-white text-xs">{getInitials(assignee.full_name)}</AvatarFallback>
+                                    {assignee.avatar_url && <img src={assignee.avatar_url} alt={assignee.full_name} />}
+                                </Avatar>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-medium">{assignee.full_name}</span>
+                                    <span className="text-xs text-muted-foreground">{assignee.email}</span>
+                                </div>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-6 text-muted-foreground border rounded-lg border-dashed">
+                            <Users className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                            <p className="text-sm">Nenhum responsável atribuído.</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -285,15 +381,16 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                 onOpenChange={setEditDialogOpen}
             />
 
-            {/* Comment Dialog */}
+            {/* Status Change Comment Dialog */}
             <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>
-                            {pendingStatus === 'concluida' ? 'Concluir Tarefa' : 'Marcar como Não se Aplica'}
+                            {pendingStatus === 'concluida' ? 'Concluir Tarefa' :
+                                pendingStatus === 'nao_aplicavel' ? 'Marcar como Não se Aplica' : 'Reabrir Tarefa'}
                         </DialogTitle>
                         <DialogDescription>
-                            Deseja adicionar um comentário a esta ação?
+                            Deseja adicionar um comentário?
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
@@ -313,17 +410,15 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                             onClick={confirmStatusChange}
                             disabled={updateMutation.isPending}
                             className={cn(
-                                pendingStatus === 'concluida'
-                                    ? 'bg-success hover:bg-success/90'
-                                    : 'bg-destructive hover:bg-destructive/90'
+                                pendingStatus === 'concluida' ? 'bg-success hover:bg-success/90' :
+                                    pendingStatus === 'pendente' ? 'bg-primary hover:bg-primary/90' :
+                                        'bg-destructive hover:bg-destructive/90'
                             )}
                         >
                             {updateMutation.isPending ? (
                                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            ) : pendingStatus === 'concluida' ? (
-                                <Check className="h-4 w-4 mr-2" />
                             ) : (
-                                <X className="h-4 w-4 mr-2" />
+                                <Check className="h-4 w-4 mr-2" />
                             )}
                             Confirmar
                         </Button>

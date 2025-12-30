@@ -11,6 +11,7 @@ import { useUnits } from '@/hooks/useUnits';
 import { useProfiles, Profile } from '@/hooks/useProfiles';
 import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
 import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key } from 'lucide-react';
 import { UnitsManagement } from '@/components/UnitsManagement';
@@ -282,38 +283,83 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
 
     setIsCreating(true);
     try {
-      // Get current session token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Sessão não encontrada');
-      }
+      // 1. Create a temporary client to sign up the new user without logging out the admin
+      const tempClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            persistSession: false, // Critical: Don't overwrite admin session
+            autoRefreshToken: false,
+            detectSessionInUrl: false
+          }
+        }
+      );
 
-      // Call Postgres function directly (bypassing Edge Function)
-      const { data, error } = await supabase.rpc('create_user_admin' as any, {
+      // 2. Sign Up via API (This guarantees valid Hashing and Metadata)
+      const { data: signUpData, error: signUpError } = await tempClient.auth.signUp({
         email: newUserEmail,
         password: newUserPassword,
-        full_name: newUserName,
-        role: newUserRole,
-        unit_ids: newUserUnits.length > 0 ? newUserUnits : null,
+        options: {
+          data: {
+            full_name: newUserName,
+          }
+        }
       });
 
-      if (error) {
-        throw new Error(error.message || 'Erro ao criar usuário');
+      if (signUpError) {
+        throw new Error(signUpError.message);
       }
 
-      const result = data as any;
-      if (result && result.error) {
-        throw new Error(result.error);
+      if (!signUpData.user?.id) {
+        throw new Error('Usuário criado mas ID não retornado.');
       }
 
-      // Check for success (RPC returns json with id on success)
-      if (!result || !result.id) {
-        throw new Error('Falha desconhecida ao criar usuário');
+      const newUserId = signUpData.user.id;
+
+      // 3. Confirm Email (via Admin RPC)
+      // Use 'as any' to bypass the type check for the new RPC
+      const { error: confirmError } = await supabase.rpc('confirm_user_email' as any, {
+        target_email: newUserEmail
+      });
+
+      if (confirmError) {
+        console.error('Error confirming email:', confirmError);
+        // Don't throw, user created but needs confirmation
+        toast({
+          title: 'Atenção',
+          description: 'Usuário criado, mas houve erro ao confirmar email automaticamente.',
+          variant: 'destructive'
+        });
+      }
+
+      // 4. Update Profile & Role (The trigger on_auth_user_created created the profile, we update it)
+      // Check if profile exists (wait a bit? Trigger is usually fast, but let's be safe)
+      // We can just UPDATE directly.
+
+      // Update Role
+      if (newUserRole !== 'usuario') {
+        // Using as any for update because the generated types might not have 'role' if it's new
+        await supabase.from('profiles').update({ role: newUserRole } as any).eq('id', newUserId);
+        // Also update user_roles if needed
+        if (isAdmin) {
+          await supabase.from('user_roles').insert({ user_id: newUserId, role: newUserRole });
+        }
+      }
+
+      // Update Units
+      if (newUserUnits.length > 0) {
+        // Update unit_managers
+        await supabase.from('unit_managers').insert(
+          newUserUnits.map(unitId => ({ user_id: newUserId, unit_id: unitId }))
+        );
+        // Update primary unit in profile
+        await supabase.from('profiles').update({ unit_id: newUserUnits[0] }).eq('id', newUserId);
       }
 
       toast({
         title: 'Usuário criado',
-        description: `${newUserName} foi cadastrado com sucesso.`,
+        description: `${newUserName} foi cadastrado com sucesso e já pode fazer login.`,
       });
 
       // Reset form

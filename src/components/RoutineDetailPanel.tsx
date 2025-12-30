@@ -540,17 +540,7 @@ export const RoutineDetailPanel = ({
             </Button>
           )
         )}
-        {isGestorOrAdmin && !isEditing && !canEditRoutine && ( // Fallback for quick edit if not completed and not covered by above
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4 w-full"
-            onClick={() => setIsEditing(true)}
-          >
-            <Pencil className="h-4 w-4 mr-2" />
-            Editar rapidamente
-          </Button>
-        )}
+        {/* Quick Edit Removed */}
       </div>
 
       {/* Description */}
@@ -643,9 +633,13 @@ export const RoutineDetailPanel = ({
                   // Find associated checkin to get notes - Robust lookup
                   const assignees = (task as any).assignees as any[];
                   const taskCheckin = checkins.find(c =>
-                    (assignee?.id && c.assignee_user_id === assignee.id) ||
+                    // Priority 1: Exact match on assignee_user_id
                     (assignees && assignees.some(a => a.id === c.assignee_user_id)) ||
-                    (c.unit_id === task.unit_id && !c.assignee_user_id) // Fallback for unit-only assignments
+                    (assignee?.id && c.assignee_user_id === assignee.id) ||
+                    // Priority 2: Match on unit_id if checkin has no assignee (legacy/unclaimed)
+                    (c.unit_id === task.unit_id && !c.assignee_user_id) ||
+                    // Priority 3: Match on unit_id and the task assignee is the one who completed it (fallback)
+                    (c.unit_id === task.unit_id && c.completed_by === assignees?.[0]?.id)
                   );
                   const taskComment = taskCheckin?.notes;
 
@@ -653,7 +647,7 @@ export const RoutineDetailPanel = ({
                     <div
                       key={task.id}
                       className={cn(
-                        'grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors hover:bg-secondary/20 group',
+                        'grid grid-cols-12 gap-2 px-4 py-1.5 items-center transition-colors hover:bg-secondary/20 group',
                         isTaskCompleted && 'bg-success/5',
                         isTaskNA && 'bg-muted/20'
                       )}
@@ -774,6 +768,10 @@ export const RoutineDetailPanel = ({
                         {task.due_date ? (
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(task.due_date), 'dd/MM', { locale: ptBR })}
+                          </span>
+                        ) : periodData?.period?.period_end ? (
+                          <span className="text-xs text-muted-foreground" title="Fim do ciclo">
+                            {format(new Date(periodData.period.period_end), 'dd/MM', { locale: ptBR })}
                           </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>

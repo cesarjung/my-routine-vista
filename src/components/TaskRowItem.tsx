@@ -64,10 +64,14 @@ export const TaskRowItem = ({
     const statusInfo = statusConfig[task.status as Enums<'task_status'>] || statusConfig.pendente;
     const priorityInfo = priorityConfig[task.priority || 1] || priorityConfig[1];
 
+    // Determine date to display: Due Date > Start Date > Created At
+    const displayDate = task.due_date || task.start_date || task.created_at;
+    const dateLabel = task.due_date ? 'Prazo: ' : task.start_date ? 'Início: ' : 'Criado: ';
+
     return (
         <div
             className={cn(
-                'w-full text-left p-4 border-b border-border transition-colors group flex items-start gap-4',
+                'w-full text-left p-2 border-b border-border transition-colors group flex items-start gap-3', // Reduced padding p-4->p-2, gap-4->gap-3
                 isSelected ? 'bg-primary/10' : 'hover:bg-secondary/50',
                 onClick && 'cursor-pointer'
             )}
@@ -84,28 +88,28 @@ export const TaskRowItem = ({
                         e.stopPropagation();
                         onToggleSelect(task.id);
                     }}
-                    className="mt-1 flex-shrink-0"
+                    className="mt-0.5 flex-shrink-0" /* Adjusted margin */
                 >
                     {isSelected ? (
-                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                        <CheckCircle2 className="h-4 w-4 text-primary" /> /* Reduced icon size */
                     ) : (
-                        <Circle className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+                        <Circle className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
                     )}
                 </button>
             )}
 
             <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                    <h3 className={cn('font-medium text-foreground', task.status === 'concluida' && 'line-through text-muted-foreground')}>
+                <div className="flex items-center justify-between gap-2"> {/* items-start -> items-center for compactness */}
+                    <h3 className={cn('font-medium text-sm text-foreground truncate', task.status === 'concluida' && 'line-through text-muted-foreground')}> {/* Added text-sm, truncate */}
                         {task.title}
                     </h3>
                     <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="outline" className={statusInfo.className}>{statusInfo.label}</Badge>
+                        <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 h-5", statusInfo.className)}>{statusInfo.label}</Badge> {/* Smaller Badge */}
                         {/* Recurrence Badge */}
                         {task.is_recurring && (
-                            <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 shrink-0">
-                                <RefreshCw className="w-3 h-3" />
-                                <span className="truncate max-w-[80px]">
+                            <div className="flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0 rounded-full border border-blue-100 shrink-0 h-5">
+                                <RefreshCw className="w-2.5 h-2.5" />
+                                <span className="truncate max-w-[60px]">
                                     {frequencyLabels[task.recurrence_frequency] || task.recurrence_frequency}
                                 </span>
                             </div>
@@ -115,47 +119,50 @@ export const TaskRowItem = ({
 
                 {/* Comment Display */}
                 {comment && (
-                    <div className="flex items-start gap-1 mt-1 ml-0">
-                        <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <span className="text-xs text-blue-600 font-medium break-words leading-tight">
+                    <div className="flex items-center gap-1 mt-0.5 ml-0">
+                        <MessageSquare className="w-2.5 h-2.5 text-blue-500 flex-shrink-0" />
+                        <span className="text-[10px] text-blue-600 font-medium break-words leading-tight">
                             {comment}
                         </span>
                     </div>
                 )}
 
-                <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                    {task.unit && (
-                        <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{task.unit.name}</span>
+                <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground"> {/* text-xs -> text-[10px], gap-4 -> gap-3 */}
+                    {displayDate && (
+                        <span className="flex items-center gap-1" title={dateLabel + format(new Date(displayDate), 'dd/MM/yyyy HH:mm')}>
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(displayDate), 'dd/MM/yyyy', { locale: ptBR })}
+                        </span>
                     )}
-                    {task.due_date && (
-                        <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />{format(new Date(task.due_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                    {task.unit && (
+                        <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{task.unit.name}</span>
                     )}
                     {task.routine && (
-                        <span className="flex items-center gap-1.5">
-                            <RefreshCw className="h-3.5 w-3.5" />
+                        <span className="flex items-center gap-1">
+                            <RefreshCw className="h-3 w-3" />
                             {task.routine.title}
                         </span>
                     )}
-                    <span className={cn('flex items-center gap-1.5', priorityInfo.className)}>
+                    <span className={cn('flex items-center gap-1', priorityInfo.className)}>
                         Prioridade: {priorityInfo.label}
                     </span>
 
                     {/* Assignees Display */}
                     {(task.assignees && task.assignees.length > 0) && (
-                        <div className="flex items-center -space-x-2">
+                        <div className="flex items-center -space-x-1.5">
                             {task.assignees.slice(0, 3).map((assignee: any) => (
-                                <div key={assignee.id} className="h-6 w-6 rounded-full border-2 border-background overflow-hidden" title={assignee.full_name}>
+                                <div key={assignee.id} className="h-5 w-5 rounded-full border border-background overflow-hidden" title={assignee.full_name}>
                                     {assignee.avatar_url ? (
                                         <img src={assignee.avatar_url} alt={assignee.full_name} className="h-full w-full object-cover" />
                                     ) : (
-                                        <div className="h-full w-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                                        <div className="h-full w-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500">
                                             {assignee.full_name?.substring(0, 2).toUpperCase()}
                                         </div>
                                     )}
                                 </div>
                             ))}
                             {task.assignees.length > 3 && (
-                                <div className="h-6 w-6 rounded-full border-2 border-background bg-slate-100 flex items-center justify-center text-[9px] font-medium text-slate-600">
+                                <div className="h-5 w-5 rounded-full border border-background bg-slate-100 flex items-center justify-center text-[8px] font-medium text-slate-600">
                                     +{task.assignees.length - 3}
                                 </div>
                             )}
@@ -165,11 +172,11 @@ export const TaskRowItem = ({
             </div>
 
             {/* ACTIONS */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0"> {/* Smaller button */}
+                            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -186,11 +193,15 @@ export const TaskRowItem = ({
                         )}
                     </DropdownMenuContent>
                 </DropdownMenu>
+                {/* Chevrons hidden or kept small? Kept small */}
+                {/* Removed Chevrons to save space/clean up as they were mostly for mobile expansion indication but row is clickable */}
+                {/* User didn't ask to remove chevrons but "compact". Keeping them but smaller if needed. */}
+                {/* Actually, let's keep logic but maybe hide if truly compact? The code had them. I will keep them but cleaner. */}
                 {hideSelection && (
-                    <ChevronRight className={cn('w-5 h-5 text-muted-foreground transition-transform shrink-0')} />
+                    <ChevronRight className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0')} />
                 )}
                 {!hideSelection && (
-                    <ChevronRight className={cn('w-5 h-5 text-muted-foreground transition-transform shrink-0', isSelected && 'text-primary')} />
+                    <ChevronRight className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', isSelected && 'text-primary')} />
                 )}
             </div>
         </div>

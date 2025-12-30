@@ -181,22 +181,29 @@ export const RoutinesView = ({
 
     return (
       <div className="divide-y divide-border">
-        {filteredRoutines.map((routine) => (
-          <RoutineListItem
-            key={routine.id}
-            routine={routine}
-            isSelected={selectedRoutine?.id === routine.id}
-            isMultiSelected={selectedRoutineIds.includes(routine.id)}
-            onToggleSelect={handleToggleSelect}
-            onClick={() => setSelectedRoutine(routine)}
-            onEdit={(e) => {
-              e.stopPropagation();
-              setEditingRoutine(routine);
-            }}
-            canEdit={isGestorOrAdmin}
-            periodDates={null}
-          />
-        ))}
+        {filteredRoutines.map((routine) => {
+          // Find active period
+          const periods = (routine as any).routine_periods;
+          const activePeriod = periods?.find((p: any) => p.is_active) ||
+            periods?.sort((a: any, b: any) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime())[0];
+
+          return (
+            <RoutineListItem
+              key={routine.id}
+              routine={routine}
+              isSelected={selectedRoutine?.id === routine.id}
+              isMultiSelected={selectedRoutineIds.includes(routine.id)}
+              onToggleSelect={handleToggleSelect}
+              onClick={() => setSelectedRoutine(routine)}
+              onEdit={(e) => {
+                e.stopPropagation();
+                setEditingRoutine(routine);
+              }}
+              canEdit={isGestorOrAdmin}
+              periodDates={activePeriod ? { period_start: activePeriod.period_start, period_end: activePeriod.period_end } : null}
+            />
+          )
+        })}
       </div>
     );
   };

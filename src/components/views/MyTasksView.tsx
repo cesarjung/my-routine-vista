@@ -716,6 +716,7 @@ export const MyTasksView = ({
           <div className="h-full overflow-y-auto">
             {selectedTask && (
               <TaskDetailPanel
+                key={selectedTask.id + '-' + selectedTask.updated_at}
                 task={selectedTask}
                 onClose={() => setSelectedTask(null)}
               />

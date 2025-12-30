@@ -39,6 +39,7 @@ const emptyFrequencyBreakdown = (): FrequencyBreakdown => ({
 export const useUnitRoutineStatus = (sectorId?: string | null) => {
   return useQuery({
     queryKey: ['unit-routine-status', sectorId],
+    refetchInterval: 5000, // Auto-update fallback
     queryFn: async () => {
       // Get all units with parent_id (actual units, not gerências)
       const { data: units, error: unitsError } = await supabase
@@ -91,13 +92,13 @@ export const useUnitRoutineStatus = (sectorId?: string | null) => {
 
         for (const task of unitTasks) {
           const freq = task.routine_id ? routineFrequencyMap.get(task.routine_id) : null;
-          
+
           if (freq && FREQUENCIES.includes(freq)) {
             const isCompleted = task.status === 'concluida';
-            
+
             frequencies[freq].total++;
             frequencies[freq][isCompleted ? 'completed' : 'pending']++;
-            
+
             totals.total++;
             totals[isCompleted ? 'completed' : 'pending']++;
           }
@@ -122,6 +123,7 @@ export const useUnitRoutineStatus = (sectorId?: string | null) => {
 export const useResponsibleRoutineStatus = (sectorId?: string | null) => {
   return useQuery({
     queryKey: ['responsible-routine-status', sectorId],
+    refetchInterval: 5000,
     queryFn: async () => {
       // Get all profiles
       const { data: profiles, error: profilesError } = await supabase
@@ -174,13 +176,13 @@ export const useResponsibleRoutineStatus = (sectorId?: string | null) => {
 
         for (const task of responsibleTasks) {
           const freq = task.routine_id ? routineFrequencyMap.get(task.routine_id) : null;
-          
+
           if (freq && FREQUENCIES.includes(freq)) {
             const isCompleted = task.status === 'concluida';
-            
+
             frequencies[freq].total++;
             frequencies[freq][isCompleted ? 'completed' : 'pending']++;
-            
+
             totals.total++;
             totals[isCompleted ? 'completed' : 'pending']++;
           }
@@ -215,6 +217,7 @@ export interface UnitSummary {
 export const useUnitsSummary = (sectorId?: string | null) => {
   return useQuery({
     queryKey: ['units-summary', sectorId],
+    refetchInterval: 5000,
     queryFn: async () => {
       const { data: units, error: unitsError } = await supabase
         .from('units')
@@ -230,7 +233,7 @@ export const useUnitsSummary = (sectorId?: string | null) => {
           .from('tasks')
           .select('status')
           .eq('unit_id', unit.id);
-        
+
         if (sectorId) {
           tasksQuery = tasksQuery.eq('sector_id', sectorId);
         }
@@ -262,12 +265,13 @@ export const useUnitsSummary = (sectorId?: string | null) => {
 export const useOverallStats = (sectorId?: string | null) => {
   return useQuery({
     queryKey: ['overall-stats', sectorId],
+    refetchInterval: 5000,
     queryFn: async () => {
       let routineQuery = supabase
         .from('routines')
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true);
-      
+
       if (sectorId) {
         routineQuery = routineQuery.eq('sector_id', sectorId);
       }
@@ -277,7 +281,7 @@ export const useOverallStats = (sectorId?: string | null) => {
       let tasksQuery = supabase
         .from('tasks')
         .select('status');
-      
+
       if (sectorId) {
         tasksQuery = tasksQuery.eq('sector_id', sectorId);
       }

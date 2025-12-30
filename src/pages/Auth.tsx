@@ -30,14 +30,14 @@ const Auth = () => {
   const navigate = useNavigate();
   const { user, loading, signIn, signUp } = useAuth();
   const { toast } = useToast();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
-  
+
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  
+
   // SignUp form
   const [signUpFullName, setSignUpFullName] = useState('');
   const [signUpEmail, setSignUpEmail] = useState('');
@@ -52,12 +52,12 @@ const Auth = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const validation = loginSchema.safeParse({
       email: loginEmail,
       password: loginPassword,
     });
-    
+
     if (!validation.success) {
       toast({
         title: "Erro de validação",
@@ -66,12 +66,13 @@ const Auth = () => {
       });
       return;
     }
-    
+
     setIsLoading(true);
     const { error } = await signIn(loginEmail, loginPassword);
     setIsLoading(false);
-    
+
     if (error) {
+      console.error('Login error details:', error); // Debug log
       let message = "Erro ao fazer login";
       if (error.message.includes("Invalid login credentials")) {
         message = "Email ou senha incorretos";
@@ -88,14 +89,14 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const validation = signUpSchema.safeParse({
       fullName: signUpFullName,
       email: signUpEmail,
       password: signUpPassword,
       confirmPassword: signUpConfirmPassword,
     });
-    
+
     if (!validation.success) {
       toast({
         title: "Erro de validação",
@@ -104,11 +105,11 @@ const Auth = () => {
       });
       return;
     }
-    
+
     setIsLoading(true);
     const { error } = await signUp(signUpEmail, signUpPassword, signUpFullName);
     setIsLoading(false);
-    
+
     if (error) {
       let message = "Erro ao criar conta";
       if (error.message.includes("already registered")) {
@@ -160,8 +161,8 @@ const Auth = () => {
               {activeTab === 'login' ? 'Entrar' : 'Criar conta'}
             </CardTitle>
             <CardDescription className="text-center">
-              {activeTab === 'login' 
-                ? 'Digite suas credenciais para acessar' 
+              {activeTab === 'login'
+                ? 'Digite suas credenciais para acessar'
                 : 'Preencha os dados para criar sua conta'}
             </CardDescription>
           </CardHeader>
@@ -171,7 +172,7 @@ const Auth = () => {
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Cadastro</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
@@ -189,7 +190,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Senha</Label>
                     <div className="relative">
@@ -205,7 +206,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
                     {isLoading ? (
                       <>
@@ -218,7 +219,7 @@ const Auth = () => {
                   </Button>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
@@ -236,7 +237,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <div className="relative">
@@ -252,7 +253,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Senha</Label>
                     <div className="relative">
@@ -268,7 +269,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="signup-confirm-password">Confirmar senha</Label>
                     <div className="relative">
@@ -284,7 +285,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
                     {isLoading ? (
                       <>
@@ -300,7 +301,7 @@ const Auth = () => {
             </Tabs>
           </CardContent>
         </Card>
-        
+
         <p className="text-center text-sm text-muted-foreground">
           Sirtec Sistemas Elétricos - Gestão de Rotinas
         </p>
