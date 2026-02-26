@@ -339,7 +339,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                         <p>Nenhuma rotina correspondente encontrada com calendário neste mês.</p>
                     </div>
                 ) : (
-                    <div className="flex-1 overflow-auto border custom-scrollbar m-2 shadow-inner bg-card h-full relative">
+                    <div className="flex-1 min-h-0 overflow-auto border custom-scrollbar m-2 shadow-inner bg-card relative">
                         <style dangerouslySetInnerHTML={{
                             __html: `
                             .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 12px; }
