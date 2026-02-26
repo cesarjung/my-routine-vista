@@ -5,6 +5,7 @@ export type NavigationContext =
   | { type: 'my-tasks' }
   | { type: 'sector'; sectorId: string; folder?: string; frequency?: string }
   | { type: 'dashboard' }
+  | { type: 'notes' }
   | { type: 'settings' };
 
 export interface NavigationState {

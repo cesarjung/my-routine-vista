@@ -101,6 +101,7 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
   const [routineDialogOpen, setRoutineDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
+  const [selectedDateContext, setSelectedDateContext] = useState<Date | null>(null);
 
   // Fetch active routine periods
   const { data: routinePeriods } = useQuery({
@@ -131,10 +132,15 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
     }
   };
 
-  const handleSelectRoutine = (routineId: string) => {
+  const handleSelectRoutine = (routineId: string, contextDate?: Date) => {
     const routine = routines?.find(r => r.id === routineId);
     if (routine) {
       setSelectedRoutine(routine);
+      if (contextDate) {
+        setSelectedDateContext(contextDate);
+      } else {
+        setSelectedDateContext(null);
+      }
     }
   };
 
@@ -233,7 +239,7 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
         tasks.some(t => t.parent_task_id === task.id);
 
       // If this is a parent task with children, skip it (children will show instead)
-      if (hasChildren && !isMyTasks) {
+      if (hasChildren) {
         return;
       }
 
@@ -538,13 +544,13 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
             return (
               <div
                 key={`allday-${day.toISOString()}`}
-                className="p-1 border-r border-border last:border-r-0 space-y-1"
+                className="p-1 border-r border-border last:border-r-0 space-y-1 min-w-0" // Add min-w-0
               >
                 {allDayItems.map((item) => (
                   <div
                     key={item.id}
                     className={cn(
-                      'text-xs px-2 py-1 rounded text-white truncate cursor-pointer hover:opacity-80',
+                      'text-xs px-2 py-1 rounded text-white cursor-pointer hover:opacity-80 whitespace-normal break-words shadow-sm', // Wrap text
                       getItemColor(item)
                     )}
                     title={item.title}
@@ -552,12 +558,12 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                       e.stopPropagation();
                       if (item.type === 'task') {
                         if (item.routineId) {
-                          handleSelectRoutine(item.routineId);
+                          handleSelectRoutine(item.routineId, day);
                         } else {
                           handleEditTask(item.id);
                         }
                       } else if (item.type === 'routine' && item.routineId) {
-                        handleSelectRoutine(item.routineId);
+                        handleSelectRoutine(item.routineId, day);
                       }
                     }}
                   >
@@ -633,19 +639,21 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                         style={{
                           top: top + 1,
                           height: height - 2,
-                          marginLeft: itemIndex > 0 ? `${(itemIndex % 2) * 40}%` : 0,
-                          width: itemIndex > 0 ? '60%' : undefined
+                          left: itemIndex > 0 ? `${(itemIndex % 2) * 40}%` : undefined,
+                          width: itemIndex > 0 ? '60%' : undefined,
+                          zIndex: itemIndex > 0 ? 20 : 10,
                         }}
                         title={`${item.title} (${timeStr} - ${endTimeStr})`}
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (item.type === 'task') {
                             if (item.routineId) {
-                              handleSelectRoutine(item.routineId);
+                              handleSelectRoutine(item.routineId, day);
                             } else {
                               handleEditTask(item.id);
                             }
                           } else if (item.type === 'routine' && item.routineId) {
-                            handleSelectRoutine(item.routineId);
+                            handleSelectRoutine(item.routineId, day);
                           }
                         }}
                       >
@@ -806,7 +814,11 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
             <div className="h-full overflow-y-auto">
               <RoutineDetailPanel
                 routine={selectedRoutine}
-                onClose={() => setSelectedRoutine(null)}
+                onClose={() => {
+                  setSelectedRoutine(null);
+                  setSelectedDateContext(null);
+                }}
+                contextDate={selectedDateContext}
               />
             </div>
           )}

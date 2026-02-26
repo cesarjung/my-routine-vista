@@ -69,21 +69,21 @@ export const useRoutinePeriods = (routineId?: string) => {
       const { data, error } = await query;
 
       if (error) throw error;
-      
+
       // Fetch assignee profiles separately
       const checkinIds = data?.flatMap(p => p.routine_checkins?.map(c => c.assignee_user_id).filter(Boolean)) || [];
       const uniqueUserIds = [...new Set(checkinIds)];
-      
+
       let profilesMap = new Map();
       if (uniqueUserIds.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, full_name, email')
           .in('id', uniqueUserIds);
-        
+
         profiles?.forEach(p => profilesMap.set(p.id, p));
       }
-      
+
       // Enrich checkins with assignee profiles
       const enrichedData = data?.map(period => ({
         ...period,
@@ -92,7 +92,7 @@ export const useRoutinePeriods = (routineId?: string) => {
           assignee_profile: checkin.assignee_user_id ? profilesMap.get(checkin.assignee_user_id) : null,
         })) || [],
       }));
-      
+
       return enrichedData as RoutinePeriodWithCheckins[];
     },
     enabled: !!routineId,
@@ -111,7 +111,7 @@ export const useAllActiveRoutinePeriods = () => {
         .order('period_start', { ascending: false });
 
       if (error) throw error;
-      
+
       // Create a map of routine_id to its active period
       const periodsByRoutine = new Map<string, { period_start: string; period_end: string }>();
       data?.forEach(period => {
@@ -122,7 +122,7 @@ export const useAllActiveRoutinePeriods = () => {
           });
         }
       });
-      
+
       return periodsByRoutine;
     },
   });
@@ -158,7 +158,7 @@ export const useCurrentPeriodCheckins = (routineId: string) => {
         .maybeSingle();
 
       if (periodError) throw periodError;
-      
+
       // Fetch assignee profiles
       let enrichedPeriod = period;
       if (period?.routine_checkins) {
@@ -166,17 +166,17 @@ export const useCurrentPeriodCheckins = (routineId: string) => {
           .map(c => c.assignee_user_id)
           .filter(Boolean);
         const uniqueUserIds = [...new Set(userIds)];
-        
+
         let profilesMap = new Map();
         if (uniqueUserIds.length > 0) {
           const { data: profiles } = await supabase
             .from('profiles')
             .select('id, full_name, email')
             .in('id', uniqueUserIds);
-          
+
           profiles?.forEach(p => profilesMap.set(p.id, p));
         }
-        
+
         enrichedPeriod = {
           ...period,
           routine_checkins: period.routine_checkins.map(checkin => ({
@@ -200,9 +200,9 @@ export const useCreatePeriodWithCheckins = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ routineId, periodStart, periodEnd }: { 
-      routineId: string; 
-      periodStart: Date; 
+    mutationFn: async ({ routineId, periodStart, periodEnd }: {
+      routineId: string;
+      periodStart: Date;
       periodEnd: Date;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -214,7 +214,7 @@ export const useCreatePeriodWithCheckins = () => {
         .select('title, description, unit_id, sector_id')
         .eq('id', routineId)
         .single();
-      
+
       if (routineError) throw routineError;
 
       // Get routine assignees (users assigned to this routine)
@@ -266,7 +266,7 @@ export const useCreatePeriodWithCheckins = () => {
         for (const assignee of assignees) {
           const assigneeProfile = assignee.profiles as any;
           const assigneeUnitId = assigneeProfile?.unit_id || routine.unit_id;
-          
+
           // Create checkin
           checkins.push({
             routine_period_id: period.id,
@@ -347,7 +347,7 @@ export const useCompleteCheckin = () => {
   return useMutation({
     mutationFn: async ({ checkinId, notes }: { checkinId: string; notes?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) throw new Error('Usuário não autenticado');
 
       const { data, error } = await supabase
@@ -369,6 +369,13 @@ export const useCompleteCheckin = () => {
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
       queryClient.invalidateQueries({ queryKey: ['routines'] });
+
+      // Dashboard invalidations
+      queryClient.invalidateQueries({ queryKey: ['units-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['overall-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['unit-routine-status'] });
+      queryClient.invalidateQueries({ queryKey: ['responsible-routine-status'] });
+
       toast({
         title: 'Check-in concluído',
         description: 'O checkin foi marcado como concluído.',
@@ -391,7 +398,7 @@ export const useMarkCheckinNotCompleted = () => {
   return useMutation({
     mutationFn: async ({ checkinId, notes }: { checkinId: string; notes?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) throw new Error('Usuário não autenticado');
 
       const { data, error } = await supabase
@@ -413,6 +420,13 @@ export const useMarkCheckinNotCompleted = () => {
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
       queryClient.invalidateQueries({ queryKey: ['routines'] });
+
+      // Dashboard invalidations
+      queryClient.invalidateQueries({ queryKey: ['units-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['overall-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['unit-routine-status'] });
+      queryClient.invalidateQueries({ queryKey: ['responsible-routine-status'] });
+
       toast({
         title: 'Marcado como não concluído',
         description: 'O checkin foi marcado como não foi possível realizar.',
@@ -453,6 +467,13 @@ export const useUndoCheckin = () => {
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
       queryClient.invalidateQueries({ queryKey: ['routines'] });
+
+      // Dashboard invalidations
+      queryClient.invalidateQueries({ queryKey: ['units-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['overall-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['unit-routine-status'] });
+      queryClient.invalidateQueries({ queryKey: ['responsible-routine-status'] });
+
       toast({
         title: 'Check-in desfeito',
         description: 'O checkin foi desmarcado.',

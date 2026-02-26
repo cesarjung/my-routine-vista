@@ -76,11 +76,12 @@ type FormData = z.infer<typeof formSchema>;
 
 interface TaskFormProps {
   sectorId?: string;
+  sectionId?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
-export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
+export const TaskForm = ({ sectorId, sectionId, onSuccess, onCancel }: TaskFormProps) => {
   const [subtasks, setSubtasks] = useState<SubtaskData[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignees, setNewSubtaskAssignees] = useState<string[]>([]);
@@ -235,7 +236,7 @@ export const TaskForm = ({ sectorId, onSuccess, onCancel }: TaskFormProps) => {
       recurrence_frequency: data.is_recurring ? data.recurrence_frequency : undefined,
       recurrence_mode: data.is_recurring ? data.recurrence_mode : undefined,
       sector_id: sectorId,
-      section_id: sectorId && sectorId !== 'tasks' ? sectorId : undefined, // If sectorId is 'tasks' (default), don't set section_id (it's null)
+      section_id: sectionId || (sectorId && sectorId !== 'tasks' ? sectorId : undefined),
       skip_weekends_holidays: data.skip_weekends_holidays || false,
     });
 

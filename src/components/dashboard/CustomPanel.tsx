@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Building2, Users, FolderKanban, Settings, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
+import { FolderKanban, Building2, Users, Loader2, Play, Settings, Trash2, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { DashboardPanel, useDeleteDashboardPanel } from '@/hooks/useDashboardPanels';
-import { useIsAdmin } from '@/hooks/useUserRole';
 import { useTasks } from '@/hooks/useTasks';
-import { PanelFormDialog } from './PanelFormDialog';
+import { useRoutines } from '@/hooks/useRoutines';
+import { useCustomPanelData } from '@/hooks/useDashboardData';
+import { useIsAdmin } from '@/hooks/useUserRole';
+import { useDeleteDashboardPanel, DashboardPanel } from '@/hooks/useDashboardPanels';
+import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
+import { TaskTrackerPanel } from '@/components/dashboard/TaskTrackerPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -32,6 +35,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
@@ -103,7 +107,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
       if (filters.title_filter) {
-        tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
+        tasksQuery = tasksQuery.ilike('title', `% ${filters.title_filter}% `);
       }
       if (periodDates) {
         tasksQuery = tasksQuery
@@ -265,7 +269,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
         // Also handle ad-hoc tasks by grouping by title
         tasks?.forEach(task => {
-          let key = task.routine_id || `title:${task.title}`;
+          let key = task.routine_id || `title:${task.title} `;
           let name = task.title;
 
           if (task.routine_id && routineMap.has(task.routine_id)) {
@@ -426,29 +430,29 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
 
     // Filter by entity type
     if (tasksDialog.entityType === 'unit') {
-      if (task.unit_id !== tasksDialog.entityId) return false;
+      if ((task as any).unit_id !== tasksDialog.entityId) return false;
     } else if (tasksDialog.entityType === 'responsible') {
-      if (task.assigned_to !== tasksDialog.entityId) return false;
+      if ((task as any).assigned_to !== tasksDialog.entityId) return false;
     } else if (tasksDialog.entityType === 'sector') {
-      if (task.sector_id !== tasksDialog.entityId) return false;
+      if ((task as any).sector_id !== tasksDialog.entityId) return false;
     }
 
     // Filter by panel's sector if set
     if (panel.filters.sector_id) {
       if (Array.isArray(panel.filters.sector_id)) {
-        if (!panel.filters.sector_id.includes(task.sector_id)) return false;
-      } else if (task.sector_id !== panel.filters.sector_id) {
+        if (!panel.filters.sector_id.includes((task as any).sector_id)) return false;
+      } else if ((task as any).sector_id !== panel.filters.sector_id) {
         return false;
       }
     }
 
     // Filter by panel's title filter if set
-    if (panel.filters.title_filter && !task.title.toLowerCase().includes(panel.filters.title_filter.toLowerCase())) return false;
+    if (panel.filters.title_filter && !(task as any).title?.toLowerCase().includes(panel.filters.title_filter.toLowerCase())) return false;
 
     // Filter by frequency (using routine map from panel data)
     if (tasksDialog.frequency && panelData?.routinesMap) {
-      if (!task.routine_id) return false;
-      const freq = panelData.routinesMap[task.routine_id];
+      if (!(task as any).routine_id) return false;
+      const freq = panelData.routinesMap[(task as any).routine_id];
       if (freq !== tasksDialog.frequency) return false;
     }
 
@@ -566,6 +570,62 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
     );
   };
 
+  // Render tracker gantt (new tracking mode)
+  if (panel.filters.group_by === 'tracker_gantt') {
+    return (
+      <div
+        className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
+        style={{
+          minHeight: 150,
+          minWidth: 280,
+          height: 480,
+          maxWidth: '100%'
+        }}
+      >
+        <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30 flex-shrink-0">
+          <Icon className="w-4 h-4 text-primary" />
+          <span className="font-medium text-sm truncate">{panel.title}</span>
+
+          {isAdmin && (
+            <div className="flex items-center gap-1 ml-auto">
+              <PanelFormDialog
+                panel={panel}
+                trigger={
+                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                    <Settings className="w-3 h-3" />
+                  </Button>
+                }
+              />
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remover painel?</AlertDialogTitle>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
+                      Remover
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+        </div>
+        <div className="overflow-auto flex-1">
+          {/* We pass the frequencies or routine preferences here from panel */}
+          {/* Right now, if user saved "routines" in their Panel, we pass them. Panel filters could be enriched later. */}
+          <TaskTrackerPanel sectorId={Array.isArray(panel.filters.sector_id) ? panel.filters.sector_id[0] : panel.filters.sector_id} initialRoutineIds={panel.filters.task_frequency || []} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div
@@ -644,38 +704,39 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
                 Nenhuma tarefa encontrada
               </div>
             ) : (
-              <div className="space-y-2">
-                {filteredTasks.map(task => (
-                  <div
-                    key={task.id}
-                    className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{task.title}</p>
+              <div className="space-y-4">
+                {filteredTasks.map((task: any) => (
+                  <div key={task.id} className="p-4 rounded-lg border bg-card">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h4 className="font-medium">{task.title}</h4>
                         {task.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                          <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
                             {task.description}
                           </p>
                         )}
+                        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                          {task.routine && (
+                            <span className="flex items-center gap-1">
+                              <Play className="w-3 h-3" />
+                              Rotina: {task.routine.title}
+                            </span>
+                          )}
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full font-medium flex items-center gap-1",
+                            task.status === 'concluida' ? "bg-success/20 text-success" :
+                              task.status === 'atrasada' ? "bg-destructive/20 text-destructive" :
+                                task.status === 'em_andamento' ? "bg-warning/20 text-warning" :
+                                  "bg-secondary/50"
+                          )}>
+                            {STATUS_LABELS[task.status] || task.status}
+                          </span>
+                          {task.due_date && (
+                            <span>Vencimento: {new Date(task.due_date).toLocaleDateString()}</span>
+                          )}
+                        </div>
                       </div>
-                      <Badge
-                        variant={
-                          task.status === 'concluida' ? 'default' :
-                            task.status === 'atrasada' ? 'destructive' :
-                              task.status === 'em_andamento' ? 'secondary' :
-                                'outline'
-                        }
-                        className="shrink-0"
-                      >
-                        {STATUS_LABELS[task.status] || task.status}
-                      </Badge>
                     </div>
-                    {task.due_date && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Prazo: {new Date(task.due_date).toLocaleDateString('pt-BR')}
-                      </p>
-                    )}
                   </div>
                 ))}
               </div>

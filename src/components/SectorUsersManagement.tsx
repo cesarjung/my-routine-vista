@@ -106,19 +106,19 @@ export const SectorUsersManagement = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="w-5 h-5" />
-          Usuários por Setor
+          Usuários por Espaço
         </CardTitle>
         <CardDescription>
-          Gerencie os setores e defina quais usuários podem acessá-los
+          Gerencie os espaços e defina quais usuários podem acessá-los
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Sector Selector */}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Selecione um Setor</label>
+          <label className="text-sm font-medium">Selecione um Espaço</label>
           <Select value={selectedSectorId} onValueChange={setSelectedSectorId}>
             <SelectTrigger>
-              <SelectValue placeholder="Escolha um setor" />
+              <SelectValue placeholder="Escolha um espaço" />
             </SelectTrigger>
             <SelectContent>
               {sectors?.map(sector => (
@@ -174,9 +174,9 @@ export const SectorUsersManagement = () => {
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Adicionar Usuário ao Setor</DialogTitle>
+                      <DialogTitle>Adicionar Usuário ao Espaço</DialogTitle>
                       <DialogDescription>
-                        Selecione um usuário para dar acesso a este setor
+                        Selecione um usuário para dar acesso a este espaço
                       </DialogDescription>
                     </DialogHeader>
 
@@ -222,16 +222,16 @@ export const SectorUsersManagement = () => {
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button size="sm" variant="destructive" className="gap-2" title="Excluir Setor">
+                    <Button size="sm" variant="destructive" className="gap-2" title="Excluir Espaço">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir setor?</AlertDialogTitle>
+                      <AlertDialogTitle>Excluir espaço?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Tem certeza que deseja excluir o setor "{selectedSector?.name}"?
-                        Essa ação não pode ser desfeita e removerá todos os acessos de usuários a este setor.
+                        Tem certeza que deseja excluir o espaço "{selectedSector?.name}"?
+                        Essa ação não pode ser desfeita e removerá todos os acessos de usuários a este espaço.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -305,15 +305,15 @@ export const SectorUsersManagement = () => {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar Setor</DialogTitle>
+            <DialogTitle>Editar Espaço</DialogTitle>
             <DialogDescription>
-              Personalize o nome e a cor do setor {selectedSector?.name}
+              Personalize o nome e a cor do espaço {selectedSector?.name}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label htmlFor="edit-sector-name" className="text-sm font-medium">Nome do Setor</label>
+              <label htmlFor="edit-sector-name" className="text-sm font-medium">Nome do Espaço</label>
               <input
                 id="edit-sector-name"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

@@ -11,7 +11,8 @@ import { GanttView } from './views/GanttView';
 import { CalendarView } from './views/CalendarView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { useSectors } from '@/hooks/useSectors';
-import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
+import { NotesList } from '@/components/NotesList';
+import sirtecLogo from '@/assets/sirtec-logo-transparent.png';
 import {
   Select,
   SelectContent,
@@ -40,17 +41,17 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogoHeader} alt="Sirtec" className="h-8 w-auto object-contain" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
             <div className="h-6 w-px bg-border hidden md:block" />
             <div>
-              <h1 className="text-xl font-bold text-foreground leading-none mb-1">Dashboard Geral</h1>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Dashboard Geral</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
                 <span>Visão Geral</span>
               </div>
             </div>
           </div>
         </header>
-        <div className="max-w-7xl mx-auto w-full">
+        <div className="w-full h-full">
           <DashboardView hideHeader={true} />
         </div>
       </div>
@@ -63,17 +64,17 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogoHeader} alt="Sirtec" className="h-8 w-auto object-contain" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
             <div className="h-6 w-px bg-border hidden md:block" />
             <div>
-              <h1 className="text-xl font-bold text-foreground leading-none mb-1">Configurações</h1>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Configurações</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
                 <span>Sistema</span>
               </div>
             </div>
           </div>
         </header>
-        <div className="max-w-7xl mx-auto w-full">
+        <div className="w-full h-full">
           <SettingsView hideHeader={true} />
         </div>
       </div>
@@ -86,10 +87,10 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogoHeader} alt="Sirtec" className="h-8 w-auto object-contain" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
             <div className="h-6 w-px bg-border hidden md:block" />
             <div>
-              <h1 className="text-xl font-bold text-foreground leading-none mb-1">Minhas Tarefas</h1>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Minhas Tarefas</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
                 <span>Lista de Tarefas</span>
               </div>
@@ -102,6 +103,29 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         </header>
         <div className="w-full h-full">
           <MyTasksView viewMode={viewMode} />
+        </div>
+      </div>
+    );
+  }
+
+  // Notes View
+  if (context.type === 'notes') {
+    return (
+      <div className="h-full flex flex-col p-6">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
+            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
+            <div className="h-6 w-px bg-border hidden md:block" />
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Anotações e Quadros</h1>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                <span>Geral</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="w-full h-full overflow-hidden">
+          <NotesList />
         </div>
       </div>
     );
@@ -120,10 +144,10 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         <div className="h-full flex flex-col p-6">
           <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
             <div className="flex items-center gap-4">
-              <img src={sirtecLogoHeader} alt="Sirtec" className="h-8 w-auto object-contain" />
+              <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
               <div className="h-6 w-px bg-border hidden md:block" />
               <div>
-                <h1 className="text-xl font-bold text-foreground leading-none mb-1">
+                <h1 className="text-base font-semibold text-foreground leading-none mb-1">
                   {sector?.name}
                 </h1>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -132,7 +156,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
               </div>
             </div>
           </header>
-          <div className="max-w-7xl mx-auto w-full">
+          <div className="w-full h-full">
             <DashboardView forcedSectorId={sectorId} hideHeader={true} />
           </div>
         </div>
@@ -146,7 +170,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       return 'Gestão CCM';
     };
 
-    const sectionTitle = currentSection ? currentSection.title : (folder === 'routines' ? 'Rotinas' : folder === 'tasks' ? 'Tarefas' : folder);
+    const sectionTitle = currentSection ? currentSection.title : (folder === 'routines' ? 'Rotinas' : folder === 'tasks' ? 'Tarefas' : folder === 'notes' ? 'Anotações' : folder);
 
     const showViewToggle = folder !== 'units';
 
@@ -154,10 +178,10 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogoHeader} alt="Sirtec" className="h-8 w-auto object-contain" />
+            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
             <div className="h-6 w-px bg-border hidden md:block" />
             <div>
-              <h1 className="text-xl font-bold text-foreground leading-none mb-1">
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">
                 {getTitle()}
               </h1>
               {sector && (
@@ -190,6 +214,8 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
               frequency={frequency}
               viewMode={viewMode}
             />
+          ) : folder === 'notes' ? (
+            <NotesList sectorId={sectorId} />
           ) : (
             <TasksView
               sectorId={sectorId}

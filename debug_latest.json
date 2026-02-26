@@ -1,0 +1,82 @@
+[
+  {
+    "id": "d68c2b9c-76f1-4cf2-8b1c-b75edac3cf61",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "cde018fe-94f9-4323-a215-618c9ffe1db9",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "73fbf32d-f191-480b-b7fd-6b190ee1a267",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "f8917d34-4192-4356-8693-3d18b91b28f4",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "4aab28f7-2670-4a6b-97c9-670b4baa9839",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "17d73947-71f3-4008-8767-91d90ba5f2b8",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": null
+  },
+  {
+    "id": "9795877d-75a2-425d-b27e-6c696a20939d",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "9f6ce394-8380-4920-af01-fddc26223978",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  },
+  {
+    "id": "229f57bc-8cbf-4a4e-b089-3b2e7518e701",
+    "title": "[Rotina] teste recorrencia",
+    "start_date": "2026-01-06T10:00:00+00:00",
+    "due_date": "2026-01-06T11:52:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "98ead6f7-46ea-469e-a8f9-4adf13bec21f"
+  }
+]

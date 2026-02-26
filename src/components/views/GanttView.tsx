@@ -53,14 +53,17 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
   // Detail Panel State
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedRoutine, setSelectedRoutine] = useState<any | null>(null);
+  const [selectedDateContext, setSelectedDateContext] = useState<string | null>(null);
 
   const handleTaskClick = (task: Task) => {
     if (task.routine_id && (task as any).routine) {
       setSelectedRoutine((task as any).routine);
+      setSelectedDateContext(task.due_date);
       setSelectedTask(null);
     } else {
       setSelectedTask(task);
       setSelectedRoutine(null);
+      setSelectedDateContext(null);
     }
   };
 
@@ -440,7 +443,11 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
             {selectedRoutine && (
               <RoutineDetailPanel
                 routine={selectedRoutine}
-                onClose={() => setSelectedRoutine(null)}
+                onClose={() => {
+                  setSelectedRoutine(null);
+                  setSelectedDateContext(null);
+                }}
+                contextDate={selectedDateContext}
               />
             )}
           </div>

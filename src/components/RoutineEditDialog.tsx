@@ -92,6 +92,7 @@ const formSchema = z.object({
   endDate: z.date().optional(),
   endTime: z.string().optional(),
   skipWeekendsHolidays: z.boolean(),
+  monthlyAnchor: z.enum(['date', 'weekday'] as const).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -242,6 +243,7 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
       description: routine.description || '',
       frequency: routine.frequency as any,
       recurrenceMode: routine.recurrence_mode || 'schedule',
+      monthlyAnchor: (routine.custom_schedule as any)?.monthlyAnchor || 'date',
       startDate: undefined,
       startTime: '',
       endDate: undefined,
@@ -249,6 +251,38 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
       skipWeekendsHolidays: false,
     } : undefined,
   });
+
+  const { data: currentPeriodTask } = useQuery({
+    queryKey: ['routine-current-task-dates', routine?.id],
+    queryFn: async () => {
+      if (!routine?.id) return null;
+      const { data } = await supabase
+        .from('tasks')
+        .select('start_date, due_date')
+        .eq('routine_id', routine.id)
+        .in('status', ['pendente', 'em_andamento', 'atrasada'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!routine?.id && open,
+  });
+
+  useEffect(() => {
+    if (currentPeriodTask) {
+      if (currentPeriodTask.start_date) {
+        const sd = new Date(currentPeriodTask.start_date);
+        form.setValue('startDate', sd);
+        form.setValue('startTime', format(sd, 'HH:mm'));
+      }
+      if (currentPeriodTask.due_date) {
+        const dd = new Date(currentPeriodTask.due_date);
+        form.setValue('endDate', dd);
+        form.setValue('endTime', format(dd, 'HH:mm'));
+      }
+    }
+  }, [currentPeriodTask, form]);
 
   // Reset unit assignments when routine changes and load saved data
   useEffect(() => {
@@ -307,12 +341,30 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
   const onSubmit = async (data: FormData) => {
     if (!routine) return;
 
+    let startDateISO = null;
+    let dueDateISO = null;
+
+    if (data.startDate) {
+      const date = setHours(setMinutes(data.startDate, parseInt(data.startTime?.split(':')[1] || '0')), parseInt(data.startTime?.split(':')[0] || '0'));
+      startDateISO = date.toISOString();
+    }
+
+    if (data.endDate) {
+      const date = setHours(setMinutes(data.endDate, parseInt(data.endTime?.split(':')[1] || '0')), parseInt(data.endTime?.split(':')[0] || '0'));
+      dueDateISO = date.toISOString();
+    }
+
     await updateRoutine.mutateAsync({
       id: routine.id,
       data: {
         title: data.title,
         description: data.description || null,
         frequency: data.frequency,
+        recurrence_mode: data.recurrenceMode,
+        skipWeekendsHolidays: data.skipWeekendsHolidays,
+        monthlyAnchor: data.monthlyAnchor,
+        startDate: startDateISO,
+        dueDate: dueDateISO,
       },
     });
 
@@ -428,6 +480,36 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                   </FormItem>
                 )}
               />
+              {form.watch('frequency') === 'mensal' && (
+                <FormField
+                  control={form.control}
+                  name="monthlyAnchor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Repetição Mensal</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || 'date'}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o tipo de repetição" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="date">Mesmo dia do Mês (ex: todo dia 15)</SelectItem>
+                          <SelectItem value="weekday">Mesmo dia da Semana (ex: toda 2ª Quarta-feira)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        {field.value === 'date'
+                          ? 'A tarefa será criada sempre na mesma data (dia 15, dia 20, etc), ajustando se cair em fim de semana.'
+                          : 'A tarefa será criada mantendo a posição na semana (ex: segunda quinta-feira do mês).'}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+
 
               {/* Data e Hora de Início */}
               <div className="grid grid-cols-2 gap-4">
@@ -525,7 +607,6 @@ export const RoutineEditDialog = ({ routine, open, onOpenChange }: RoutineEditDi
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
-                            disabled={(date) => date < (form.getValues('startDate') || new Date())}
                             initialFocus
                             className="pointer-events-auto"
                           />

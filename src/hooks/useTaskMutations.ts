@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
+
+
 import {
   syncTaskToCalendar,
   updateCalendarEvent,
@@ -95,6 +97,7 @@ export const useCreateTask = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
       toast.success('Tarefa criada com sucesso!');
     },
@@ -320,6 +323,7 @@ export const useCreateTaskWithUnits = () => {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
       const hasMultipleUnits = result.childTasks && result.childTasks.length > 0;
       toast.success(hasMultipleUnits ? 'Tarefa criada para todas as unidades!' : 'Tarefa criada com sucesso!');
@@ -356,7 +360,8 @@ export const useUpdateTask = () => {
           priority, 
           parent_task_id, 
           routine_id,
-          task_assignees(user_id)
+          task_assignees(user_id),
+          routine:routines(frequency)
         `)
         .eq('id', id)
         .single();
@@ -369,6 +374,20 @@ export const useUpdateTask = () => {
         .single();
 
       if (error) throw error;
+
+      // Update assignees if provided
+      if (assigneeIds !== undefined) {
+        // ... (existing assignee logic)
+      }
+
+      // ... (existing updateRoutineCheckin logic)
+
+      // ... (omitting middle parts for brevity in this replace call if possible, but replace_file_content must use contiguous block)
+      // Actually refetching the whole block from 340 to 470 is safer or I need to split.
+      // I will only replace the select part first, then the logic part.
+      // But I can't do multiple in one replace_file_content call effectively if they are far apart.
+      // Let's replace the fetch part first.
+
 
       // Update assignees if provided
       if (assigneeIds !== undefined) {
@@ -451,19 +470,26 @@ export const useUpdateTask = () => {
         await checkAndCompleteParentTask(existingTask.parent_task_id);
       }
 
-      // Handle recurring task completion (on_completion mode) - only for parent tasks
+      // Handle recurring task completion
+      const effectiveFrequency = existingTask?.recurrence_frequency || existingTask?.routine?.frequency;
+
+
+
       if (
         existingTask?.is_recurring &&
-        existingTask?.recurrence_mode === 'on_completion' &&
+        (existingTask?.recurrence_mode === 'on_completion' || existingTask?.recurrence_mode === 'schedule') &&
         !existingTask?.parent_task_id && // Only for parent/standalone tasks
         updates.status === 'concluida' &&
-        existingTask?.status !== 'concluida' &&
+        // existingTask?.status !== 'concluida' && // Relaxed check
         existingTask?.start_date &&
         existingTask?.due_date &&
-        existingTask?.recurrence_frequency
+        effectiveFrequency
       ) {
         // Create next instance when task is completed
-        await createNextRecurringInstance(existingTask, id);
+        await createNextRecurringInstance({
+          ...existingTask,
+          recurrence_frequency: effectiveFrequency as string
+        }, id);
       }
 
       return data;
@@ -515,11 +541,18 @@ export const useUpdateTask = () => {
     onSettled: () => {
       // Invalidar tudo para garantir consitência final
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
       queryClient.invalidateQueries({ queryKey: ['child-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
+
+      // Dashboard invalidations
+      queryClient.invalidateQueries({ queryKey: ['units-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['overall-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['unit-routine-status'] });
+      queryClient.invalidateQueries({ queryKey: ['responsible-routine-status'] });
 
       // Invalidar TUDO para garantir que não haja chaves esquecidas
       queryClient.invalidateQueries();
@@ -628,7 +661,7 @@ async function checkAndCompleteParentTask(parentTaskId: string): Promise<void> {
     // Get all child tasks
     const { data: childTasks, error } = await supabase
       .from('tasks')
-      .select('id, status')
+      .select('id, status, unit_id')
       .eq('parent_task_id', parentTaskId);
 
     if (error) throw error;
@@ -648,15 +681,18 @@ async function checkAndCompleteParentTask(parentTaskId: string): Promise<void> {
       newStatus = 'em_andamento';
     }
 
-    // Get parent task info
+    // Get parent task info and ROUTINE info
     const { data: parentTask, error: parentError } = await supabase
       .from('tasks')
-      .select('id, status, is_recurring, recurrence_frequency, recurrence_mode, start_date, due_date, title, description, unit_id, sector_id, assigned_to, created_by, priority')
+      .select('id, status, is_recurring, recurrence_frequency, recurrence_mode, start_date, due_date, title, description, unit_id, sector_id, assigned_to, created_by, priority, routine_id, routine:routines(id, frequency)')
       .eq('id', parentTaskId)
       .single();
 
     if (parentError) throw parentError;
     if (!parentTask) return;
+
+    // effective frequency
+    const effectiveFreq = parentTask.recurrence_frequency || parentTask.routine?.frequency;
 
     // Only update if status changed
     if (parentTask.status !== newStatus) {
@@ -672,17 +708,20 @@ async function checkAndCompleteParentTask(parentTaskId: string): Promise<void> {
       console.log(`Parent task ${parentTaskId} updated to ${newStatus}`);
     }
 
-    // If completed and is recurring (on_completion mode), create next instance
+    // If completed and is recurring (on_completion or schedule mode), create next instance
     if (
       newStatus === 'concluida' &&
       parentTask.status !== 'concluida' && // Only if it wasn't already completed
       parentTask.is_recurring &&
-      parentTask.recurrence_mode === 'on_completion' &&
+      (parentTask.recurrence_mode === 'on_completion' || parentTask.recurrence_mode === 'schedule') &&
       parentTask.start_date &&
       parentTask.due_date &&
-      parentTask.recurrence_frequency
+      effectiveFreq
     ) {
-      await createNextRecurringInstanceWithChildren(parentTask, childTasks);
+      await createNextRecurringInstanceWithChildren({
+        ...parentTask,
+        recurrence_frequency: effectiveFreq as string
+      }, childTasks.map(t => ({ id: t.id, status: t.status, unit_id: t.unit_id || undefined })));
     }
   } catch (error) {
     console.error('Error checking/completing parent task:', error);
@@ -703,8 +742,9 @@ async function createNextRecurringInstanceWithChildren(
     assigned_to: string | null;
     created_by: string | null;
     priority: number | null;
+    routine_id: string | null;
   },
-  childTasks: { id: string; status: string }[]
+  childTasks: { id: string; status: string; unit_id?: string }[]
 ): Promise<void> {
   const startDate = new Date(parentTask.start_date);
   const dueDate = new Date(parentTask.due_date);
@@ -738,6 +778,7 @@ async function createNextRecurringInstanceWithChildren(
       recurrence_frequency: parentTask.recurrence_frequency as 'diaria' | 'semanal' | 'quinzenal' | 'mensal',
       recurrence_mode: 'on_completion',
       parent_task_id: null,
+      routine_id: parentTask.routine_id, // Ensure propagated
     })
     .select('id')
     .single();
@@ -745,6 +786,41 @@ async function createNextRecurringInstanceWithChildren(
   if (parentError || !newParentTask) {
     console.error('Error creating next parent task:', parentError);
     return;
+  }
+
+  // Create NEW Routine Period for the next cycle (Fix for Routines View)
+  if (parentTask.routine_id) {
+    // Deactivate previous periods to prevent view stagnation
+    await supabase
+      .from('routine_periods')
+      .update({ is_active: false })
+      .eq('routine_id', parentTask.routine_id)
+      .eq('is_active', true);
+
+    const { data: newPeriod, error: periodError } = await supabase
+      .from('routine_periods')
+      .insert({
+        routine_id: parentTask.routine_id,
+        period_start: nextStart.toISOString(),
+        period_end: nextDue.toISOString(),
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (periodError) console.error('Error creating next period:', periodError);
+
+    // We should ideally create checkins here too if we want them to appear immediately
+    // The original logic created checkins based on Unit IDs.
+    const unitIds = [...new Set(childTasks.map(t => t.unit_id).filter(Boolean))];
+    if (newPeriod && unitIds.length > 0) {
+      const checkins = unitIds.map(uid => ({
+        routine_period_id: newPeriod.id,
+        unit_id: uid
+      }));
+      const { error: checkinError } = await supabase.from('routine_checkins').insert(checkins);
+      if (checkinError) console.error('Error creating next checkins:', checkinError);
+    }
   }
 
   // Get original child tasks with full details
@@ -801,6 +877,7 @@ async function createNextRecurringInstance(
     priority: number | null;
     parent_task_id: string | null;
     recurrence_mode: string | null;
+    routine_id: string | null;
   },
   currentTaskId: string
 ): Promise<void> {
@@ -810,12 +887,30 @@ async function createNextRecurringInstance(
 
   // Calculate next start date based on frequency
   const now = new Date();
-  const nextStart = new Date(now);
-  nextStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+  let nextStart = new Date(now);
 
-  // If the calculated time has already passed today, start tomorrow
-  if (nextStart <= now) {
-    nextStart.setDate(nextStart.getDate() + 1);
+  if (existingTask.recurrence_mode === 'schedule') {
+    // For Schedule mode, strictly add frequency to Previous Start Date
+    nextStart = new Date(startDate);
+
+    switch (existingTask.recurrence_frequency) {
+      case 'diaria': nextStart.setDate(nextStart.getDate() + 1); break;
+      case 'semanal': nextStart.setDate(nextStart.getDate() + 7); break;
+      case 'quinzenal': nextStart.setDate(nextStart.getDate() + 15); break;
+      case 'mensal': nextStart.setMonth(nextStart.getMonth() + 1); break;
+    }
+
+    // Maintain time part
+    nextStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+
+  } else {
+    // On Completion Mode (Original Logic)
+    nextStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+
+    // If the calculated time has already passed today, start tomorrow
+    if (nextStart <= now) {
+      nextStart.setDate(nextStart.getDate() + 1);
+    }
   }
 
   const nextDue = new Date(nextStart.getTime() + duration);
@@ -856,10 +951,31 @@ async function createNextRecurringInstance(
       is_recurring: true,
       recurrence_frequency: existingTask.recurrence_frequency as 'diaria' | 'semanal' | 'quinzenal' | 'mensal',
       recurrence_mode: existingTask.recurrence_mode as 'schedule' | 'on_completion',
-      parent_task_id: existingTask.parent_task_id || currentTaskId,
+      // If it's a root task (parent_task_id is null), keep it null.
+      // Do NOT link to the old task, otherwise it becomes a child and disappears from Routine View.
+      parent_task_id: existingTask.parent_task_id,
+      routine_id: existingTask.routine_id,
     })
     .select('id')
     .single();
+
+  // ALSO Create Period for Single Task Recurrence (if routine_id exists)
+  if (existingTask.routine_id) {
+    // Deactivate previous periods
+    await supabase
+      .from('routine_periods')
+      .update({ is_active: false })
+      .eq('routine_id', existingTask.routine_id)
+      .eq('is_active', true);
+
+    await supabase.from('routine_periods').insert({
+      routine_id: existingTask.routine_id,
+      period_start: nextStart.toISOString(),
+      period_end: nextDue.toISOString(),
+      is_active: true
+    });
+    // We don't necessarily creating checkins for single task as checkins are usually for Multi-Unit Routines.
+  }
 
   if (error) {
     console.error('Error creating next recurring instance:', error);
@@ -948,6 +1064,7 @@ export const useDeleteTask = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
       toast.success('Tarefa e tarefas filhas excluídas!');
     },
@@ -1013,6 +1130,7 @@ export const useBulkDeleteTasks = () => {
     },
     onSuccess: (deletedIds) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
       queryClient.invalidateQueries({ queryKey: ['child-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
@@ -1063,6 +1181,7 @@ export const useBulkUpdateStatus = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-stats'] });
       queryClient.invalidateQueries({ queryKey: ['child-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });

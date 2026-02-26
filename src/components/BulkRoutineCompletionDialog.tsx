@@ -13,6 +13,7 @@ import { Loader2, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useBulkUpdateTasks } from '@/hooks/useTasks';
+import { useUpdateTask } from '@/hooks/useTaskMutations';
 
 interface BulkRoutineCompletionDialogProps {
     open: boolean;
@@ -33,6 +34,7 @@ export const BulkRoutineCompletionDialog = ({
     const [parentTasks, setParentTasks] = useState<{ id: string }[]>([]);
 
     const bulkUpdateTasks = useBulkUpdateTasks();
+    const updateTask = useUpdateTask();
 
     // Reset state when dialog opens
     useEffect(() => {
@@ -63,7 +65,6 @@ export const BulkRoutineCompletionDialog = ({
             const parentIds = pTasks.map(t => t.id);
 
             // 2. Count pending child tasks for these parents
-            // We look for tasks where parent_task_id is in parentIds AND status is NOT 'concluida' AND NOT 'nao_aplicavel'
             const { count } = await supabase
                 .from('tasks')
                 .select('*', { count: 'exact', head: true })
@@ -90,11 +91,13 @@ export const BulkRoutineCompletionDialog = ({
 
         setIsLoading(true);
         try {
-            // Just mark parent tasks as completed
-            await bulkUpdateTasks.mutateAsync({
-                taskIds: parentTasks.map(t => t.id),
-                status: 'concluida'
-            });
+            // Update parent tasks individually to trigger side effects (recurrence, etc)
+            await Promise.all(parentTasks.map(task =>
+                updateTask.mutateAsync({
+                    id: task.id,
+                    status: 'concluida'
+                })
+            ));
 
             toast.success(`${selectedRoutineIds.length} rotinas encerradas! Tarefas pendentes mantidas.`);
             onSuccess();
@@ -125,7 +128,7 @@ export const BulkRoutineCompletionDialog = ({
                 .neq('status', 'concluida')
                 .neq('status', 'nao_aplicavel');
 
-            // 2. Mark them as completed
+            // 2. Mark children as completed (Bulk is fine here)
             if (pendingChildren && pendingChildren.length > 0) {
                 await bulkUpdateTasks.mutateAsync({
                     taskIds: pendingChildren.map(t => t.id),
@@ -133,11 +136,13 @@ export const BulkRoutineCompletionDialog = ({
                 });
             }
 
-            // 3. Mark parent tasks as completed
-            await bulkUpdateTasks.mutateAsync({
-                taskIds: parentIds,
-                status: 'concluida'
-            });
+            // 3. Mark parent tasks as completed using useUpdateTask to trigger Recurrence
+            await Promise.all(parentIds.map(id =>
+                updateTask.mutateAsync({
+                    id,
+                    status: 'concluida'
+                })
+            ));
 
             toast.success(`${selectedRoutineIds.length} rotinas encerradas! Todas as tarefas foram concluídas.`);
             onSuccess();
@@ -173,7 +178,7 @@ export const BulkRoutineCompletionDialog = ({
 
                 {!isCalculating && (
                     <AlertDialogFooter className="flex flex-col sm:flex-col gap-2 sm:space-x-0 w-full">
-                        <div className="flex-1" /> {/* Spacer */}
+                        <div className="flex-1" />
                         <AlertDialogCancel className="mt-0 w-full sm:w-auto">Cancelar</AlertDialogCancel>
 
                         {pendingCount > 0 && (

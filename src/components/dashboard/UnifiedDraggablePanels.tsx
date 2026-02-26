@@ -204,9 +204,9 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
       <div
         {...(canDrag ? { ...attributes, ...listeners } : {})}
         className={cn(
-          "absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center bg-gradient-to-r from-muted/80 to-transparent rounded-l-lg transition-opacity touch-none",
+          "absolute left-0 top-0 bottom-0 w-8 z-[60] flex items-center justify-center bg-gradient-to-r from-muted/90 to-transparent rounded-l-lg transition-opacity touch-none",
           canDrag
-            ? "cursor-grab active:cursor-grabbing opacity-60 hover:opacity-100"
+            ? "cursor-grab active:cursor-grabbing opacity-100 ring-1 ring-border/50"
             : "cursor-not-allowed opacity-40"
         )}
         title={canDrag ? "Arraste para reposicionar" : "Somente administradores podem reorganizar"}
@@ -244,7 +244,7 @@ const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }
 
   return (
     <div className="relative opacity-90 shadow-2xl rounded-lg w-[calc(50vw-2rem)] min-w-[300px] max-w-[600px]">
-      <div className="absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center cursor-grabbing bg-gradient-to-r from-muted/80 to-transparent rounded-l-lg">
+      <div className="absolute left-0 top-0 bottom-0 w-8 z-[60] flex items-center justify-center cursor-grabbing bg-gradient-to-r from-muted/90 to-transparent rounded-l-lg ring-1 ring-border/50">
         <GripVertical className="w-4 h-4 text-muted-foreground" />
       </div>
       <div className="pl-6">

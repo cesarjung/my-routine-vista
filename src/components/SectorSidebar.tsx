@@ -12,15 +12,29 @@ import {
   Building2,
   Settings,
   LogOut,
-  Users
+  Users,
+  StickyNote,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSectors, useSectorMutations, useSectionMutations, Sector, SectorSection } from '@/hooks/useSectors';
-import { useIsAdmin } from '@/hooks/useUserRole';
+import { useSectorUserMutations } from '@/hooks/useSectorUsers';
+import { useProfiles } from '@/hooks/useProfiles';
+import { useIsAdmin, useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import { NavigationContext, ViewMode } from '@/types/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +42,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
+import { SectorSettingsDialog } from '@/components/SectorSettingsDialog';
 import sirtecLogo from '@/assets/sirtec-logo-transparent.png';
 
 interface SectorSidebarProps {
@@ -48,21 +66,33 @@ const FREQUENCIES = [
 export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange }: SectorSidebarProps) => {
   const { user, signOut } = useAuth();
   const { data: sectors = [], isLoading } = useSectors();
-  const { createSector } = useSectorMutations();
+  const { createSector, deleteSector } = useSectorMutations();
   const { createSection, deleteSection } = useSectionMutations();
+  const { addUserToSector } = useSectorUserMutations();
+  const { data: profiles = [] } = useProfiles();
   const { isAdmin } = useIsAdmin();
+  const { isGestorOrAdmin } = useIsGestorOrAdmin();
 
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedRoutineFreqs, setExpandedRoutineFreqs] = useState<Set<string>>(new Set());
   const [isRotinasExpanded, setIsRotinasExpanded] = useState(true);
   const [newSectorName, setNewSectorName] = useState('');
+  const [isNewSectorPrivate, setIsNewSectorPrivate] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Section Creation State
   const [activeSectorIdForSection, setActiveSectorIdForSection] = useState<string | null>(null);
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
+
+  // Sector Settings State
+  const [activeConfigSectorId, setActiveConfigSectorId] = useState<string | null>(null);
+  const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
+
+  // Sector Deletion State
+  const [sectorToDelete, setSectorToDelete] = useState<Sector | null>(null);
 
   const toggleSector = (sectorId: string) => {
     const newExpanded = new Set(expandedSectors);
@@ -96,8 +126,30 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
 
   const handleCreateSector = async () => {
     if (!newSectorName.trim()) return;
-    await createSector.mutateAsync({ name: newSectorName.trim() });
+
+    // Create the sector
+    const newSector = await createSector.mutateAsync({ name: newSectorName.trim(), is_private: isNewSectorPrivate });
+
+    // If private and users are selected, add them
+    if (newSector && isNewSectorPrivate && selectedUsers.length > 0) {
+      // Create an array of promises for adding users
+      const addPromises = selectedUsers.map(userId =>
+        addUserToSector.mutateAsync({
+          sectorId: newSector.id,
+          userId: userId
+        })
+      );
+
+      try {
+        await Promise.all(addPromises);
+      } catch (err) {
+        console.error("Erro ao adicionar alguns usuários ao novo espaço:", err);
+      }
+    }
+
     setNewSectorName('');
+    setIsNewSectorPrivate(false);
+    setSelectedUsers([]);
     setIsDialogOpen(false);
   };
 
@@ -167,6 +219,34 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
             {!collapsed && <span className="truncate text-sm">{sector.name}</span>}
           </button>
 
+          {/* Settings Button */}
+          {(isGestorOrAdmin || sector.created_by === user?.id) && !collapsed && (
+            <div className="flex opacity-0 group-hover/sector:opacity-100 transition-opacity ml-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveConfigSectorId(sector.id);
+                  setIsConfigDialogOpen(true);
+                }}
+                className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-white"
+                title="Configurações do Espaço"
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSectorToDelete(sector);
+                }}
+                className="p-1 hover:bg-destructive/20 rounded text-muted-foreground hover:text-destructive"
+                title="Excluir Espaço"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Add Section Button */}
           {isAdmin && !collapsed && (
             <button
@@ -184,6 +264,22 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
 
         {isExpanded && !collapsed && (
           <div className="ml-4 space-y-0.5 border-l border-sidebar-border/50 pl-1 mt-0.5">
+            {/* Atalho Fixo Anotações do Espaço */}
+            <div className="relative group/section">
+              <button
+                onClick={() => onNavigate({ type: 'sector', sectorId: sector.id, folder: 'notes' })}
+                className={cn(
+                  'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors',
+                  context.type === 'sector' && context.sectorId === sector.id && context.folder === 'notes'
+                    ? 'bg-sidebar-accent text-white font-medium'
+                    : 'text-gray-300 hover:bg-sidebar-accent/50 hover:text-white'
+                )}
+              >
+                <StickyNote className="w-3.5 h-3.5" />
+                <span>Anotações e Quadros</span>
+              </button>
+            </div>
+
             {sections.map(section => {
               // Special handling for Routines
               if (section.type === 'routines') {
@@ -381,46 +477,106 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
             {!collapsed && <span className="text-sm">Minhas Tarefas</span>}
           </button>
 
+          {/* Anotações e Quadros */}
+          <button
+            onClick={() => onNavigate({ type: 'notes' })}
+            className={cn(
+              'w-full flex items-center gap-3 px-2 py-1.5 rounded-md transition-all duration-200',
+              context.type === 'notes'
+                ? 'bg-sidebar-accent text-white font-medium'
+                : 'text-gray-300 hover:text-white hover:bg-sidebar-accent/50'
+            )}
+            title={collapsed ? "Anotações" : undefined}
+          >
+            <StickyNote className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && <span className="text-sm">Anotações</span>}
+          </button>
+
           {/* Separator for Sectors */}
           {!collapsed && (
             <div className="flex items-center justify-between px-2 pt-3 pb-1">
               <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest pl-1">
-                SETORES
+                ESPAÇOS
               </span>
-              {isAdmin && (
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <button className="p-0.5 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors">
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Criar novo setor</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 pt-4">
-                      <Input
-                        placeholder="Nome do setor"
-                        value={newSectorName}
-                        onChange={(e) => setNewSectorName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleCreateSector()}
-                      />
-                      <Button onClick={handleCreateSector} disabled={!newSectorName.trim()}>
-                        Criar Setor
-                      </Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <button className="p-0.5 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors" title="Criar novo espaço">
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Criar novo espaço</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <Input
+                      placeholder="Nome do espaço"
+                      value={newSectorName}
+                      onChange={(e) => setNewSectorName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCreateSector()}
+                    />
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="private-sector"
+                          checked={isNewSectorPrivate}
+                          onCheckedChange={setIsNewSectorPrivate}
+                        />
+                        <Label htmlFor="private-sector" className="text-sm font-normal">
+                          Espaço Privado / Personalizado
+                        </Label>
+                      </div>
+
+                      {/* Members Select (Only show if private) */}
+                      {isNewSectorPrivate && (
+                        <div className="space-y-2 pt-2 border-t border-border mt-2">
+                          <Label className="text-xs text-muted-foreground">Compartilhar com (opcional)</Label>
+                          <MultiAssigneeSelect
+                            profiles={profiles}
+                            selectedIds={selectedUsers}
+                            onChange={setSelectedUsers}
+                            placeholder="Selecione membros para convidar"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Os usuários selecionados poderão ver este espaço. (Admins/master sempre podem ver).
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  </DialogContent>
-                </Dialog>
-              )}
+                    <Button onClick={handleCreateSector} disabled={!newSectorName.trim()}>
+                      Criar Espaço
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 
-          {/* Sectors list */}
+          {/* Espaços list */}
           {isLoading ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">Carregando...</div>
           ) : (
-            <div className="space-y-0.5">
-              {sectors.map(renderSectorItem)}
+            <div className="space-y-4">
+              {/* Públicos */}
+              <div className="space-y-0.5">
+                {sectors.filter(s => !s.is_private).map(renderSectorItem)}
+              </div>
+
+              {/* Privados do Usuário */}
+              {sectors.filter(s => s.is_private).length > 0 && (
+                <div className="pt-2 border-t border-sidebar-border/50">
+                  {!collapsed && (
+                    <div className="px-2 mb-1">
+                      <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest pl-1">
+                        Meus Espaços Privados
+                      </span>
+                    </div>
+                  )}
+                  <div className="space-y-0.5">
+                    {sectors.filter(s => s.is_private).map(renderSectorItem)}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -477,6 +633,42 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog for Sector Settings */}
+      <SectorSettingsDialog
+        sectorId={activeConfigSectorId}
+        open={isConfigDialogOpen}
+        onOpenChange={setIsConfigDialogOpen}
+        isAdmin={isAdmin}
+        isGestorOrAdmin={isGestorOrAdmin}
+        currentUserId={user?.id}
+      />
+
+      {/* Dialog for Sector Deletion */}
+      <AlertDialog open={!!sectorToDelete} onOpenChange={(open) => !open && setSectorToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir espaço?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Excluirá "{sectorToDelete?.name}" e todas as tarefas e rotinas associadas a ele.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 text-white"
+              onClick={async () => {
+                if (sectorToDelete) {
+                  await deleteSector.mutateAsync(sectorToDelete.id);
+                  setSectorToDelete(null);
+                }
+              }}
+            >
+              Sim, Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 };

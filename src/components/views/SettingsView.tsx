@@ -13,7 +13,8 @@ import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key, Moon } from 'lucide-react';
+import { useTheme } from '@/components/ThemeProvider';
 import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
 import { SectorUsersManagement } from '@/components/SectorUsersManagement';
@@ -34,6 +35,7 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
   const { canManageUsers, isLoading: isLoadingRole } = useCanManageUsers();
   const { isAdmin } = useIsAdmin();
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
   const { data: units } = useUnits();
   const { data: profiles, refetch: refetchProfiles } = useProfiles();
 
@@ -191,27 +193,15 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
 
     setIsUpdating(true);
     try {
-      // Update email if changed (requires edge function with admin API)
+      // Update email if changed (via RPC Admin)
       if (editEmail && editEmail !== editingUser.email) {
-        const { data: session } = await supabase.auth.getSession();
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-user-email`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.session?.access_token}`,
-            },
-            body: JSON.stringify({
-              userId: editingUser.id,
-              newEmail: editEmail.trim(),
-            }),
-          }
-        );
+        const { error: emailError } = await supabase.rpc('update_user_email_rpc' as any, {
+          target_user_id: editingUser.id,
+          new_email: editEmail.trim()
+        });
 
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || 'Erro ao atualizar email');
+        if (emailError) {
+          throw new Error(emailError.message || 'Erro ao atualizar email');
         }
       }
 
@@ -496,6 +486,34 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
               </Button>
             </CardContent>
           </Card>
+
+          {/* Theme / Appearance Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Moon className="w-5 h-5" />
+                Aparência
+              </CardTitle>
+              <CardDescription>
+                Personalize o tema visual do sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="theme-select-user">Tema da Interface</Label>
+                <Select value={theme} onValueChange={(v: "light" | "dark" | "system") => setTheme(v)}>
+                  <SelectTrigger id="theme-select-user">
+                    <SelectValue placeholder="Selecione um tema" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Claro</SelectItem>
+                    <SelectItem value="dark">Escuro</SelectItem>
+                    <SelectItem value="system">Padrão do Sistema</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Google Calendar Integration */}
@@ -534,7 +552,7 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
           {isAdmin && (
             <TabsTrigger value="sectors" className="flex items-center gap-2">
               <FolderKey className="w-4 h-4" />
-              Setores
+              Espaços
             </TabsTrigger>
           )}
           {isAdmin && (
@@ -631,6 +649,34 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
                 >
                   {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Theme / Appearance Card (Admin) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Moon className="w-5 h-5" />
+                  Aparência
+                </CardTitle>
+                <CardDescription>
+                  Personalize o tema visual do sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="theme-select-admin">Tema da Interface</Label>
+                  <Select value={theme} onValueChange={(v: "light" | "dark" | "system") => setTheme(v)}>
+                    <SelectTrigger id="theme-select-admin">
+                      <SelectValue placeholder="Selecione um tema" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Claro</SelectItem>
+                      <SelectItem value="dark">Escuro</SelectItem>
+                      <SelectItem value="system">Padrão do Sistema</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardContent>
             </Card>
           </div>

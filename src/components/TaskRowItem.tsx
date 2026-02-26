@@ -48,6 +48,7 @@ interface TaskRowItemProps {
     onClick?: () => void;
     hideSelection?: boolean;
     comment?: string | null;
+    disableStrikethrough?: boolean;
 }
 
 export const TaskRowItem = ({
@@ -58,7 +59,8 @@ export const TaskRowItem = ({
     onStatusChange,
     onClick,
     hideSelection = false,
-    comment
+    comment,
+    disableStrikethrough = false
 }: TaskRowItemProps) => {
 
     const statusInfo = statusConfig[task.status as Enums<'task_status'>] || statusConfig.pendente;
@@ -100,7 +102,7 @@ export const TaskRowItem = ({
 
             <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2"> {/* items-start -> items-center for compactness */}
-                    <h3 className={cn('font-medium text-sm text-foreground truncate', task.status === 'concluida' && 'line-through text-muted-foreground')}> {/* Added text-sm, truncate */}
+                    <h3 className={cn('font-medium text-sm text-foreground truncate', task.status === 'concluida' && !disableStrikethrough && 'line-through text-muted-foreground')}> {/* Added text-sm, truncate */}
                         {task.title}
                     </h3>
                     <div className="flex items-center gap-2 shrink-0">

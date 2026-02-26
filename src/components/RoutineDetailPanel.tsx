@@ -91,9 +91,17 @@ import {
 } from 'date-fns';
 import { toast } from 'sonner';
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ChecklistTab } from './tabs/ChecklistTab';
+import { AttachmentsTab } from './tabs/AttachmentsTab';
+import { HistoryTab } from './tabs/HistoryTab';
+import { useRoutineChecklist, useRoutineAttachments, useRoutineHistory } from '@/hooks/useRoutineEnhancements'; // If needed for counts later, but tabs handle it.
+
 interface RoutineDetailPanelProps {
   routine: Tables<'routines'>;
   onClose: () => void;
+  onSelectTask?: (task: any) => void;
+  contextDate?: Date | string | null;
 }
 
 type TaskFrequency = Enums<'task_frequency'>;
@@ -158,6 +166,8 @@ const getAvatarColor = (id: string): string => {
 export const RoutineDetailPanel = ({
   routine,
   onClose,
+  onSelectTask,
+  contextDate,
 }: RoutineDetailPanelProps) => {
   const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -166,6 +176,7 @@ export const RoutineDetailPanel = ({
   const [taskStatusDialogOpen, setTaskStatusDialogOpen] = useState(false);
   const [selectedTaskForStatus, setSelectedTaskForStatus] = useState<{ id: string, status: 'concluida' | 'nao_aplicavel' } | null>(null);
   const [taskComment, setTaskComment] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Editable fields
   const [title, setTitle] = useState(routine.title);
@@ -174,7 +185,11 @@ export const RoutineDetailPanel = ({
 
   const { user } = useAuth();
   const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id);
-  const { data: routineTasksData, isLoading: isLoadingTasks } = useRoutineTasks(routine.id);
+
+  // Converta o contextDate para ISO (apenas a porção de data YYYY-MM-DD se necessário) caso tenha sido passado
+  const contextDateString = contextDate ? (typeof contextDate === 'string' ? contextDate : format(contextDate, 'yyyy-MM-dd')) : undefined;
+
+  const { data: routineTasksData, isLoading: isLoadingTasks } = useRoutineTasks(routine.id, contextDateString);
   const { data: unitManagers } = useUnitManagers();
   const { data: allProfiles } = useProfiles();
   const createPeriod = useCreatePeriodWithCheckins();
@@ -320,9 +335,14 @@ export const RoutineDetailPanel = ({
     return unitManagers?.filter((m) => m.unit_id === unitId) || [];
   };
 
-  const periodLabel = periodData?.period
-    ? `${format(new Date(periodData.period.period_start), "dd/MM", { locale: ptBR })} → ${format(new Date(periodData.period.period_end), "dd/MM", { locale: ptBR })}`
-    : null;
+  let periodLabel: string | null = null;
+  if (routineTasksData?.parentTask?.start_date && routineTasksData?.parentTask?.due_date) {
+    periodLabel = `${format(new Date(routineTasksData.parentTask.start_date), "dd/MM", { locale: ptBR })} → ${format(new Date(routineTasksData.parentTask.due_date), "dd/MM", { locale: ptBR })}`;
+  } else if (routineTasksData?.parentTask?.due_date) {
+    periodLabel = format(new Date(routineTasksData.parentTask.due_date), "dd/MM", { locale: ptBR });
+  } else if (periodData?.period) {
+    periodLabel = `${format(new Date(periodData.period.period_start), "dd/MM", { locale: ptBR })} → ${format(new Date(periodData.period.period_end), "dd/MM", { locale: ptBR })}`;
+  }
 
   // Determine Routine Status
   const isRoutineCompleted = routineTasksData?.parentTask?.status === 'concluida' || (total > 0 && completed === total);
@@ -543,6 +563,8 @@ export const RoutineDetailPanel = ({
         {/* Quick Edit Removed */}
       </div>
 
+
+
       {/* Description */}
       <div className="p-6 border-b border-border">
         {isEditing ? (
@@ -560,266 +582,309 @@ export const RoutineDetailPanel = ({
         )}
       </div>
 
-      {/* Subtasks Section */}
-      <div className="flex-1 overflow-auto">
-        <button
-          onClick={() => setIsSubtasksExpanded(!isSubtasksExpanded)}
-          className="w-full p-4 flex items-center gap-2 hover:bg-secondary/30 transition-colors"
-        >
-          <ChevronDown
-            className={cn(
-              'w-4 h-4 text-muted-foreground transition-transform',
-              !isSubtasksExpanded && '-rotate-90'
-            )}
-          />
-          <span className="text-sm font-medium text-foreground">Tarefas por Responsável</span>
-          <span className="text-xs text-muted-foreground">
-            {completed} / {total}
-          </span>
-          <div className="ml-auto">
-            <ProgressBar completed={completed} total={total} className="w-24 h-1.5" />
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-6 pt-4 border-b border-border">
+            <TabsList className="w-full justify-start h-9 bg-transparent p-0">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                Geral
+              </TabsTrigger>
+              <TabsTrigger value="checklist" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                Checklist
+              </TabsTrigger>
+              <TabsTrigger value="attachments" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                Arquivos
+              </TabsTrigger>
+              <TabsTrigger value="history" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                Histórico
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </button>
 
-        {isSubtasksExpanded && (
-          <div className="border-t border-border">
-            {isLoading || isLoadingTasks ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : !periodData?.period && childTasks.length === 0 ? (
-              <div className="text-center py-12 px-6">
-                <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                <p className="text-muted-foreground mb-4">
-                  Nenhum período ativo. Inicie um novo período para criar tarefas.
-                </p>
-                <Button
-                  onClick={handleStartPeriod}
-                  disabled={createPeriod.isPending}
-                  className="gap-2"
+          <div className="flex-1 overflow-hidden p-0 flex flex-col">
+            <TabsContent value="overview" className="mt-0 h-full flex flex-col">
+              {/* Subtasks Section - Moved here */}
+              {/* Debug Log */}
+              {/* {console.log('Rendering Overview. childTasks:', childTasks.length, 'Expanded:', isSubtasksExpanded)} */}
+              <div className="flex-1 overflow-auto">
+                <button
+                  onClick={() => setIsSubtasksExpanded(!isSubtasksExpanded)}
+                  className="w-full p-4 flex items-center gap-2 hover:bg-secondary/30 transition-colors"
                 >
-                  {createPeriod.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                  Iniciar Período
-                </Button>
-              </div>
-            ) : childTasks.length > 0 ? (
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 text-muted-foreground transition-transform',
+                      !isSubtasksExpanded && '-rotate-90'
+                    )}
+                  />
+                  <span className="text-sm font-medium text-foreground">Tarefas por Responsável</span>
+                  <span className="text-xs text-muted-foreground">
+                    {completed} / {total}
+                  </span>
+                  <div className="ml-auto">
+                    <ProgressBar completed={completed} total={total} className="w-24 h-1.5" />
+                  </div>
+                </button>
 
-              <div className="divide-y divide-border">
-                {/* Table Header */}
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
-                  <div className="col-span-5">Nome</div>
-                  <div className="col-span-4">Responsável</div>
-                  <div className="col-span-3">Vencimento</div>
-                </div>
-
-                {/* Task Rows */}
-                {childTasks.map((task) => {
-                  const isTaskCompleted = task.status === 'concluida';
-                  const isTaskNA = task.status === 'nao_aplicavel';
-                  const assignee = (task as any).assignee;
-                  const userCanEdit = canEditTask(task);
-
-                  // Debuging
-                  // console.log('Task:', task.id, assignee?.full_name, assignee?.id); 
-                  // console.log('Checkins:', checkins.map(c => ({ id: c.id, user: c.assignee_user_id, notes: c.notes })));
-
-                  // Find associated checkin to get notes
-
-                  // Find associated checkin to get notes - Robust lookup
-                  // Find associated checkin to get notes - Robust lookup
-                  const assignees = (task as any).assignees as any[];
-                  const taskCheckin = checkins.find(c =>
-                    // Priority 1: Exact match on assignee_user_id
-                    (assignees && assignees.some(a => a.id === c.assignee_user_id)) ||
-                    (assignee?.id && c.assignee_user_id === assignee.id) ||
-                    // Priority 2: Match on unit_id if checkin has no assignee (legacy/unclaimed)
-                    (c.unit_id === task.unit_id && !c.assignee_user_id) ||
-                    // Priority 3: Match on unit_id and the task assignee is the one who completed it (fallback)
-                    (c.unit_id === task.unit_id && c.completed_by === assignees?.[0]?.id)
-                  );
-                  const taskComment = taskCheckin?.notes;
-
-                  return (
-                    <div
-                      key={task.id}
-                      className={cn(
-                        'grid grid-cols-12 gap-2 px-4 py-1.5 items-center transition-colors hover:bg-secondary/20 group',
-                        isTaskCompleted && 'bg-success/5',
-                        isTaskNA && 'bg-muted/20'
-                      )}
-                    >
-                      {/* Name with checkboxes */}
-                      <div className="col-span-5 flex items-center gap-2">
-                        {userCanEdit && (
-                          <>
-                            {/* Green checkbox for completing */}
-                            <button
-                              onClick={() => {
-                                if (isTaskCompleted) {
-                                  updateTask.mutate({ id: task.id, status: 'pendente' });
-                                } else {
-                                  setSelectedTaskForStatus({ id: task.id, status: 'concluida' });
-                                  setTaskComment('');
-                                  setTaskStatusDialogOpen(true);
-                                }
-                              }}
-                              disabled={updateTask.isPending}
-                              className={cn(
-                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
-                                isTaskCompleted
-                                  ? 'bg-success border-success text-white'
-                                  : 'border-success/50 hover:border-success hover:bg-success/10'
-                              )}
-                              title="Concluída"
-                            >
-                              {isTaskCompleted && <Check className="h-3 w-3" />}
-                            </button>
-
-                            {/* Red checkbox for N/A */}
-                            <button
-                              onClick={() => {
-                                if (isTaskNA) {
-                                  updateTask.mutate({ id: task.id, status: 'pendente' });
-                                } else {
-                                  setSelectedTaskForStatus({ id: task.id, status: 'nao_aplicavel' });
-                                  setTaskComment('');
-                                  setTaskStatusDialogOpen(true);
-                                }
-                              }}
-                              disabled={updateTask.isPending}
-                              className={cn(
-                                'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
-                                isTaskNA
-                                  ? 'bg-destructive border-destructive text-white'
-                                  : 'border-destructive/50 hover:border-destructive hover:bg-destructive/10'
-                              )}
-                              title="Não se Aplica"
-                            >
-                              {isTaskNA && <X className="h-3 w-3" />}
-                            </button>
-                          </>
-                        )}
-
-                        <div className="flex flex-col overflow-hidden">
-                          <span
-                            className={cn(
-                              'font-medium text-sm truncate',
-                              (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
-                            )}
-                          >
-                            {(task as any).unit?.name || 'Sem unidade'}
-                          </span>
-                          {taskComment && (
-                            <div className="flex items-start gap-1 mt-1">
-                              <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
-                              <span className="text-xs text-blue-600 font-medium break-words leading-tight">
-                                {taskComment}
-                              </span>
-                            </div>
+                {isSubtasksExpanded && (
+                  <div className="border-t border-border">
+                    {isLoading || isLoadingTasks ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    ) : !periodData?.period && childTasks.length === 0 ? (
+                      <div className="text-center py-12 px-6">
+                        <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                        <p className="text-muted-foreground mb-4">
+                          Nenhum período ativo. Inicie um novo período para criar tarefas.
+                        </p>
+                        <Button
+                          onClick={handleStartPeriod}
+                          disabled={createPeriod.isPending}
+                          className="gap-2"
+                        >
+                          {createPeriod.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Play className="h-4 w-4" />
                           )}
+                          Iniciar Período
+                        </Button>
+                      </div>
+                    ) : childTasks.length > 0 ? (
+
+                      <div className="divide-y divide-border">
+                        {/* Table Header */}
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
+                          <div className="col-span-12 md:col-span-5">Nome</div>
+                          <div className="hidden md:block col-span-4">Responsável</div>
+                          <div className="hidden md:block col-span-3">Vencimento</div>
                         </div>
-                      </div>
 
-                      {/* Responsible */}
-                      <div className="col-span-4 flex items-center gap-1">
-                        {(task as any).assignees && (task as any).assignees.length > 0 ? (
-                          <div className="flex -space-x-2 overflow-hidden">
-                            {(task as any).assignees.slice(0, 3).map((assignee: any) => (
-                              <Avatar key={assignee.id} className={cn('h-6 w-6 border-2 border-background', getAvatarColor(assignee.id))} title={assignee.full_name}>
-                                <AvatarFallback className="text-[10px] text-white">
-                                  {getInitials(assignee.full_name)}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {(task as any).assignees.length > 3 && (
-                              <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center border-2 border-background text-[10px] font-medium" title={`+${(task as any).assignees.length - 3} outros`}>
-                                +{(task as any).assignees.length - 3}
+                        {/* Task Rows */}
+                        {childTasks.map((task) => {
+                          const isTaskCompleted = task.status === 'concluida';
+                          const isTaskNA = task.status === 'nao_aplicavel';
+                          const assignee = (task as any).assignee;
+                          const userCanEdit = canEditTask(task);
+
+                          // Find associated checkin to get notes - Robust lookup
+                          const assignees = (task as any).assignees as any[];
+                          const taskCheckin = checkins.find(c =>
+                            // Priority 1: Exact match on assignee_user_id
+                            (assignees && assignees.some(a => a.id === c.assignee_user_id)) ||
+                            (assignee?.id && c.assignee_user_id === assignee.id) ||
+                            // Priority 2: Match on unit_id if checkin has no assignee (legacy/unclaimed)
+                            (c.unit_id === task.unit_id && !c.assignee_user_id) ||
+                            // Priority 3: Match on unit_id and the task assignee is the one who completed it (fallback)
+                            (c.unit_id === task.unit_id && c.completed_by === assignees?.[0]?.id)
+                          );
+                          const taskComment = taskCheckin?.notes;
+
+                          return (
+                            <div
+                              key={task.id}
+                              onClick={() => onSelectTask && onSelectTask(task)}
+                              className={cn(
+                                'grid grid-cols-12 gap-2 px-4 py-1.5 items-center transition-colors hover:bg-secondary/20 group',
+                                onSelectTask && 'cursor-pointer',
+                                isTaskCompleted && 'bg-success/5',
+                                isTaskNA && 'bg-muted/20'
+                              )}
+                            >
+                              {/* Name with checkboxes */}
+                              <div className="col-span-12 md:col-span-5 flex items-center gap-2">
+                                {userCanEdit && (
+                                  <>
+                                    {/* Green checkbox for completing */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isTaskCompleted) {
+                                          updateTask.mutate({ id: task.id, status: 'pendente' });
+                                        } else {
+                                          setSelectedTaskForStatus({ id: task.id, status: 'concluida' });
+                                          setTaskComment('');
+                                          setTaskStatusDialogOpen(true);
+                                        }
+                                      }}
+                                      disabled={updateTask.isPending}
+                                      className={cn(
+                                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                                        isTaskCompleted
+                                          ? 'bg-success border-success text-white'
+                                          : 'border-success/50 hover:border-success hover:bg-success/10'
+                                      )}
+                                      title="Concluída"
+                                    >
+                                      {isTaskCompleted && <Check className="h-3 w-3" />}
+                                    </button>
+
+                                    {/* Red checkbox for N/A */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isTaskNA) {
+                                          updateTask.mutate({ id: task.id, status: 'pendente' });
+                                        } else {
+                                          setSelectedTaskForStatus({ id: task.id, status: 'nao_aplicavel' });
+                                          setTaskComment('');
+                                          setTaskStatusDialogOpen(true);
+                                        }
+                                      }}
+                                      disabled={updateTask.isPending}
+                                      className={cn(
+                                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                                        isTaskNA
+                                          ? 'bg-destructive border-destructive text-white'
+                                          : 'border-destructive/50 hover:border-destructive hover:bg-destructive/10'
+                                      )}
+                                      title="Não se Aplica"
+                                    >
+                                      {isTaskNA && <X className="h-3 w-3" />}
+                                    </button>
+                                  </>
+                                )}
+
+                                <div className="flex flex-col overflow-hidden">
+                                  <span
+                                    className={cn(
+                                      'font-medium text-sm truncate',
+                                      (isTaskCompleted || isTaskNA) && 'text-muted-foreground line-through'
+                                    )}
+                                  >
+                                    {(task as any).unit?.name || 'Sem unidade'}
+                                  </span>
+                                  {taskComment && (
+                                    <div className="flex items-start gap-1 mt-1">
+                                      <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                                      <span className="text-xs text-blue-600 font-medium break-words leading-tight">
+                                        {taskComment}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        ) : assignee ? (
-                          <div className="flex items-center gap-1">
-                            <Avatar className={cn('h-6 w-6', getAvatarColor(assignee.id))}>
-                              <AvatarFallback className="text-[10px] text-white">
-                                {getInitials(assignee.full_name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm text-muted-foreground truncate">
-                              {assignee.full_name || assignee.email}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground truncate">—</span>
-                        )}
-                        {/* Show name if only one assignee in list mode to keep consistency if needed, but avatar group is better for multi */}
-                        {(task as any).assignees && (task as any).assignees.length === 1 && (
-                          <span className="text-sm text-muted-foreground truncate ml-1">
-                            {(task as any).assignees[0].full_name}
-                          </span>
-                        )}
+
+                              {/* Responsible */}
+                              <div className="hidden md:flex col-span-4 items-center gap-1">
+                                {(task as any).assignees && (task as any).assignees.length > 0 ? (
+                                  <div className="flex -space-x-2 overflow-hidden">
+                                    {(task as any).assignees.slice(0, 3).map((assignee: any) => (
+                                      <Avatar key={assignee.id} className={cn('h-6 w-6 border-2 border-background', getAvatarColor(assignee.id))} title={assignee.full_name}>
+                                        <AvatarFallback className="text-[10px] text-white">
+                                          {getInitials(assignee.full_name)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                    ))}
+                                    {(task as any).assignees.length > 3 && (
+                                      <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center border-2 border-background text-[10px] font-medium" title={`+${(task as any).assignees.length - 3} outros`}>
+                                        +{(task as any).assignees.length - 3}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : assignee ? (
+                                  <div className="flex items-center gap-1">
+                                    <Avatar className={cn('h-6 w-6', getAvatarColor(assignee.id))}>
+                                      <AvatarFallback className="text-[10px] text-white">
+                                        {getInitials(assignee.full_name)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-sm text-muted-foreground truncate">
+                                      {assignee.full_name || assignee.email}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground truncate">—</span>
+                                )}
+                                {/* Show name if only one assignee in list mode to keep consistency if needed, but avatar group is better for multi */}
+                                {(task as any).assignees && (task as any).assignees.length === 1 && (
+                                  <span className="text-sm text-muted-foreground truncate ml-1">
+                                    {(task as any).assignees[0].full_name}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Due Date */}
+                              <div className="hidden md:flex col-span-3 items-center">
+                                {task.due_date ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    {format(new Date(task.due_date), 'dd/MM', { locale: ptBR })}
+                                  </span>
+                                ) : periodData?.period?.period_end ? (
+                                  <span className="text-xs text-muted-foreground" title="Fim do ciclo">
+                                    {format(new Date(periodData.period.period_end), 'dd/MM', { locale: ptBR })}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
+                    ) : checkins.length > 0 ? (
+                      <div className="divide-y divide-border">
+                        {/* Table Header for legacy checkins */}
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
+                          <div className="col-span-5">Nome</div>
+                          <div className="col-span-3">Responsável</div>
+                          <div className="col-span-2">Ações</div>
+                          <div className="col-span-2">Vencimento</div>
+                        </div>
 
-                      {/* Due Date */}
-                      <div className="col-span-3 flex items-center">
-                        {task.due_date ? (
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(task.due_date), 'dd/MM', { locale: ptBR })}
-                          </span>
-                        ) : periodData?.period?.period_end ? (
-                          <span className="text-xs text-muted-foreground" title="Fim do ciclo">
-                            {format(new Date(periodData.period.period_end), 'dd/MM', { locale: ptBR })}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        {/* Checkin Rows */}
+                        {checkins.map((checkin) => {
+                          const isCompleted = checkin.status === 'completed';
+                          const managers = getManagersForUnit(checkin.unit_id);
+
+                          return (
+                            <CheckinRow
+                              key={checkin.id}
+                              checkin={checkin}
+                              isCompleted={isCompleted}
+                              managers={managers}
+                              periodEnd={periodData?.period?.period_end}
+                              onToggle={(status) => { handleToggleCheckin(checkin.id, status) }}
+                              onMarkNotCompleted={() => { handleMarkNotCompleted(checkin.id) }}
+                              isToggling={completeCheckin.isPending || undoCheckin.isPending || markNotCompleted.isPending}
+                              isGestorOrAdmin={isGestorOrAdmin}
+                              allProfiles={allProfiles}
+                              getAvatarColor={getAvatarColor}
+                              getInitials={getInitials}
+                            />
+                          );
+                        })}
                       </div>
-                    </div>
-                  );
-                })}
+                    ) : (
+                      <div className="text-center py-12 px-6">
+                        <p className="text-muted-foreground">Esta rotina não possui unidades vinculadas.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            ) : checkins.length > 0 ? (
-              <div className="divide-y divide-border">
-                {/* Table Header for legacy checkins */}
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
-                  <div className="col-span-5">Nome</div>
-                  <div className="col-span-3">Responsável</div>
-                  <div className="col-span-2">Ações</div>
-                  <div className="col-span-2">Vencimento</div>
-                </div>
+            </TabsContent>
 
-                {/* Checkin Rows */}
-                {checkins.map((checkin) => {
-                  const isCompleted = checkin.status === 'completed';
-                  const managers = getManagersForUnit(checkin.unit_id);
-
-                  return (
-                    <CheckinRow
-                      key={checkin.id}
-                      checkin={checkin}
-                      isCompleted={isCompleted}
-                      managers={managers}
-                      periodEnd={periodData?.period?.period_end}
-                      onToggle={() => handleToggleCheckin(checkin.id, checkin.status || 'pending')}
-                      onMarkNotCompleted={() => handleMarkNotCompleted(checkin.id)}
-                      isToggling={completeCheckin.isPending || undoCheckin.isPending || markNotCompleted.isPending}
-                      isGestorOrAdmin={isGestorOrAdmin}
-                      allProfiles={allProfiles}
-                    />
-                  );
-                })}
+            <TabsContent value="checklist" className="mt-0 h-full flex flex-col">
+              <div className="flex-1 overflow-auto p-6">
+                {activeTab === 'checklist' && <ChecklistTab routineId={routine.id} />}
               </div>
+            </TabsContent>
 
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                Nenhum responsável atribuído à rotina
+            <TabsContent value="attachments" className="mt-0 h-full flex flex-col">
+              <div className="flex-1 overflow-auto p-6">
+                {activeTab === 'attachments' && <AttachmentsTab routineId={routine.id} />}
               </div>
-            )}
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-0 h-full flex flex-col">
+              <div className="flex-1 overflow-auto p-6">
+                {activeTab === 'history' && <HistoryTab routineId={routine.id} />}
+              </div>
+            </TabsContent>
           </div>
-        )}
+        </Tabs>
       </div>
 
       {/* Task Status Dialog with Comment */}

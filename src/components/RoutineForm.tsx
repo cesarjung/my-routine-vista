@@ -78,6 +78,7 @@ const formSchema = z.object({
   repeatForever: z.boolean().optional(),
   recurrenceEndDate: z.date().optional(),
   skipWeekendsHolidays: z.boolean().optional(),
+  monthlyAnchor: z.enum(['date', 'weekday'] as const).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -116,6 +117,7 @@ export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
       repeatForever: true,
       recurrenceEndDate: undefined,
       skipWeekendsHolidays: false,
+      monthlyAnchor: 'date',
     },
   });
 
@@ -224,6 +226,7 @@ export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
       parentAssignees: effectiveParentAssignees as string[],
       sectorId: sectorId,
       skipWeekendsHolidays: data.skipWeekendsHolidays || false,
+      monthlyAnchor: data.monthlyAnchor,
       startDate: combineDateAndTime(data.startDate, data.startTime),
       dueDate: combineDateAndTime(data.dueDate, data.dueTime),
     });
@@ -524,6 +527,35 @@ export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
                     </FormItem>
                   )}
                 />
+
+                {form.watch('recurrenceFrequency') === 'mensal' && (
+                  <FormField
+                    control={form.control}
+                    name="monthlyAnchor"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Repetição Mensal</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || 'date'}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o tipo de repetição" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="date">Mesmo dia do Mês (ex: todo dia 15)</SelectItem>
+                            <SelectItem value="weekday">Mesmo dia da Semana (ex: toda 2ª Quarta-feira)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription className="text-xs">
+                          {field.value === 'date'
+                            ? 'A tarefa será criada sempre na mesma data, ajustando se cair em fim de semana.'
+                            : 'A tarefa será criada mantendo a posição na semana.'}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}

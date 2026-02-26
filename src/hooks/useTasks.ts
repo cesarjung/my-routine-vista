@@ -97,9 +97,12 @@ export const useTasks = (unitId?: string) => {
 
       let filteredTasks = data as TaskWithDetails[];
 
-      // Filter out tasks from inactive routines
+      // Filter out tasks from inactive routines AND orphan tasks (routine deleted but task remains)
       filteredTasks = filteredTasks.filter(task => {
-        if (!task.routine) return true; // Standalone task
+        // If task has a routine_id but no joined routine data, it's an orphan (zombie) task -> Hide it
+        if (task.routine_id && !task.routine) return false;
+
+        if (!task.routine) return true; // Genuine standalone task
         return (task.routine as any).is_active !== false; // Active routine
       });
 
@@ -198,8 +201,11 @@ export const useTasksByStatus = (status: TaskStatus) => {
 
       let filteredTasks = data as TaskWithDetails[];
 
-      // Filter out tasks from inactive routines
+      // Filter out tasks from inactive routines AND orphan tasks
       filteredTasks = filteredTasks.filter(task => {
+        // If task has a routine_id but no joined routine data, it's an orphan (zombie) task -> Hide it
+        if (task.routine_id && !task.routine) return false;
+
         if (!task.routine) return true; // Standalone task
         return (task.routine as any).is_active !== false; // Active routine
       });
@@ -291,22 +297,34 @@ export const useTaskStats = () => {
 };
 
 // Hook to get tasks linked to a specific routine
-export const useRoutineTasks = (routineId: string) => {
+export const useRoutineTasks = (routineId: string, contextDate?: string) => {
   return useQuery({
     queryKey: ['routine-tasks', routineId],
     queryFn: async () => {
-      // Get parent task for this routine
-      const { data: parentTask, error: parentError } = await supabase
+      let query = supabase
         .from('tasks')
         .select(`
           *,
           unit:units(id, name, code)
         `)
         .eq('routine_id', routineId)
-        .is('parent_task_id', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .is('parent_task_id', null);
+
+      if (contextDate) {
+        // Interpreta contextDate localmente (ex: "2026-02-26T00:00:00") na máquina do usuário (UTC-3)
+        // Isso retorna a meia-noite correta em UTC (ex: 2026-02-26T03:00:00.000Z)
+        const localStart = new Date(`${contextDate}T00:00:00`);
+
+        const localEnd = new Date(localStart);
+        localEnd.setDate(localStart.getDate() + 1);
+
+        // Busca a tarefa pai pela data limite dentro dessa exata janela de 24h locais.
+        query = query.gte('due_date', localStart.toISOString()).lt('due_date', localEnd.toISOString());
+      } else {
+        query = query.order('created_at', { ascending: false }).limit(1);
+      }
+
+      const { data: parentTask, error: parentError } = await query.maybeSingle();
 
       if (parentError) throw parentError;
       if (!parentTask) return { parentTask: null, childTasks: [] };

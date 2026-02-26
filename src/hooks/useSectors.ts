@@ -19,6 +19,7 @@ export interface Sector {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  is_private?: boolean | null;
   sections?: SectorSection[];
 }
 
@@ -41,7 +42,7 @@ export const useSectorMutations = () => {
   const queryClient = useQueryClient();
 
   const createSector = useMutation({
-    mutationFn: async (sector: { name: string; description?: string; color?: string; icon?: string }) => {
+    mutationFn: async (sector: { name: string; description?: string; color?: string; icon?: string; is_private?: boolean }) => {
       const { data: { user } } = await supabase.auth.getUser();
 
       const { data, error } = await supabase
@@ -51,6 +52,7 @@ export const useSectorMutations = () => {
           description: sector.description || null,
           color: sector.color || '#6366f1',
           icon: sector.icon || 'folder',
+          is_private: sector.is_private || false,
           created_by: user?.id,
         })
         .select()
@@ -61,16 +63,16 @@ export const useSectorMutations = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sectors'] });
-      toast.success('Setor criado com sucesso!');
+      toast.success('Espaço criado com sucesso!');
     },
-    onError: (error) => {
-      console.error('Erro ao criar setor:', error);
-      toast.error('Erro ao criar setor');
+    onError: (error: any) => {
+      console.error('Erro ao criar espaço:', error);
+      toast.error(error.message || 'Erro ao criar espaço');
     },
   });
 
   const updateSector = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; color?: string; icon?: string }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; color?: string; icon?: string; is_private?: boolean }) => {
       const { data, error } = await supabase
         .from('sectors')
         .update(updates)
@@ -83,11 +85,11 @@ export const useSectorMutations = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sectors'] });
-      toast.success('Setor atualizado com sucesso!');
+      toast.success('Espaço atualizado com sucesso!');
     },
-    onError: (error) => {
-      console.error('Erro ao atualizar setor:', error);
-      toast.error('Erro ao atualizar setor');
+    onError: (error: any) => {
+      console.error('Erro ao atualizar espaço:', error);
+      toast.error(error.message || 'Erro ao atualizar espaço');
     },
   });
 
@@ -102,11 +104,11 @@ export const useSectorMutations = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sectors'] });
-      toast.success('Setor excluído com sucesso!');
+      toast.success('Espaço excluído com sucesso!');
     },
-    onError: (error) => {
-      console.error('Erro ao excluir setor:', error);
-      toast.error('Erro ao excluir setor');
+    onError: (error: any) => {
+      console.error('Erro ao excluir espaço:', error);
+      toast.error(error.message || 'Erro ao excluir espaço');
     },
   });
 

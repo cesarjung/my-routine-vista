@@ -54,6 +54,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from './ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { ChecklistTab } from './tabs/ChecklistTab';
+import { AttachmentsTab } from './tabs/AttachmentsTab';
+import { HistoryTab } from './tabs/HistoryTab';
 
 interface TaskDetailPanelProps {
     task: Tables<'tasks'> & {
@@ -345,34 +349,81 @@ export const TaskDetailPanel = ({ task, onClose }: TaskDetailPanelProps) => {
                 )}
             </div>
 
-            {/* Responsibles / Content Section */}
-            <div className="flex-1 overflow-auto p-4">
-                <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium">Responsáveis</span>
-                </div>
+            {/* Tabs Section */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+                <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden">
+                    <div className="px-6 pt-4 border-b border-border">
+                        <TabsList className="w-full justify-start h-9 bg-transparent p-0">
+                            <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                                Geral
+                            </TabsTrigger>
+                            <TabsTrigger value="checklist" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                                Checklist
+                            </TabsTrigger>
+                            <TabsTrigger value="attachments" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                                Arquivos
+                            </TabsTrigger>
+                            <TabsTrigger value="history" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 pb-2">
+                                Histórico
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
 
-                <div className="space-y-2">
-                    {task.assignees && task.assignees.length > 0 ? (
-                        task.assignees.map((assignee: any) => (
-                            <div key={assignee.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-secondary/20 transition-colors">
-                                <Avatar className={cn('h-8 w-8', getAvatarColor(assignee.id))}>
-                                    <AvatarFallback className="text-white text-xs">{getInitials(assignee.full_name)}</AvatarFallback>
-                                    {assignee.avatar_url && <img src={assignee.avatar_url} alt={assignee.full_name} />}
-                                </Avatar>
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-medium">{assignee.full_name}</span>
-                                    <span className="text-xs text-muted-foreground">{assignee.email}</span>
+                    <div className="flex-1 overflow-hidden p-0 flex flex-col">
+                        <TabsContent value="overview" className="mt-0 h-full flex flex-col text-foreground/80">
+                            {/* Responsibles (moved here) */}
+                            <div className="flex-1 overflow-auto p-6 space-y-6">
+                                {/* Responsibles (moved here) */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-primary" />
+                                        <span className="text-sm font-medium">Responsáveis</span>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        {task.assignees && task.assignees.length > 0 ? (
+                                            task.assignees.map((assignee: any) => (
+                                                <div key={assignee.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-secondary/20 transition-colors">
+                                                    <Avatar className={cn('h-8 w-8', getAvatarColor(assignee.id))}>
+                                                        <AvatarFallback className="text-white text-xs">{getInitials(assignee.full_name)}</AvatarFallback>
+                                                        {assignee.avatar_url && <img src={assignee.avatar_url} alt={assignee.full_name} />}
+                                                    </Avatar>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-medium">{assignee.full_name}</span>
+                                                        <span className="text-xs text-muted-foreground">{assignee.email}</span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-6 text-muted-foreground border rounded-lg border-dashed">
+                                                <Users className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                                                <p className="text-sm">Nenhum responsável atribuído.</p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        ))
-                    ) : (
-                        <div className="text-center py-6 text-muted-foreground border rounded-lg border-dashed">
-                            <Users className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                            <p className="text-sm">Nenhum responsável atribuído.</p>
-                        </div>
-                    )}
-                </div>
+                        </TabsContent>
+
+                        <TabsContent value="checklist" className="mt-0 h-full flex flex-col">
+                            <div className="flex-1 overflow-auto p-6">
+                                <ChecklistTab taskId={task.id} />
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="attachments" className="mt-0 h-full flex flex-col">
+                            <div className="flex-1 overflow-auto p-6">
+                                <AttachmentsTab taskId={task.id} />
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="history" className="mt-0 h-full flex flex-col">
+                            <div className="flex-1 overflow-auto p-6">
+                                <HistoryTab taskId={task.id} />
+                            </div>
+                        </TabsContent>
+                    </div>
+                </Tabs>
             </div>
 
             <TaskEditDialog

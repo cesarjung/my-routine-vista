@@ -421,7 +421,15 @@ export const TasksView = ({
             {selectedRoutine && (
               <RoutineDetailPanel
                 routine={selectedRoutine}
-                onClose={() => setSelectedRoutine(null)}
+                contextDate={selectedTask?.due_date || undefined}
+                onClose={() => {
+                  setSelectedRoutine(null);
+                  setSelectedTask(null);
+                }}
+                onSelectTask={(task) => {
+                  setSelectedRoutine(null);
+                  setSelectedTask(task);
+                }}
               />
             )}
           </div>

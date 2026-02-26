@@ -81,7 +81,7 @@ const Auth = () => {
       }
       toast({
         title: "Erro",
-        description: message,
+        description: `${message} (${error.message || `Detalhes: ${JSON.stringify(error)}`})`,
         variant: "destructive",
       });
     }

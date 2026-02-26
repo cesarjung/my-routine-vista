@@ -2,14 +2,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Json } from '@/integrations/supabase/types';
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export interface PanelFilters {
   sector_id?: string | string[] | null;
   unit_id?: string | string[] | null;
   status?: string[];
   period?: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
-  group_by: 'unit' | 'responsible' | 'sector' | 'task_matrix';
+  group_by: 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt';
   title_filter?: string;
   task_frequency?: string[];
 }
@@ -22,6 +28,7 @@ export interface DashboardPanel {
   filters: PanelFilters;
   display_config: Record<string, unknown>;
   order_index: number;
+  is_private?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -74,7 +81,8 @@ export const useCreateDashboardPanel = () => {
           panel_type: panel.panel_type,
           filters: panel.filters as unknown as Json,
           display_config: panel.display_config as unknown as Json,
-          order_index: panel.order_index
+          order_index: panel.order_index,
+          is_private: panel.is_private || false
         })
         .select()
         .single();

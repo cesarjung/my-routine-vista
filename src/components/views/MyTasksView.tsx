@@ -135,6 +135,7 @@ export const MyTasksView = ({
   const isGestorOrAdmin = role === 'admin' || role === 'gestor';
 
   const [activeTab, setActiveTab] = useState('tasks');
+  const [activeCompletionTab, setActiveCompletionTab] = useState('pending'); // 'pending' | 'completed'
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFrequency, setActiveFrequency] = useState<string>('all');
   const [activeStatusFilter, setActiveStatusFilter] = useState<string>('active');
@@ -192,7 +193,18 @@ export const MyTasksView = ({
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
-    // 3. Status Filter
+    // 3. Status Filter (Global - can override completion tab? No, keep separate)
+    // Actually, distinct valid statuses depend on the tab.
+    // PENDING TAB: status != concluded
+    // COMPLETED TAB: status == concluded
+    const isCompleted = task.status === 'concluida';
+    if (activeCompletionTab === 'pending' && isCompleted) return false;
+    if (activeCompletionTab === 'completed' && !isCompleted) return false;
+
+    // Existing Status Filter (Checkbox Chips)
+    // If we are in 'completed' tab, selectedStatuses might only have 'concluida' relevant.
+    // If we are in 'pending', users might filter by 'atrasada' etc.
+    // We retain this logic but it effectively intersects.
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status);
     if (!matchesStatus) return false;
 
@@ -214,20 +226,6 @@ export const MyTasksView = ({
     const matchesPriority = priorityFilter === 'all' || task.priority.toString() === priorityFilter;
     if (!matchesPriority) return false;
 
-    // 6. Routine Parent Visibility
-    // User wants to see Routines (Parents) within "My Tasks" if assigned to them.
-    // So we DO NOT hide routine parents explicitly anymore.
-    // However, we MUST HIDE Routine Subtasks if the user is NOT responsible (handled by Assignment Check #1).
-    // Assignment Check #1 handles both:
-    // - If I am assigned the Parent, I see the Parent.
-    // - If I am assigned the Subtask, I see the Subtask.
-    // - If I am NOT assigned the Subtask, I don't see it.
-
-    // We only need to ensure we don't accidentally Show Subtasks that shouldn't be main-level?
-    // In "My Tasks", every task assigned to me should be visible.
-    // Whether it's a subtask or a parent.
-    // So we simply Remove the forced exclusion of Parents.
-
     return true;
   }) || [];
 
@@ -248,6 +246,12 @@ export const MyTasksView = ({
         ? (r.is_active !== false)
         : (r.is_active === false);
     if (!matchesActiveStatus) return false;
+
+    // Completion Tab Logic for Routines
+    // "Pending" -> Active Routines
+    // "Completed" -> Inactive Routines
+    if (activeCompletionTab === 'pending' && r.is_active === false) return false;
+    if (activeCompletionTab === 'completed' && r.is_active !== false) return false;
 
     // Priority Filter (Users request consistency, though Routines might not have priority visibly)
     const matchesPriority = priorityFilter === 'all' || (r as any).priority?.toString() === priorityFilter;
@@ -367,6 +371,7 @@ export const MyTasksView = ({
                           (c.assignee_user_id === user?.id || (c.unit_id === task.unit_id && !c.assignee_user_id))
                         )?.notes
                       }
+                      disableStrikethrough={true}
                     />
                   ))}
                 </div>
@@ -479,7 +484,7 @@ export const MyTasksView = ({
                   size="sm"
                   className={cn(
                     "h-8 text-xs gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200",
-                    activeTab === 'routines' && !isGestorOrAdmin && "hidden"
+                    ((activeTab === 'routines' && !isGestorOrAdmin) || activeCompletionTab === 'completed') && "hidden"
                   )}
                   onClick={async () => {
                     try {
@@ -611,6 +616,18 @@ export const MyTasksView = ({
                 {/* Spacer */}
                 <div className="flex-1" />
 
+                {/* Completion Toggle */}
+                <Tabs value={activeCompletionTab} onValueChange={(v) => setActiveCompletionTab(v as any)} className="h-8 bg-secondary/30 p-0.5 rounded-lg border border-border shrink-0">
+                  <TabsList className="h-full bg-transparent p-0 gap-0.5">
+                    <TabsTrigger value="pending" className="h-full text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      Pendentes
+                    </TabsTrigger>
+                    <TabsTrigger value="completed" className="h-full text-xs px-3 data-[state=active]:bg-green-100 data-[state=active]:text-green-800 data-[state=active]:shadow-sm">
+                      Concluídas
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+
                 {/* New Task Button */}
                 <div className="shrink-0">
                   <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -724,7 +741,15 @@ export const MyTasksView = ({
             {selectedRoutine && (
               <RoutineDetailPanel
                 routine={selectedRoutine}
-                onClose={() => setSelectedRoutine(null)}
+                contextDate={selectedTask?.due_date || undefined}
+                onClose={() => {
+                  setSelectedRoutine(null);
+                  setSelectedTask(null);
+                }}
+                onSelectTask={(task) => {
+                  setSelectedRoutine(null);
+                  setSelectedTask(task);
+                }}
               />
             )}
           </div>

@@ -3,10 +3,12 @@ import { SectorSidebar } from '@/components/SectorSidebar';
 import { ContentArea } from '@/components/ContentArea';
 import { NavigationContext, ViewMode } from '@/types/navigation';
 
+
 const Index = () => {
   const [context, setContext] = useState<NavigationContext>({ type: 'dashboard' });
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [collapsed, setCollapsed] = useState(false);
+
 
   return (
     <div className="flex min-h-screen bg-background w-full">

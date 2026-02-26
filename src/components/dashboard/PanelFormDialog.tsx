@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -44,7 +45,8 @@ const GROUP_BY_OPTIONS = [
   { value: 'unit', label: 'Por Unidade' },
   { value: 'responsible', label: 'Por Responsável' },
   { value: 'sector', label: 'Por Setor' },
-  { value: 'task_matrix', label: 'Por Tarefa (Matriz)' },
+  { value: 'task_matrix', label: 'Por Data (Legado)' },
+  { value: 'tracker_gantt', label: 'Rastreador Matriz (Gantt)' },
 ];
 
 interface PanelFormDialogProps {
@@ -56,6 +58,7 @@ interface PanelFormDialogProps {
 export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDialogProps) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(panel?.title || '');
+  const [isPrivate, setIsPrivate] = useState(panel?.is_private || false);
 
   // Initialize ids as array, handling legacy string values
   const [sectorIds, setSectorIds] = useState<string[]>(
@@ -78,7 +81,9 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
   const [selectedFrequencies, setSelectedFrequencies] = useState<string[]>(panel?.filters.task_frequency || []);
   const [titleFilter, setTitleFilter] = useState<string>(panel?.filters.title_filter || '');
   const [period, setPeriod] = useState<string>(panel?.filters.period || 'all');
-  const [groupBy, setGroupBy] = useState<'unit' | 'responsible' | 'sector' | 'task_matrix'>(panel?.filters.group_by || 'unit');
+  const [groupBy, setGroupBy] = useState<'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt'>(
+    (panel?.filters.group_by as 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt') || 'unit'
+  );
 
   const { data: sectors } = useSectors();
   const { data: units } = useUnits();
@@ -118,7 +123,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
       updatePanel.mutate({
         id: panel.id,
         title,
-        filters
+        filters,
+        is_private: isPrivate
       }, {
         onSuccess: () => setOpen(false)
       });
@@ -128,7 +134,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
         panel_type: 'summary',
         filters,
         display_config: {},
-        order_index: panelCount
+        order_index: panelCount,
+        is_private: isPrivate
       }, {
         onSuccess: () => {
           setOpen(false);
@@ -140,7 +147,7 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
   const resetForm = () => {
     setTitle('');
-    setTitle('');
+    setIsPrivate(false);
     setSectorIds([]);
     setUnitIds([]);
     setSelectedStatus([]);
@@ -187,8 +194,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
           </div>
 
           <div className="space-y-2">
-            <Label>Agrupar por</Label>
-            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'unit' | 'responsible' | 'sector' | 'task_matrix')}>
+            <Label>Agrupar por / Modo de Exibição</Label>
+            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt')}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -285,6 +292,17 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
             {selectedStatus.length === 0 && (
               <p className="text-xs text-muted-foreground">Nenhum selecionado = todos os status</p>
             )}
+          </div>
+
+          <div className="flex items-center space-x-2 pt-2 border-t border-border">
+            <Switch
+              id="private-panel"
+              checked={isPrivate}
+              onCheckedChange={setIsPrivate}
+            />
+            <Label htmlFor="private-panel" className="text-sm font-normal">
+              Painel Privado (Apenas eu e admins podemos ver)
+            </Label>
           </div>
         </div>
 

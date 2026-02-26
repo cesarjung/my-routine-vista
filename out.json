@@ -1,0 +1,6 @@
+{
+  "code": "PGRST100",
+  "details": "unexpected \"*\" expecting field name (* or [a..z0..9_$])",
+  "hint": null,
+  "message": "\"failed to parse tree path (*select)\" (line 1, column 1)"
+}
