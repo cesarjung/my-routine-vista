@@ -565,7 +565,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       </div>
 
       {activeTab === 'tracker' ? (
-        <div className="mt-4">
+        <div className="mt-4 flex-1 overflow-hidden min-h-[400px] flex flex-col">
           <TaskTrackerPanel sectorId={selectedSectorId} />
         </div>
       ) : (

@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useTasks } from '@/hooks/useTasks';
 import { useRoutines } from '@/hooks/useRoutines';
-import { useCustomPanelData } from '@/hooks/useDashboardData';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { useDeleteDashboardPanel, DashboardPanel } from '@/hooks/useDashboardPanels';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
@@ -617,7 +616,7 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
             </div>
           )}
         </div>
-        <div className="overflow-auto flex-1">
+        <div className="overflow-hidden flex-1 min-h-0 flex flex-col">
           {/* We pass the frequencies or routine preferences here from panel */}
           {/* Right now, if user saved "routines" in their Panel, we pass them. Panel filters could be enriched later. */}
           <TaskTrackerPanel sectorId={Array.isArray(panel.filters.sector_id) ? panel.filters.sector_id[0] : panel.filters.sector_id} initialRoutineIds={panel.filters.task_frequency || []} />
