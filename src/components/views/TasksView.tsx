@@ -117,7 +117,7 @@ export const TasksView = ({
     const matchesSection = !sectionId
       ? true
       : sectionId === 'tasks'
-        ? ((task as any).section_id === null || (task as any).section_id === 'tasks')
+        ? ((task as any).section_id === null || (task as any).section_id === 'tasks' || (task as any).section_id === sectorId)
         : (task as any).section_id === sectionId;
 
     const matchesPriority = priorityFilter === 'all' || task.priority.toString() === priorityFilter;
