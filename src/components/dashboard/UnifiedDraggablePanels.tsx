@@ -20,15 +20,13 @@ import { toast } from 'sonner';
 // Types for unified panel system
 export type UnifiedPanel = {
   id: string;
-  type: 'custom' | 'units' | 'responsibles';
+  type: 'custom';
   panel?: DashboardPanel;
   position: { x: number; y: number };
 };
 
 interface UnifiedDraggablePanelsProps {
   customPanels: DashboardPanel[];
-  renderUnitsPanel: () => React.ReactNode;
-  renderResponsiblesPanel: () => React.ReactNode;
   sectorId?: string | null;
 }
 
@@ -226,19 +224,13 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
 };
 
 // Drag Overlay Component  
-const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }: {
+const DragOverlayContent = ({ panel }: {
   panel: UnifiedPanel;
-  renderUnitsPanel: () => React.ReactNode;
-  renderResponsiblesPanel: () => React.ReactNode;
 }) => {
   const renderContent = () => {
     switch (panel.type) {
       case 'custom':
         return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
-      case 'units':
-        return renderUnitsPanel();
-      case 'responsibles':
-        return renderResponsiblesPanel();
     }
   };
 
@@ -256,8 +248,6 @@ const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }
 
 export const UnifiedDraggablePanels = ({
   customPanels,
-  renderUnitsPanel,
-  renderResponsiblesPanel,
   sectorId,
 }: UnifiedDraggablePanelsProps) => {
   const { user } = useAuth();
@@ -297,19 +287,6 @@ export const UnifiedDraggablePanels = ({
         position: layoutMap[panel.id] || getInitialPosition(index),
       });
       index++;
-    });
-
-    panels.push({
-      id: 'default-units',
-      type: 'units',
-      position: layoutMap['default-units'] || getInitialPosition(index),
-    });
-    index++;
-
-    panels.push({
-      id: 'default-responsibles',
-      type: 'responsibles',
-      position: layoutMap['default-responsibles'] || getInitialPosition(index),
     });
 
     return panels;
@@ -374,10 +351,6 @@ export const UnifiedDraggablePanels = ({
     switch (panel.type) {
       case 'custom':
         return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
-      case 'units':
-        return renderUnitsPanel();
-      case 'responsibles':
-        return renderResponsiblesPanel();
     }
   };
 
@@ -415,8 +388,6 @@ export const UnifiedDraggablePanels = ({
         {activePanel && isAdmin && (
           <DragOverlayContent
             panel={activePanel}
-            renderUnitsPanel={renderUnitsPanel}
-            renderResponsiblesPanel={renderResponsiblesPanel}
           />
         )}
       </DragOverlay>

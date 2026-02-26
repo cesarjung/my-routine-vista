@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Building2, Users, Loader2, CheckCircle2, Maximize2, X, ExternalLink } from 'lucide-react';
-import { useUnitRoutineStatus, useResponsibleRoutineStatus, useOverallStats } from '@/hooks/useDashboardData';
+import { useOverallStats } from '@/hooks/useDashboardData';
 import { useDashboardPanels } from '@/hooks/useDashboardPanels';
 import { useTasks } from '@/hooks/useTasks';
 import { useIsAdmin } from '@/hooks/useUserRole';
@@ -299,15 +299,33 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
 
   const { data: sectors } = useSectors();
   const { data: statsData } = useOverallStats(selectedSectorId);
-  const { data: unitStatus, isLoading: loadingUnits } = useUnitRoutineStatus(selectedSectorId);
-  const { data: responsibleStatus, isLoading: loadingResponsibles } = useResponsibleRoutineStatus(selectedSectorId);
-  const { data: customPanels, isLoading: loadingPanels } = useDashboardPanels();
+  const { data: customPanels } = useDashboardPanels();
   const { isAdmin } = useIsAdmin();
 
-  const isLoading = loadingUnits || loadingResponsibles;
   const overallPercentage = statsData?.percentage || 0;
 
   const filteredPanels = customPanels?.filter(panel => {
+    // Ocultar paineis de outros setores cruzados
+    const pSector = panel.filters?.sector_id;
+    let matchesSector = true;
+
+    if (selectedSectorId) {
+      if (Array.isArray(pSector)) {
+        matchesSector = pSector.includes(selectedSectorId);
+      } else {
+        matchesSector = pSector === selectedSectorId;
+      }
+    } else {
+      // Dashboard Global
+      if (Array.isArray(pSector) && pSector.length > 0) {
+        matchesSector = false;
+      } else if (pSector && !Array.isArray(pSector)) {
+        matchesSector = false;
+      }
+    }
+
+    if (!matchesSector) return false;
+
     if (activeTab === 'public') {
       return !panel.is_private;
     } else {
@@ -377,101 +395,17 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
               </div>
 
               {/* Custom Panels */}
-              {filteredPanels && filteredPanels.length > 0 && (
+              {filteredPanels && filteredPanels.length > 0 ? (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                   {filteredPanels.map(panel => (
                     <CustomPanel key={panel.id} panel={panel} />
                   ))}
                 </div>
-              )}
-
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                </div>
               ) : (
-                <>
-                  <p className="text-sm text-muted-foreground font-medium">Painéis Padrão</p>
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                    {/* Units Panel */}
-                    <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0} defaultHeight={400}>
-                      {unitStatus?.length === 0 ? (
-                        <div className="p-4 text-center text-muted-foreground">Sem dados</div>
-                      ) : (
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-card z-10">
-                            <tr className="border-b border-border">
-                              <th className="text-left p-3 font-medium text-muted-foreground">Nome</th>
-                              {FREQUENCIES.map(f => <th key={f} className="p-2 text-center font-medium text-muted-foreground w-12">{FREQUENCY_LABELS[f]}</th>)}
-                              <th className="p-3 text-right font-medium text-muted-foreground w-14">%</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border/50">
-                            {unitStatus?.map(unit => (
-                              <tr key={unit.id} className="hover:bg-secondary/20">
-                                <td className="p-3">
-                                  <p className="font-medium text-foreground">{unit.name}</p>
-                                </td>
-                                {FREQUENCIES.map(f => (
-                                  <td key={f} className="p-2 text-center">
-                                    <StatusBadge
-                                      data={unit.frequencies[f]}
-                                      frequency={f}
-                                      onClick={unit.frequencies[f].total > 0
-                                        ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
-                                        : undefined
-                                      }
-                                    />
-                                  </td>
-                                ))}
-                                <td className="p-3 text-right"><TotalBadge data={unit.totals} /></td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </ResizablePanel>
-
-                    {/* Responsibles Panel */}
-                    <ResizablePanel title="Responsáveis" icon={Users} count={responsibleStatus?.length || 0} defaultHeight={400}>
-                      {responsibleStatus?.length === 0 ? (
-                        <div className="p-4 text-center text-muted-foreground">Sem dados</div>
-                      ) : (
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-card z-10">
-                            <tr className="border-b border-border">
-                              <th className="text-left p-3 font-medium text-muted-foreground">Nome</th>
-                              {FREQUENCIES.map(f => <th key={f} className="p-2 text-center font-medium text-muted-foreground w-12">{FREQUENCY_LABELS[f]}</th>)}
-                              <th className="p-3 text-right font-medium text-muted-foreground w-14">%</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border/50">
-                            {responsibleStatus?.map(person => (
-                              <tr key={person.id} className="hover:bg-secondary/20">
-                                <td className="p-3">
-                                  <p className="font-medium text-foreground">{person.name}</p>
-                                </td>
-                                {FREQUENCIES.map(f => (
-                                  <td key={f} className="p-2 text-center">
-                                    <StatusBadge
-                                      data={person.frequencies[f]}
-                                      frequency={f}
-                                      onClick={person.frequencies[f].total > 0
-                                        ? () => openTasksDialog(person.id, person.name, 'responsible', f)
-                                        : undefined
-                                      }
-                                    />
-                                  </td>
-                                ))}
-                                <td className="p-3 text-right"><TotalBadge data={person.totals} /></td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </ResizablePanel>
-                  </div>
-                </>
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-lg border border-border border-dashed">
+                  <p className="text-lg font-medium">Nenhum painel configurado</p>
+                  <p className="text-sm">Vá até as Engrenagens do Topo Direto ou '+' para adicionar painéis customizados.</p>
+                </div>
               )}
             </>
           )}
@@ -570,101 +504,11 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
         </div>
       ) : (
         /* All Panels with Unified Drag and Drop */
-        isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-          </div>
-        ) : (
-          <UnifiedDraggablePanels
-            customPanels={filteredPanels}
-            sectorId={selectedSectorId}
-            renderUnitsPanel={() => (
-              <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
-                {unitStatus?.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
-                ) : (
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-card z-10">
-                      <tr className="border-b border-border">
-                        <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
-                        {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
-                        <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {unitStatus?.map(unit => (
-                        <tr key={unit.id} className="hover:bg-secondary/20">
-                          <td className="p-2">
-                            <p className="font-medium text-foreground" title={unit.name}>{unit.name}</p>
-                          </td>
-                          {FREQUENCIES.map(f => (
-                            <td key={f} className="p-1 text-center">
-                              <StatusBadge
-                                data={unit.frequencies[f]}
-                                frequency={f}
-                                onClick={unit.frequencies[f].total > 0
-                                  ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
-                                  : undefined
-                                }
-                              />
-                            </td>
-                          ))}
-                          <td className="p-2 text-right"><TotalBadge data={unit.totals} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </ResizablePanel>
-            )}
-            renderResponsiblesPanel={() => (
-              <ResizablePanel title="Responsáveis" icon={Users} count={responsibleStatus?.length || 0}>
-                {responsibleStatus?.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
-                ) : (
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-card z-10">
-                      <tr className="border-b border-border">
-                        <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
-                        {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
-                        <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {responsibleStatus?.map(person => (
-                        <tr key={person.id} className="hover:bg-secondary/20">
-                          <td className="p-2">
-                            <p className="font-medium text-foreground" title={person.name}>{person.name}</p>
-                          </td>
-                          {FREQUENCIES.map(f => (
-                            <td key={f} className="p-1 text-center">
-                              <StatusBadge
-                                data={person.frequencies[f]}
-                                frequency={f}
-                                onClick={person.frequencies[f].total > 0
-                                  ? () => openTasksDialog(person.id, person.name, 'responsible', f)
-                                  : undefined
-                                }
-                              />
-                            </td>
-                          ))}
-                          <td className="p-2 text-right"><TotalBadge data={person.totals} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </ResizablePanel>
-            )}
-          />
-        )
+        <UnifiedDraggablePanels
+          customPanels={filteredPanels}
+          sectorId={selectedSectorId}
+        />
       )}
-      {/* Tasks Dialog */}
-      <TasksDialog
-        state={tasksDialog}
-        onClose={closeTasksDialog}
-        sectorId={selectedSectorId}
-      />
     </div>
   );
 };
