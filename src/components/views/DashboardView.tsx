@@ -32,7 +32,7 @@ import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
 import { CustomPanel } from '@/components/dashboard/CustomPanel';
 import { UnifiedDraggablePanels } from '@/components/dashboard/UnifiedDraggablePanels';
 import { TaskTrackerPanel } from '@/components/dashboard/TaskTrackerPanel';
-import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
+
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -340,7 +340,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       <div className="fixed inset-0 z-50 bg-background overflow-auto">
         {/* Fullscreen Header */}
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-8 py-4 flex items-center justify-between">
-          <img src={sirtecLogoHeader} alt="Sirtec" className="h-12 object-contain" />
+
           <h1 className="text-2xl font-bold text-foreground">Gerenciamento de Rotinas</h1>
           <Button
             variant="ghost"

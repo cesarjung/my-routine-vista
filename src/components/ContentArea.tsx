@@ -41,8 +41,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
-            <div className="h-6 w-px bg-border hidden md:block" />
+
             <div>
               <h1 className="text-base font-semibold text-foreground leading-none mb-1">Dashboard Geral</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -64,8 +63,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
-            <div className="h-6 w-px bg-border hidden md:block" />
+
             <div>
               <h1 className="text-base font-semibold text-foreground leading-none mb-1">Configurações</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -87,8 +85,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
-            <div className="h-6 w-px bg-border hidden md:block" />
+
             <div>
               <h1 className="text-base font-semibold text-foreground leading-none mb-1">Minhas Tarefas</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -114,8 +111,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
-            <div className="h-6 w-px bg-border hidden md:block" />
+
             <div>
               <h1 className="text-base font-semibold text-foreground leading-none mb-1">Anotações e Quadros</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -144,8 +140,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         <div className="h-full flex flex-col p-6">
           <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
             <div className="flex items-center gap-4">
-              <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
-              <div className="h-6 w-px bg-border hidden md:block" />
+
               <div>
                 <h1 className="text-base font-semibold text-foreground leading-none mb-1">
                   {sector?.name}
@@ -178,8 +173,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-            <img src={sirtecLogo} alt="Sirtec" className="h-6 w-auto object-contain" />
-            <div className="h-6 w-px bg-border hidden md:block" />
+
             <div>
               <h1 className="text-base font-semibold text-foreground leading-none mb-1">
                 {getTitle()}
