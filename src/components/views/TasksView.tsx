@@ -68,6 +68,7 @@ const frequencies = [
 interface TasksViewProps {
   sectorId?: string;
   sectionId?: string; // New prop
+  isDefaultTasksSection?: boolean;
   hideHeader?: boolean;
   viewMode?: ViewMode;
 }
@@ -75,6 +76,7 @@ interface TasksViewProps {
 export const TasksView = ({
   sectorId,
   sectionId,
+  isDefaultTasksSection,
   hideHeader,
   viewMode = 'list'
 }: TasksViewProps) => {
@@ -114,11 +116,9 @@ export const TasksView = ({
     const matchesSector = !sectorId || task.sector_id === sectorId;
 
     // Filter by Section ID
-    const matchesSection = !sectionId
-      ? true
-      : sectionId === 'tasks'
-        ? ((task as any).section_id === null || (task as any).section_id === 'tasks' || (task as any).section_id === sectorId)
-        : (task as any).section_id === sectionId;
+    const matchesSection = !sectionId || isDefaultTasksSection
+      ? (!sectionId || (task as any).section_id === null || (task as any).section_id === 'tasks' || (task as any).section_id === sectorId || (task as any).section_id === sectionId)
+      : (task as any).section_id === sectionId;
 
     const matchesPriority = priorityFilter === 'all' || task.priority.toString() === priorityFilter;
 
@@ -136,6 +136,22 @@ export const TasksView = ({
     // Show only "Main" items: Standalone Tasks or Routine Parents (Containers)
     // Hide Routine Child Tasks (Subtasks) from the main list
     const isRoutineSubtask = task.routine_id && task.parent_task_id;
+
+    if (task.title.toLowerCase().includes("teste tarefa")) {
+      console.log("DEBUG TESTE TAREFA:", {
+        title: task.title,
+        sectionId: sectionId,
+        taskSectionId: (task as any).section_id,
+        matchesSearch,
+        matchesStatus,
+        matchesSector,
+        matchesSection,
+        matchesPriority,
+        matchesFrequency,
+        matchesActiveStatus,
+        isRoutineSubtask,
+      });
+    }
 
     return matchesSearch && matchesStatus && matchesSector && matchesSection && matchesPriority && matchesFrequency && matchesActiveStatus && !isRoutineSubtask;
   }) || [];

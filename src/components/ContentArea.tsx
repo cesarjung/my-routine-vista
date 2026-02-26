@@ -214,6 +214,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
             <TasksView
               sectorId={sectorId}
               sectionId={folder}
+              isDefaultTasksSection={currentSection?.type === 'tasks' || folder === 'tasks'}
               viewMode={viewMode}
             />
           )}

@@ -277,6 +277,7 @@ export const useCreateTaskWithUnits = () => {
             description: data.description || null,
             unit_id: userUnitId || null, // null for admins/gestors without unit
             sector_id: data.sector_id || null,
+            section_id: data.section_id || null,
             assigned_to: data.parentAssignedTo || user.id,
             status: 'pendente',
             priority: data.priority,
