@@ -488,9 +488,9 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
   }
 
   return (
-    <div className="space-y-3">
+    <div className={cn("flex flex-col h-full", activeTab === 'tracker' ? "overflow-hidden" : "overflow-auto space-y-3")}>
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
           <div className={cn(
@@ -556,7 +556,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+      <div className={cn("flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap", activeTab === 'tracker' ? "hidden" : "flex-shrink-0")}>
         <span><b>D</b>=Diária <b>S</b>=Semanal <b>Q</b>=Quinzenal <b>M</b>=Mensal</span>
         <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-success/30" />100%</span>
         <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-emerald-500/30" />≥70%</span>
@@ -565,7 +565,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       </div>
 
       {activeTab === 'tracker' ? (
-        <div className="mt-4 flex-1 overflow-hidden min-h-[400px] flex flex-col">
+        <div className="mt-4 flex-1 overflow-hidden min-h-0 flex flex-col border rounded-lg bg-card shadow-sm">
           <TaskTrackerPanel sectorId={selectedSectorId} />
         </div>
       ) : (
