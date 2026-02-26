@@ -471,7 +471,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                                 let bgClass = '';
 
                                                                 if (task.status === 'concluida') { displayChar = <Check className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#43a047] text-white border-b-2 border-b-[#2e7d32] shadow-sm'; }
-                                                                else if (task.status === 'nao_aplicavel') { displayChar = <Check className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#1b5e20] text-white border-b-2 border-b-[#144d17] shadow-sm'; }
+                                                                else if (task.status === 'nao_aplicavel') { displayChar = <Check className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#0A3D14] text-white border-b-2 border-b-[#05260A] shadow-sm'; }
                                                                 else if (task.status === 'atrasada') { displayChar = <XIcon className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#e53935] text-white border-b-2 border-b-[#c62828] shadow-sm'; }
                                                                 else if (task.status === 'cancelada') { displayChar = 'C'; bgClass = 'bg-gray-500 text-white border-b-2 border-b-gray-700 shadow-sm'; }
                                                                 else { displayChar = <Minus className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#fb8c00] text-white border-b-2 border-b-[#ef6c00] shadow-sm'; }

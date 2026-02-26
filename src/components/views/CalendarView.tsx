@@ -376,7 +376,7 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
       atrasada: 'bg-red-500 border-red-600',
       cancelada: 'bg-slate-500 border-slate-600',
       concluida_parcial: 'bg-green-800 border-green-900',
-      nao_aplicavel: 'bg-[#1b5e20] border-[#144d17] text-white',
+      nao_aplicavel: 'bg-[#0A3D14] border-[#05260A] text-white',
     };
 
     return statusColors[item.status || 'pendente'] || statusColors.pendente;
