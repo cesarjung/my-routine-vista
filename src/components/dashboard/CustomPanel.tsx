@@ -106,7 +106,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
       if (filters.title_filter) {
-        tasksQuery = tasksQuery.ilike('title', `% ${filters.title_filter}% `);
+        tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
       }
       if (periodDates) {
         tasksQuery = tasksQuery
