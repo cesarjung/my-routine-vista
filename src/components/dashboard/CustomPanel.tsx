@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FolderKanban, Building2, Users, Loader2, Play, Settings, Trash2, CheckCircle2 } from 'lucide-react';
+import { FolderKanban, Building2, Users, Loader2, Play, Settings, Trash2, CheckCircle2, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useTasks } from '@/hooks/useTasks';
@@ -238,6 +238,58 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
           return { id: sector.id, name: sector.name, color: sector.color, frequencies, totals };
         }).filter(s => s.totals.total > 0);
+      } else if (filters.group_by === 'task') {
+        // Group by Routine / Task Title
+        const routineMap = new Map<string, { id: string, name: string, tasks: any[] }>();
+
+        // Populate distinct routines first
+        const distinctRoutineIds = [...new Set(tasks?.map(t => t.routine_id).filter(Boolean))];
+        if (distinctRoutineIds.length > 0) {
+          const { data: routines } = await supabase
+            .from('routines')
+            .select('id, title')
+            .in('id', distinctRoutineIds as string[]);
+
+          routines?.forEach(r => {
+            routineMap.set(r.id, { id: r.id, name: r.title, tasks: [] });
+          });
+        }
+
+        // Group tasks into routines or standalone titles
+        tasks?.forEach(task => {
+          let key = task.routine_id || `title:${task.title}`;
+          let name = task.title;
+
+          if (task.routine_id && routineMap.has(task.routine_id)) {
+            name = routineMap.get(task.routine_id)!.name;
+          } else if (!routineMap.has(key)) {
+            routineMap.set(key, { id: key, name: name, tasks: [] });
+          }
+
+          routineMap.get(key)!.tasks.push(task);
+        });
+
+        // Calculate frequencies and totals for each task/routine group
+        results = Array.from(routineMap.values()).map(group => {
+          const frequencies: Record<string, StatusData> = {};
+
+          FREQUENCIES.forEach(f => {
+            const freqTasks = group.tasks.filter(t => t.routine_id && routinesMap[t.routine_id] === f);
+            frequencies[f] = {
+              completed: freqTasks.filter(t => t.status === 'concluida').length,
+              pending: freqTasks.filter(t => t.status !== 'concluida' && t.status !== 'cancelada').length,
+              total: freqTasks.length
+            };
+          });
+
+          const totals = {
+            completed: group.tasks.filter(t => t.status === 'concluida').length,
+            pending: group.tasks.filter(t => t.status !== 'concluida' && t.status !== 'cancelada').length,
+            total: group.tasks.length
+          };
+
+          return { id: group.id, name: group.name, frequencies, totals };
+        }).filter(g => g.totals.total > 0);
       } else if (filters.group_by === 'task_matrix') {
         let unitsQuery = supabase.from('units').select('id, name, code').order('name');
         if (filters.unit_id) {
@@ -365,6 +417,7 @@ const getGroupIcon = (groupBy: string) => {
     case 'unit': return Building2;
     case 'responsible': return Users;
     case 'sector': return FolderKanban;
+    case 'task': return ClipboardList;
     default: return Building2;
   }
 };
@@ -373,7 +426,7 @@ interface TasksDialogState {
   isOpen: boolean;
   title: string;
   entityId: string;
-  entityType: 'unit' | 'responsible' | 'sector';
+  entityType: 'unit' | 'responsible' | 'sector' | 'task';
   frequency: string;
 }
 
@@ -407,7 +460,7 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
   const openTasksDialog = (
     entityId: string,
     entityName: string,
-    entityType: 'unit' | 'responsible' | 'sector',
+    entityType: 'unit' | 'responsible' | 'sector' | 'task',
     frequency: string
   ) => {
     setTasksDialog({
@@ -434,6 +487,14 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
       if ((task as any).assigned_to !== tasksDialog.entityId) return false;
     } else if (tasksDialog.entityType === 'sector') {
       if ((task as any).sector_id !== tasksDialog.entityId) return false;
+    } else if (tasksDialog.entityType === 'task') {
+      // If grouped by task, the entityId is either a routine_id or a 'title:...'
+      if (tasksDialog.entityId.startsWith('title:')) {
+        const titleKey = tasksDialog.entityId.substring(6);
+        if ((task as any).title !== titleKey || (task as any).routine_id) return false;
+      } else {
+        if ((task as any).routine_id !== tasksDialog.entityId) return false;
+      }
     }
 
     // Filter by panel's sector if set
@@ -553,7 +614,7 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
                       ? () => openTasksDialog(
                         item.id,
                         item.name,
-                        panel.filters.group_by as 'unit' | 'responsible' | 'sector',
+                        panel.filters.group_by as 'unit' | 'responsible' | 'sector' | 'task',
                         f
                       )
                       : undefined

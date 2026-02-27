@@ -45,6 +45,7 @@ const GROUP_BY_OPTIONS = [
   { value: 'unit', label: 'Por Unidade' },
   { value: 'responsible', label: 'Por Responsável' },
   { value: 'sector', label: 'Por Setor' },
+  { value: 'task', label: 'Por Tarefa' },
   { value: 'task_matrix', label: 'Por Data (Legado)' },
   { value: 'tracker_gantt', label: 'Rastreador Matriz (Gantt)' },
 ];
@@ -81,8 +82,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
   const [selectedFrequencies, setSelectedFrequencies] = useState<string[]>(panel?.filters.task_frequency || []);
   const [titleFilter, setTitleFilter] = useState<string>(panel?.filters.title_filter || '');
   const [period, setPeriod] = useState<string>(panel?.filters.period || 'all');
-  const [groupBy, setGroupBy] = useState<'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt'>(
-    (panel?.filters.group_by as 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt') || 'unit'
+  const [groupBy, setGroupBy] = useState<'unit' | 'responsible' | 'sector' | 'task' | 'task_matrix' | 'tracker_gantt'>(
+    (panel?.filters.group_by as 'unit' | 'responsible' | 'sector' | 'task' | 'task_matrix' | 'tracker_gantt') || 'unit'
   );
 
   const { data: sectors } = useSectors();
@@ -195,7 +196,7 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
           <div className="space-y-2">
             <Label>Agrupar por / Modo de Exibição</Label>
-            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt')}>
+            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'unit' | 'responsible' | 'sector' | 'task' | 'task_matrix' | 'tracker_gantt')}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
