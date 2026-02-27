@@ -184,6 +184,13 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                 if (!task.due_date) return;
                 const dateKey = format(parseISO(task.due_date), 'yyyy-MM-dd');
                 const unitId = task.unit_id || 'unassigned';
+
+                const existingTask = taskMap.get(`${unitId}_${dateKey}`);
+                // Se já existir uma tarefa filha (subtarefa) na célula e a atual for a Tarefa Mãe, ignoramos
+                if (existingTask && existingTask.parent_task_id !== null && task.parent_task_id === null) {
+                    return;
+                }
+
                 taskMap.set(`${unitId}_${dateKey}`, task);
             });
 
@@ -216,9 +223,15 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
             const dailyStats = daysInMonth.map(day => {
                 const dateKey = format(day, 'yyyy-MM-dd');
-                const dayTasks = routineTasks.filter(t => t.due_date && format(parseISO(t.due_date), 'yyyy-MM-dd') === dateKey);
+                const allDayTasks = routineTasks.filter(t => t.due_date && format(parseISO(t.due_date), 'yyyy-MM-dd') === dateKey);
+
+                // Se o dia tiver tarefas filhas (parent_task_id !== null), contamos apenas elas na porcentagem. 
+                // Caso contrário (rotinas sem divisão por unidades), contamos a própria tarefa raiz.
+                const childTasks = allDayTasks.filter(t => t.parent_task_id !== null);
+                const dayTasks = childTasks.length > 0 ? childTasks : allDayTasks;
+
                 const total = dayTasks.length;
-                const completed = dayTasks.filter(t => t.status === 'concluida').length;
+                const completed = dayTasks.filter(t => t.status === 'concluida' || t.status === 'nao_aplicavel').length;
                 return { total, completed };
             });
 
