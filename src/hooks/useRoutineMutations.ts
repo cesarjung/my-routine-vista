@@ -36,6 +36,8 @@ interface UpdateRoutineData extends Partial<CreateRoutineData> {
   skipWeekendsHolidays?: boolean;
   monthlyAnchor?: 'date' | 'weekday';
   recurrence_mode?: RecurrenceMode;
+  startDate?: string | null;
+  dueDate?: string | null;
 }
 
 export const useCreateRoutine = () => {
@@ -388,50 +390,54 @@ export const useUpdateRoutine = () => {
 
       const updatePayload: any = { ...data };
 
+      // Extract properties that shouldn't go directly to the routines table
+      const { startDate, dueDate, recurrenceMode, skipWeekendsHolidays, monthlyAnchor, ...routineUpdatePayload } = updatePayload;
+
       // Update custom_schedule if skipWeekendsHolidays OR monthlyAnchor provided
-      if (data.skipWeekendsHolidays !== undefined || data.monthlyAnchor !== undefined) {
-
-        // Fetch current custom_schedule first or assume we merge? 
-        // For simplicity, we construct a new object, but we should preserve existing keys if they exist.
-        // But since we built this, currently only these 2 keys exist.
-
-        const currentCustomSchedule: any = {}; // Ideally fetch, but we can rely on what's passed for now or merge in DB logic? No.
-        // Actually, we should merge. But simplest way is constructing the object.
-
-        updatePayload.custom_schedule = {
-          skipWeekendsHolidays: data.skipWeekendsHolidays ?? false, // Default to false if undefined but we are in this block? No, be careful.
-          monthlyAnchor: data.monthlyAnchor ?? 'date'
+      if (skipWeekendsHolidays !== undefined || monthlyAnchor !== undefined) {
+        routineUpdatePayload.custom_schedule = {
+          skipWeekendsHolidays: skipWeekendsHolidays ?? false,
+          monthlyAnchor: monthlyAnchor ?? 'date'
         };
+      }
 
-        // If we are only updating one, we might lose the other if we don't pass both.
-        // RoutineEditDialog passes BOTH when editing. So this is safe for that use case.
-
-        // Ensure we don't send camelCase recurrenceMode if it exists in data
-        if ('recurrenceMode' in updatePayload) {
-          delete updatePayload.recurrenceMode;
-        }
-
-        // If we need to map it here (fallback)
-        if (data.recurrenceMode && !updatePayload.recurrence_mode) {
-          updatePayload.recurrence_mode = data.recurrenceMode;
-        }
-
-        delete updatePayload.skipWeekendsHolidays;
-        delete updatePayload.monthlyAnchor;
+      if (recurrenceMode && !routineUpdatePayload.recurrence_mode) {
+        routineUpdatePayload.recurrence_mode = recurrenceMode;
       }
 
       const { data: routine, error } = await supabase
         .from('routines')
-        .update(updatePayload)
+        .update(routineUpdatePayload)
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
+
+      // Update tasks dates for active tasks of this routine
+      if (startDate !== undefined || dueDate !== undefined) {
+        const taskUpdate: any = {};
+        if (startDate !== undefined) taskUpdate.start_date = startDate;
+        if (dueDate !== undefined) taskUpdate.due_date = dueDate;
+
+        if (Object.keys(taskUpdate).length > 0) {
+          const { error: taskError } = await supabase
+            .from('tasks')
+            .update(taskUpdate)
+            .eq('routine_id', id)
+            .in('status', ['pendente', 'em_andamento', 'atrasada']);
+
+          if (taskError) {
+            console.error("Error updating tasks dates for routine:", taskError);
+          }
+        }
+      }
+
       return routine;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routines'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast({
         title: 'Rotina atualizada',
         description: 'A rotina foi atualizada com sucesso.',
