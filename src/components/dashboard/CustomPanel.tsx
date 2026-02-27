@@ -106,7 +106,11 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
       if (filters.title_filter) {
-        tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
+        if (Array.isArray(filters.title_filter) && filters.title_filter.length > 0) {
+          tasksQuery = tasksQuery.in('title', filters.title_filter);
+        } else if (typeof filters.title_filter === 'string') {
+          tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
+        }
       }
       if (periodDates) {
         tasksQuery = tasksQuery
@@ -507,7 +511,13 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
     }
 
     // Filter by panel's title filter if set
-    if (panel.filters.title_filter && !(task as any).title?.toLowerCase().includes(panel.filters.title_filter.toLowerCase())) return false;
+    if (panel.filters.title_filter) {
+      if (Array.isArray(panel.filters.title_filter) && panel.filters.title_filter.length > 0) {
+        if (!panel.filters.title_filter.includes((task as any).title)) return false;
+      } else if (typeof panel.filters.title_filter === 'string') {
+        if (!(task as any).title?.toLowerCase().includes(panel.filters.title_filter.toLowerCase())) return false;
+      }
+    }
 
     // Filter by frequency (using routine map from panel data)
     if (tasksDialog.frequency && panelData?.routinesMap) {

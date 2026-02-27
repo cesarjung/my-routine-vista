@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { useSectors } from '@/hooks/useSectors';
 import { useUnits } from '@/hooks/useUnits';
+import { useRoutines } from '@/hooks/useRoutines';
 import { useCreateDashboardPanel, useUpdateDashboardPanel, PanelFilters, DashboardPanel } from '@/hooks/useDashboardPanels';
 import { MultiSelect } from '@/components/ui/multi-select';
 
@@ -80,7 +81,14 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
   const [selectedStatus, setSelectedStatus] = useState<string[]>(panel?.filters.status || []);
   const [selectedFrequencies, setSelectedFrequencies] = useState<string[]>(panel?.filters.task_frequency || []);
-  const [titleFilter, setTitleFilter] = useState<string>(panel?.filters.title_filter || '');
+  // title_filter can be a string (legacy) or an array of strings
+  const [selectedTitles, setSelectedTitles] = useState<string[]>(
+    Array.isArray(panel?.filters.title_filter)
+      ? panel.filters.title_filter
+      : panel?.filters.title_filter
+        ? [panel.filters.title_filter]
+        : []
+  );
   const [period, setPeriod] = useState<string>(panel?.filters.period || 'all');
   const [groupBy, setGroupBy] = useState<'unit' | 'responsible' | 'sector' | 'task' | 'task_matrix' | 'tracker_gantt'>(
     (panel?.filters.group_by as 'unit' | 'responsible' | 'sector' | 'task' | 'task_matrix' | 'tracker_gantt') || 'unit'
@@ -88,6 +96,7 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
 
   const { data: sectors } = useSectors();
   const { data: units } = useUnits();
+  const { data: routines } = useRoutines();
   const createPanel = useCreateDashboardPanel();
   const updatePanel = useUpdateDashboardPanel();
 
@@ -115,7 +124,7 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
       unit_id: unitIds.length > 0 ? unitIds : undefined,
       status: selectedStatus.length > 0 ? selectedStatus : undefined,
       task_frequency: selectedFrequencies.length > 0 ? selectedFrequencies : undefined,
-      title_filter: titleFilter || undefined,
+      title_filter: (selectedTitles.length > 0 ? selectedTitles : undefined) as any,
       period: period as PanelFilters['period'],
       group_by: groupBy
     };
@@ -153,7 +162,7 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
     setUnitIds([]);
     setSelectedStatus([]);
     setSelectedFrequencies([]);
-    setTitleFilter('');
+    setSelectedTitles([]);
     setPeriod('all');
     setGroupBy('unit');
   };
@@ -185,12 +194,18 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="titleFilter">Filtrar por Nome da Tarefa</Label>
-            <Input
-              id="titleFilter"
-              value={titleFilter}
-              onChange={(e) => setTitleFilter(e.target.value)}
-              placeholder="Ex: Checklist"
+            <Label>Filtrar por Nome da Tarefa (Rotina)</Label>
+            <MultiSelect
+              options={
+                Array.from(new Set(routines?.map(r => r.title) || [])).sort().map(title => ({
+                  label: title,
+                  value: title
+                }))
+              }
+              selected={selectedTitles}
+              onChange={setSelectedTitles}
+              placeholder="Todas as tarefas"
+              searchPlaceholder="Buscar tarefa..."
             />
           </div>
 
