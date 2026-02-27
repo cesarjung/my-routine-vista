@@ -105,13 +105,47 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       if (filters.status && filters.status.length > 0) {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
+
+      let matchedRoutineIds: string[] = [];
       if (filters.title_filter) {
         if (Array.isArray(filters.title_filter) && filters.title_filter.length > 0) {
-          tasksQuery = tasksQuery.in('title', filters.title_filter);
+          // If we have exact titles from the MultiSelect, they are mostly Routine titles.
+          // Let's find routines that match these titles first.
+          const { data: matchedRoutines } = await supabase
+            .from('routines')
+            .select('id')
+            .in('title', filters.title_filter);
+
+          if (matchedRoutines && matchedRoutines.length > 0) {
+            matchedRoutineIds = matchedRoutines.map(r => r.id);
+            // We want tasks that either match the title EXACTLY (legacy/ad-hoc tasks without routines) 
+            // OR belong to these matched routines.
+            // Since Supabase `in` chain acts as AND, we need to use `or`
+            const titlesStr = filters.title_filter.map(t => `"${t}"`).join();
+            const routinesStr = matchedRoutineIds.map(id => `"${id}"`).join();
+            tasksQuery = tasksQuery.or(`title.in.(${titlesStr}),routine_id.in.(${routinesStr})`);
+          } else {
+            // Just search by title if no routines matched
+            tasksQuery = tasksQuery.in('title', filters.title_filter);
+          }
         } else if (typeof filters.title_filter === 'string') {
-          tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
+          // Fallback legacy behavior
+
+          const { data: matchedRoutines } = await supabase
+            .from('routines')
+            .select('id')
+            .ilike('title', `%${filters.title_filter}%`);
+
+          if (matchedRoutines && matchedRoutines.length > 0) {
+            matchedRoutineIds = matchedRoutines.map(r => r.id);
+            const routinesStr = matchedRoutineIds.map(id => `"${id}"`).join();
+            tasksQuery = tasksQuery.or(`title.ilike.%${filters.title_filter}%,routine_id.in.(${routinesStr})`);
+          } else {
+            tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
+          }
         }
       }
+
       if (periodDates) {
         tasksQuery = tasksQuery
           .gte('created_at', periodDates.start.toISOString())
@@ -124,15 +158,21 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       // Get routines for frequency mapping
       const routineIds = [...new Set(rawTasks?.filter(t => t.routine_id).map(t => t.routine_id) || [])];
       let routinesMap: Record<string, string> = {};
+      let routineTitlesMap: Record<string, string> = {};
 
       if (routineIds.length > 0) {
         const { data: routines } = await supabase
           .from('routines')
-          .select('id, frequency')
+          .select('id, frequency, title')
           .in('id', routineIds);
 
         routinesMap = (routines || []).reduce((acc, r) => {
           acc[r.id] = r.frequency;
+          return acc;
+        }, {} as Record<string, string>);
+
+        routineTitlesMap = (routines || []).reduce((acc, r) => {
+          acc[r.id] = r.title;
           return acc;
         }, {} as Record<string, string>);
       }
@@ -342,10 +382,10 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         });
 
         results = Array.from(routineMap.values());
-        return { results, routinesMap, units: units || [] };
+        return { results, routinesMap, routineTitlesMap, units: units || [] };
       }
 
-      return { results, routinesMap };
+      return { results, routinesMap, routineTitlesMap };
     }
   });
 };
@@ -512,10 +552,18 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
 
     // Filter by panel's title filter if set
     if (panel.filters.title_filter) {
+      const taskTitle = (task as any).title || '';
+      const routineTitle = (task as any).routine?.title || panelData?.routineTitlesMap?.[(task as any).routine_id] || '';
+
       if (Array.isArray(panel.filters.title_filter) && panel.filters.title_filter.length > 0) {
-        if (!panel.filters.title_filter.includes((task as any).title)) return false;
+        const matchesTitle = panel.filters.title_filter.includes(taskTitle);
+        const matchesRoutine = panel.filters.title_filter.includes(routineTitle);
+        if (!matchesTitle && !matchesRoutine) return false;
       } else if (typeof panel.filters.title_filter === 'string') {
-        if (!(task as any).title?.toLowerCase().includes(panel.filters.title_filter.toLowerCase())) return false;
+        const filterStr = panel.filters.title_filter.toLowerCase();
+        const matchesTitle = taskTitle.toLowerCase().includes(filterStr);
+        const matchesRoutine = routineTitle.toLowerCase().includes(filterStr);
+        if (!matchesTitle && !matchesRoutine) return false;
       }
     }
 
