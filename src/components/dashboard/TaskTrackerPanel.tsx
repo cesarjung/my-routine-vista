@@ -476,7 +476,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                 <thead className="bg-background shadow-sm">
                                                     <tr>
                                                         <th
-                                                            className="drag-handle sticky-col-1 text-white dark:text-black font-bold p-1 px-2 text-center uppercase text-[10px] w-[160px] min-w-[160px] cursor-move transition-colors group relative"
+                                                            className="drag-handle sticky-col-1 text-white dark:text-black font-bold p-1 px-2 text-center uppercase text-[10px] w-[140px] min-w-[140px] max-w-[140px] whitespace-normal break-words cursor-move transition-colors group relative"
                                                             style={{ backgroundColor: bannerColor }}
                                                         >
                                                             <div className="absolute left-1 top-1/2 -translate-y-1/2 text-white/50 dark:text-black/50 group-hover:text-white dark:group-hover:text-black">
@@ -485,7 +485,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                             ROTINAS
                                                         </th>
                                                         <th
-                                                            className="sticky-col-2 text-white dark:text-black font-bold p-1 text-center uppercase text-[10px] w-[160px] min-w-[160px]"
+                                                            className="sticky-col-2 text-white dark:text-black font-bold p-1 text-center uppercase text-[10px] w-[180px] min-w-[180px] max-w-[180px] whitespace-normal"
                                                             style={{ backgroundColor: bannerColor }}
                                                         >
                                                             {/* Blank space */}
@@ -512,14 +512,14 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                 <tbody>
                                                     {/* Routine Info Header Row */}
                                                     <tr>
-                                                        <th className="sticky-col-1 bg-white dark:bg-background text-black dark:text-foreground font-bold p-1.5 text-center text-[10px] uppercase border-t-2 border-[#888] align-top relative">
+                                                        <th className="sticky-col-1 bg-white dark:bg-background text-black dark:text-foreground font-bold p-1.5 text-center text-[10px] uppercase border-t-2 border-[#888] align-top relative w-[140px] min-w-[140px] max-w-[140px] whitespace-normal break-words">
                                                             HORÁRIO
                                                             <div className="text-[9px] font-normal text-muted-foreground mt-0.5 whitespace-nowrap">
                                                                 {timeRange}
                                                             </div>
                                                         </th>
                                                         <th
-                                                            className="sticky-col-2 bg-black font-bold p-1.5 text-center whitespace-nowrap text-[11px] border-t-2 border-[#888]"
+                                                            className="sticky-col-2 bg-black font-bold p-1.5 text-center text-[11px] leading-tight border-t-2 border-[#888] w-[180px] min-w-[180px] max-w-[180px] break-words whitespace-normal align-middle"
                                                             style={{ color: bannerColor }}
                                                         >
                                                             {routine.title}
@@ -538,12 +538,12 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
                                                     {/* Routine Checkpoint Header Row */}
                                                     <tr>
-                                                        <th className="sticky-col-1 bg-white dark:bg-background p-0 m-0 align-middle">
+                                                        <th className="sticky-col-1 bg-white dark:bg-background p-0 m-0 align-middle w-[140px] min-w-[140px] max-w-[140px]">
                                                             <div className="text-[10px] font-bold text-muted-foreground uppercase text-center w-full">
                                                                 DESCRIÇÃO
                                                             </div>
                                                         </th>
-                                                        <th className="sticky-col-2 bg-white dark:bg-background p-0 px-1">
+                                                        <th className="sticky-col-2 bg-white dark:bg-background p-0 px-1 w-[180px] min-w-[180px] max-w-[180px]">
                                                             <div className="bg-[#f08c16] text-black font-bold p-1 px-2 text-left text-[10px] uppercase rounded-sm mx-1 my-1">
                                                                 UNIDADES
                                                             </div>
@@ -568,13 +568,13 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                     {matrix.map((row, rowIndex) => (
                                                         <tr key={row.unit.id} className="hover:bg-accent/30 transition-colors group h-full">
                                                             {rowIndex === 0 && (
-                                                                <td rowSpan={matrix.length} className="sticky-col-1 bg-white dark:bg-background p-3 align-middle text-center text-[10px] font-medium group-hover:bg-background border-r-2 border-[#888]">
+                                                                <td rowSpan={matrix.length} className="sticky-col-1 bg-white dark:bg-background p-3 align-middle text-center text-[10px] font-medium group-hover:bg-background border-r-2 border-[#888] w-[140px] min-w-[140px] max-w-[140px] break-words whitespace-normal">
                                                                     <div className="whitespace-normal break-words mt-1 flex flex-col justify-center h-full min-h-[40px]">
                                                                         {routine.description || 'Acompanhamento da Rotina.'}
                                                                     </div>
                                                                 </td>
                                                             )}
-                                                            <td className="sticky-col-2 bg-white dark:bg-background p-1 px-2 font-medium text-[10px] whitespace-nowrap overflow-hidden text-ellipsis group-hover:bg-accent/10 border-r-2 border-[#888]" title={row.unit.name}>
+                                                            <td className="sticky-col-2 bg-white dark:bg-background p-1 px-2 font-medium text-[10px] break-words whitespace-normal leading-tight overflow-hidden group-hover:bg-accent/10 border-r-2 border-[#888] w-[180px] min-w-[180px] max-w-[180px] align-middle" title={row.unit.name}>
                                                                 {row.unit.name}
                                                             </td>
                                                             {row.days.map((task, colIndex) => {
