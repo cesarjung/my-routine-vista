@@ -2,23 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, ChevronLeft, ChevronRight, FileSpreadsheet, Check, X as XIcon, Minus, GripVertical, RefreshCw } from 'lucide-react';
-import {
-    DndContext,
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-} from '@dnd-kit/core';
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    rectSortingStrategy,
-    useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { Rnd, RndDragCallback, RndResizeCallback } from 'react-rnd';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,32 +22,14 @@ interface TaskTrackerPanelProps {
     initialRoutineIds?: string[];
 }
 
-interface SortableRoutineCardProps {
-    idItem: string;
-    children: (props: any) => React.ReactNode;
-}
 
-const SortableRoutineCard = ({ idItem, children }: SortableRoutineCardProps) => {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: idItem });
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.8 : 1,
-        position: isDragging ? 'relative' as const : 'relative' as const,
-        zIndex: isDragging ? 50 : 1,
-    };
-    return (
-        <div ref={setNodeRef} style={style} className={`mb-6 border rounded-lg shadow-sm bg-card overflow-hidden flex flex-col ${isDragging ? 'shadow-xl scale-[1.02] ring-2 ring-primary/50' : ''}`}>
-            {children({ attributes, listeners, isDragging })}
-        </div>
-    );
-};
 
 export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrackerPanelProps) => {
     const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>(initialRoutineIds);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [frequencyFilter, setFrequencyFilter] = useState<string>('all');
-    const [orderedRoutineIds, setOrderedRoutineIds] = useState<string[]>([]);
+    const [layouts, setLayouts] = useState<Record<string, { x: number, y: number, width: number, height: number }>>({});
+    const [maxHeight, setMaxHeight] = useState(600);
     const [selectedRoutineForPanel, setSelectedRoutineForPanel] = useState<{ routine: any; date: Date } | null>(null);
     const queryClient = useQueryClient();
     const { user } = useAuth();
@@ -71,18 +37,22 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
     const updateTaskMutation = useUpdateTask();
 
     useEffect(() => {
-        const savedOrder = localStorage.getItem('tasktracker-routine-order');
-        if (savedOrder) {
+        const savedLayouts = localStorage.getItem('tasktracker-layouts');
+        if (savedLayouts) {
             try {
-                setOrderedRoutineIds(JSON.parse(savedOrder));
+                setLayouts(JSON.parse(savedLayouts));
             } catch (e) { }
         }
     }, []);
 
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-    );
+    const updateLayout = (id: string, updates: Partial<{ x: number, y: number, width: number, height: number }>) => {
+        setLayouts(prev => {
+            const current = prev[id] || { x: 0, y: 0, width: 400, height: 250 };
+            const next = { ...prev, [id]: { ...current, ...updates } };
+            localStorage.setItem('tasktracker-layouts', JSON.stringify(next));
+            return next;
+        });
+    };
 
     useEffect(() => {
         const channel = supabase.channel('task-tracker-changes')
@@ -260,32 +230,40 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
         await updateTaskMutation.mutateAsync({ id: taskId, status: 'pendente', comment: 'Reaberta através do Rastreador de Tarefas' });
     };
 
-    const sortedRoutinesData = useMemo(() => {
-        if (!orderedRoutineIds.length) return routinesData;
+    const sortedRoutinesData = routinesData;
 
-        return [...routinesData].sort((a, b) => {
-            const indexA = orderedRoutineIds.indexOf(a.routine.id);
-            const indexB = orderedRoutineIds.indexOf(b.routine.id);
-            if (indexA === -1 && indexB === -1) return 0;
-            if (indexA === -1) return 1;
-            if (indexB === -1) return -1;
-            return indexA - indexB;
+    useEffect(() => {
+        if (sortedRoutinesData.length === 0) return;
+
+        let changed = false;
+        const newLayouts = { ...layouts };
+
+        sortedRoutinesData.forEach((r, index) => {
+            if (!newLayouts[r.routine.id]) {
+                const col = index % 3;
+                const row = Math.floor(index / 3);
+                newLayouts[r.routine.id] = {
+                    x: col * 420,
+                    y: row * 280,
+                    width: 400,
+                    height: 250
+                };
+                changed = true;
+            }
         });
-    }, [routinesData, orderedRoutineIds]);
 
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (over && active.id !== over.id) {
-            setOrderedRoutineIds((prev) => {
-                const currentIds = sortedRoutinesData.map(r => r.routine.id);
-                const activeIndex = currentIds.indexOf(active.id as string);
-                const overIndex = currentIds.indexOf(over.id as string);
-                const nextOrder = arrayMove(currentIds, activeIndex, overIndex);
-                localStorage.setItem('tasktracker-routine-order', JSON.stringify(nextOrder));
-                return nextOrder;
-            });
+        if (changed) {
+            setLayouts(newLayouts);
+            localStorage.setItem('tasktracker-layouts', JSON.stringify(newLayouts));
         }
-    };
+
+        let maxBottom = 600;
+        Object.values(newLayouts).forEach(l => {
+            if (l.y + l.height > maxBottom) maxBottom = l.y + l.height;
+        });
+        setMaxHeight(maxBottom + 100);
+
+    }, [sortedRoutinesData, layouts]);
 
     const handlePrevMonth = () => setCurrentDate(prev => subMonths(prev, 1));
     const handleNextMonth = () => setCurrentDate(prev => addMonths(prev, 1));
@@ -373,171 +351,189 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                             .matrix-table thead .sticky-col-1 { z-index: 50; }
                             .matrix-table thead .sticky-col-2 { z-index: 50; }
                         `}} />
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <SortableContext items={sortedRoutinesData.map(r => r.routine.id)} strategy={rectSortingStrategy}>
-                                <div className="flex flex-wrap items-start content-start gap-4 p-2 pb-8">
-                                    {/* BODY REPEATED PER ROUTINE */}
-                                    {sortedRoutinesData.map(({ routine, matrix, dailyStats }, rIndex) => (
-                                        <SortableRoutineCard key={routine.id} idItem={routine.id}>
-                                            {({ attributes, listeners, isDragging }: any) => (
-                                                <div
-                                                    className="overflow-auto custom-scrollbar max-h-[70vh] resize min-h-[150px] min-w-[300px] w-full xl:w-[calc(50%-8px)] border border-border rounded-md shadow-sm bg-background pb-1"
-                                                    style={{ maxWidth: '100%' }}
-                                                >
-                                                    <table className="matrix-table w-full text-xs font-sans min-w-max border-separate border-spacing-0 relative pb-4">
-                                                        {/* INDIVIDUAL THEAD FOR DATES PER ROUTINE */}
-                                                        <thead className="bg-background shadow-sm">
-                                                            <tr>
-                                                                <th className="sticky-col-1 bg-[#f08c16] text-black font-bold p-1 px-2 text-center uppercase text-[10px] w-[160px] min-w-[160px]">
-                                                                    ROTINAS
-                                                                </th>
-                                                                <th className="sticky-col-2 bg-[#f08c16] text-black font-bold p-1 text-center uppercase text-[10px] w-[160px] min-w-[160px]">
-                                                                    {/* Blank space */}
-                                                                </th>
-                                                                {daysInMonth.map(day => (
-                                                                    <th key={`d-${day.toISOString()}`} className="bg-muted border-b border-[#ddd] text-muted-foreground font-semibold p-1 w-[26px] min-w-[26px] text-center text-[10px]">
-                                                                        {format(day, 'dd/M')}
-                                                                    </th>
-                                                                ))}
-                                                            </tr>
-                                                            <tr>
-                                                                <th className="sticky-col-1 bg-[#e2e2e2] dark:bg-muted text-black dark:text-foreground font-bold p-1 px-2 text-center text-[9px] uppercase">
-                                                                    FILTRO C/ {routinesData.length} ROTINA(S)
-                                                                </th>
-                                                                <th className="sticky-col-2 bg-[#e2e2e2] dark:bg-muted text-black dark:text-foreground font-bold p-1 px-2 text-center text-[9px] uppercase">
-                                                                </th>
-                                                                {daysInMonth.map(day => (
-                                                                    <th key={`w-${day.toISOString()}`} className="bg-[#e2e2e2] dark:bg-secondary/40 text-muted-foreground font-medium p-1 text-center text-[9px] uppercase">
-                                                                        {format(day, 'EE', { locale: ptBR }).substring(0, 3)}
-                                                                    </th>
-                                                                ))}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {/* Routine Info Header Row */}
-                                                            <tr>
-                                                                <th className="sticky-col-1 bg-white dark:bg-background text-black dark:text-foreground font-bold p-1.5 text-center text-[10px] uppercase border-t-2 border-[#888] align-top relative">
-                                                                    <div {...attributes} {...listeners} className="absolute left-1 top-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
-                                                                        <GripVertical className="w-4 h-4" />
-                                                                    </div>
-                                                                    HORÁRIO
-                                                                    <div className="text-[9px] font-normal text-muted-foreground mt-0.5 whitespace-nowrap">
-                                                                        {routine.start_time ? routine.start_time.substring(0, 5) : '00:00'} - {routine.end_time ? routine.end_time.substring(0, 5) : '23:59'}
-                                                                    </div>
-                                                                </th>
-                                                                <th className="sticky-col-2 bg-black text-[#f08c16] font-bold p-1.5 text-center whitespace-nowrap text-[11px] border-t-2 border-[#888]">
-                                                                    {routine.title}
-                                                                </th>
-                                                                {dailyStats.map((stat, i) => {
-                                                                    const pct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : null;
-                                                                    const bgClass = 'bg-[#df7d70] text-black';
-                                                                    return (
-                                                                        <th key={`pct-${i}`} className={`font-medium p-1 text-center text-[9px] ${bgClass} border-t-2 border-[#888] align-top`}>
-                                                                            <div className="mt-1.5">{pct !== null ? `${pct}%` : '0%'}</div>
-                                                                        </th>
-                                                                    );
-                                                                })}
-                                                            </tr>
+                        <div className="relative w-full" style={{ minHeight: maxHeight }}>
+                            {/* BODY REPEATED PER ROUTINE */}
+                            {sortedRoutinesData.map(({ routine, matrix, dailyStats }, rIndex) => {
+                                const l = layouts[routine.id] || { x: rIndex * 50, y: rIndex * 50, width: 400, height: 250 };
+                                return (
+                                    <Rnd
+                                        key={routine.id}
+                                        default={{
+                                            x: l.x,
+                                            y: l.y,
+                                            width: l.width,
+                                            height: l.height
+                                        }}
+                                        position={{ x: l.x, y: l.y }}
+                                        size={{ width: l.width, height: l.height }}
+                                        onDragStop={(e, d) => updateLayout(routine.id, { x: d.x, y: d.y })}
+                                        onResizeStop={(e, direction, ref, delta, position) => {
+                                            updateLayout(routine.id, {
+                                                width: parseInt(ref.style.width, 10),
+                                                height: parseInt(ref.style.height, 10),
+                                                ...position
+                                            });
+                                        }}
+                                        dragHandleClassName="drag-handle"
+                                        minWidth={300}
+                                        minHeight={150}
+                                        bounds="parent"
+                                        className="border border-border rounded-md shadow-sm bg-background overflow-hidden flex flex-col z-10"
+                                    >
+                                        <div className="w-full h-full overflow-auto custom-scrollbar pb-1 flex flex-col">
+                                            <table className="matrix-table w-full text-xs font-sans min-w-max border-separate border-spacing-0 relative pb-4">
+                                                {/* INDIVIDUAL THEAD FOR DATES PER ROUTINE */}
+                                                <thead className="bg-background shadow-sm">
+                                                    <tr>
+                                                        <th className="drag-handle sticky-col-1 bg-[#f08c16] text-black font-bold p-1 px-2 text-center uppercase text-[10px] w-[160px] min-w-[160px] cursor-move hover:bg-[#e07d0a] transition-colors group relative">
+                                                            <div className="absolute left-1 top-1/2 -translate-y-1/2 text-black/50 group-hover:text-black">
+                                                                <GripVertical className="w-4 h-4" />
+                                                            </div>
+                                                            ROTINAS
+                                                        </th>
+                                                        <th className="sticky-col-2 bg-[#f08c16] text-black font-bold p-1 text-center uppercase text-[10px] w-[160px] min-w-[160px]">
+                                                            {/* Blank space */}
+                                                        </th>
+                                                        {daysInMonth.map(day => (
+                                                            <th key={`d-${day.toISOString()}`} className="bg-muted border-b border-[#ddd] text-muted-foreground font-semibold p-1 w-[26px] min-w-[26px] text-center text-[10px]">
+                                                                {format(day, 'dd/M')}
+                                                            </th>
+                                                        ))}
+                                                    </tr>
+                                                    <tr>
+                                                        <th className="sticky-col-1 bg-[#e2e2e2] dark:bg-muted text-black dark:text-foreground font-bold p-1 px-2 text-center text-[9px] uppercase">
+                                                            FILTRO C/ {routinesData.length} ROTINA(S)
+                                                        </th>
+                                                        <th className="sticky-col-2 bg-[#e2e2e2] dark:bg-muted text-black dark:text-foreground font-bold p-1 px-2 text-center text-[9px] uppercase">
+                                                        </th>
+                                                        {daysInMonth.map(day => (
+                                                            <th key={`w-${day.toISOString()}`} className="bg-[#e2e2e2] dark:bg-secondary/40 text-muted-foreground font-medium p-1 text-center text-[9px] uppercase">
+                                                                {format(day, 'EE', { locale: ptBR }).substring(0, 3)}
+                                                            </th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {/* Routine Info Header Row */}
+                                                    <tr>
+                                                        <th className="sticky-col-1 bg-white dark:bg-background text-black dark:text-foreground font-bold p-1.5 text-center text-[10px] uppercase border-t-2 border-[#888] align-top relative">
+                                                            HORÁRIO
+                                                            <div className="text-[9px] font-normal text-muted-foreground mt-0.5 whitespace-nowrap">
+                                                                {routine.start_time ? routine.start_time.substring(0, 5) : '00:00'} - {routine.end_time ? routine.end_time.substring(0, 5) : '23:59'}
+                                                            </div>
+                                                        </th>
+                                                        <th className="sticky-col-2 bg-black text-[#f08c16] font-bold p-1.5 text-center whitespace-nowrap text-[11px] border-t-2 border-[#888]">
+                                                            {routine.title}
+                                                        </th>
 
-                                                            {/* Routine Checkpoint Header Row */}
-                                                            <tr>
-                                                                <th className="sticky-col-1 bg-white dark:bg-background p-0 m-0 align-middle">
-                                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase text-center w-full">
-                                                                        DESCRIÇÃO
-                                                                    </div>
+                                                        {dailyStats.map((stat, i) => {
+                                                            const pct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : null;
+                                                            const bgClass = 'bg-[#df7d70] text-black';
+                                                            return (
+                                                                <th key={`pct-${i}`} className={`font-medium p-1 text-center text-[9px] ${bgClass} border-t-2 border-[#888] align-top`}>
+                                                                    <div className="mt-1.5">{pct !== null ? `${pct}%` : '0%'}</div>
                                                                 </th>
-                                                                <th className="sticky-col-2 bg-white dark:bg-background p-0 px-1">
-                                                                    <div className="bg-[#f08c16] text-black font-bold p-1 px-2 text-left text-[10px] uppercase rounded-sm mx-1 my-1">
-                                                                        UNIDADES
-                                                                    </div>
-                                                                </th>
-                                                                {
-                                                                    dailyStats.map((stat, i) => {
-                                                                        const info = dailyStats[i];
-                                                                        return (
-                                                                            <th key={`b-${i}`} className="bg-black border-[#444] border-r border-b p-0.5">
-                                                                                {info.total > 0 ? (
-                                                                                    <div className="text-[9px] text-white text-center font-normal">{Math.round((info.completed / info.total) * 100)}%</div>
-                                                                                ) : (
-                                                                                    <div className="text-[9px] text-[#555] text-center font-normal">-</div>
-                                                                                )}
-                                                                            </th>
-                                                                        );
-                                                                    })
-                                                                }
-                                                            </tr>
+                                                            );
+                                                        })}
+                                                    </tr>
 
-                                                            {/* Routine Units Rows */}
-                                                            {matrix.map((row, rowIndex) => (
-                                                                <tr key={row.unit.id} className={`hover:bg-accent/30 transition-colors group h-full ${isDragging ? 'bg-background' : ''}`}>
-                                                                    {rowIndex === 0 && (
-                                                                        <td rowSpan={matrix.length} className="sticky-col-1 bg-white dark:bg-background p-3 align-middle text-center text-[10px] font-medium group-hover:bg-background border-r-2 border-[#888]">
-                                                                            <div className="whitespace-normal break-words mt-1 flex flex-col justify-center h-full min-h-[40px]">
-                                                                                {routine.description || 'Acompanhamento da Rotina.'}
-                                                                            </div>
-                                                                        </td>
-                                                                    )}
-                                                                    <td className="sticky-col-2 bg-white dark:bg-background p-1 px-2 font-medium text-[10px] whitespace-nowrap overflow-hidden text-ellipsis group-hover:bg-accent/10 border-r-2 border-[#888]" title={row.unit.name}>
-                                                                        {row.unit.name}
+                                                    {/* Routine Checkpoint Header Row */}
+                                                    <tr>
+                                                        <th className="sticky-col-1 bg-white dark:bg-background p-0 m-0 align-middle">
+                                                            <div className="text-[10px] font-bold text-muted-foreground uppercase text-center w-full">
+                                                                DESCRIÇÃO
+                                                            </div>
+                                                        </th>
+                                                        <th className="sticky-col-2 bg-white dark:bg-background p-0 px-1">
+                                                            <div className="bg-[#f08c16] text-black font-bold p-1 px-2 text-left text-[10px] uppercase rounded-sm mx-1 my-1">
+                                                                UNIDADES
+                                                            </div>
+                                                        </th>
+                                                        {
+                                                            dailyStats.map((stat, i) => {
+                                                                const info = dailyStats[i];
+                                                                return (
+                                                                    <th key={`b-${i}`} className="bg-black border-[#444] border-r border-b p-0.5">
+                                                                        {info.total > 0 ? (
+                                                                            <div className="text-[9px] text-white text-center font-normal">{Math.round((info.completed / info.total) * 100)}%</div>
+                                                                        ) : (
+                                                                            <div className="text-[9px] text-[#555] text-center font-normal">-</div>
+                                                                        )}
+                                                                    </th>
+                                                                );
+                                                            })
+                                                        }
+                                                    </tr>
+
+                                                    {/* Routine Units Rows */}
+                                                    {matrix.map((row, rowIndex) => (
+                                                        <tr key={row.unit.id} className={`hover:bg-accent/30 transition-colors group h-full ${isDragging ? 'bg-background' : ''}`}>
+                                                            {rowIndex === 0 && (
+                                                                <td rowSpan={matrix.length} className="sticky-col-1 bg-white dark:bg-background p-3 align-middle text-center text-[10px] font-medium group-hover:bg-background border-r-2 border-[#888]">
+                                                                    <div className="whitespace-normal break-words mt-1 flex flex-col justify-center h-full min-h-[40px]">
+                                                                        {routine.description || 'Acompanhamento da Rotina.'}
+                                                                    </div>
+                                                                </td>
+                                                            )}
+                                                            <td className="sticky-col-2 bg-white dark:bg-background p-1 px-2 font-medium text-[10px] whitespace-nowrap overflow-hidden text-ellipsis group-hover:bg-accent/10 border-r-2 border-[#888]" title={row.unit.name}>
+                                                                {row.unit.name}
+                                                            </td>
+                                                            {row.days.map((task, colIndex) => {
+                                                                if (task === null) return <td key={colIndex} className="p-0.5 text-center bg-black border-[#222]"></td>;
+                                                                if (task === 'empty') return <td key={colIndex} className="p-0.5 text-center text-muted-foreground/30 font-light text-[9px] bg-white dark:bg-card border-dotted border-gray-100">-</td>;
+
+                                                                let displayChar: React.ReactNode = '?';
+                                                                let bgClass = '';
+
+                                                                if (task.status === 'concluida') { displayChar = <Check className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#43a047] text-white border-b-2 border-b-[#2e7d32] shadow-sm'; }
+                                                                else if (task.status === 'nao_aplicavel') { displayChar = <Check className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#0A3D14] text-white border-b-2 border-b-[#05260A] shadow-sm'; }
+                                                                else if (task.status === 'atrasada') { displayChar = <XIcon className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#e53935] text-white border-b-2 border-b-[#c62828] shadow-sm'; }
+                                                                else if (task.status === 'cancelada') { displayChar = 'C'; bgClass = 'bg-gray-500 text-white border-b-2 border-b-gray-700 shadow-sm'; }
+                                                                else { displayChar = <Minus className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#fb8c00] text-white border-b-2 border-b-[#ef6c00] shadow-sm'; }
+
+                                                                const isAllowed = canUserAccessTask(task);
+                                                                const cellContent = (
+                                                                    <div
+                                                                        onClick={() => handleTaskClick(task, routine)}
+                                                                        className={`flex items-center justify-center w-[20px] h-[16px] mx-auto rounded-[2px] ${isAllowed ? 'cursor-pointer hover:opacity-80' : 'cursor-default opacity-90'} transition-opacity ${bgClass}`}
+                                                                        title={task.status !== 'concluida' ? `Status: ${task.status}\nRotina: ${routine.title}\nVencimento: ${format(parseISO(task.due_date), 'dd/MM/yyyy')}` : undefined}
+                                                                    >
+                                                                        {displayChar}
+                                                                    </div>
+                                                                );
+
+                                                                return (
+                                                                    <td key={colIndex} className="p-0">
+                                                                        <div className="h-full w-full min-h-[22px] p-0.5 flex items-center justify-center bg-white dark:bg-card hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50 transition-colors">
+                                                                            {task.status === 'concluida' ? (
+                                                                                <HoverCard openDelay={200} closeDelay={300}>
+                                                                                    <HoverCardTrigger asChild>
+                                                                                        {cellContent}
+                                                                                    </HoverCardTrigger>
+                                                                                    <HoverCardContent className="w-80 p-4 z-[100] shadow-xl border-accent" side="top" align="center">
+                                                                                        <TaskHoverCard
+                                                                                            task={task}
+                                                                                            routine={routine}
+                                                                                            isAllowed={isAllowed}
+                                                                                            handleReopenTask={handleReopenTask}
+                                                                                            updateTaskMutationPending={updateTaskMutation.isPending}
+                                                                                        />
+                                                                                    </HoverCardContent>
+                                                                                </HoverCard>
+                                                                            ) : cellContent}
+                                                                        </div>
                                                                     </td>
-                                                                    {row.days.map((task, colIndex) => {
-                                                                        if (task === null) return <td key={colIndex} className="p-0.5 text-center bg-black border-[#222]"></td>;
-                                                                        if (task === 'empty') return <td key={colIndex} className="p-0.5 text-center text-muted-foreground/30 font-light text-[9px] bg-white dark:bg-card border-dotted border-gray-100">-</td>;
-
-                                                                        let displayChar: React.ReactNode = '?';
-                                                                        let bgClass = '';
-
-                                                                        if (task.status === 'concluida') { displayChar = <Check className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#43a047] text-white border-b-2 border-b-[#2e7d32] shadow-sm'; }
-                                                                        else if (task.status === 'nao_aplicavel') { displayChar = <Check className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#0A3D14] text-white border-b-2 border-b-[#05260A] shadow-sm'; }
-                                                                        else if (task.status === 'atrasada') { displayChar = <XIcon className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#e53935] text-white border-b-2 border-b-[#c62828] shadow-sm'; }
-                                                                        else if (task.status === 'cancelada') { displayChar = 'C'; bgClass = 'bg-gray-500 text-white border-b-2 border-b-gray-700 shadow-sm'; }
-                                                                        else { displayChar = <Minus className="w-3.5 h-3.5 stroke-[3]" />; bgClass = 'bg-[#fb8c00] text-white border-b-2 border-b-[#ef6c00] shadow-sm'; }
-
-                                                                        const isAllowed = canUserAccessTask(task);
-                                                                        const cellContent = (
-                                                                            <div
-                                                                                onClick={() => handleTaskClick(task, routine)}
-                                                                                className={`flex items-center justify-center w-[20px] h-[16px] mx-auto rounded-[2px] ${isAllowed ? 'cursor-pointer hover:opacity-80' : 'cursor-default opacity-90'} transition-opacity ${bgClass}`}
-                                                                                title={task.status !== 'concluida' ? `Status: ${task.status}\nRotina: ${routine.title}\nVencimento: ${format(parseISO(task.due_date), 'dd/MM/yyyy')}` : undefined}
-                                                                            >
-                                                                                {displayChar}
-                                                                            </div>
-                                                                        );
-
-                                                                        return (
-                                                                            <td key={colIndex} className="p-0">
-                                                                                <div className="h-full w-full min-h-[22px] p-0.5 flex items-center justify-center bg-white dark:bg-card hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50 transition-colors">
-                                                                                    {task.status === 'concluida' ? (
-                                                                                        <HoverCard openDelay={200} closeDelay={300}>
-                                                                                            <HoverCardTrigger asChild>
-                                                                                                {cellContent}
-                                                                                            </HoverCardTrigger>
-                                                                                            <HoverCardContent className="w-80 p-4 z-[100] shadow-xl border-accent" side="top" align="center">
-                                                                                                <TaskHoverCard
-                                                                                                    task={task}
-                                                                                                    routine={routine}
-                                                                                                    isAllowed={isAllowed}
-                                                                                                    handleReopenTask={handleReopenTask}
-                                                                                                    updateTaskMutationPending={updateTaskMutation.isPending}
-                                                                                                />
-                                                                                            </HoverCardContent>
-                                                                                        </HoverCard>
-                                                                                    ) : cellContent}
-                                                                                </div>
-                                                                            </td>
-                                                                        );
-                                                                    })}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-                                        </SortableRoutineCard>
-                                    ))}
-                                </div>
-                            </SortableContext>
-                        </DndContext>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Rnd>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
             </CardContent>
@@ -555,6 +551,6 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                     )}
                 </SheetContent>
             </Sheet>
-        </Card>
+        </Card >
     );
 };
