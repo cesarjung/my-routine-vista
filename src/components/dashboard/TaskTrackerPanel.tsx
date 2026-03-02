@@ -125,23 +125,36 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
     const routinesToShow = useMemo(() => {
         let baseRoutines = activeRoutines;
 
-        // If no routines are selected manually, show NOTHING
-        if (selectedRoutineIds.length === 0) {
-            return [];
+        // Se não existir seleção manual de rotina nenhuma vez E não recebemos initialFrequencies
+        // Mantemos o painel vazio por segurança. Mas se recebemos frequências via widget dashboard
+        // ou salvamos globalmente, liberamos as rotinas ligadas àquelas frequências.
+        const hasManualRoutines = selectedRoutineIds.length > 0;
+        const hasFrequencies = frequencyFilter.length > 0;
+
+        if (!hasManualRoutines && !hasFrequencies) {
+            return []; // Nothing selected anywhere
         }
 
-        // If no frequencies are explicitly selected, show NOTHING
-        if (frequencyFilter.length === 0) {
-            return [];
+        let result = baseRoutines;
+
+        if (hasManualRoutines) {
+            result = result.filter(r => selectedRoutineIds.includes(r.id));
         }
 
-        // Get the manually selected routines
-        const manualRoutines = baseRoutines.filter(r => selectedRoutineIds.includes(r.id));
+        if (hasFrequencies) {
+            result = result.filter(r => frequencyFilter.includes(r.frequency));
+        }
 
-        // Filter those down by frequency
-        return manualRoutines.filter(r => frequencyFilter.includes(r.frequency));
+        return result;
 
     }, [activeRoutines, selectedRoutineIds, frequencyFilter]);
+
+    // Quando carregamos via Widget com Frequência mas sem Rotinas salvas, tentamos selecionar todas as ativas pra iniciar
+    useEffect(() => {
+        if (initialFrequencies.length > 0 && selectedRoutineIds.length === 0 && routinesToShow.length > 0) {
+            setSelectedRoutineIds(routinesToShow.map(r => r.id));
+        }
+    }, [initialFrequencies, routinesToShow.length]);
 
     const routineIds = useMemo(() => routinesToShow.map(r => r.id), [routinesToShow]);
 
