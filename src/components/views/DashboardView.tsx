@@ -316,12 +316,10 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
         matchesSector = pSector === selectedSectorId;
       }
     } else {
-      // Dashboard Global
-      if (Array.isArray(pSector) && pSector.length > 0) {
-        matchesSector = false;
-      } else if (pSector && !Array.isArray(pSector)) {
-        matchesSector = false;
-      }
+      // Dashboard Global - Shows everything or panels with no specific sector restrictions constraint (if needed).
+      // Here we explicitly let matchesSector be true if global, to see ALL panels, OR we can filter out strictly isolated panels.
+      // Based on user: "geral poder olhar todos" -> So if no sector selected, it matches all.
+      matchesSector = true;
     }
 
     if (!matchesSector) return false;

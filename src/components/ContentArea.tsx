@@ -51,7 +51,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
           </div>
         </header>
         <div className="w-full h-full">
-          <DashboardView hideHeader={true} />
+          <DashboardView key="dashboard-global" hideHeader={true} />
         </div>
       </div>
     );
@@ -152,7 +152,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
             </div>
           </header>
           <div className="w-full h-full">
-            <DashboardView forcedSectorId={sectorId} hideHeader={true} />
+            <DashboardView key={`dashboard-${sectorId}`} forcedSectorId={sectorId} hideHeader={true} />
           </div>
         </div>
       );
