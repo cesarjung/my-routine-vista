@@ -23,11 +23,17 @@ interface TaskTrackerPanelProps {
 }
 
 
+const frequencyOptions = [
+    { label: 'Diárias', value: 'diaria' },
+    { label: 'Semanais', value: 'semanal' },
+    { label: 'Quinzenais', value: 'quinzenal' },
+    { label: 'Mensais', value: 'mensal' },
+];
 
 export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrackerPanelProps) => {
     const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>(initialRoutineIds);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
-    const [frequencyFilter, setFrequencyFilter] = useState<string>('all');
+    const [frequencyFilter, setFrequencyFilter] = useState<string[]>([]);
     const [layouts, setLayouts] = useState<Record<string, { x: number, y: number, width: number, height: number }>>({});
     const [maxHeight, setMaxHeight] = useState(600);
     const [selectedRoutineForPanel, setSelectedRoutineForPanel] = useState<{ routine: any; date: Date } | null>(null);
@@ -86,9 +92,9 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
         // Get the manually selected routines
         const manualRoutines = baseRoutines.filter(r => selectedRoutineIds.includes(r.id));
 
-        // Filter those down by frequency if a specific frequency is chosen
-        if (frequencyFilter !== 'all') {
-            return manualRoutines.filter(r => r.frequency === frequencyFilter);
+        // Filter those down by frequency if any specific frequencies are chosen
+        if (frequencyFilter.length > 0) {
+            return manualRoutines.filter(r => frequencyFilter.includes(r.frequency));
         }
 
         return manualRoutines;
@@ -286,17 +292,12 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                         </div>
 
                         <div className="w-[180px]">
-                            <select
-                                value={frequencyFilter}
-                                onChange={(e) => setFrequencyFilter(e.target.value)}
-                                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                <option value="all">Todas as Frequências</option>
-                                <option value="diaria">Diárias</option>
-                                <option value="semanal">Semanais</option>
-                                <option value="quinzenal">Quinzenais</option>
-                                <option value="mensal">Mensais</option>
-                            </select>
+                            <MultiSelect
+                                options={frequencyOptions}
+                                selected={frequencyFilter}
+                                onChange={(vals) => setFrequencyFilter(vals)}
+                                placeholder="Frequências..."
+                            />
                         </div>
 
                         <div className="flex items-center gap-2 bg-secondary/30 rounded-md p-1 border ml-auto">
