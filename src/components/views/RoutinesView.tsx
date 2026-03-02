@@ -204,7 +204,6 @@ export const RoutinesView = ({
                 setSelectedRoutineDate(null); // No specific date context for list items unless mapped
               }}
               onEdit={(e) => {
-                e.stopPropagation();
                 setEditingRoutine(routine);
               }}
               canEdit={isGestorOrAdmin}
@@ -223,7 +222,7 @@ export const RoutinesView = ({
           {/* Header removed from here to save vertical space. Tabs moved to inner toolbars. */}
 
           <div className="flex-1 overflow-hidden relative">
-            <TabsContent value="routines" className="h-full flex flex-col m-0 p-6 absolute inset-0 overflow-auto">
+            <TabsContent value="routines" className="h-full flex flex-col m-0 p-6 absolute inset-0 overflow-auto data-[state=inactive]:hidden">
               <div className="w-full flex flex-col transition-all duration-300">
                 {/* Header Container V3 - Single Line */}
                 {selectedRoutineIds.length > 0 ? (
@@ -335,7 +334,7 @@ export const RoutinesView = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="notes" className="h-full m-0 p-6 absolute inset-0 overflow-auto flex flex-col">
+            <TabsContent value="notes" className="h-full m-0 p-6 absolute inset-0 overflow-auto flex flex-col data-[state=inactive]:hidden">
               <div className="flex flex-col gap-2 p-2 bg-card border-b border-border shadow-sm mb-4 rounded-lg shrink-0">
                 <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
                   <TabsList className="justify-start h-8 bg-secondary/50 p-0.5 shrink-0 border border-border">
