@@ -15,7 +15,7 @@ import {
     arrayMove,
     SortableContext,
     sortableKeyboardCoordinates,
-    verticalListSortingStrategy,
+    rectSortingStrategy,
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -374,7 +374,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                             .matrix-table thead .sticky-col-2 { z-index: 50; }
                         `}} />
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <SortableContext items={sortedRoutinesData.map(r => r.routine.id)} strategy={verticalListSortingStrategy}>
+                            <SortableContext items={sortedRoutinesData.map(r => r.routine.id)} strategy={rectSortingStrategy}>
                                 <div className="flex flex-wrap items-start content-start gap-4 p-2 pb-8">
                                     {/* BODY REPEATED PER ROUTINE */}
                                     {sortedRoutinesData.map(({ routine, matrix, dailyStats }, rIndex) => (
