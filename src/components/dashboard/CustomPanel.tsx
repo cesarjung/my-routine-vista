@@ -503,40 +503,50 @@ export const CustomPanel = ({ panel, triggerRefetch }: CustomPanelProps) => {
   const Icon = getGroupIcon(panel.filters.group_by);
 
   const panelRef = useRef<HTMLDivElement>(null);
+  const configRef = useRef(panel.display_config);
+
+  // Update ref continuously without triggering effects
+  configRef.current = panel.display_config;
 
   // Load saved dimensions
   const savedHeight = (panel.display_config?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
   const savedWidth = panel.display_config?.width as number | undefined;
 
-  // Persist dimensions via ResizeObserver
+  // Persist dimensions via ResizeObserver (Safely)
   useEffect(() => {
     if (!panelRef.current) return;
 
     let timeoutId: NodeJS.Timeout;
+    let isInitial = true;
+
     const observer = new ResizeObserver((entries) => {
+      if (isInitial) {
+        isInitial = false;
+        return; // Skip the fire-on-attach initial frame to prevent loops
+      }
+
       const entry = entries[0];
       if (!entry) return;
 
       const newWidth = entry.borderBoxSize ? entry.borderBoxSize[0].inlineSize : entry.contentRect.width;
       const newHeight = entry.borderBoxSize ? entry.borderBoxSize[0].blockSize : entry.contentRect.height;
 
-      // Only update if dimensions actually changed significantly (more than 5px to avoid micro-adjustments loops)
-      const currentSavedHeight = (panel.display_config?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
-      const currentSavedWidth = panel.display_config?.width as number | undefined;
+      const currentSavedHeight = (configRef.current?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
+      const currentSavedWidth = configRef.current?.width as number | undefined;
 
-      if (Math.abs(newHeight - currentSavedHeight) > 5 || (currentSavedWidth && Math.abs(newWidth - currentSavedWidth) > 5) || (!currentSavedWidth && newWidth > 0 && Math.abs(newWidth - panelRef.current.offsetWidth) > 5)) {
+      if (Math.abs(newHeight - currentSavedHeight) > 10 || (currentSavedWidth && Math.abs(newWidth - currentSavedWidth) > 10) || (!currentSavedWidth && newWidth > 0 && Math.abs(newWidth - panelRef.current!.offsetWidth) > 10)) {
         clearTimeout(timeoutId);
 
         timeoutId = setTimeout(() => {
           updatePanel.mutate({
             id: panel.id,
             display_config: {
-              ...panel.display_config,
+              ...configRef.current,
               width: Math.round(newWidth),
               height: Math.round(newHeight)
             }
           });
-        }, 800); // 800ms debounce
+        }, 1200); // 1.2s debounce to be conservative
       }
     });
 
@@ -546,7 +556,7 @@ export const CustomPanel = ({ panel, triggerRefetch }: CustomPanelProps) => {
       clearTimeout(timeoutId);
       observer.disconnect();
     };
-  }, [panel.id, panel.display_config, panel.filters.group_by, updatePanel]);
+  }, [panel.id, panel.filters.group_by]); // STRICT DEPENDENCIES: Removed updatePanel & panel.display_config to prevent render wipeouts
 
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
     isOpen: false,
