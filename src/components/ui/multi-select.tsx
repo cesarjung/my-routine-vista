@@ -86,15 +86,15 @@ export function MultiSelect({
                         className
                     )}
                 >
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex-1 overflow-hidden text-left flex items-center pr-2">
                         {selected.length === 0 && (
-                            <span className="text-muted-foreground font-normal">{placeholder}</span>
+                            <span className="text-muted-foreground font-normal truncate block w-full">{placeholder}</span>
                         )}
                         {selected.length > 0 && selected.length < options.length && (
-                            <span className="text-foreground font-medium">{selected.length} {selectedPluralLabel}</span>
+                            <span className="text-foreground font-medium truncate block w-full">{selected.length} {selectedPluralLabel}</span>
                         )}
                         {selected.length === options.length && options.length > 0 && (
-                            <span className="text-foreground font-medium">{selectAllLabel}</span>
+                            <span className="text-foreground font-medium truncate block w-full">{selectAllLabel}</span>
                         )}
                     </div>
                     <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
