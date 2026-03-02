@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, ChevronLeft, ChevronRight, FileSpreadsheet, Check, X as XIcon, Minus, GripVertical, RefreshCw } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, FileSpreadsheet, Check, X as XIcon, Minus, GripVertical, RefreshCw, Save, Calendar as CalendarIcon } from 'lucide-react';
 import { Rnd, RndDragCallback, RndResizeCallback } from 'react-rnd';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { useRoutines } from '@/hooks/useRoutines';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useUpdateTask } from '@/hooks/useTaskMutations';
+import { useTrackerSettings } from '@/hooks/useTrackerSettings';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
@@ -37,27 +38,47 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
     const [layouts, setLayouts] = useState<Record<string, { x: number, y: number, width: number, height: number }>>({});
     const [maxHeight, setMaxHeight] = useState(600);
     const [selectedRoutineForPanel, setSelectedRoutineForPanel] = useState<{ routine: any; date: Date } | null>(null);
+    const [isLayoutDirty, setIsLayoutDirty] = useState(false);
+    const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
+
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const { data: role } = useUserRole();
     const updateTaskMutation = useUpdateTask();
 
+    const { settings, saveSettings, isLoading: isLoadingSettings } = useTrackerSettings(sectorId);
+
     useEffect(() => {
-        const savedLayouts = localStorage.getItem('tasktracker-layouts');
-        if (savedLayouts) {
-            try {
-                setLayouts(JSON.parse(savedLayouts));
-            } catch (e) { }
+        if (settings && !hasLoadedSettings) {
+            if (Object.keys(settings.layouts).length > 0) {
+                setLayouts(settings.layouts);
+            }
+            if (settings.filters?.routines?.length > 0 && initialRoutineIds.length === 0) {
+                setSelectedRoutineIds(settings.filters.routines);
+            }
+            if (settings.filters?.frequencies?.length > 0) {
+                setFrequencyFilter(settings.filters.frequencies);
+            }
+            setHasLoadedSettings(true);
         }
-    }, []);
+    }, [settings, hasLoadedSettings, initialRoutineIds.length]);
 
     const updateLayout = (id: string, updates: Partial<{ x: number, y: number, width: number, height: number }>) => {
         setLayouts(prev => {
             const current = prev[id] || { x: 0, y: 0, width: 400, height: 250 };
-            const next = { ...prev, [id]: { ...current, ...updates } };
-            localStorage.setItem('tasktracker-layouts', JSON.stringify(next));
-            return next;
+            return { ...prev, [id]: { ...current, ...updates } };
         });
+        setIsLayoutDirty(true);
+    };
+
+    const handleSaveGlobalView = () => {
+        if (!sectorId) return;
+        saveSettings.mutate({
+            sector_id: sectorId,
+            filters: { routines: selectedRoutineIds, frequencies: frequencyFilter },
+            layouts: layouts
+        });
+        setIsLayoutDirty(false);
     };
 
     useEffect(() => {
@@ -299,7 +320,8 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
         if (changed) {
             setLayouts(newLayouts);
-            localStorage.setItem('tasktracker-layouts', JSON.stringify(newLayouts));
+            // Salvar silenciosamente se mudou via carregamento inicial sem layouts
+            setIsLayoutDirty(true);
         }
 
         let maxBottom = 600;
@@ -331,7 +353,10 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                             <MultiSelect
                                 options={activeRoutines.map(r => ({ label: r.title, value: r.id }))}
                                 selected={selectedRoutineIds}
-                                onChange={setSelectedRoutineIds}
+                                onChange={(vals) => {
+                                    setSelectedRoutineIds(vals);
+                                    setIsLayoutDirty(true);
+                                }}
                                 placeholder="Selecionar Rotinas Manuais..."
                             />
                         </div>
@@ -340,12 +365,31 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                             <MultiSelect
                                 options={frequencyOptions}
                                 selected={frequencyFilter}
-                                onChange={(vals) => setFrequencyFilter(vals)}
+                                onChange={(vals) => {
+                                    setFrequencyFilter(vals);
+                                    setIsLayoutDirty(true);
+                                }}
                                 placeholder="Frequências..."
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 bg-secondary/30 rounded-md p-1 border ml-auto">
+                        {/* Botão de salvar vista para Gestores/Admin */}
+                        {(role === 'admin' || role === 'gestor') && (
+                            <div className="ml-auto mr-2">
+                                <Button
+                                    size="sm"
+                                    variant="default"
+                                    disabled={!isLayoutDirty || saveSettings.isPending}
+                                    onClick={handleSaveGlobalView}
+                                    className="gap-2"
+                                >
+                                    {saveSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    Salvar Vista
+                                </Button>
+                            </div>
+                        )}
+
+                        <div className={`flex items-center gap-2 bg-secondary/30 rounded-md p-1 border ${(role === 'admin' || role === 'gestor') ? '' : 'ml-auto'}`}>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevMonth}>
                                 <ChevronLeft className="w-4 h-4" />
                             </Button>
