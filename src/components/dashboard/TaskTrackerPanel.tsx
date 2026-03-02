@@ -428,7 +428,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                 border-color: rgba(150, 150, 150, 0.2);
                             }
                             .matrix-table .sticky-col-1 { position: sticky; left: 0; z-index: 20; }
-                            .matrix-table .sticky-col-2 { position: sticky; left: 160px; z-index: 20; border-right-width: 2px; border-right-color: rgba(150, 150, 150, 0.4); }
+                            .matrix-table .sticky-col-2 { position: sticky; left: 140px; z-index: 20; border-right-width: 2px; border-right-color: rgba(150, 150, 150, 0.4); }
                             
                             /* Maintain headers over sticky cols */
                             .matrix-table thead { position: sticky; top: 0; z-index: 40; }
