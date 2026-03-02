@@ -380,8 +380,8 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                     {sortedRoutinesData.map(({ routine, matrix, dailyStats }, rIndex) => (
                                         <SortableRoutineCard key={routine.id} idItem={routine.id}>
                                             {({ attributes, listeners, isDragging }: any) => (
-                                                <div className="w-full overflow-x-auto custom-scrollbar">
-                                                    <table className="matrix-table w-full text-xs font-sans min-w-max border-separate border-spacing-0">
+                                                <div className="w-full overflow-auto custom-scrollbar max-h-[60vh]">
+                                                    <table className="matrix-table w-full text-xs font-sans min-w-max border-separate border-spacing-0 relative">
                                                         {/* INDIVIDUAL THEAD FOR DATES PER ROUTINE */}
                                                         <thead className="bg-background shadow-sm">
                                                             <tr>
