@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRoutines } from '@/hooks/useRoutines';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUserRole } from '@/hooks/useUserRole';
+import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import { useUpdateTask } from '@/hooks/useTaskMutations';
 import { useTrackerSettings } from '@/hooks/useTrackerSettings';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -43,7 +43,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
     const queryClient = useQueryClient();
     const { user } = useAuth();
-    const { data: role } = useUserRole();
+    const { isGestorOrAdmin } = useIsGestorOrAdmin();
     const updateTaskMutation = useUpdateTask();
 
     const { settings, saveSettings, isLoading: isLoadingSettings } = useTrackerSettings(sectorId);
@@ -374,7 +374,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                         </div>
 
                         {/* Botão de salvar vista para Gestores/Admin */}
-                        {(role === 'admin' || role === 'gestor') && (
+                        {isGestorOrAdmin && (
                             <div className="ml-auto mr-2">
                                 <Button
                                     size="sm"
@@ -389,7 +389,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                             </div>
                         )}
 
-                        <div className={`flex items-center gap-2 bg-secondary/30 rounded-md p-1 border ${(role === 'admin' || role === 'gestor') ? '' : 'ml-auto'}`}>
+                        <div className={`flex items-center gap-2 bg-secondary/30 rounded-md p-1 border ${isGestorOrAdmin ? '' : 'ml-auto'}`}>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevMonth}>
                                 <ChevronLeft className="w-4 h-4" />
                             </Button>
