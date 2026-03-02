@@ -124,7 +124,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
             if (routineIds.length === 0) return [];
             const { data, error } = await supabase
                 .from('tasks')
-                .select(`id, status, due_date, unit_id, routine_id, title, description, priority, created_by, assigned_to, completed_at, parent_task_id, unit:units(name), assignees:task_assignees(user_id)`)
+                .select(`id, status, start_date, due_date, unit_id, routine_id, title, description, priority, created_by, assigned_to, completed_at, parent_task_id, unit:units(name), assignees:task_assignees(user_id)`)
                 .in('routine_id', routineIds)
                 .gte('due_date', startDate.toISOString())
                 .lte('due_date', endDate.toISOString());
@@ -207,7 +207,12 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                 return { total, completed };
             });
 
-            return { routine, matrix, dailyStats };
+            const firstTask = routineTasks.find(t => t.start_date || t.due_date);
+            const timeRange = firstTask
+                ? `${firstTask.start_date ? format(parseISO(firstTask.start_date), 'HH:mm') : '00:00'} - ${firstTask.due_date ? format(parseISO(firstTask.due_date), 'HH:mm') : '23:59'}`
+                : '00:00 - 23:59';
+
+            return { routine, matrix, dailyStats, timeRange };
         });
     }, [routinesToShow, allUnitRows, tasks, daysInMonth]);
 
@@ -410,14 +415,14 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                         <th className="sticky-col-1 bg-white dark:bg-background text-black dark:text-foreground font-bold p-1.5 text-center text-[10px] uppercase border-t-2 border-[#888] align-top relative">
                                                             HORÁRIO
                                                             <div className="text-[9px] font-normal text-muted-foreground mt-0.5 whitespace-nowrap">
-                                                                {routine.start_time ? routine.start_time.substring(0, 5) : '00:00'} - {routine.end_time ? routine.end_time.substring(0, 5) : '23:59'}
+                                                                {r.timeRange}
                                                             </div>
                                                         </th>
                                                         <th className="sticky-col-2 bg-black text-[#f08c16] font-bold p-1.5 text-center whitespace-nowrap text-[11px] border-t-2 border-[#888]">
-                                                            {routine.title}
+                                                            {r.routine.title}
                                                         </th>
 
-                                                        {dailyStats.map((stat, i) => {
+                                                        {r.dailyStats.map((stat, i) => {
                                                             const pct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : null;
                                                             const bgClass = 'bg-[#df7d70] text-black';
                                                             return (
