@@ -395,6 +395,18 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                             {/* BODY REPEATED PER ROUTINE */}
                             {sortedRoutinesData.map(({ routine, matrix, dailyStats, timeRange }, rIndex) => {
                                 const l = layouts[routine.id] || { x: rIndex * 50, y: rIndex * 50, width: 400, height: 250 };
+
+                                const getFrequencyColor = (freq: string | undefined) => {
+                                    switch (freq) {
+                                        case 'diaria': return '#f08c16';
+                                        case 'semanal': return '#ef4444'; // red-500
+                                        case 'quinzenal': return '#6b7280'; // gray-500
+                                        case 'mensal': return '#22c55e'; // green-500
+                                        default: return '#f08c16';
+                                    }
+                                };
+                                const bannerColor = getFrequencyColor(routine.frequency);
+
                                 return (
                                     <Rnd
                                         key={routine.id}
@@ -419,13 +431,19 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                 {/* INDIVIDUAL THEAD FOR DATES PER ROUTINE */}
                                                 <thead className="bg-background shadow-sm">
                                                     <tr>
-                                                        <th className="drag-handle sticky-col-1 bg-[#f08c16] text-black font-bold p-1 px-2 text-center uppercase text-[10px] w-[160px] min-w-[160px] cursor-move hover:bg-[#e07d0a] transition-colors group relative">
-                                                            <div className="absolute left-1 top-1/2 -translate-y-1/2 text-black/50 group-hover:text-black">
+                                                        <th
+                                                            className="drag-handle sticky-col-1 text-white dark:text-black font-bold p-1 px-2 text-center uppercase text-[10px] w-[160px] min-w-[160px] cursor-move transition-colors group relative"
+                                                            style={{ backgroundColor: bannerColor }}
+                                                        >
+                                                            <div className="absolute left-1 top-1/2 -translate-y-1/2 text-white/50 dark:text-black/50 group-hover:text-white dark:group-hover:text-black">
                                                                 <GripVertical className="w-4 h-4" />
                                                             </div>
                                                             ROTINAS
                                                         </th>
-                                                        <th className="sticky-col-2 bg-[#f08c16] text-black font-bold p-1 text-center uppercase text-[10px] w-[160px] min-w-[160px]">
+                                                        <th
+                                                            className="sticky-col-2 text-white dark:text-black font-bold p-1 text-center uppercase text-[10px] w-[160px] min-w-[160px]"
+                                                            style={{ backgroundColor: bannerColor }}
+                                                        >
                                                             {/* Blank space */}
                                                         </th>
                                                         {daysInMonth.map(day => (
@@ -456,7 +474,10 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                                 {timeRange}
                                                             </div>
                                                         </th>
-                                                        <th className="sticky-col-2 bg-black text-[#f08c16] font-bold p-1.5 text-center whitespace-nowrap text-[11px] border-t-2 border-[#888]">
+                                                        <th
+                                                            className="sticky-col-2 bg-black font-bold p-1.5 text-center whitespace-nowrap text-[11px] border-t-2 border-[#888]"
+                                                            style={{ color: bannerColor }}
+                                                        >
                                                             {routine.title}
                                                         </th>
 
