@@ -358,12 +358,6 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                 return (
                                     <Rnd
                                         key={routine.id}
-                                        default={{
-                                            x: l.x,
-                                            y: l.y,
-                                            width: l.width,
-                                            height: l.height
-                                        }}
                                         position={{ x: l.x, y: l.y }}
                                         size={{ width: l.width, height: l.height }}
                                         onDragStop={(e, d) => updateLayout(routine.id, { x: d.x, y: d.y })}
@@ -467,7 +461,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
                                                     {/* Routine Units Rows */}
                                                     {matrix.map((row, rowIndex) => (
-                                                        <tr key={row.unit.id} className={`hover:bg-accent/30 transition-colors group h-full ${isDragging ? 'bg-background' : ''}`}>
+                                                        <tr key={row.unit.id} className="hover:bg-accent/30 transition-colors group h-full">
                                                             {rowIndex === 0 && (
                                                                 <td rowSpan={matrix.length} className="sticky-col-1 bg-white dark:bg-background p-3 align-middle text-center text-[10px] font-medium group-hover:bg-background border-r-2 border-[#888]">
                                                                     <div className="whitespace-normal break-words mt-1 flex flex-col justify-center h-full min-h-[40px]">
