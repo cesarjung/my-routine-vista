@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRoutines } from '@/hooks/useRoutines';
+import { useSectors } from '@/hooks/useSectors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
 import { useUpdateTask } from '@/hooks/useTaskMutations';
@@ -34,6 +35,7 @@ const frequencyOptions = [
 export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrackerPanelProps) => {
     const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>(initialRoutineIds);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
+    const [trackerSectorIds, setTrackerSectorIds] = useState<string[]>([]);
     const [frequencyFilter, setFrequencyFilter] = useState<string[]>([]);
     const [layouts, setLayouts] = useState<Record<string, { x: number, y: number, width: number, height: number }>>({});
     const [maxHeight, setMaxHeight] = useState(600);
@@ -60,6 +62,9 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                 if (settings.filters?.frequencies?.length > 0) {
                     setFrequencyFilter(settings.filters.frequencies);
                 }
+                if (settings.filters?.sectors?.length > 0) {
+                    setTrackerSectorIds(settings.filters.sectors);
+                }
             }
             setHasLoadedSettings(true);
         }
@@ -75,16 +80,11 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
     const handleSaveGlobalView = () => {
         console.log("-> Clicou em Salvar Vista", { sectorId, isLoadingSettings, isPending: saveSettings.isPending });
-        if (!sectorId) {
-            console.warn("-> SectorID não definido, abortando...");
-            import('sonner').then(m => m.toast.error("Erro: Nenhum setor selecionado no Dashboard. Selecione um setor primeiro."));
-            return;
-        }
 
         console.log("-> Disparando saveSettings.mutate...");
         saveSettings.mutate({
-            sector_id: sectorId,
-            filters: { routines: selectedRoutineIds, frequencies: frequencyFilter },
+            sector_id: sectorId || null,
+            filters: { routines: selectedRoutineIds, frequencies: frequencyFilter, sectors: trackerSectorIds },
             layouts: layouts
         });
         setIsLayoutDirty(false);
@@ -103,12 +103,22 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
     }, [queryClient]);
 
     const { data: routines, isLoading: isLoadingRoutines } = useRoutines();
+    const { data: sectorsData } = useSectors();
 
     const activeRoutines = useMemo(() => {
         const _active = routines?.filter(r => r.is_active !== false) || [];
-        if (!sectorId) return _active;
-        return _active.filter((r: any) => r.sector_id === sectorId);
-    }, [routines, sectorId]);
+
+        let filtered = _active;
+        if (sectorId) {
+            filtered = filtered.filter((r: any) => r.sector_id === sectorId);
+        }
+
+        if (trackerSectorIds.length > 0) {
+            filtered = filtered.filter((r: any) => trackerSectorIds.includes(r.sector_id));
+        }
+
+        return filtered;
+    }, [routines, sectorId, trackerSectorIds]);
 
     // determine which routines to show based on the filter
     const routinesToShow = useMemo(() => {
@@ -358,6 +368,18 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
             <CardHeader className="pb-3 shrink-0 px-2 sm:px-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-4 w-full">
+                        <div className="w-[180px]">
+                            <MultiSelect
+                                options={sectorsData?.map(s => ({ label: s.name, value: s.id })) || []}
+                                selected={trackerSectorIds}
+                                onChange={(vals) => {
+                                    setTrackerSectorIds(vals);
+                                    setIsLayoutDirty(true);
+                                }}
+                                placeholder="Todos os Setores"
+                            />
+                        </div>
+
                         <div className="w-[300px]">
                             <MultiSelect
                                 options={activeRoutines.map(r => ({ label: r.title, value: r.id }))}
@@ -393,7 +415,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                     className="gap-2"
                                 >
                                     {saveSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    Salvar Vista
+                                    {sectorId ? "Salvar Vista Local" : "Salvar Vista Global"}
                                 </Button>
                             </div>
                         )}
