@@ -90,15 +90,17 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
       if (filters.sector_id) {
         if (Array.isArray(filters.sector_id)) {
-          if (filters.sector_id.length > 0) tasksQuery = tasksQuery.in('sector_id', filters.sector_id);
-        } else {
+          const validSectors = filters.sector_id.filter(id => id && id.toLowerCase() !== 'todos os setores' && id.toLowerCase() !== 'selecionar todos');
+          if (validSectors.length > 0) tasksQuery = tasksQuery.in('sector_id', validSectors);
+        } else if (filters.sector_id.toLowerCase() !== 'todos os setores' && filters.sector_id.toLowerCase() !== 'selecionar todos') {
           tasksQuery = tasksQuery.eq('sector_id', filters.sector_id);
         }
       }
       if (filters.unit_id) {
         if (Array.isArray(filters.unit_id)) {
-          if (filters.unit_id.length > 0) tasksQuery = tasksQuery.in('unit_id', filters.unit_id);
-        } else {
+          const validUnits = filters.unit_id.filter(id => id && id.toLowerCase() !== 'todas as unidades' && id.toLowerCase() !== 'selecionar todos');
+          if (validUnits.length > 0) tasksQuery = tasksQuery.in('unit_id', validUnits);
+        } else if (filters.unit_id.toLowerCase() !== 'todas as unidades' && filters.unit_id.toLowerCase() !== 'selecionar todos') {
           tasksQuery = tasksQuery.eq('unit_id', filters.unit_id);
         }
       }
@@ -109,26 +111,27 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       let matchedRoutineIds: string[] = [];
       if (filters.title_filter) {
         if (Array.isArray(filters.title_filter) && filters.title_filter.length > 0) {
-          // If we have exact titles from the MultiSelect, they are mostly Routine titles.
-          // Let's find routines that match these titles first.
-          const { data: matchedRoutines } = await supabase
-            .from('routines')
-            .select('id')
-            .in('title', filters.title_filter);
+          const validTitles = filters.title_filter.filter(t => t && t.toLowerCase() !== 'todas as rotinas' && t.toLowerCase() !== 'selecionar todos');
 
-          if (matchedRoutines && matchedRoutines.length > 0) {
-            matchedRoutineIds = matchedRoutines.map(r => r.id);
-            // We want tasks that either match the title EXACTLY (legacy/ad-hoc tasks without routines) 
-            // OR belong to these matched routines.
-            // Since Supabase `in` chain acts as AND, we need to use `or`
-            const titlesStr = filters.title_filter.map(t => `"${t}"`).join();
-            const routinesStr = matchedRoutineIds.map(id => `"${id}"`).join();
-            tasksQuery = tasksQuery.or(`title.in.(${titlesStr}),routine_id.in.(${routinesStr})`);
-          } else {
-            // Just search by title if no routines matched
-            tasksQuery = tasksQuery.in('title', filters.title_filter);
+          if (validTitles.length > 0) {
+            // Let's find routines that match these titles first.
+            const { data: matchedRoutines } = await supabase
+              .from('routines')
+              .select('id')
+              .in('title', validTitles);
+
+            if (matchedRoutines && matchedRoutines.length > 0) {
+              matchedRoutineIds = matchedRoutines.map(r => r.id);
+              // Since Supabase `in` chain acts as AND, we need to use `or`
+              const titlesStr = validTitles.map(t => `"${t}"`).join();
+              const routinesStr = matchedRoutineIds.map(id => `"${id}"`).join();
+              tasksQuery = tasksQuery.or(`title.in.(${titlesStr}),routine_id.in.(${routinesStr})`);
+            } else {
+              // Just search by title if no routines matched
+              tasksQuery = tasksQuery.in('title', validTitles);
+            }
           }
-        } else if (typeof filters.title_filter === 'string') {
+        } else if (typeof filters.title_filter === 'string' && filters.title_filter.toLowerCase() !== 'todas as rotinas' && filters.title_filter.toLowerCase() !== 'selecionar todos') {
           // Fallback legacy behavior
 
           const { data: matchedRoutines } = await supabase

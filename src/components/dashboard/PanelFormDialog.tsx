@@ -119,12 +119,17 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
   const handleSubmit = () => {
     if (!title.trim()) return;
 
+    // Filter out generic strings that break custom panel views
+    const cleanSectorIds = sectorIds.filter(id => id && id.toLowerCase() !== 'todos os setores' && id.toLowerCase() !== 'selecionar todos');
+    const cleanUnitIds = unitIds.filter(id => id && id.toLowerCase() !== 'todas as unidades' && id.toLowerCase() !== 'selecionar todos');
+    const cleanTitles = selectedTitles.filter(t => t && t.toLowerCase() !== 'todas as rotinas' && t.toLowerCase() !== 'todas as tarefas' && t.toLowerCase() !== 'selecionar todos');
+
     const filters: PanelFilters = {
-      sector_id: sectorIds.length > 0 ? sectorIds : undefined,
-      unit_id: unitIds.length > 0 ? unitIds : undefined,
+      sector_id: cleanSectorIds.length > 0 ? cleanSectorIds : undefined,
+      unit_id: cleanUnitIds.length > 0 ? cleanUnitIds : undefined,
       status: selectedStatus.length > 0 ? selectedStatus : undefined,
       task_frequency: selectedFrequencies.length > 0 ? selectedFrequencies : undefined,
-      title_filter: (selectedTitles.length > 0 ? selectedTitles : undefined) as any,
+      title_filter: (cleanTitles.length > 0 ? cleanTitles : undefined) as any,
       period: period as PanelFilters['period'],
       group_by: groupBy
     };
