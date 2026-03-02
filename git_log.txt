@@ -1,0 +1,20 @@
+﻿4d37228 fix(ui): enforce lowercase value in cmdk to restore multi select clickability
+584a79d style(ui): force white text on multiselect items and change command accent color to prevent unreadable dark contrast
+46dc062 fix(dashboard): resolve type casting for tasks dialogue and clear vite cache
+40c3b40 fix(deps): downgrade cmdk to 0.2.0 to resolve shadcn command render crash
+7cfe124 build(ui): force install cmdk and manually write radix popover and command ui blocks to fix build crash
+6486775 fix(dashboard): add missing icon imports causing white screen
+4c1f4d6 feat(dashboard): convert sector select to multiselect and allow global tracker saves
+349fe31 fix(dashboard): fix silent fail on Dashboard Global saving by enabling button and adding explicit sector missing error toast
+bbde910 fix(dashboard): fix layout save race condition and button graying out by removing isLayoutDirty disabling and enforcing initial load
+1062975 style(dashboard): fix column gap fixing sticky left property
+18a8e13 style(dashboard): enforce fixed column widths and word breaking for long routine titles
+156ebcd chore: sync latest changes to remote
+d2d1a57 fix(dashboard): fix ReferenceError on undefined role causing white screen crash on task select
+9df585d fix(dashboard): restrict save view button to managers and admins using correct hook
+e4dab29 feat(dashboard): Persist Tracker filters and layouts globally per sector via DB
+9111878 feat(dashboard): Colorize Routine headers dynamically based on frequency
+2e34aaa fix(dashboard): Handle missing routine dates gracefully and fix variable map crash
+0b8a456 fix(dashboard): Extract accurate timeRange from Routine tasks instead of static text
+80f9361 feat(dashboard): Require active frequency selection for TaskTracker
+a50a0ce feat(dashboard): Turn frequencies dropdown into multiselect element
