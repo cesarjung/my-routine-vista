@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { FolderKanban, Building2, Users, Loader2, Play, Settings, Trash2, CheckCircle2, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useTasks } from '@/hooks/useTasks';
 import { useRoutines } from '@/hooks/useRoutines';
 import { useIsAdmin } from '@/hooks/useUserRole';
-import { useDeleteDashboardPanel, DashboardPanel } from '@/hooks/useDashboardPanels';
+import { useDeleteDashboardPanel, useUpdateDashboardPanel, DashboardPanel } from '@/hooks/useDashboardPanels';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
 import { TaskTrackerPanel } from '@/components/dashboard/TaskTrackerPanel';
 import { Button } from '@/components/ui/button';
@@ -487,76 +487,38 @@ const STATUS_LABELS: Record<string, string> = {
 
 interface CustomPanelProps {
   panel: DashboardPanel;
-  triggerRefetch: () => void;
 }
 
-export const CustomPanel = ({ panel, triggerRefetch }: CustomPanelProps) => {
-  const [tasksDialogOpen, setTasksDialogOpen] = useState(false);
-  const [tasksDialogParams, setTasksDialogParams] = useState<{ id: string, name: string, groupBy: string, frequency?: string } | null>(null);
-  const { data: panelData, isLoading, error } = useCustomPanelData(panel);
+export const CustomPanel = ({ panel }: CustomPanelProps) => {
+  const { data: panelData, isLoading } = useCustomPanelData(panel);
   const { data: allTasks } = useTasks();
   const deletePanel = useDeleteDashboardPanel();
   const updatePanel = useUpdateDashboardPanel();
-  const { user } = useAuth();
-  const isAdmin = user?.email === 'test@example.com' || true; // Replace with actual admin check
-
+  const { isAdmin } = useIsAdmin();
   const Icon = getGroupIcon(panel.filters.group_by);
 
   const panelRef = useRef<HTMLDivElement>(null);
-  const configRef = useRef(panel.display_config);
 
-  // Update ref continuously without triggering effects
-  configRef.current = panel.display_config;
-
-  // Load saved dimensions
   const savedHeight = (panel.display_config?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
   const savedWidth = panel.display_config?.width as number | undefined;
 
-  // Persist dimensions via ResizeObserver (Safely)
-  useEffect(() => {
+  const handleResizeStop = useCallback(() => {
     if (!panelRef.current) return;
 
-    let timeoutId: NodeJS.Timeout;
-    let isInitial = true;
+    const currentWidth = panelRef.current.offsetWidth;
+    const currentHeight = panelRef.current.offsetHeight;
 
-    const observer = new ResizeObserver((entries) => {
-      if (isInitial) {
-        isInitial = false;
-        return; // Skip the fire-on-attach initial frame to prevent loops
-      }
-
-      const entry = entries[0];
-      if (!entry) return;
-
-      const newWidth = entry.borderBoxSize ? entry.borderBoxSize[0].inlineSize : entry.contentRect.width;
-      const newHeight = entry.borderBoxSize ? entry.borderBoxSize[0].blockSize : entry.contentRect.height;
-
-      const currentSavedHeight = (configRef.current?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
-      const currentSavedWidth = configRef.current?.width as number | undefined;
-
-      if (Math.abs(newHeight - currentSavedHeight) > 10 || (currentSavedWidth && Math.abs(newWidth - currentSavedWidth) > 10) || (!currentSavedWidth && newWidth > 0 && Math.abs(newWidth - panelRef.current!.offsetWidth) > 10)) {
-        clearTimeout(timeoutId);
-
-        timeoutId = setTimeout(() => {
-          updatePanel.mutate({
-            id: panel.id,
-            display_config: {
-              ...configRef.current,
-              width: Math.round(newWidth),
-              height: Math.round(newHeight)
-            }
-          });
-        }, 1200); // 1.2s debounce to be conservative
-      }
-    });
-
-    observer.observe(panelRef.current);
-
-    return () => {
-      clearTimeout(timeoutId);
-      observer.disconnect();
-    };
-  }, [panel.id, panel.filters.group_by]); // STRICT DEPENDENCIES: Removed updatePanel & panel.display_config to prevent render wipeouts
+    if (Math.abs(currentHeight - savedHeight) > 10 || (savedWidth && Math.abs(currentWidth - savedWidth) > 10)) {
+      updatePanel.mutate({
+        id: panel.id,
+        display_config: {
+          ...panel.display_config,
+          width: currentWidth,
+          height: currentHeight
+        }
+      });
+    }
+  }, [panel.id, panel.display_config, savedHeight, savedWidth, updatePanel]);
 
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
     isOpen: false,
@@ -758,6 +720,7 @@ export const CustomPanel = ({ panel, triggerRefetch }: CustomPanelProps) => {
     return (
       <div
         ref={panelRef}
+        onMouseUp={handleResizeStop}
         className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
         style={{
           minHeight: 250,
@@ -815,6 +778,7 @@ export const CustomPanel = ({ panel, triggerRefetch }: CustomPanelProps) => {
     <>
       <div
         ref={panelRef}
+        onMouseUp={handleResizeStop}
         className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
         style={{
           minHeight: 150,
