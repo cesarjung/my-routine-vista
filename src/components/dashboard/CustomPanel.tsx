@@ -735,11 +735,11 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
             </div>
           )}
         </div>
-        <div className="overflow-hidden flex-1 min-h-0 flex flex-col">
-          {/* We pass the frequencies or routine preferences here from panel */}
-          {/* Right now, if user saved "routines" in their Panel, we pass them. Panel filters could be enriched later. */}
-          <TaskTrackerPanel sectorId={Array.isArray(panel.filters.sector_id) ? panel.filters.sector_id[0] : panel.filters.sector_id} initialRoutineIds={panel.filters.task_frequency || []} />
-        </div>
+        <TaskTrackerPanel
+          sectorId={Array.isArray(panel.filters.sector_id) ? panel.filters.sector_id[0] : panel.filters.sector_id}
+          initialFrequencies={panel.filters.task_frequency || []}
+          initialRoutineIds={Array.isArray(panel.filters.title_filter) ? panel.filters.title_filter : []}
+        />
       </div>
     );
   }

@@ -22,6 +22,7 @@ import { TaskHoverCard } from './TaskHoverCard';
 interface TaskTrackerPanelProps {
     sectorId?: string | null;
     initialRoutineIds?: string[];
+    initialFrequencies?: string[];
 }
 
 
@@ -32,11 +33,11 @@ const frequencyOptions = [
     { label: 'Mensais', value: 'mensal' },
 ];
 
-export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrackerPanelProps) => {
+export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFrequencies = [] }: TaskTrackerPanelProps) => {
     const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>(initialRoutineIds);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [trackerSectorIds, setTrackerSectorIds] = useState<string[]>([]);
-    const [frequencyFilter, setFrequencyFilter] = useState<string[]>([]);
+    const [frequencyFilter, setFrequencyFilter] = useState<string[]>(initialFrequencies);
     const [layouts, setLayouts] = useState<Record<string, { x: number, y: number, width: number, height: number }>>({});
     const [maxHeight, setMaxHeight] = useState(600);
     const [selectedRoutineForPanel, setSelectedRoutineForPanel] = useState<{ routine: any; date: Date } | null>(null);
