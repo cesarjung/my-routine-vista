@@ -89,15 +89,17 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
             return [];
         }
 
+        // If no frequencies are explicitly selected, show NOTHING
+        if (frequencyFilter.length === 0) {
+            return [];
+        }
+
         // Get the manually selected routines
         const manualRoutines = baseRoutines.filter(r => selectedRoutineIds.includes(r.id));
 
-        // Filter those down by frequency if any specific frequencies are chosen
-        if (frequencyFilter.length > 0) {
-            return manualRoutines.filter(r => frequencyFilter.includes(r.frequency));
-        }
+        // Filter those down by frequency
+        return manualRoutines.filter(r => frequencyFilter.includes(r.frequency));
 
-        return manualRoutines;
     }, [activeRoutines, selectedRoutineIds, frequencyFilter]);
 
     const routineIds = useMemo(() => routinesToShow.map(r => r.id), [routinesToShow]);
