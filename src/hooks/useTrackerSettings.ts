@@ -78,8 +78,9 @@ export function useTrackerSettings(sectorId?: string) {
             queryClient.invalidateQueries({ queryKey: ['tracker_settings', sectorId] });
             toast.success('Configuração da Tela salva com sucesso.');
         },
-        onError: (e) => {
-            toast.error('Ocorreu um erro ao salvar o Layout e Filtros. Apenas gestores tem permissão para esta ação.');
+        onError: (e: any) => {
+            console.error(e);
+            toast.error(`Erro ao salvar Vista: ${e.message || String(e)}`);
         },
     });
 

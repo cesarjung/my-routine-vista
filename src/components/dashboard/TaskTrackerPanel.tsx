@@ -49,19 +49,21 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
     const { settings, saveSettings, isLoading: isLoadingSettings } = useTrackerSettings(sectorId);
 
     useEffect(() => {
-        if (settings && !hasLoadedSettings) {
-            if (Object.keys(settings.layouts).length > 0) {
-                setLayouts(settings.layouts);
-            }
-            if (settings.filters?.routines?.length > 0 && initialRoutineIds.length === 0) {
-                setSelectedRoutineIds(settings.filters.routines);
-            }
-            if (settings.filters?.frequencies?.length > 0) {
-                setFrequencyFilter(settings.filters.frequencies);
+        if (!isLoadingSettings && !hasLoadedSettings) {
+            if (settings) {
+                if (settings.layouts && Object.keys(settings.layouts).length > 0) {
+                    setLayouts(settings.layouts);
+                }
+                if (settings.filters?.routines?.length > 0 && initialRoutineIds.length === 0) {
+                    setSelectedRoutineIds(settings.filters.routines);
+                }
+                if (settings.filters?.frequencies?.length > 0) {
+                    setFrequencyFilter(settings.filters.frequencies);
+                }
             }
             setHasLoadedSettings(true);
         }
-    }, [settings, hasLoadedSettings, initialRoutineIds.length]);
+    }, [settings, isLoadingSettings, hasLoadedSettings, initialRoutineIds.length]);
 
     const updateLayout = (id: string, updates: Partial<{ x: number, y: number, width: number, height: number }>) => {
         setLayouts(prev => {
@@ -379,7 +381,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                 <Button
                                     size="sm"
                                     variant="default"
-                                    disabled={!isLayoutDirty || saveSettings.isPending}
+                                    disabled={isLoadingSettings || saveSettings.isPending}
                                     onClick={handleSaveGlobalView}
                                     className="gap-2"
                                 >
