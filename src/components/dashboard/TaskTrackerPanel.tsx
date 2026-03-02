@@ -375,12 +375,15 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                         `}} />
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <SortableContext items={sortedRoutinesData.map(r => r.routine.id)} strategy={verticalListSortingStrategy}>
-                                <div className="flex flex-col gap-4 p-2 pb-8">
+                                <div className="flex flex-wrap items-start content-start gap-4 p-2 pb-8">
                                     {/* BODY REPEATED PER ROUTINE */}
                                     {sortedRoutinesData.map(({ routine, matrix, dailyStats }, rIndex) => (
                                         <SortableRoutineCard key={routine.id} idItem={routine.id}>
                                             {({ attributes, listeners, isDragging }: any) => (
-                                                <div className="w-full overflow-auto custom-scrollbar max-h-[70vh] resize-y min-h-[150px] pb-1">
+                                                <div
+                                                    className="overflow-auto custom-scrollbar max-h-[70vh] resize min-h-[150px] min-w-[300px] w-full xl:w-[calc(50%-8px)] border border-border rounded-md shadow-sm bg-background pb-1"
+                                                    style={{ maxWidth: '100%' }}
+                                                >
                                                     <table className="matrix-table w-full text-xs font-sans min-w-max border-separate border-spacing-0 relative pb-4">
                                                         {/* INDIVIDUAL THEAD FOR DATES PER ROUTINE */}
                                                         <thead className="bg-background shadow-sm">
