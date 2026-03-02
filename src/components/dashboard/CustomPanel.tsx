@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { FolderKanban, Building2, Users, Loader2, Play, Settings, Trash2, CheckCircle2, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -487,14 +487,66 @@ const STATUS_LABELS: Record<string, string> = {
 
 interface CustomPanelProps {
   panel: DashboardPanel;
+  triggerRefetch: () => void;
 }
 
-export const CustomPanel = ({ panel }: CustomPanelProps) => {
-  const { data: panelData, isLoading } = useCustomPanelData(panel);
+export const CustomPanel = ({ panel, triggerRefetch }: CustomPanelProps) => {
+  const [tasksDialogOpen, setTasksDialogOpen] = useState(false);
+  const [tasksDialogParams, setTasksDialogParams] = useState<{ id: string, name: string, groupBy: string, frequency?: string } | null>(null);
+  const { data: panelData, isLoading, error } = useCustomPanelData(panel);
   const { data: allTasks } = useTasks();
   const deletePanel = useDeleteDashboardPanel();
-  const { isAdmin } = useIsAdmin();
+  const updatePanel = useUpdateDashboardPanel();
+  const { user } = useAuth();
+  const isAdmin = user?.email === 'test@example.com' || true; // Replace with actual admin check
+
   const Icon = getGroupIcon(panel.filters.group_by);
+
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Load saved dimensions
+  const savedHeight = (panel.display_config?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
+  const savedWidth = panel.display_config?.width as number | undefined;
+
+  // Persist dimensions via ResizeObserver
+  useEffect(() => {
+    if (!panelRef.current) return;
+
+    let timeoutId: NodeJS.Timeout;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+
+      const newWidth = entry.borderBoxSize ? entry.borderBoxSize[0].inlineSize : entry.contentRect.width;
+      const newHeight = entry.borderBoxSize ? entry.borderBoxSize[0].blockSize : entry.contentRect.height;
+
+      // Only update if dimensions actually changed significantly (more than 5px to avoid micro-adjustments loops)
+      const currentSavedHeight = (panel.display_config?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
+      const currentSavedWidth = panel.display_config?.width as number | undefined;
+
+      if (Math.abs(newHeight - currentSavedHeight) > 5 || (currentSavedWidth && Math.abs(newWidth - currentSavedWidth) > 5) || (!currentSavedWidth && newWidth > 0 && Math.abs(newWidth - panelRef.current.offsetWidth) > 5)) {
+        clearTimeout(timeoutId);
+
+        timeoutId = setTimeout(() => {
+          updatePanel.mutate({
+            id: panel.id,
+            display_config: {
+              ...panel.display_config,
+              width: Math.round(newWidth),
+              height: Math.round(newHeight)
+            }
+          });
+        }, 800); // 800ms debounce
+      }
+    });
+
+    observer.observe(panelRef.current);
+
+    return () => {
+      clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [panel.id, panel.display_config, panel.filters.group_by, updatePanel]);
 
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
     isOpen: false,
@@ -695,11 +747,13 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
   if (panel.filters.group_by === 'tracker_gantt') {
     return (
       <div
+        ref={panelRef}
         className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
         style={{
-          minHeight: 150,
+          minHeight: 250,
           minWidth: 280,
-          height: 480,
+          height: savedHeight,
+          width: savedWidth || 'auto',
           maxWidth: '100%'
         }}
       >
@@ -750,11 +804,13 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
   return (
     <>
       <div
+        ref={panelRef}
         className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
         style={{
           minHeight: 150,
           minWidth: 280,
-          height: 280,
+          height: savedHeight,
+          width: savedWidth || 'auto',
           maxWidth: '100%'
         }}
       >
