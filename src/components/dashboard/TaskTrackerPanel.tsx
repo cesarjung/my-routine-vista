@@ -277,7 +277,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
     const canUserAccessTask = (task: any) => {
         if (!user) return false;
-        if (role === 'admin' || role === 'gestor') return true;
+        if (isGestorOrAdmin) return true;
         if (task.created_by === user.id || task.assigned_to === user.id) return true;
         if (task.assignees && task.assignees.some((a: any) => a.user_id === user.id)) return true;
         return false;
