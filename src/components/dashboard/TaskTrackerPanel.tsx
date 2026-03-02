@@ -154,7 +154,16 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
             const taskMap = new Map();
             routineTasks.forEach(task => {
                 if (!task.due_date) return;
-                const dateKey = format(parseISO(task.due_date), 'yyyy-MM-dd');
+
+                let dateKey = '';
+                try {
+                    const parsed = parseISO(task.due_date);
+                    if (isNaN(parsed.getTime())) return;
+                    dateKey = format(parsed, 'yyyy-MM-dd');
+                } catch (e) {
+                    return;
+                }
+
                 const unitId = task.unit_id || 'unassigned';
 
                 const existingTask = taskMap.get(`${unitId}_${dateKey}`);
@@ -195,7 +204,16 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
 
             const dailyStats = daysInMonth.map(day => {
                 const dateKey = format(day, 'yyyy-MM-dd');
-                const allDayTasks = routineTasks.filter(t => t.due_date && format(parseISO(t.due_date), 'yyyy-MM-dd') === dateKey);
+                const allDayTasks = routineTasks.filter(t => {
+                    if (!t.due_date) return false;
+                    try {
+                        const parsed = parseISO(t.due_date);
+                        if (isNaN(parsed.getTime())) return false;
+                        return format(parsed, 'yyyy-MM-dd') === dateKey;
+                    } catch (e) {
+                        return false;
+                    }
+                });
 
                 // Se o dia tiver tarefas filhas (parent_task_id !== null), contamos apenas elas na porcentagem. 
                 // Caso contrário (rotinas sem divisão por unidades), contamos a própria tarefa raiz.
@@ -207,10 +225,30 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                 return { total, completed };
             });
 
+            let timeRange = '00:00 - 23:59';
             const firstTask = routineTasks.find(t => t.start_date || t.due_date);
-            const timeRange = firstTask
-                ? `${firstTask.start_date ? format(parseISO(firstTask.start_date), 'HH:mm') : '00:00'} - ${firstTask.due_date ? format(parseISO(firstTask.due_date), 'HH:mm') : '23:59'}`
-                : '00:00 - 23:59';
+
+            if (firstTask) {
+                let startStr = '00:00';
+                let endStr = '23:59';
+                try {
+                    if (firstTask.start_date) {
+                        const parsedStart = parseISO(firstTask.start_date);
+                        if (!isNaN(parsedStart.getTime())) {
+                            startStr = format(parsedStart, 'HH:mm');
+                        }
+                    }
+                    if (firstTask.due_date) {
+                        const parsedEnd = parseISO(firstTask.due_date);
+                        if (!isNaN(parsedEnd.getTime())) {
+                            endStr = format(parsedEnd, 'HH:mm');
+                        }
+                    }
+                } catch (e) {
+                    // ignore format errors for legacy malformed dates
+                }
+                timeRange = `${startStr} - ${endStr}`;
+            }
 
             return { routine, matrix, dailyStats, timeRange };
         });
@@ -355,7 +393,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                         `}} />
                         <div className="relative w-full" style={{ minHeight: maxHeight }}>
                             {/* BODY REPEATED PER ROUTINE */}
-                            {sortedRoutinesData.map(({ routine, matrix, dailyStats }, rIndex) => {
+                            {sortedRoutinesData.map(({ routine, matrix, dailyStats, timeRange }, rIndex) => {
                                 const l = layouts[routine.id] || { x: rIndex * 50, y: rIndex * 50, width: 400, height: 250 };
                                 return (
                                     <Rnd
@@ -415,14 +453,14 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                                                         <th className="sticky-col-1 bg-white dark:bg-background text-black dark:text-foreground font-bold p-1.5 text-center text-[10px] uppercase border-t-2 border-[#888] align-top relative">
                                                             HORÁRIO
                                                             <div className="text-[9px] font-normal text-muted-foreground mt-0.5 whitespace-nowrap">
-                                                                {r.timeRange}
+                                                                {timeRange}
                                                             </div>
                                                         </th>
                                                         <th className="sticky-col-2 bg-black text-[#f08c16] font-bold p-1.5 text-center whitespace-nowrap text-[11px] border-t-2 border-[#888]">
-                                                            {r.routine.title}
+                                                            {routine.title}
                                                         </th>
 
-                                                        {r.dailyStats.map((stat, i) => {
+                                                        {dailyStats.map((stat, i) => {
                                                             const pct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : null;
                                                             const bgClass = 'bg-[#df7d70] text-black';
                                                             return (
