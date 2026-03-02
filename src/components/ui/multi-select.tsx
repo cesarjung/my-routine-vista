@@ -85,39 +85,12 @@ export function MultiSelect({
                         {selected.length === 0 && (
                             <span className="text-muted-foreground font-normal">{placeholder}</span>
                         )}
-                        {selectedOptions.map((option) => (
-                            <Badge
-                                key={option.value}
-                                variant="secondary"
-                                className={cn("mr-1 mb-1 font-normal", badgeClassName)}
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleUnselect(option.value)
-                                }}
-                            >
-                                {option.icon && <option.icon className="mr-1 h-3 w-3" />}
-                                {option.label}
-                                <div
-                                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                            handleUnselect(option.value)
-                                        }
-                                    }}
-                                    onMouseDown={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                    }}
-                                    onClick={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        handleUnselect(option.value)
-                                    }}
-                                >
-                                    <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                                </div>
-                            </Badge>
-                        ))}
+                        {selected.length > 0 && selected.length < options.length && (
+                            <span className="text-foreground font-medium">{selected.length} Rotinas Selecionadas</span>
+                        )}
+                        {selected.length === options.length && options.length > 0 && (
+                            <span className="text-foreground font-medium">Todas as Rotinas</span>
+                        )}
                     </div>
                     <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
