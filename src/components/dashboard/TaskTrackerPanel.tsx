@@ -74,7 +74,14 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
     };
 
     const handleSaveGlobalView = () => {
-        if (!sectorId) return;
+        console.log("-> Clicou em Salvar Vista", { sectorId, isLoadingSettings, isPending: saveSettings.isPending });
+        if (!sectorId) {
+            console.warn("-> SectorID não definido, abortando...");
+            import('sonner').then(m => m.toast.error("Erro: Nenhum setor selecionado no Dashboard. Selecione um setor primeiro."));
+            return;
+        }
+
+        console.log("-> Disparando saveSettings.mutate...");
         saveSettings.mutate({
             sector_id: sectorId,
             filters: { routines: selectedRoutineIds, frequencies: frequencyFilter },
@@ -380,8 +387,8 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
                             <div className="ml-auto mr-2">
                                 <Button
                                     size="sm"
-                                    variant="default"
-                                    disabled={isLoadingSettings || saveSettings.isPending}
+                                    variant={sectorId ? "default" : "secondary"}
+                                    disabled={saveSettings.isPending}
                                     onClick={handleSaveGlobalView}
                                     className="gap-2"
                                 >
