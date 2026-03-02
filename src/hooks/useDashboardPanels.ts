@@ -15,9 +15,10 @@ export interface PanelFilters {
   unit_id?: string | string[] | null;
   status?: string[];
   period?: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
-  group_by: 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt';
+  group_by: 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt' | 'task';
   title_filter?: string;
   task_frequency?: string[];
+  dashboard_context?: string;
 }
 
 export interface DashboardPanel {

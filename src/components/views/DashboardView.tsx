@@ -180,7 +180,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
   const { data: allTasks, isLoading } = useTasks();
 
   // Filter tasks based on entity type and frequency
-  const filteredTasks = allTasks?.filter(task => {
+  const filteredTasks = allTasks?.filter((task: any) => {
     // Filter by entity (unit or responsible)
     if (state.entityType === 'unit') {
       if (task.unit_id !== state.entityId) return false;
@@ -229,7 +229,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredTasks.map(task => (
+              {filteredTasks.map((task: any) => (
                 <div
                   key={task.id}
                   className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
@@ -305,25 +305,21 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
   const overallPercentage = statsData?.percentage || 0;
 
   const filteredPanels = customPanels?.filter(panel => {
-    // Ocultar paineis de outros setores cruzados
-    const pSector = panel.filters?.sector_id;
-    let matchesSector = true;
+    const contextIdentifier = selectedSectorId || 'global';
+    // Backwards compatibility: if dashboard_context doesn't exist, try to infer from sector_id or treat as global
+    let panelContext = panel.filters?.dashboard_context;
 
-    if (selectedSectorId) {
-      if (Array.isArray(pSector)) {
-        matchesSector = pSector.includes(selectedSectorId);
+    if (!panelContext) {
+      if (panel.filters?.sector_id && typeof panel.filters.sector_id === 'string') {
+        panelContext = panel.filters.sector_id;
       } else {
-        matchesSector = pSector === selectedSectorId;
+        panelContext = 'global';
       }
-    } else {
-      // Dashboard Global - Shows everything or panels with no specific sector restrictions constraint (if needed).
-      // Here we explicitly let matchesSector be true if global, to see ALL panels, OR we can filter out strictly isolated panels.
-      // Based on user: "geral poder olhar todos" -> So if no sector selected, it matches all.
-      matchesSector = true;
     }
 
-    if (!matchesSector) return false;
+    if (panelContext !== contextIdentifier) return false;
 
+    // Permissions checking
     if (activeTab === 'public') {
       return !panel.is_private;
     } else {
@@ -461,7 +457,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
             </Tooltip>
           </TooltipProvider>
 
-          {isAdmin && <PanelFormDialog panelCount={customPanels?.length || 0} />}
+          {isAdmin && <PanelFormDialog panelCount={filteredPanels?.length || 0} dashboardContext={selectedSectorId} />}
 
           {!forcedSectorId && (
             <Select

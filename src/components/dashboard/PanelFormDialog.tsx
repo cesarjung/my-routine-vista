@@ -55,9 +55,10 @@ interface PanelFormDialogProps {
   panel?: DashboardPanel;
   panelCount?: number;
   trigger?: React.ReactNode;
+  dashboardContext?: string | null;
 }
 
-export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDialogProps) => {
+export const PanelFormDialog = ({ panel, panelCount = 0, trigger, dashboardContext }: PanelFormDialogProps) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(panel?.title || '');
   const [isPrivate, setIsPrivate] = useState(panel?.is_private || false);
@@ -131,7 +132,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
       task_frequency: selectedFrequencies.length > 0 ? selectedFrequencies : undefined,
       title_filter: (cleanTitles.length > 0 ? cleanTitles : undefined) as any,
       period: period as PanelFilters['period'],
-      group_by: groupBy
+      group_by: groupBy,
+      dashboard_context: panel ? panel.filters.dashboard_context : (dashboardContext || 'global')
     };
 
     if (panel) {
@@ -182,7 +184,7 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{panel ? 'Editar Painel' : 'Criar Painel Customizado'}</DialogTitle>
         </DialogHeader>
@@ -211,6 +213,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
               onChange={setSelectedTitles}
               placeholder="Todas as tarefas"
               searchPlaceholder="Buscar tarefa..."
+              selectAllLabel="Todas as Rotinas"
+              selectedPluralLabel="Rotinas Sel."
             />
           </div>
 
@@ -240,6 +244,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
               onChange={setSectorIds}
               placeholder="Todos os setores"
               searchPlaceholder="Buscar setor..."
+              selectAllLabel="Todos os Setores"
+              selectedPluralLabel="Setores Sel."
             />
           </div>
 
@@ -251,6 +257,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger }: PanelFormDia
               onChange={setUnitIds}
               placeholder="Todas as unidades"
               searchPlaceholder="Buscar unidade..."
+              selectAllLabel="Todas as Unidades"
+              selectedPluralLabel="Unidades Sel."
             />
           </div>
 

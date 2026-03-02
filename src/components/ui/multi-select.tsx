@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/command"
 import {
     Popover,
-    PopoverContent,
+    PopoverContentNoPortal,
     PopoverTrigger,
 } from "@/components/ui/popover"
 
@@ -32,6 +32,8 @@ interface MultiSelectProps {
     searchPlaceholder?: string
     className?: string
     badgeClassName?: string
+    selectAllLabel?: string
+    selectedPluralLabel?: string
 }
 
 export function MultiSelect({
@@ -42,7 +44,10 @@ export function MultiSelect({
     searchPlaceholder = "Buscar...",
     className,
     badgeClassName,
+    selectAllLabel = "Todos selecionados",
+    selectedPluralLabel = "Selecionados",
 }: MultiSelectProps) {
+    console.log("=== MULTISELECT RENDERIZANDO ===");
     const [open, setOpen] = React.useState(false)
 
     const selectedOptions = React.useMemo(() => {
@@ -86,24 +91,29 @@ export function MultiSelect({
                             <span className="text-muted-foreground font-normal">{placeholder}</span>
                         )}
                         {selected.length > 0 && selected.length < options.length && (
-                            <span className="text-foreground font-medium">{selected.length} Rotinas Selecionadas</span>
+                            <span className="text-foreground font-medium">{selected.length} {selectedPluralLabel}</span>
                         )}
                         {selected.length === options.length && options.length > 0 && (
-                            <span className="text-foreground font-medium">Todas as Rotinas</span>
+                            <span className="text-foreground font-medium">{selectAllLabel}</span>
                         )}
                     </div>
                     <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
+            <PopoverContentNoPortal
+                className="w-full p-0"
+                align="start"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+            >
                 <Command>
                     <CommandInput placeholder={searchPlaceholder} />
                     <CommandList>
                         <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>
                         <CommandGroup>
                             <CommandItem
-                                onSelect={handleSelectAll}
+                                value="select-all"
                                 className="cursor-pointer"
+                                onSelect={handleSelectAll}
                             >
                                 <div
                                     className={cn(
@@ -129,8 +139,8 @@ export function MultiSelect({
                                     <CommandItem
                                         key={option.value}
                                         value={option.label} // Use label for efficient search
-                                        onSelect={() => handleSelect(option.value)}
                                         className="cursor-pointer"
+                                        onSelect={() => handleSelect(option.value)}
                                     >
                                         <div
                                             className={cn(
@@ -152,7 +162,7 @@ export function MultiSelect({
                         </CommandGroup>
                     </CommandList>
                 </Command>
-            </PopoverContent>
+            </PopoverContentNoPortal>
         </Popover>
     )
 }

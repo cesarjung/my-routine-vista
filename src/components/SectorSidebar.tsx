@@ -191,13 +191,19 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
     const routinesKey = `${sector.id}-routines`;
     const isRoutinesExpanded = expandedFolders.has(routinesKey);
 
-    // Fallback if sections haven't loaded yet or query is cached without them
-    const sections = sector.sections?.sort((a, b) => a.order_index - b.order_index) || [
-      { id: 'dashboard', sector_id: sector.id, title: 'Dashboard', type: 'dashboard', order_index: 0 },
-      { id: 'tasks', sector_id: sector.id, title: 'Tarefas', type: 'tasks', order_index: 1 },
-      { id: 'routines', sector_id: sector.id, title: 'Rotinas', type: 'routines', order_index: 2 },
-      { id: 'units', sector_id: sector.id, title: 'Unidades', type: 'units', order_index: 3 },
-    ];
+    // Filter out 'units' globally to fix legacy DB rows and the hardcoded Trigger that injects it for new sectors
+    const sections = (sector.sections || [])
+      .filter(s => s.type !== 'units')
+      .sort((a, b) => a.order_index - b.order_index);
+
+    // Fallback if no sections exist yet
+    if (sections.length === 0) {
+      sections.push(
+        { id: 'dashboard', sector_id: sector.id, title: 'Dashboard', type: 'dashboard', order_index: 0 },
+        { id: 'tasks', sector_id: sector.id, title: 'Tarefas', type: 'tasks', order_index: 1 },
+        { id: 'routines', sector_id: sector.id, title: 'Rotinas', type: 'routines', order_index: 2 }
+      );
+    }
 
     return (
       <div key={sector.id} className="ml-2">

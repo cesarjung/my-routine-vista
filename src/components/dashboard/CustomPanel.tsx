@@ -86,7 +86,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       const periodDates = getPeriodDates(filters.period || 'all');
 
       // Build tasks query
-      let tasksQuery = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, sector_id');
+      let tasksQuery = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, sector_id, due_date');
 
       if (filters.sector_id) {
         if (Array.isArray(filters.sector_id)) {
@@ -151,8 +151,8 @@ const useCustomPanelData = (panel: DashboardPanel) => {
 
       if (periodDates) {
         tasksQuery = tasksQuery
-          .gte('created_at', periodDates.start.toISOString())
-          .lte('created_at', periodDates.end.toISOString());
+          .gte('due_date', periodDates.start.toISOString())
+          .lte('due_date', periodDates.end.toISOString());
       }
 
       const { data: rawTasks, error: tasksError } = await tasksQuery;

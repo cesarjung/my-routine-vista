@@ -39,7 +39,7 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
     return (
         <div
             className={cn(
-                'w-full text-left p-3 border-b border-border transition-colors group flex items-start gap-3',
+                'w-full text-left p-2 border-b border-border transition-colors group flex items-start gap-3',
                 isSelected ? 'bg-primary/10' : 'hover:bg-secondary/50',
                 onClick && 'cursor-pointer'
             )}
@@ -55,60 +55,60 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
                         e.stopPropagation();
                         onToggleSelect(routine.id);
                     }}
-                    className="mt-1 flex-shrink-0"
+                    className="mt-0.5 flex-shrink-0"
                 >
                     {isMultiSelected ? (
-                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                        <CheckCircle2 className="h-4 w-4 text-primary" />
                     ) : (
-                        <Circle className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+                        <Circle className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
                     )}
                 </button>
             )}
 
             {!onToggleSelect && (
-                <div className="mt-1 flex-shrink-0 opacity-0 w-5 h-5" />
+                <div className="mt-0.5 flex-shrink-0 opacity-0 w-4 h-4" />
             )}
 
             <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                    <h4 className={cn("font-medium text-foreground truncate", routine.is_active === false && "line-through text-muted-foreground")}>{routine.title}</h4>
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                    <h3 className={cn("font-medium text-sm text-foreground truncate", routine.is_active === false && "line-through text-muted-foreground")}>{routine.title}</h3>
+                    <div className="flex items-center gap-2 shrink-0">
                         {(routine as any).status === 'pendente' && (
-                            <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100">
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100">
                                 Pendente
                             </Badge>
                         )}
                         {(routine as any).status === 'concluida' && (
-                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 hover:bg-green-100">
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-green-600 border-green-200 bg-green-50 hover:bg-green-100">
                                 Concluída
                             </Badge>
                         )}
                         {(routine as any).status === 'inativa' && (
-                            <Badge variant="outline" className="text-slate-500 border-slate-200 bg-slate-50">
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-slate-500 border-slate-200 bg-slate-50">
                                 Inativa
                             </Badge>
                         )}
-                        <span className="bg-secondary text-secondary-foreground px-2 py-0.5 rounded text-xs border border-border">
+                        <span className="bg-secondary text-secondary-foreground px-1.5 py-0 h-5 flex items-center rounded text-[10px] border border-border">
                             {frequencyLabels[routine.frequency] || routine.frequency}
                         </span>
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
                     {periodDates ? (
-                        <span className="flex items-center gap-1.5 text-primary">
-                            <Clock className="w-3.5 h-3.5" />
+                        <span className="flex items-center gap-1 text-primary">
+                            <Clock className="w-3 h-3" />
                             {formatPeriodLabel()}
                         </span>
                     ) : (
-                        <span className="flex items-center gap-1.5 text-muted-foreground/60">
-                            <Clock className="w-3.5 h-3.5" />
+                        <span className="flex items-center gap-1 text-muted-foreground/60">
+                            <Clock className="w-3 h-3" />
                             Sem período ativo
                         </span>
                     )}
 
                     {routine.description && (
-                        <span className="truncate max-w-[300px] flex items-center gap-1.5">
+                        <span className="truncate max-w-[300px] flex items-center gap-1">
                             {routine.description}
                         </span>
                     )}
@@ -116,20 +116,20 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
                 {canEdit && (
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={onEdit}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
                     >
-                        <Pencil className="w-4 h-4 text-muted-foreground" />
+                        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                     </Button>
                 )}
                 <ChevronRight
                     className={cn(
-                        'w-5 h-5 text-muted-foreground transition-transform shrink-0',
+                        'w-4 h-4 text-muted-foreground transition-transform shrink-0',
                         isSelected && 'text-primary'
                     )}
                 />

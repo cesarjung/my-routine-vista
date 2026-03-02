@@ -220,21 +220,7 @@ export const RoutinesView = ({
     <div className="flex h-full flex-col">
       {!hideHeader && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col flex h-full">
-          <div className="px-6 border-b border-border bg-background pt-2 sticky top-0 z-10 shrink-0">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold tracking-tight">Rotinas</h1>
-            </div>
-            <TabsList className="h-9 mb-2 bg-muted/50 p-1">
-              <TabsTrigger value="routines" className="gap-2 text-xs">
-                <Calendar className="h-3.5 w-3.5" />
-                Rotinas
-              </TabsTrigger>
-              <TabsTrigger value="notes" className="gap-2 text-xs">
-                <StickyNote className="h-3.5 w-3.5" />
-                Anotações e Quadros
-              </TabsTrigger>
-            </TabsList>
-          </div>
+          {/* Header removed from here to save vertical space. Tabs moved to inner toolbars. */}
 
           <div className="flex-1 overflow-hidden relative">
             <TabsContent value="routines" className="h-full flex flex-col m-0 p-6 absolute inset-0 overflow-auto">
@@ -271,6 +257,19 @@ export const RoutinesView = ({
                 ) : (
                   <div className="flex flex-col gap-2 p-2 bg-card border-b border-border shadow-sm mb-4 rounded-lg">
                     <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
+                      <TabsList className="justify-start h-8 bg-secondary/50 p-0.5 shrink-0 border border-border">
+                        <TabsTrigger value="routines" className="gap-1.5 h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                          <Calendar className="w-3.5 h-3.5" />
+                          Rotinas
+                        </TabsTrigger>
+                        <TabsTrigger value="notes" className="gap-1.5 h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                          <StickyNote className="w-3.5 h-3.5" />
+                          Anotações e Quadros
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <div className="h-5 w-px bg-border shrink-0 mx-0.5" />
+
                       <div className="relative w-[180px] shrink-0">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 bg-background h-8 text-xs w-full" />
@@ -336,7 +335,21 @@ export const RoutinesView = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="notes" className="h-full m-0 p-6 absolute inset-0 overflow-auto">
+            <TabsContent value="notes" className="h-full m-0 p-6 absolute inset-0 overflow-auto flex flex-col">
+              <div className="flex flex-col gap-2 p-2 bg-card border-b border-border shadow-sm mb-4 rounded-lg shrink-0">
+                <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
+                  <TabsList className="justify-start h-8 bg-secondary/50 p-0.5 shrink-0 border border-border">
+                    <TabsTrigger value="routines" className="gap-1.5 h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <Calendar className="w-3.5 h-3.5" />
+                      Rotinas
+                    </TabsTrigger>
+                    <TabsTrigger value="notes" className="gap-1.5 h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <StickyNote className="w-3.5 h-3.5" />
+                      Anotações e Quadros
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+              </div>
               <NotesList />
             </TabsContent>
           </div>
