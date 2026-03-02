@@ -380,9 +380,9 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
     return (
         <Card className="flex flex-col h-[calc(100vh-140px)] min-h-[600px] overflow-hidden border-0 shadow-none">
             <CardHeader className="pb-3 shrink-0 px-2 sm:px-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-4 w-full">
-                        <div className="w-[180px]">
+                <div className="flex items-center justify-between mb-1">
+                    <div className="flex flex-wrap items-center gap-2 w-full">
+                        <div className="w-[140px] shrink-0">
                             <MultiSelect
                                 options={sectorsData?.map(s => ({ label: s.name, value: s.id })) || []}
                                 selected={trackerSectorIds}
@@ -390,11 +390,11 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                                     setTrackerSectorIds(vals);
                                     setIsLayoutDirty(true);
                                 }}
-                                placeholder="Todos os Setores"
+                                placeholder="Setores..."
                             />
                         </div>
 
-                        <div className="w-[300px]">
+                        <div className="w-[200px] shrink-0">
                             <MultiSelect
                                 options={activeRoutines.map(r => ({ label: r.title, value: r.id }))}
                                 selected={selectedRoutineIds}
@@ -402,11 +402,11 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                                     setSelectedRoutineIds(vals);
                                     setIsLayoutDirty(true);
                                 }}
-                                placeholder="Selecionar Rotinas Manuais..."
+                                placeholder="Rotinas Manuais..."
                             />
                         </div>
 
-                        <div className="w-[180px]">
+                        <div className="w-[140px] shrink-0">
                             <MultiSelect
                                 options={frequencyOptions}
                                 selected={frequencyFilter}
@@ -420,29 +420,29 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
 
                         {/* Botão de salvar vista para Gestores/Admin */}
                         {isGestorOrAdmin && (
-                            <div className="ml-auto mr-2">
+                            <div className="ml-auto mr-1 shrink-0">
                                 <Button
                                     size="sm"
                                     variant={sectorId ? "default" : "secondary"}
                                     disabled={saveSettings.isPending}
                                     onClick={handleSaveGlobalView}
-                                    className="gap-2"
+                                    className="gap-1.5 h-8 text-xs px-3"
                                 >
-                                    {saveSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    {sectorId ? "Salvar Vista Local" : "Salvar Vista Global"}
+                                    {saveSettings.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                    {sectorId ? "Salvar Local" : "Salvar Global"}
                                 </Button>
                             </div>
                         )}
 
-                        <div className={`flex items-center gap-2 bg-secondary/30 rounded-md p-1 border ${isGestorOrAdmin ? '' : 'ml-auto'}`}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevMonth}>
-                                <ChevronLeft className="w-4 h-4" />
+                        <div className={`flex items-center gap-1 bg-secondary/30 rounded-md p-0.5 border shrink-0 ${isGestorOrAdmin ? '' : 'ml-auto'}`}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePrevMonth}>
+                                <ChevronLeft className="w-3.5 h-3.5" />
                             </Button>
-                            <span className="font-semibold text-sm min-w-[140px] text-center capitalize">
-                                {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+                            <span className="font-semibold text-xs min-w-[110px] text-center capitalize">
+                                {format(currentDate, 'MMM yyyy', { locale: ptBR })}
                             </span>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
-                                <ChevronRight className="w-4 h-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNextMonth}>
+                                <ChevronRight className="w-3.5 h-3.5" />
                             </Button>
                         </div>
                     </div>
