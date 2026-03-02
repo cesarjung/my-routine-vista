@@ -78,26 +78,20 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [] }: TaskTrack
     const routinesToShow = useMemo(() => {
         let baseRoutines = activeRoutines;
 
-        // Return active if no filter explicitly set
-        if (frequencyFilter === 'all' && selectedRoutineIds.length === 0) {
-            return baseRoutines;
+        // If no routines are selected manually, show NOTHING
+        if (selectedRoutineIds.length === 0) {
+            return [];
         }
 
-        const frequencyRoutines = frequencyFilter !== 'all'
-            ? baseRoutines.filter(r => r.frequency === frequencyFilter)
-            : [];
+        // Get the manually selected routines
+        const manualRoutines = baseRoutines.filter(r => selectedRoutineIds.includes(r.id));
 
-        const manualRoutines = selectedRoutineIds.length > 0
-            ? baseRoutines.filter(r => selectedRoutineIds.includes(r.id))
-            : [];
+        // Filter those down by frequency if a specific frequency is chosen
+        if (frequencyFilter !== 'all') {
+            return manualRoutines.filter(r => r.frequency === frequencyFilter);
+        }
 
-        // Return a union of both filters
-        const combined = [...frequencyRoutines, ...manualRoutines];
-
-        // Remove duplicates by ID
-        const uniqueValues = Array.from(new Map(combined.map(r => [r.id, r])).values());
-
-        return uniqueValues;
+        return manualRoutines;
     }, [activeRoutines, selectedRoutineIds, frequencyFilter]);
 
     const routineIds = useMemo(() => routinesToShow.map(r => r.id), [routinesToShow]);
