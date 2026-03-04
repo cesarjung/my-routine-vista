@@ -476,7 +476,6 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                         )}
                         title={item.title}
                         onClick={(e) => {
-                          e.stopPropagation();
                           if (item.type === 'task') {
                             if (item.routineId) {
                               handleSelectRoutine(item.routineId);
@@ -555,7 +554,6 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                     )}
                     title={item.title}
                     onClick={(e) => {
-                      e.stopPropagation();
                       if (item.type === 'task') {
                         if (item.routineId) {
                           handleSelectRoutine(item.routineId, day);
@@ -645,7 +643,6 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
                         }}
                         title={`${item.title} (${timeStr} - ${endTimeStr})`}
                         onClick={(e) => {
-                          e.stopPropagation();
                           if (item.type === 'task') {
                             if (item.routineId) {
                               handleSelectRoutine(item.routineId, day);

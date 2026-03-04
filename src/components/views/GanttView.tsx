@@ -73,7 +73,6 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
   };
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus, e: React.MouseEvent) => {
-    e.stopPropagation();
     updateTask.mutate({
       id: taskId,
       status: newStatus,
@@ -235,7 +234,10 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
                   key={task.id}
                   className="h-12 border-b border-border px-3 flex items-center gap-2 group cursor-pointer hover:bg-secondary/30"
                   style={{ animationDelay: `${index * 30}ms` }}
-                  onClick={() => handleTaskClick(task as Task)}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('button')) return;
+                    handleTaskClick(task as Task);
+                  }}
                 >
                   {/* Quick checkbox */}
                   <button
@@ -269,7 +271,6 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>

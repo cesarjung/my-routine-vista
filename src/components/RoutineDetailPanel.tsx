@@ -669,17 +669,18 @@ export const RoutineDetailPanel = ({
                           const userCanEdit = canEditTask(task);
 
                           // Find associated checkin to get notes - Robust lookup
-                          const assignees = (task as any).assignees as any[];
+                          const assignees = Array.isArray((task as any).assignees) ? (task as any).assignees : [];
+                          const assignee = (task as any).assignee || null;
                           const taskCheckin = checkins.find(c =>
                             // Priority 1: Exact match on assignee_user_id
-                            (assignees && assignees.some(a => a.id === c.assignee_user_id)) ||
+                            (assignees.length > 0 && c.assignee_user_id && assignees.some(a => a?.id === c.assignee_user_id)) ||
                             (assignee?.id && c.assignee_user_id === assignee.id) ||
                             // Priority 2: Match on unit_id if checkin has no assignee (legacy/unclaimed)
                             (c.unit_id === task.unit_id && !c.assignee_user_id) ||
                             // Priority 3: Match on unit_id and the task assignee is the one who completed it (fallback)
-                            (c.unit_id === task.unit_id && c.completed_by === assignees?.[0]?.id)
+                            (c.unit_id === task.unit_id && assignees[0]?.id && c.completed_by === assignees[0].id)
                           );
-                          const taskComment = taskCheckin?.notes;
+                          const taskCommentLabel = taskCheckin?.notes || (task as any).comment || '';
 
                           return (
                             <div
@@ -755,11 +756,11 @@ export const RoutineDetailPanel = ({
                                   >
                                     {(task as any).unit?.name || 'Sem unidade'}
                                   </span>
-                                  {taskComment && (
+                                  {taskCommentLabel && (
                                     <div className="flex items-start gap-1 mt-1">
                                       <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
                                       <span className="text-xs text-blue-600 font-medium break-words leading-tight">
-                                        {taskComment}
+                                        {taskCommentLabel}
                                       </span>
                                     </div>
                                   )}

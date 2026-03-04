@@ -685,7 +685,7 @@ async function checkAndCompleteParentTask(parentTaskId: string): Promise<void> {
     // Get parent task info and ROUTINE info
     const { data: parentTask, error: parentError } = await supabase
       .from('tasks')
-      .select('id, status, is_recurring, recurrence_frequency, recurrence_mode, start_date, due_date, title, description, unit_id, sector_id, assigned_to, created_by, priority, routine_id, routine:routines(id, frequency)')
+      .select('id, status, is_recurring, recurrence_frequency, recurrence_mode, start_date, due_date, title, description, unit_id, sector_id, assigned_to, created_by, priority, parent_task_id, routine_id, routine:routines(id, frequency)')
       .eq('id', parentTaskId)
       .single();
 
@@ -744,6 +744,8 @@ async function createNextRecurringInstanceWithChildren(
     created_by: string | null;
     priority: number | null;
     routine_id: string | null;
+    parent_task_id?: string | null;
+    recurrence_mode?: string | null;
   },
   childTasks: { id: string; status: string; unit_id?: string }[]
 ): Promise<void> {
@@ -777,8 +779,8 @@ async function createNextRecurringInstanceWithChildren(
       status: 'pendente',
       is_recurring: true,
       recurrence_frequency: parentTask.recurrence_frequency as 'diaria' | 'semanal' | 'quinzenal' | 'mensal',
-      recurrence_mode: 'on_completion',
-      parent_task_id: null,
+      recurrence_mode: (parentTask.recurrence_mode as any) || 'on_completion',
+      parent_task_id: parentTask.parent_task_id || parentTask.id,
       routine_id: parentTask.routine_id, // Ensure propagated
     })
     .select('id')
@@ -824,10 +826,25 @@ async function createNextRecurringInstanceWithChildren(
     }
   }
 
+  // Copy Parent Task Assignees
+  const { data: parentAssignees } = await supabase
+    .from('task_assignees')
+    .select('user_id')
+    .eq('task_id', parentTask.id);
+
+  if (parentAssignees && parentAssignees.length > 0) {
+    await supabase.from('task_assignees').insert(
+      parentAssignees.map(a => ({
+        task_id: newParentTask.id,
+        user_id: a.user_id
+      }))
+    );
+  }
+
   // Get original child tasks with full details
   const { data: originalChildren, error: childError } = await supabase
     .from('tasks')
-    .select('title, description, unit_id, sector_id, assigned_to, created_by, priority')
+    .select('id, title, description, unit_id, sector_id, assigned_to, created_by, priority')
     .eq('parent_task_id', parentTask.id);
 
   if (childError || !originalChildren) {
@@ -835,28 +852,45 @@ async function createNextRecurringInstanceWithChildren(
     return;
   }
 
-  // Create new child tasks
-  const newChildTasks = originalChildren.map((child) => ({
-    title: child.title,
-    description: child.description,
-    unit_id: child.unit_id,
-    sector_id: child.sector_id,
-    assigned_to: child.assigned_to,
-    created_by: child.created_by,
-    start_date: nextStart.toISOString(),
-    due_date: nextDue.toISOString(),
-    priority: child.priority || 1,
-    status: 'pendente' as const,
-    parent_task_id: newParentTask.id,
-  }));
-
-  if (newChildTasks.length > 0) {
-    const { error: insertError } = await supabase
+  // Create new child tasks one by one to copy assignees
+  for (const child of originalChildren) {
+    const { data: newChildTask, error: insertError } = await supabase
       .from('tasks')
-      .insert(newChildTasks);
+      .insert({
+        title: child.title,
+        description: child.description,
+        unit_id: child.unit_id,
+        sector_id: child.sector_id,
+        assigned_to: child.assigned_to,
+        created_by: child.created_by,
+        start_date: nextStart.toISOString(),
+        due_date: nextDue.toISOString(),
+        priority: child.priority || 1,
+        status: 'pendente' as const,
+        parent_task_id: newParentTask.id,
+        routine_id: parentTask.routine_id,
+      })
+      .select('id')
+      .single();
 
-    if (insertError) {
-      console.error('Error creating child tasks:', insertError);
+    if (insertError || !newChildTask) {
+      console.error('Error creating child task:', insertError);
+      continue;
+    }
+
+    // Fetch and copy assignees for this child task
+    const { data: childAssignees } = await supabase
+      .from('task_assignees')
+      .select('user_id')
+      .eq('task_id', child.id);
+
+    if (childAssignees && childAssignees.length > 0) {
+      await supabase.from('task_assignees').insert(
+        childAssignees.map(a => ({
+          task_id: newChildTask.id,
+          user_id: a.user_id
+        }))
+      );
     }
   }
 

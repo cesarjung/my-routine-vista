@@ -52,7 +52,6 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
             {onToggleSelect && (
                 <button
                     onClick={(e) => {
-                        e.stopPropagation();
                         onToggleSelect(routine.id);
                     }}
                     className="mt-0.5 flex-shrink-0"

@@ -87,7 +87,6 @@ export const TaskRowItem = ({
             {!hideSelection && onToggleSelect && (
                 <button
                     onClick={(e) => {
-                        e.stopPropagation();
                         onToggleSelect(task.id);
                     }}
                     className="mt-0.5 flex-shrink-0" /* Adjusted margin */
