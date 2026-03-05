@@ -41,12 +41,6 @@ export const TaskHoverCard = ({
                         .eq('routine_period_id', periodData.id)
                         .eq('unit_id', task.unit_id);
 
-                    if (task.assigned_to) {
-                        query = query.eq('assignee_user_id', task.assigned_to);
-                    } else {
-                        query = query.is('assignee_user_id', null);
-                    }
-
                     const { data: checkinData } = await query.maybeSingle();
 
                     if (checkinData && checkinData.notes) {

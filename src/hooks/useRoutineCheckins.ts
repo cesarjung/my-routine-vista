@@ -128,9 +128,9 @@ export const useAllActiveRoutinePeriods = () => {
   });
 };
 
-export const useCurrentPeriodCheckins = (routineId: string) => {
+export const useCurrentPeriodCheckins = (routineId: string, contextDate?: string, exactDate?: string) => {
   return useQuery({
-    queryKey: ['current-period-checkins', routineId],
+    queryKey: ['current-period-checkins', routineId, contextDate, exactDate],
     queryFn: async () => {
       // Get routine info
       const { data: routine, error: routineError } = await supabase
@@ -142,7 +142,7 @@ export const useCurrentPeriodCheckins = (routineId: string) => {
       if (routineError) throw routineError;
 
       // Get the most recent active period for this routine (current or future)
-      let { data: period, error: periodError } = await supabase
+      let query = supabase
         .from('routine_periods')
         .select(`
           *,
@@ -151,11 +151,33 @@ export const useCurrentPeriodCheckins = (routineId: string) => {
             unit:units (id, name, code)
           )
         `)
-        .eq('routine_id', routineId)
-        .eq('is_active', true)
-        .order('period_start', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .eq('routine_id', routineId);
+
+      if (exactDate) {
+        // Como o exactDate original carrega o offset real do fuso (ex: 2026-03-05T02:59:59.000Z), 
+        // ele garante que bate dentro do período correto sem "vazar" pro dia posterior.
+        query = query
+          .lte('period_start', exactDate)
+          .gte('period_end', exactDate)
+          .order('period_start', { ascending: false })
+          .limit(1);
+      } else if (contextDate) {
+        // Fallback Mestre: a âncora do meio-dia (12:00:00Z) para ignorar fusos horários locais.
+        // O Supabase salva periods que começam 03:00 de hoje até 02:59 de amanhã (GMT-3).
+        // Um ponto fixo no meio-dia universal (T12:00:00Z) sempre interseciona essa janela!
+        const safeDateString = contextDate.substring(0, 10);
+        const targetPoint = `${safeDateString}T12:00:00Z`;
+
+        query = query
+          .lte('period_start', targetPoint)
+          .gte('period_end', targetPoint)
+          .order('period_start', { ascending: false })
+          .limit(1);
+      } else {
+        query = query.eq('is_active', true).order('period_start', { ascending: false }).limit(1);
+      }
+
+      let { data: period, error: periodError } = await query.maybeSingle();
 
       if (periodError) throw periodError;
 

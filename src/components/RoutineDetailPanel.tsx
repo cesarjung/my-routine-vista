@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Calendar,
   Users,
@@ -79,7 +81,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import type { Tables, Enums } from '@/integrations/supabase/types';
 import {
   startOfDay,
   endOfDay,
@@ -98,13 +99,14 @@ import { HistoryTab } from './tabs/HistoryTab';
 import { useRoutineChecklist, useRoutineAttachments, useRoutineHistory } from '@/hooks/useRoutineEnhancements'; // If needed for counts later, but tabs handle it.
 
 interface RoutineDetailPanelProps {
-  routine: Tables<'routines'>;
+  routine: any;
   onClose: () => void;
   onSelectTask?: (task: any) => void;
   contextDate?: Date | string | null;
+  exactDate?: string;
 }
 
-type TaskFrequency = Enums<'task_frequency'>;
+type TaskFrequency = 'diaria' | 'semanal' | 'quinzenal' | 'mensal' | 'anual';
 
 const frequencyLabels: Record<string, string> = {
   diaria: 'Diária',
@@ -168,6 +170,7 @@ export const RoutineDetailPanel = ({
   onClose,
   onSelectTask,
   contextDate,
+  exactDate,
 }: RoutineDetailPanelProps) => {
   const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -184,10 +187,10 @@ export const RoutineDetailPanel = ({
   const [frequency, setFrequency] = useState<TaskFrequency>(routine.frequency);
 
   const { user } = useAuth();
-  const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id);
-
   // Converta o contextDate para ISO (apenas a porção de data YYYY-MM-DD se necessário) caso tenha sido passado
   const contextDateString = contextDate ? (typeof contextDate === 'string' ? contextDate : format(contextDate, 'yyyy-MM-dd')) : undefined;
+
+  const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id, contextDateString, exactDate);
 
   const { data: routineTasksData, isLoading: isLoadingTasks } = useRoutineTasks(routine.id, contextDateString);
   const { data: unitManagers } = useUnitManagers();
@@ -200,6 +203,71 @@ export const RoutineDetailPanel = ({
   const deleteRoutine = useDeleteRoutine();
   const updateRoutine = useUpdateRoutine();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
+  const queryClient = useQueryClient();
+
+  // Auto-heal child task dates and deduplicate ghost tasks
+  useEffect(() => {
+    if (routineTasksData?.parentTask && routineTasksData?.childTasks) {
+      const parentDate = routineTasksData.parentTask.due_date?.substring(0, 10);
+      if (!parentDate) return;
+
+      let needsRefresh = false;
+
+      // 1. Auto-healing dates
+      routineTasksData.childTasks.forEach((child: any) => {
+        const childDate = child.due_date?.substring(0, 10);
+        if (childDate && childDate !== parentDate) {
+          console.log(`Auto-healing task ${child.id}: changing date from ${childDate} to ${parentDate}`);
+          supabase.from('tasks').update({
+            due_date: routineTasksData.parentTask.due_date,
+            start_date: routineTasksData.parentTask.start_date
+          }).eq('id', child.id).then(({ error }) => {
+            if (!error) needsRefresh = true;
+          });
+        }
+      });
+
+      // 2. Deduplication (Orphan removal)
+      const tasksByUnit = new Map<string, any[]>();
+      routineTasksData.childTasks.forEach((child: any) => {
+        if (!child.unit_id) return;
+        if (!tasksByUnit.has(child.unit_id)) tasksByUnit.set(child.unit_id, []);
+        tasksByUnit.get(child.unit_id)!.push(child);
+      });
+
+      tasksByUnit.forEach((tasks, unitId) => {
+        if (tasks.length > 1) {
+          console.log(`Found ${tasks.length} duplicate tasks for unit ${unitId}. Commencing deduplication...`);
+          // Sort to prioritize keeping the 'completed' one, or the one with comments/assignees
+          tasks.sort((a, b) => {
+            if (a.status === 'completed' && b.status !== 'completed') return -1;
+            if (b.status === 'completed' && a.status !== 'completed') return 1;
+            // If both same status, prioritize the older one (more likely to be the true original)
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          });
+
+          const taskToKeep = tasks[0];
+          const tasksToDelete = tasks.slice(1);
+
+          tasksToDelete.forEach(task => {
+            console.log(`Auto-deleting duplicate orphan task ${task.id}`);
+            // Fire and forget delete
+            supabase.from('tasks').delete().eq('id', task.id).then(({ error }) => {
+              if (!error) needsRefresh = true;
+            });
+          });
+        }
+      });
+
+      if (needsRefresh) {
+        // Debounce slightly to allow the fire-and-forget queries to execute
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+          queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
+        }, 800);
+      }
+    }
+  }, [routineTasksData, queryClient]);
 
   // Get current user's unit_id
   const userProfile = allProfiles?.find(p => p.id === user?.id);
@@ -252,7 +320,7 @@ export const RoutineDetailPanel = ({
   };
 
   // Use tasks instead of checkins when available
-  const childTasks = routineTasksData?.childTasks || [];
+  const childTasks: any[] = routineTasksData?.childTasks || [];
   const handleReopenRoutine = async () => {
     if (!routineTasksData?.parentTask) return;
 
@@ -652,7 +720,6 @@ export const RoutineDetailPanel = ({
                         </Button>
                       </div>
                     ) : childTasks.length > 0 ? (
-
                       <div className="divide-y divide-border">
                         {/* Table Header */}
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs text-muted-foreground uppercase tracking-wider bg-secondary/30">
@@ -670,16 +737,9 @@ export const RoutineDetailPanel = ({
 
                           // Find associated checkin to get notes - Robust lookup
                           const assignees = Array.isArray((task as any).assignees) ? (task as any).assignees : [];
-                          const assignee = (task as any).assignee || null;
-                          const taskCheckin = checkins.find(c =>
-                            // Priority 1: Exact match on assignee_user_id
-                            (assignees.length > 0 && c.assignee_user_id && assignees.some(a => a?.id === c.assignee_user_id)) ||
-                            (assignee?.id && c.assignee_user_id === assignee.id) ||
-                            // Priority 2: Match on unit_id if checkin has no assignee (legacy/unclaimed)
-                            (c.unit_id === task.unit_id && !c.assignee_user_id) ||
-                            // Priority 3: Match on unit_id and the task assignee is the one who completed it (fallback)
-                            (c.unit_id === task.unit_id && assignees[0]?.id && c.completed_by === assignees[0].id)
-                          );
+                          // A matriz do rastreador funciona na base 1:1, ou seja, 1 checkin para 1 unidade em 1 período.
+                          // Portanto, basta cruzar pelo unit_id!
+                          const taskCheckin = checkins.find(c => c.unit_id === task.unit_id);
                           const taskCommentLabel = taskCheckin?.notes || (task as any).comment || '';
 
                           return (
@@ -846,7 +906,7 @@ export const RoutineDetailPanel = ({
                               isCompleted={isCompleted}
                               managers={managers}
                               periodEnd={periodData?.period?.period_end}
-                              onToggle={(status) => { handleToggleCheckin(checkin.id, status) }}
+                              onToggle={() => { handleToggleCheckin(checkin.id) }}
                               onMarkNotCompleted={() => { handleMarkNotCompleted(checkin.id) }}
                               isToggling={completeCheckin.isPending || undoCheckin.isPending || markNotCompleted.isPending}
                               isGestorOrAdmin={isGestorOrAdmin}

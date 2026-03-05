@@ -297,9 +297,9 @@ export const useTaskStats = () => {
 };
 
 // Hook to get tasks linked to a specific routine
-export const useRoutineTasks = (routineId: string, contextDate?: string) => {
+export const useRoutineTasks = (routineId: string, contextDate?: string, exactDate?: string) => {
   return useQuery({
-    queryKey: ['routine-tasks', routineId],
+    queryKey: ['routine-tasks', routineId, contextDate, exactDate],
     queryFn: async () => {
       let query = supabase
         .from('tasks')
@@ -310,16 +310,17 @@ export const useRoutineTasks = (routineId: string, contextDate?: string) => {
         .eq('routine_id', routineId)
         .is('parent_task_id', null);
 
-      if (contextDate) {
-        // Interpreta contextDate localmente (ex: "2026-02-26T00:00:00") na máquina do usuário (UTC-3)
-        // Isso retorna a meia-noite correta em UTC (ex: 2026-02-26T03:00:00.000Z)
-        const localStart = new Date(`${contextDate}T00:00:00`);
+      if (exactDate) {
+        // Se temos a data exata vinda do Tracker, cravamos nela pra evitar pegar um "Órfão" duplicado
+        query = query.eq('due_date', exactDate);
+      } else if (contextDate) {
+        // Fallback seguro usando a janela de 24h Universal.
+        const safeDateString = contextDate.substring(0, 10);
+        const startPoint = `${safeDateString}T00:00:00.000Z`;
+        const endPoint = `${safeDateString}T23:59:59.999Z`;
 
-        const localEnd = new Date(localStart);
-        localEnd.setDate(localStart.getDate() + 1);
-
-        // Busca a tarefa pai pela data limite dentro dessa exata janela de 24h locais.
-        query = query.gte('due_date', localStart.toISOString()).lt('due_date', localEnd.toISOString());
+        // Busca a tarefa pai pela data limite dentro dessa exata janela de 24h Universal
+        query = query.gte('due_date', startPoint).lt('due_date', endPoint);
       } else {
         query = query.order('created_at', { ascending: false }).limit(1);
       }

@@ -40,7 +40,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
     const [frequencyFilter, setFrequencyFilter] = useState<string[]>(initialFrequencies);
     const [layouts, setLayouts] = useState<Record<string, { x: number, y: number, width: number, height: number }>>({});
     const [maxHeight, setMaxHeight] = useState(600);
-    const [selectedRoutineForPanel, setSelectedRoutineForPanel] = useState<{ routine: any; date: Date } | null>(null);
+    const [selectedRoutineForPanel, setSelectedRoutineForPanel] = useState<{ routine: any; date: Date | string; exactDate?: string } | null>(null);
     const [isLayoutDirty, setIsLayoutDirty] = useState(false);
     const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
 
@@ -319,7 +319,16 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
     const handleTaskClick = (task: any, routine: any) => {
         const access = canUserAccessTask(task);
         if (access) {
-            setSelectedRoutineForPanel({ routine, date: parseISO(task.due_date) });
+            // Precisamos ler a data considerando o fuso horário (ex: "2026-03-05T02:59Z" no banco é 23:59 de Hoje no Brasil)
+            // Extrair substring(0,10) de '05' empurra pro dia errado! Precisamos parsear localmente primeiro.
+            let dateStr = new Date().toISOString().substring(0, 10);
+            if (task.due_date) {
+                const parsedDate = parseISO(task.due_date);
+                if (!isNaN(parsedDate.getTime())) {
+                    dateStr = format(parsedDate, 'yyyy-MM-dd'); // Resulta corretamente em "2026-03-04" 
+                }
+            }
+            setSelectedRoutineForPanel({ routine, date: dateStr, exactDate: task.due_date || undefined });
         } else {
             console.warn("🚫 Permissão negada para clique na tarefa.");
         }
@@ -689,6 +698,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                             <RoutineDetailPanel
                                 routine={selectedRoutineForPanel.routine}
                                 contextDate={selectedRoutineForPanel.date}
+                                exactDate={selectedRoutineForPanel.exactDate}
                                 onClose={() => setSelectedRoutineForPanel(null)}
                             />
                         </div>

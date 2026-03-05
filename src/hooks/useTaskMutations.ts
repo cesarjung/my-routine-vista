@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 
 import {
@@ -367,9 +368,12 @@ export const useUpdateTask = () => {
         .eq('id', id)
         .single();
 
+      // Build explicitly the payload for the tasks table
+      const dbUpdates = { ...updates };
+
       const { data, error } = await supabase
         .from('tasks')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', id)
         .select()
         .single();
@@ -425,22 +429,34 @@ export const useUpdateTask = () => {
         effectiveAssigneeId = existingTask.task_assignees[0].user_id;
       }
 
-      // If task is being completed and is linked to a routine, update the routine checkin
+      // Se a tarefa está sendo concluída OU JÁ ESTÁ concluída (para permitir editar comentário depois)
       if (
         existingTask?.routine_id &&
-        updates.status === 'concluida' &&
-        existingTask?.status !== 'concluida'
+        (updates.status === 'concluida' || (updates.status === undefined && existingTask?.status === 'concluida'))
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, effectiveAssigneeId, existingTask.unit_id, 'completed', comment);
+        await updateRoutineCheckinFromTask(
+          existingTask.routine_id,
+          effectiveAssigneeId,
+          existingTask.unit_id,
+          'completed',
+          comment,
+          existingTask.due_date
+        );
       }
 
-      // If task was set to NA and is linked to a routine, update the checkin
       if (
         existingTask?.routine_id &&
         updates.status === 'nao_aplicavel' &&
         existingTask?.status !== 'nao_aplicavel'
       ) {
-        await updateRoutineCheckinFromTask(existingTask.routine_id, effectiveAssigneeId, existingTask.unit_id, 'not_completed', comment);
+        await updateRoutineCheckinFromTask(
+          existingTask.routine_id,
+          effectiveAssigneeId,
+          existingTask.unit_id,
+          'not_completed',
+          comment,
+          existingTask.due_date
+        );
       }
 
       // If task was uncompleted and is linked to a routine, revert the checkin
@@ -570,51 +586,119 @@ async function updateRoutineCheckinFromTask(
   assigneeUserId: string | null | undefined,
   unitId: string | null,
   status: 'completed' | 'pending' | 'not_completed',
-  note?: string
+  note?: string,
+  dueDate?: string | null
 ): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Find the most recent active period for this routine
-    const { data: activePeriod } = await supabase
+    let periodQuery = supabase
       .from('routine_periods')
       .select('id')
-      .eq('routine_id', routineId)
-      .eq('is_active', true)
-      .order('period_start', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq('routine_id', routineId);
 
-    if (!activePeriod) return;
+    if (dueDate) {
+      // Usa a string do dueDate exata vinda do banco (ex: 2026-03-05T02:59:59.000Z), que já
+      // carrega a compensação de fuso aplicável (garantindo bater no período exato, sem pular de dia).
+      periodQuery = periodQuery
+        .lte('period_start', dueDate)
+        .gte('period_end', dueDate)
+        .order('period_start', { ascending: false })
+        .limit(1);
+    } else {
+      periodQuery = periodQuery.eq('is_active', true).order('period_start', { ascending: false }).limit(1);
+    }
 
-    // Find the checkin for this user in this period
+    const { data: activePeriod } = await periodQuery.maybeSingle();
+
+    let activePeriodId = activePeriod?.id;
+
+    if (!activePeriodId && dueDate) {
+      // Auto-create a period envelope for this day so the comment has somewhere to live!
+      // 'dueDate' is an ISO string like '2026-03-05T02:59:59.000Z' (which is 23:59:59 BRT on Mar 4th)
+      const dateObj = new Date(dueDate);
+      // Extrair o YYYY-MM-DD usando o fuso horário local (Brasil), não o UTC
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const safeDateString = `${year}-${month}-${day}`;
+
+      // Supabase GMT-3 offsets based on the user's timezone observed so far
+      const startPoint = `${safeDateString}T00:00:00-03:00`;
+      const endPoint = `${safeDateString}T23:59:59-03:00`;
+
+      const { data: newPeriod } = await supabase
+        .from('routine_periods')
+        .insert({
+          routine_id: routineId,
+          period_start: startPoint,
+          period_end: endPoint,
+          is_active: false // Ensure we don't accidentally leave ghost active periods floating
+        })
+        .select('id')
+        .single();
+
+      if (newPeriod) {
+        activePeriodId = newPeriod.id;
+      }
+    }
+
+    if (!activePeriodId) return;
     let targetCheckin = null;
 
-    if (assigneeUserId) {
+    if (assigneeUserId && unitId) {
       const { data: checkin } = await supabase
         .from('routine_checkins')
         .select('id')
-        .eq('routine_period_id', activePeriod.id)
+        .eq('routine_period_id', activePeriodId)
+        .eq('assignee_user_id', assigneeUserId)
+        .eq('unit_id', unitId)
+        .maybeSingle();
+
+      targetCheckin = checkin;
+    } else if (assigneeUserId) {
+      const { data: checkin } = await supabase
+        .from('routine_checkins')
+        .select('id')
+        .eq('routine_period_id', activePeriodId)
         .eq('assignee_user_id', assigneeUserId)
         .maybeSingle();
 
       targetCheckin = checkin;
     }
 
-    // Fallback: If no checkin found for user, look for checkin for unit with null user
+    // Fallback: If no checkin found for user, strictly grab the checkin for this unit
     if (!targetCheckin && unitId) {
       const { data: unitCheckin } = await supabase
         .from('routine_checkins')
         .select('id')
-        .eq('routine_period_id', activePeriod.id)
+        .eq('routine_period_id', activePeriodId)
         .eq('unit_id', unitId)
-        .is('assignee_user_id', null)
         .maybeSingle();
 
       targetCheckin = unitCheckin;
     }
 
-    if (!targetCheckin) return;
+    if (!targetCheckin) {
+      if (!unitId) return; // Precisa ter unidade para criar o checkin
+
+      const { error: insertError } = await supabase
+        .from('routine_checkins')
+        .insert({
+          routine_period_id: activePeriodId,
+          unit_id: unitId,
+          assignee_user_id: assigneeUserId || user?.id,
+          status: status === 'pending' ? 'pending' : status,
+          notes: note || null,
+          completed_at: status !== 'pending' ? new Date().toISOString() : null,
+          completed_by: status !== 'pending' ? (user?.id || assigneeUserId) : null,
+        });
+
+      if (insertError) {
+        console.error('Failed to create missing checkin:', insertError);
+      }
+      return; // Já criamos e salvamos a nota.
+    }
 
     // Update the checkin status
     if (status === 'pending') {
