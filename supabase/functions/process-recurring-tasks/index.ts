@@ -326,9 +326,11 @@ Deno.serve(async (req) => {
       .select('*, routine:routines(custom_schedule), parent_task:tasks!parent_task_id(start_date)')
       .eq('is_recurring', true)
       .eq('recurrence_mode', 'schedule')
-      .in('status', ['pendente', 'em_andamento', 'concluida']) // Added 'concluida'
+      .in('status', ['pendente', 'em_andamento', 'concluida'])
       .not('start_date', 'is', null)
-      .not('due_date', 'is', null);
+      .not('due_date', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(300);
 
     if (scheduleError) throw scheduleError;
 

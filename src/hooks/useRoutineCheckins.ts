@@ -433,12 +433,16 @@ export const useCreatePeriodWithCheckins = () => {
 
         // Add task assignees for each child task
         if (createdChildTasks && createdChildTasks.length > 0) {
-          const taskAssignees = createdChildTasks.map((task, index) => ({
-            task_id: task.id,
-            user_id: assignees[index].user_id,
-          }));
+          const taskAssignees = createdChildTasks
+            .filter(task => task.assigned_to)
+            .map(task => ({
+              task_id: task.id,
+              user_id: task.assigned_to,
+            }));
 
-          await supabase.from('task_assignees').insert(taskAssignees);
+          if (taskAssignees.length > 0) {
+            await supabase.from('task_assignees').insert(taskAssignees);
+          }
         }
       }
 
