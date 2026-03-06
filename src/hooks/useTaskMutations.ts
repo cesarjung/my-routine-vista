@@ -598,11 +598,18 @@ async function updateRoutineCheckinFromTask(
       .eq('routine_id', routineId);
 
     if (dueDate) {
-      // Usa a string do dueDate exata vinda do banco (ex: 2026-03-05T02:59:59.000Z), que já
-      // carrega a compensação de fuso aplicável (garantindo bater no período exato, sem pular de dia).
+      // O dueDate que vem do Tracker geralmente é o final do dia (ex: 2026-03-05T02:59:59.000Z = 23:59 de 04/03).
+      // Usa a técnica do TargetPoint universal (T12:00:00Z) para fugir de pular pro dia anterior/seguinte
+      const dateObj = new Date(dueDate);
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const safeDateString = `${year}-${month}-${day}`;
+      const targetPoint = `${safeDateString}T12:00:00Z`;
+
       periodQuery = periodQuery
-        .lte('period_start', dueDate)
-        .gte('period_end', dueDate)
+        .lte('period_start', targetPoint)
+        .gte('period_end', targetPoint)
         .order('period_start', { ascending: false })
         .limit(1);
     } else {

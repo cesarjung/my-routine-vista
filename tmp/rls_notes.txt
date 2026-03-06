@@ -1,0 +1,4 @@
+// We need to simulate with a real authenticated user token to replicate the exact context.
+// However, since we saw '42501' (Row-level security policy violation), we know the issue!
+// The frontend uses `supabase.auth.getUser()`, so it inserts as the current authenticated user.
+// Let's look at the RLS policies for `routine_periods`.

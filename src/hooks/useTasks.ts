@@ -311,19 +311,34 @@ export const useRoutineTasks = (routineId: string, contextDate?: string, exactDa
         .is('parent_task_id', null);
 
       if (exactDate) {
-        // Se temos a data exata vinda do Tracker, cravamos nela pra evitar pegar um "Órfão" duplicado
-        query = query.eq('due_date', exactDate);
-      } else if (contextDate) {
-        // Fallback seguro usando a janela de 24h Universal.
-        const safeDateString = contextDate.substring(0, 10);
-        const startPoint = `${safeDateString}T00:00:00.000Z`;
-        const endPoint = `${safeDateString}T23:59:59.999Z`;
+        // O `exactDate` que vem do Tracker pode ser um ISO ou 'YYYY-MM-DD'
+        const safeDateString = exactDate.substring(0, 10);
 
-        // Busca a tarefa pai pela data limite dentro dessa exata janela de 24h Universal
-        query = query.gte('due_date', startPoint).lt('due_date', endPoint);
-      } else {
-        query = query.order('created_at', { ascending: false }).limit(1);
+        // As tarefas são geradas com due_date correspondendo ao final do período (ex: 23:59:59 BRT = 02:59:59 de amanhã UTC)
+        // Precisamos de uma janela generosa de 48h para garantir que pegamos a parentTask daquele dia exato,
+        // dependente das conversões de timezone geradas lá atrás.
+        const startPoint = `${safeDateString}T00:00:00.000Z`;
+
+        const endDay = new Date(safeDateString);
+        endDay.setUTCDate(endDay.getUTCDate() + 1);
+        const endDayString = endDay.toISOString().substring(0, 10);
+        const endPoint = `${endDayString}T23:59:59.999Z`;
+
+        query = query.gte('due_date', startPoint).lte('due_date', endPoint);
+      } else if (contextDate) {
+        const safeDateString = contextDate.substring(0, 10);
+
+        const startPoint = `${safeDateString}T00:00:00.000Z`;
+        const endDay = new Date(safeDateString);
+        endDay.setUTCDate(endDay.getUTCDate() + 1);
+        const endDayString = endDay.toISOString().substring(0, 10);
+        const endPoint = `${endDayString}T23:59:59.999Z`;
+
+        query = query.gte('due_date', startPoint).lte('due_date', endPoint);
       }
+
+      // Evitar crash do maybeSingle caso existam clones órfãos garantindo ordem descendente
+      query = query.order('created_at', { ascending: false }).limit(1);
 
       const { data: parentTask, error: parentError } = await query.maybeSingle();
 

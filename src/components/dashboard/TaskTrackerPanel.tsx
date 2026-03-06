@@ -218,7 +218,13 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                     return;
                 }
 
-                const unitId = task.unit_id || 'unassigned';
+                let unitId = task.unit_id || 'unassigned';
+
+                // Prevent Parent Tasks (which act as invisible containers) from bleeding into 'Sem Unidade' 
+                // when the Routine strictly splits workload by units.
+                if (task.parent_task_id === null && routine.unit_ids && routine.unit_ids.length > 0 && unitId === 'unassigned') {
+                    return;
+                }
 
                 const existingTask = taskMap.get(`${unitId}_${dateKey}`);
                 // Se já existir uma tarefa filha (subtarefa) na célula e a atual for a Tarefa Mãe, ignoramos
@@ -229,20 +235,39 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                 taskMap.set(`${unitId}_${dateKey}`, task);
             });
 
-            // Count rows to adjust rowspan properly, omitting rows if they have entirely no data? 
-            // The screenshot shows all units. We keep all units.
+            // Pre-scan se esta rotina tem tarefas ou configurações em alguma Unidade real (para não exibir "Sem Unidade" atoa)
+            const hasAnyTaskInAnyUnit = allUnitRows.some(u =>
+                u.id !== 'unassigned' && daysInMonth.some(day => taskMap.has(`${u.id}_${format(day, 'yyyy-MM-dd')}`))
+            );
+            const hasUnitConfig = routine.unit_ids && routine.unit_ids.length > 0;
+
             const matrix = allUnitRows.map(unit => {
                 const isUnassignedRow = unit.id === 'unassigned';
                 const hasAnyTask = daysInMonth.some(day => taskMap.has(`${unit.id}_${format(day, 'yyyy-MM-dd')}`));
 
-                let appliesToUnit = true;
-                if (!isUnassignedRow && routine.unit_ids && routine.unit_ids.length > 0) {
-                    appliesToUnit = routine.unit_ids.includes(unit.id);
-                }
+                let appliesToUnit = false;
 
-                // If unassigned row, only show if there are unassigned tasks
-                if (isUnassignedRow) {
-                    appliesToUnit = hasAnyTask;
+                if (!isUnassignedRow) {
+                    // Only apply to unit if explicitly assigned
+                    if (hasUnitConfig) {
+                        appliesToUnit = routine.unit_ids.includes(unit.id);
+                    } else {
+                        // If no explicit unit configuration exists, default to ALL active units in the sector
+                        appliesToUnit = true;
+                    }
+
+                    // CRUCIAL RECOVERY FIX: If this operative unit has ANY tasks this month, 
+                    // it officially belongs to this routine's grid profile, even if `unit_ids` is empty.
+                    if (hasAnyTask) {
+                        appliesToUnit = true;
+                    }
+                } else {
+                    // For the "Sem Unidade" / "Global" row
+                    // ONLY display it if there are actually orphan tasks floating here.
+                    // This fully eliminates the ghost "Sem Unidade" empty row.
+                    if (hasAnyTask) {
+                        appliesToUnit = true;
+                    }
                 }
 
                 const rowData = daysInMonth.map(day => {
@@ -332,6 +357,10 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
         } else {
             console.warn("🚫 Permissão negada para clique na tarefa.");
         }
+    };
+
+    const handleEmptyCellClick = (routine: any, day: Date) => {
+        setSelectedRoutineForPanel({ routine, date: format(day, 'yyyy-MM-dd') });
     };
 
     const handleReopenTask = async (taskId: string) => {
@@ -573,17 +602,18 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                                                             </div>
                                                         </th>
                                                         <th
-                                                            className="sticky-col-2 bg-black font-bold p-1.5 text-center text-[11px] leading-tight border-t-2 border-[#888] w-[180px] min-w-[180px] max-w-[180px] break-words whitespace-normal align-middle"
+                                                            className="sticky-col-2 bg-black font-bold p-1.5 text-center text-[11px] leading-tight border-t-2 border-[#888] w-[180px] min-w-[180px] max-w-[180px] break-words whitespace-normal align-middle cursor-pointer hover:bg-[#1a1a1a] transition-colors"
                                                             style={{ color: bannerColor }}
+                                                            onClick={() => handleEmptyCellClick(routine, new Date())}
                                                         >
                                                             {routine.title}
                                                         </th>
 
                                                         {dailyStats.map((stat, i) => {
                                                             const pct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : null;
-                                                            const bgClass = 'bg-[#df7d70] text-black';
+                                                            const bgClass = 'bg-[#df7d70] text-black cursor-pointer hover:opacity-90';
                                                             return (
-                                                                <th key={`pct-${i}`} className={`font-medium p-1 text-center text-[9px] ${bgClass} border-t-2 border-[#888] align-top`}>
+                                                                <th key={`pct-${i}`} onClick={() => handleEmptyCellClick(routine, daysInMonth[i])} className={`font-medium p-1 text-center text-[9px] ${bgClass} border-t-2 border-[#888] align-top`}>
                                                                     <div className="mt-1.5">{pct !== null ? `${pct}%` : '0%'}</div>
                                                                 </th>
                                                             );
@@ -606,11 +636,11 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                                                             dailyStats.map((stat, i) => {
                                                                 const info = dailyStats[i];
                                                                 return (
-                                                                    <th key={`b-${i}`} className="bg-black border-[#444] border-r border-b p-0.5">
+                                                                    <th key={`b-${i}`} onClick={() => handleEmptyCellClick(routine, daysInMonth[i])} className="bg-black border-[#444] border-r border-b p-0.5 cursor-pointer hover:bg-[#222]">
                                                                         {info.total > 0 ? (
                                                                             <div className="text-[9px] text-white text-center font-normal">{Math.round((info.completed / info.total) * 100)}%</div>
                                                                         ) : (
-                                                                            <div className="text-[9px] text-[#555] text-center font-normal">-</div>
+                                                                            <div className="text-[9px] text-[#888] text-center font-normal">0%</div>
                                                                         )}
                                                                     </th>
                                                                 );
@@ -633,7 +663,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                                                             </td>
                                                             {row.days.map((task, colIndex) => {
                                                                 if (task === null) return <td key={colIndex} className="p-0.5 text-center bg-black border-[#222]"></td>;
-                                                                if (task === 'empty') return <td key={colIndex} className="p-0.5 text-center text-muted-foreground/30 font-light text-[9px] bg-white dark:bg-card border-dotted border-gray-100">-</td>;
+                                                                if (task === 'empty') return <td key={colIndex} onClick={() => handleEmptyCellClick(routine, daysInMonth[colIndex])} className="p-0.5 text-center text-muted-foreground/30 font-light text-[9px] bg-white dark:bg-card border-dotted border-gray-100 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors">-</td>;
 
                                                                 let displayChar: React.ReactNode = '?';
                                                                 let bgClass = '';

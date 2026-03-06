@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -192,7 +192,7 @@ export const RoutineDetailPanel = ({
 
   const { data: periodData, isLoading } = useCurrentPeriodCheckins(routine.id, contextDateString, exactDate);
 
-  const { data: routineTasksData, isLoading: isLoadingTasks } = useRoutineTasks(routine.id, contextDateString);
+  const { data: routineTasksData, isLoading: isLoadingTasks } = useRoutineTasks(routine.id, contextDateString, exactDate);
   const { data: unitManagers } = useUnitManagers();
   const { data: allProfiles } = useProfiles();
   const createPeriod = useCreatePeriodWithCheckins();
@@ -356,12 +356,34 @@ export const RoutineDetailPanel = ({
   const completed = totalTasks > 0 ? effectiveCompletedTasks : completedCount;
 
   const handleStartPeriod = async () => {
-    const dates = getPeriodDates(routine.frequency);
-    await createPeriod.mutateAsync({
-      routineId: routine.id,
-      periodStart: dates.start,
-      periodEnd: dates.end,
-    });
+    try {
+      let targetDate = new Date();
+
+      if (exactDate) {
+        const pd = new Date(exactDate);
+        if (!isNaN(pd.getTime())) targetDate = pd;
+      } else if (contextDate) {
+        const parsed = typeof contextDate === 'string' ? parseISO(contextDate) : contextDate;
+        if (!isNaN(parsed.getTime())) targetDate = parsed;
+      }
+
+      const start = startOfDay(targetDate);
+      const end = endOfDay(targetDate);
+
+      // Convert to proper GMT-3 start/end points using text manipulation to avoid shifting
+      // We want the created period to be exactly 03:00 to 02:59 of the next day in UTC
+      console.log("-> Disparando mutation createPeriod com:", { start, end });
+
+      await createPeriod.mutateAsync({
+        routineId: routine.id,
+        periodStart: start,
+        periodEnd: end,
+      });
+
+    } catch (err: any) {
+      console.error("Erro SILENCIOSO capturado no Iniciar Período:", err);
+      toast.error(err.message || 'Erro interno ao iniciar período (veja o console)');
+    }
   };
 
   const handleCloseRoutineResolving = async () => {
@@ -755,57 +777,59 @@ export const RoutineDetailPanel = ({
                             >
                               {/* Name with checkboxes */}
                               <div className="col-span-12 md:col-span-5 flex items-center gap-2">
-                                {userCanEdit && (
-                                  <>
-                                    {/* Green checkbox for completing */}
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (isTaskCompleted) {
-                                          updateTask.mutate({ id: task.id, status: 'pendente' });
-                                        } else {
-                                          setSelectedTaskForStatus({ id: task.id, status: 'concluida' });
-                                          setTaskComment('');
-                                          setTaskStatusDialogOpen(true);
-                                        }
-                                      }}
-                                      disabled={updateTask.isPending}
-                                      className={cn(
-                                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
-                                        isTaskCompleted
-                                          ? 'bg-success border-success text-white'
-                                          : 'border-success/50 hover:border-success hover:bg-success/10'
-                                      )}
-                                      title="Concluída"
-                                    >
-                                      {isTaskCompleted && <Check className="h-3 w-3" />}
-                                    </button>
+                                {/* Green checkbox for completing */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!userCanEdit) return;
+                                    if (isTaskCompleted) {
+                                      updateTask.mutate({ id: task.id, status: 'pendente' });
+                                    } else {
+                                      setSelectedTaskForStatus({ id: task.id, status: 'concluida' });
+                                      setTaskComment('');
+                                      setTaskStatusDialogOpen(true);
+                                    }
+                                  }}
+                                  disabled={updateTask.isPending || !userCanEdit}
+                                  className={cn(
+                                    'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                                    isTaskCompleted
+                                      ? 'bg-success border-success text-white'
+                                      : 'border-success/50',
+                                    userCanEdit && !isTaskCompleted && 'hover:border-success hover:bg-success/10',
+                                    !userCanEdit && 'opacity-50 cursor-not-allowed'
+                                  )}
+                                  title={userCanEdit ? "Concluída" : "Sem permissão"}
+                                >
+                                  {isTaskCompleted && <Check className="h-3 w-3" />}
+                                </button>
 
-                                    {/* Red checkbox for N/A */}
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (isTaskNA) {
-                                          updateTask.mutate({ id: task.id, status: 'pendente' });
-                                        } else {
-                                          setSelectedTaskForStatus({ id: task.id, status: 'nao_aplicavel' });
-                                          setTaskComment('');
-                                          setTaskStatusDialogOpen(true);
-                                        }
-                                      }}
-                                      disabled={updateTask.isPending}
-                                      className={cn(
-                                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
-                                        isTaskNA
-                                          ? 'bg-destructive border-destructive text-white'
-                                          : 'border-destructive/50 hover:border-destructive hover:bg-destructive/10'
-                                      )}
-                                      title="Não se Aplica"
-                                    >
-                                      {isTaskNA && <X className="h-3 w-3" />}
-                                    </button>
-                                  </>
-                                )}
+                                {/* Red checkbox for N/A */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!userCanEdit) return;
+                                    if (isTaskNA) {
+                                      updateTask.mutate({ id: task.id, status: 'pendente' });
+                                    } else {
+                                      setSelectedTaskForStatus({ id: task.id, status: 'nao_aplicavel' });
+                                      setTaskComment('');
+                                      setTaskStatusDialogOpen(true);
+                                    }
+                                  }}
+                                  disabled={updateTask.isPending || !userCanEdit}
+                                  className={cn(
+                                    'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                                    isTaskNA
+                                      ? 'bg-destructive border-destructive text-white'
+                                      : 'border-destructive/50',
+                                    userCanEdit && !isTaskNA && 'hover:border-destructive hover:bg-destructive/10',
+                                    !userCanEdit && 'opacity-50 cursor-not-allowed'
+                                  )}
+                                  title={userCanEdit ? "Não se Aplica" : "Sem permissão"}
+                                >
+                                  {isTaskNA && <X className="h-3 w-3" />}
+                                </button>
 
                                 <div className="flex flex-col overflow-hidden">
                                   <span

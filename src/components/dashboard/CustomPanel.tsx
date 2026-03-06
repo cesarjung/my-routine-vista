@@ -150,9 +150,23 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       }
 
       if (periodDates) {
+        // Precisamos converter os limites de start/end locais para a janela UTC de GMT-3 correta
+        // Para que o Supabase filtre exatamente o "Hoje" (de 03:00 de hoje até 02:59 de amanhã UTC)
+
+        const formatBound = (date: Date, isEnd: boolean) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const time = isEnd ? '23:59:59' : '00:00:00';
+          return `${year}-${month}-${day}T${time}-03:00`;
+        };
+
+        const startUtcOffset = formatBound(periodDates.start, false);
+        const endUtcOffset = formatBound(periodDates.end, true);
+
         tasksQuery = tasksQuery
-          .gte('due_date', periodDates.start.toISOString())
-          .lte('due_date', periodDates.end.toISOString());
+          .gte('due_date', startUtcOffset)
+          .lte('due_date', endUtcOffset);
       }
 
       const { data: rawTasks, error: tasksError } = await tasksQuery;
