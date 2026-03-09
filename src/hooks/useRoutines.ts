@@ -41,13 +41,41 @@ export const useRoutines = (unitId?: string) => {
 
         const userUnitId = profile?.unit_id;
 
-        // Buscar rotinas atribuídas ao usuário
+        // Buscar rotinas atribuídas ao usuário diretamente na rotina
         const { data: routineAssignees } = await supabase
           .from('routine_assignees')
           .select('routine_id')
           .eq('user_id', user.id);
 
         const assignedRoutineIds = new Set(routineAssignees?.map(ra => ra.routine_id) || []);
+
+        // NOVO: Buscar rotinas das quais o usuário é responsável por uma TAREFA específica
+        const { data: taskAssignees } = await supabase
+          .from('task_assignees')
+          .select('task:tasks(routine_id)')
+          .eq('user_id', user.id);
+
+        if (taskAssignees && taskAssignees.length > 0) {
+          taskAssignees.forEach((ta: any) => {
+            if (ta.task && ta.task.routine_id) {
+              assignedRoutineIds.add(ta.task.routine_id);
+            }
+          });
+        }
+
+        // NOVO 2: Buscar rotinas das quais o usuário é responsável via coluna assigned_to legado nas tasks
+        const { data: directTasks } = await supabase
+          .from('tasks')
+          .select('routine_id')
+          .eq('assigned_to', user.id);
+
+        if (directTasks && directTasks.length > 0) {
+          directTasks.forEach((t: any) => {
+            if (t.routine_id) {
+              assignedRoutineIds.add(t.routine_id);
+            }
+          });
+        }
 
         // Buscar rotinas que têm checkins para a unidade do usuário
         let routinesWithUserUnitCheckins = new Set<string>();
@@ -69,7 +97,7 @@ export const useRoutines = (unitId?: string) => {
         }
 
         return (data as Routine[]).filter(routine => {
-          // Mostrar se o usuário está na tabela routine_assignees
+          // Mostrar se o usuário está na tabela routine_assignees ou task_assignees
           if (assignedRoutineIds.has(routine.id)) return true;
           // Mostrar se a rotina é da unidade do usuário
           if (userUnitId && routine.unit_id === userUnitId) return true;
