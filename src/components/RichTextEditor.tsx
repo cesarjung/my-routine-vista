@@ -179,12 +179,14 @@ export const RichTextEditor = ({ content, onChange, editable = true }: RichTextE
 
     useEffect(() => {
         if (editor && content) {
-            const isEmpty = Object.keys(content).length === 0;
-            if (!isEmpty) {
-                const currentContent = editor.getJSON();
-                if (JSON.stringify(currentContent) !== JSON.stringify(content)) {
-                    // Avoid loops
-                }
+            const currentContent = editor.getJSON();
+            // Fast check if they are different
+            if (JSON.stringify(currentContent) !== JSON.stringify(content)) {
+                // Update editor without emitting an update event to avoid infinite loop
+                // We use setTimeout to ensure this runs cleanly out of the immediate render cycle
+                setTimeout(() => {
+                    editor.commands.setContent(content);
+                }, 0);
             }
         }
     }, [content, editor]);

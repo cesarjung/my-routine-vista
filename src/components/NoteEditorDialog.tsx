@@ -161,7 +161,6 @@ export const NoteEditorDialog = ({ open, onOpenChange, note, onSuccess, sectorId
                 <div className="flex-1 overflow-hidden p-6 pt-2 flex flex-col">
                     <div className="flex-1 overflow-hidden min-h-0">
                         <RichTextEditor
-                            key={note?.id ? note.id : `new-note-${sessionId}`}
                             content={content}
                             onChange={setContent}
                         />
