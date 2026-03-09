@@ -66,14 +66,17 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
   // Detail Panel State
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedRoutine, setSelectedRoutine] = useState<any | null>(null);
+  const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null);
 
   const handleTaskClick = (task: Task) => {
     if (task.routine_id && (task as any).routine) {
       setSelectedRoutine((task as any).routine);
+      setSelectedRoutineDate((task as any).due_date);
       setSelectedTask(null);
     } else {
       setSelectedTask(task);
       setSelectedRoutine(null);
+      setSelectedRoutineDate(null);
     }
   };
 
@@ -289,6 +292,7 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
         if (!open) {
           setSelectedTask(null);
           setSelectedRoutine(null);
+          setSelectedRoutineDate(null);
         }
       }}>
         <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
@@ -302,7 +306,11 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
             {selectedRoutine && (
               <RoutineDetailPanel
                 routine={selectedRoutine}
-                onClose={() => setSelectedRoutine(null)}
+                contextDate={selectedRoutineDate || undefined}
+                onClose={() => {
+                  setSelectedRoutine(null);
+                  setSelectedRoutineDate(null);
+                }}
               />
             )}
           </div>

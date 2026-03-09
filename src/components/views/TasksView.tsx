@@ -88,6 +88,7 @@ export const TasksView = ({
   const [selectedStatuses, setSelectedStatuses] = useState<Enums<'task_status'>[]>(statusFilters.map((f) => f.value));
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
   const [selectedRoutine, setSelectedRoutine] = useState<any | null>(null);
+  const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
 
   const { user } = useAuth();
@@ -200,10 +201,12 @@ export const TasksView = ({
             onClick={() => {
               if (task.routine_id && task.routine) {
                 setSelectedRoutine(task.routine);
+                setSelectedRoutineDate((task as any).due_date);
                 setSelectedTask(null);
               } else {
                 setSelectedTask(task);
                 setSelectedRoutine(null);
+                setSelectedRoutineDate(null);
               }
             }}
           />
@@ -437,13 +440,15 @@ export const TasksView = ({
             {selectedRoutine && (
               <RoutineDetailPanel
                 routine={selectedRoutine}
-                contextDate={selectedTask?.due_date || undefined}
+                contextDate={selectedRoutineDate || undefined}
                 onClose={() => {
                   setSelectedRoutine(null);
+                  setSelectedRoutineDate(null);
                   setSelectedTask(null);
                 }}
                 onSelectTask={(task) => {
                   setSelectedRoutine(null);
+                  setSelectedRoutineDate(null);
                   setSelectedTask(task);
                 }}
               />

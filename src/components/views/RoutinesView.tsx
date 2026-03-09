@@ -201,7 +201,7 @@ export const RoutinesView = ({
               onToggleSelect={handleToggleSelect}
               onClick={() => {
                 setSelectedRoutine(routine);
-                setSelectedRoutineDate(null); // No specific date context for list items unless mapped
+                setSelectedRoutineDate(activePeriod ? activePeriod.period_start : null);
               }}
               onEdit={(e) => {
                 setEditingRoutine(routine);

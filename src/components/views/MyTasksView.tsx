@@ -148,6 +148,7 @@ export const MyTasksView = ({
   // UI State
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set(['all']));
   const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
+  const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isBulkCompleteDialogOpen, setIsBulkCompleteDialogOpen] = useState(false);
 
@@ -356,10 +357,12 @@ export const MyTasksView = ({
                       onClick={() => {
                         if (task.routine_id && task.routine) {
                           setSelectedRoutine(task.routine);
+                          setSelectedRoutineDate((task as any).due_date);
                           setSelectedTask(null);
                         } else {
                           setSelectedTask(task as Task);
                           setSelectedRoutine(null);
+                          setSelectedRoutineDate(null);
                         }
                       }}
                       onStatusChange={async (id, status) => {
@@ -426,6 +429,7 @@ export const MyTasksView = ({
                       onToggleSelect={handleToggleRoutineSelect}
                       onClick={() => {
                         setSelectedRoutine(routine);
+                        setSelectedRoutineDate(null);
                         setSelectedTask(null);
                       }}
                       onEdit={() => { }}
@@ -722,11 +726,11 @@ export const MyTasksView = ({
         </Tabs>
       </div>
 
-      {/* Detail Panel via Sheet */}
       <Sheet open={isDetailOpen} onOpenChange={(open) => {
         if (!open) {
           setSelectedTask(null);
           setSelectedRoutine(null);
+          setSelectedRoutineDate(null);
         }
       }}>
         <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
@@ -741,13 +745,15 @@ export const MyTasksView = ({
             {selectedRoutine && (
               <RoutineDetailPanel
                 routine={selectedRoutine}
-                contextDate={selectedTask?.due_date || undefined}
+                contextDate={selectedRoutineDate || undefined}
                 onClose={() => {
                   setSelectedRoutine(null);
+                  setSelectedRoutineDate(null);
                   setSelectedTask(null);
                 }}
                 onSelectTask={(task) => {
                   setSelectedRoutine(null);
+                  setSelectedRoutineDate(null);
                   setSelectedTask(task);
                 }}
               />
