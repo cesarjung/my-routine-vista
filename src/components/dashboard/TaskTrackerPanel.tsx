@@ -92,14 +92,20 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
     };
 
     useEffect(() => {
+        let invalidateTimeout: NodeJS.Timeout;
+
         const channel = supabase.channel('task-tracker-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-                queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
+                clearTimeout(invalidateTimeout);
+                invalidateTimeout = setTimeout(() => {
+                    queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
+                }, 2000); // 2-second debounce to avoid UI freeze during bulk inserts
             })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
+            clearTimeout(invalidateTimeout);
         };
     }, [queryClient]);
 
@@ -176,14 +182,30 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
         queryKey: ['tracker-tasks', routineIds, startDate.toISOString()],
         queryFn: async () => {
             if (routineIds.length === 0) return [];
-            const { data, error } = await supabase
-                .from('tasks')
-                .select(`id, status, start_date, due_date, unit_id, routine_id, title, description, priority, created_by, assigned_to, completed_at, parent_task_id, unit:units(name), assignees:task_assignees(user_id)`)
-                .in('routine_id', routineIds)
-                .gte('due_date', startDate.toISOString())
-                .lte('due_date', endDate.toISOString());
-            if (error) throw error;
-            return data;
+
+            // Chunk request by small groups of routines to perfectly bypass 
+            // the Supabase default 1000-row pagination hard-limit that truncates 
+            // newly generated tasks with higher IDs.
+            const chunkSize = 3;
+            const routineChunks = [];
+            for (let i = 0; i < routineIds.length; i += chunkSize) {
+                routineChunks.push(routineIds.slice(i, i + chunkSize));
+            }
+
+            const fetchPromises = routineChunks.map(async (chunk) => {
+                const { data, error } = await supabase
+                    .from('tasks')
+                    .select(`id, status, start_date, due_date, unit_id, routine_id, title, description, priority, created_by, assigned_to, completed_at, parent_task_id, unit:units(name), assignees:task_assignees(user_id)`)
+                    .in('routine_id', chunk)
+                    .gte('due_date', startDate.toISOString())
+                    .lte('due_date', endDate.toISOString())
+                    .limit(10000);
+                if (error) throw error;
+                return data || [];
+            });
+
+            const results = await Promise.all(fetchPromises);
+            return results.flat();
         },
         enabled: routineIds.length > 0
     });
@@ -222,7 +244,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
 
                 // Prevent Parent Tasks (which act as invisible containers) from bleeding into 'Sem Unidade' 
                 // when the Routine strictly splits workload by units.
-                if (task.parent_task_id === null && routine.unit_ids && routine.unit_ids.length > 0 && unitId === 'unassigned') {
+                if (task.parent_task_id === null && unitId === 'unassigned') {
                     return;
                 }
 
@@ -239,7 +261,6 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
             const hasAnyTaskInAnyUnit = allUnitRows.some(u =>
                 u.id !== 'unassigned' && daysInMonth.some(day => taskMap.has(`${u.id}_${format(day, 'yyyy-MM-dd')}`))
             );
-            const hasUnitConfig = routine.unit_ids && routine.unit_ids.length > 0;
 
             const matrix = allUnitRows.map(unit => {
                 const isUnassignedRow = unit.id === 'unassigned';
@@ -248,16 +269,9 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                 let appliesToUnit = false;
 
                 if (!isUnassignedRow) {
-                    // Only apply to unit if explicitly assigned
-                    if (hasUnitConfig) {
-                        appliesToUnit = routine.unit_ids.includes(unit.id);
-                    } else {
-                        // If no explicit unit configuration exists, default to ALL active units in the sector
-                        appliesToUnit = true;
-                    }
-
-                    // CRUCIAL RECOVERY FIX: If this operative unit has ANY tasks this month, 
-                    // it officially belongs to this routine's grid profile, even if `unit_ids` is empty.
+                    // We rely on the hasAnyTask check to truly confirm it belongs.
+                    // If this operative unit has ANY tasks this month, 
+                    // it officially belongs to this routine's grid profile.
                     if (hasAnyTask) {
                         appliesToUnit = true;
                     }
@@ -693,7 +707,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                                                                                     <HoverCardTrigger asChild>
                                                                                         {cellContent}
                                                                                     </HoverCardTrigger>
-                                                                                    <HoverCardContent className="w-80 p-4 z-[100] shadow-xl border-accent" side="top" align="center">
+                                                                                    <HoverCardContent className="w-[280px] max-w-[90vw] p-4 z-[100] shadow-xl border-accent" side="top" align="center">
                                                                                         <TaskHoverCard
                                                                                             task={task}
                                                                                             routine={routine}

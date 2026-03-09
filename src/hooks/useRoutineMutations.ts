@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { Enums } from '@/integrations/supabase/types';
-import { isWeekendOrHoliday, getNextBusinessDay } from '@/utils/holidays';
+import { generateRoutineTimeline } from '@/utils/routineDates';
+import { addYears } from 'date-fns';
 
-type TaskFrequency = Enums<'task_frequency'>;
+type TaskFrequency = 'diaria' | 'semanal' | 'quinzenal' | 'mensal';
 
 interface UnitAssignment {
   unitId: string;
@@ -29,6 +29,8 @@ interface CreateRoutineWithUnitsData extends CreateRoutineData {
   startDate?: string | null; // Data de início definida pelo usuário
   dueDate?: string | null; // Data de vencimento definida pelo usuário
   monthlyAnchor?: 'date' | 'weekday';
+  repeatForever?: boolean;
+  recurrenceEndDate?: string | null;
 }
 
 interface UpdateRoutineData extends Partial<CreateRoutineData> {
@@ -131,230 +133,265 @@ export const useCreateRoutineWithUnits = () => {
 
       if (routineError) throw routineError;
 
-      // Calculate period dates - use user-provided dates if available, otherwise calculate based on frequency
-      let periodStart: Date;
-      let periodEnd: Date;
+      // Calculate initial base dates for the timeline generation
+      let baseStart: Date;
+      let baseEnd: Date;
 
       if (data.startDate && data.dueDate) {
-        // User provided specific dates
-        periodStart = new Date(data.startDate);
-        periodEnd = new Date(data.dueDate);
-
-        // Adjust for weekends/holidays if enabled
-        if (data.skipWeekendsHolidays) {
-          if (isWeekendOrHoliday(periodStart)) {
-            periodStart = getNextBusinessDay(periodStart);
-          }
-          if (isWeekendOrHoliday(periodEnd)) {
-            periodEnd = getNextBusinessDay(periodEnd);
-          }
-        }
+        baseStart = new Date(data.startDate);
+        baseEnd = new Date(data.dueDate);
       } else {
-        // Calculate based on frequency (fallback to current date)
         let now = new Date();
-
-        // Se ignorar feriados/fins de semana, ajustar a data inicial
-        if (data.skipWeekendsHolidays && isWeekendOrHoliday(now)) {
-          now = getNextBusinessDay(now);
-        }
-
         switch (data.frequency) {
           case 'diaria':
-            periodStart = new Date(now);
-            periodStart.setHours(0, 0, 0, 0);
-            periodEnd = new Date(periodStart);
-            periodEnd.setHours(23, 59, 59, 999);
+            baseStart = new Date(now);
+            baseStart.setHours(0, 0, 0, 0);
+            baseEnd = new Date(baseStart);
+            baseEnd.setHours(23, 59, 59, 999);
             break;
           case 'semanal':
             const dayOfWeek = now.getDay();
             const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-            periodStart = new Date(now);
-            periodStart.setDate(now.getDate() + diffToMonday);
-            periodStart.setHours(0, 0, 0, 0);
-            periodEnd = new Date(periodStart);
-            periodEnd.setDate(periodStart.getDate() + 6);
-            periodEnd.setHours(23, 59, 59, 999);
+            baseStart = new Date(now);
+            baseStart.setDate(now.getDate() + diffToMonday);
+            baseStart.setHours(0, 0, 0, 0);
+            baseEnd = new Date(baseStart);
+            baseEnd.setDate(baseStart.getDate() + 6);
+            baseEnd.setHours(23, 59, 59, 999);
             break;
           case 'quinzenal':
             const dayOfWeek2 = now.getDay();
             const diffToMonday2 = dayOfWeek2 === 0 ? -6 : 1 - dayOfWeek2;
-            periodStart = new Date(now);
-            periodStart.setDate(now.getDate() + diffToMonday2);
-            periodStart.setHours(0, 0, 0, 0);
-            periodEnd = new Date(periodStart);
-            periodEnd.setDate(periodStart.getDate() + 13);
-            periodEnd.setHours(23, 59, 59, 999);
+            baseStart = new Date(now);
+            baseStart.setDate(now.getDate() + diffToMonday2);
+            baseStart.setHours(0, 0, 0, 0);
+            baseEnd = new Date(baseStart);
+            baseEnd.setDate(baseStart.getDate() + 13);
+            baseEnd.setHours(23, 59, 59, 999);
             break;
           case 'mensal':
-            periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+            baseStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            baseEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
             break;
           default:
-            periodStart = new Date(now);
-            periodStart.setHours(0, 0, 0, 0);
-            periodEnd = new Date(periodStart);
-            periodEnd.setHours(23, 59, 59, 999);
+            baseStart = new Date(now);
+            baseStart.setHours(0, 0, 0, 0);
+            baseEnd = new Date(baseStart);
+            baseEnd.setHours(23, 59, 59, 999);
         }
       }
 
-      // Create the first period
-      const { data: period, error: periodError } = await supabase
-        .from('routine_periods')
-        .insert({
-          routine_id: routine.id,
-          period_start: periodStart.toISOString(),
-          period_end: periodEnd.toISOString(),
-          is_active: true,
-        })
-        .select()
-        .single();
+      // Determine the limit date for the pre-generation (defaults to +1 year or provided date)
+      let limitDate = new Date();
+      if (data.repeatForever || !data.recurrenceEndDate) {
+        limitDate = addYears(baseStart, 1);
+      } else {
+        limitDate = new Date(data.recurrenceEndDate);
+      }
 
-      if (periodError) throw periodError;
+      // Pre-Generate Timeline
+      const timeline = generateRoutineTimeline(baseStart, baseEnd, {
+        frequency: data.frequency as 'diaria' | 'semanal' | 'quinzenal' | 'mensal',
+        limitDate,
+        skipWeekendsHolidays: !!data.skipWeekendsHolidays,
+        monthlyAnchor: data.monthlyAnchor || 'date'
+      });
 
-      // Extract unit IDs from assignments
+      if (timeline.length === 0) {
+        throw new Error('Nenhuma data válida gerada para esta rotina.');
+      }
+
+      // Add routine assignees (single insert since it belongs to the routine)
+      const routineAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0
+        ? data.parentAssignees
+        : [data.parentAssignedTo || user.id].filter(Boolean);
+
+      if (routineAssigneeIds.length > 0) {
+        await supabase
+          .from('routine_assignees')
+          .insert(routineAssigneeIds.map(userId => ({ routine_id: routine.id, user_id: userId })));
+      }
+
+      // Prepare bulk arrays
+      const periodsToInsert = timeline.map(t => ({
+        routine_id: routine.id,
+        period_start: t.start.toISOString(),
+        period_end: t.end.toISOString(),
+        is_active: true,
+      }));
+
+      // Insert periods in chunks to avoid request size limits
+      const insertedPeriods: any[] = [];
+      const CHUNK_SIZE = 1000;
+      for (let i = 0; i < periodsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = periodsToInsert.slice(i, i + CHUNK_SIZE);
+        const { data: chunkData, error: chunkError } = await supabase
+          .from('routine_periods')
+          .insert(chunk)
+          .select('id, period_start');
+        if (chunkError) throw chunkError;
+        if (chunkData) insertedPeriods.push(...chunkData);
+      }
+
       const unitIds = data.unitAssignments.map(a => a.unitId);
-
-      // Create a map of unit_id -> assigned_to_ids from user selection
       const unitAssigneesMap = new Map<string, string[]>();
       data.unitAssignments.forEach(a => {
         unitAssigneesMap.set(a.unitId, a.assignedToIds || []);
       });
 
-      // If units were selected, create checkins and tasks for each unit
       if (unitIds.length > 0) {
-        // Create checkins
-        const checkins = unitIds.map((unitId) => ({
-          routine_period_id: period.id,
-          unit_id: unitId,
-        }));
-
-        const { error: checkinsError } = await supabase
-          .from('routine_checkins')
-          .insert(checkins);
-
-        if (checkinsError) throw checkinsError;
-
-        // Criar tarefa mãe (para gestores acompanharem o progresso geral)
         const firstUnitId = unitIds[0];
-        const { data: parentTask, error: parentTaskError } = await supabase
-          .from('tasks')
-          .insert({
+        const checkinsToInsert: any[] = [];
+        const parentTasksToInsert: any[] = [];
+
+        // Build Checkins and Parent Tasks
+        for (let i = 0; i < insertedPeriods.length; i++) {
+          const period = insertedPeriods[i];
+          const t = timeline[i];
+
+          unitIds.forEach(unitId => {
+            checkinsToInsert.push({
+              routine_period_id: period.id,
+              unit_id: unitId,
+            });
+          });
+
+          parentTasksToInsert.push({
             title: `[Rotina] ${routine.title}`,
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
-            unit_id: firstUnitId,
+            unit_id: null, // Orchestrator parent task sits globally to map to tracker properly
             sector_id: data.sectorId || null,
             routine_id: routine.id,
             assigned_to: data.parentAssignedTo || user.id,
             created_by: user.id,
-            start_date: periodStart.toISOString(),
-            due_date: periodEnd.toISOString(),
+            start_date: t.start.toISOString(),
+            due_date: t.end.toISOString(),
             status: 'pendente' as const,
             priority: 2,
             parent_task_id: null,
-            is_recurring: true, // Routines are always recurring if created via this flow with frequency
+            is_recurring: false, // We don't want the Cron to interact with them anymore!
             recurrence_frequency: data.frequency,
             recurrence_mode: data.recurrenceMode || 'schedule',
-          })
-          .select()
-          .single();
-
-        if (parentTaskError) throw parentTaskError;
-
-        // Add routine assignees
-        const routineAssigneeIds = data.parentAssignees && data.parentAssignees.length > 0
-          ? data.parentAssignees
-          : [data.parentAssignedTo || user.id].filter(Boolean);
-
-        if (routineAssigneeIds.length > 0) {
-          await supabase
-            .from('routine_assignees')
-            .insert(routineAssigneeIds.map(userId => ({ routine_id: routine.id, user_id: userId })));
+          });
         }
 
-        // Add task assignees for parent task
-        if (routineAssigneeIds.length > 0) {
-          await supabase
-            .from('task_assignees')
-            .insert(routineAssigneeIds.map(userId => ({ task_id: parentTask.id, user_id: userId })));
+        // Bulk Insert checkins
+        for (let i = 0; i < checkinsToInsert.length; i += CHUNK_SIZE) {
+          const { error } = await supabase.from('routine_checkins').insert(checkinsToInsert.slice(i, i + CHUNK_SIZE));
+          if (error) throw error;
         }
 
-        // Create tasks filhas for each unit with the selected responsibles
-        const childTasksToInsert = unitIds.map((unitId) => {
-          const assigneeIds = unitAssigneesMap.get(unitId) || [];
-          return {
-            title: `[Rotina] ${routine.title}`,
-            description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
-            unit_id: unitId,
-            sector_id: data.sectorId || null,
-            routine_id: routine.id,
-            assigned_to: assigneeIds[0] || null,
-            created_by: user.id,
-            start_date: periodStart.toISOString(),
-            due_date: periodEnd.toISOString(),
-            status: 'pendente' as const,
-            priority: 2,
-            parent_task_id: parentTask.id,
-          };
-        });
-
-        const { data: insertedChildTasks, error: tasksError } = await supabase
-          .from('tasks')
-          .insert(childTasksToInsert)
-          .select();
-
-        if (tasksError) throw tasksError;
-
-        // Create task_assignees for each child task
-        if (insertedChildTasks) {
-          for (const childTask of insertedChildTasks) {
-            const assigneeIds = unitAssigneesMap.get(childTask.unit_id!) || [];
-            if (assigneeIds.length > 0) {
-              await supabase
-                .from('task_assignees')
-                .insert(assigneeIds.map(userId => ({ task_id: childTask.id, user_id: userId })));
-            }
-          }
+        // Bulk Insert Parent Tasks
+        const insertedParentTasks: any[] = [];
+        for (let i = 0; i < parentTasksToInsert.length; i += CHUNK_SIZE) {
+          const chunk = parentTasksToInsert.slice(i, i + CHUNK_SIZE);
+          const { data: chunkData, error } = await supabase.from('tasks').insert(chunk).select('id');
+          if (error) throw error;
+          if (chunkData) insertedParentTasks.push(...chunkData);
         }
+
+        // Parent Task Assignees
+        const parentTaskAssigneesToInsert: any[] = [];
+        for (const pt of insertedParentTasks) {
+          routineAssigneeIds.forEach(userId => {
+            parentTaskAssigneesToInsert.push({ task_id: pt.id, user_id: userId });
+          });
+        }
+        for (let i = 0; i < parentTaskAssigneesToInsert.length; i += CHUNK_SIZE) {
+          await supabase.from('task_assignees').insert(parentTaskAssigneesToInsert.slice(i, i + CHUNK_SIZE));
+        }
+
+        // Child Tasks
+        const childTasksToInsert: any[] = [];
+        for (let i = 0; i < insertedParentTasks.length; i++) {
+          const pt = insertedParentTasks[i];
+          const t = timeline[i];
+
+          unitIds.forEach(unitId => {
+            const assigneeIds = Array.from(new Set(unitAssigneesMap.get(unitId) || []));
+            childTasksToInsert.push({
+              title: `[Rotina] ${routine.title}`,
+              description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
+              unit_id: unitId,
+              sector_id: data.sectorId || null,
+              routine_id: routine.id,
+              assigned_to: assigneeIds[0] || null,
+              created_by: user.id,
+              start_date: t.start.toISOString(),
+              due_date: t.end.toISOString(),
+              status: 'pendente' as const,
+              priority: 2,
+              parent_task_id: pt.id,
+            });
+          });
+        }
+
+        // Bulk Insert Child Tasks
+        const insertedChildTasks: any[] = [];
+        for (let i = 0; i < childTasksToInsert.length; i += CHUNK_SIZE) {
+          const chunk = childTasksToInsert.slice(i, i + CHUNK_SIZE);
+          const { data: chunkData, error } = await supabase.from('tasks').insert(chunk).select('id, unit_id');
+          if (error) throw error;
+          if (chunkData) insertedChildTasks.push(...chunkData);
+        }
+
+        // Child Task Assignees
+        const childTaskAssigneesToInsert: any[] = [];
+        for (const ct of insertedChildTasks) {
+          const assigneeIds = Array.from(new Set(unitAssigneesMap.get(ct.unit_id) || []));
+          assigneeIds.forEach(userId => {
+            childTaskAssigneesToInsert.push({ task_id: ct.id, user_id: userId });
+          });
+        }
+        for (let i = 0; i < childTaskAssigneesToInsert.length; i += CHUNK_SIZE) {
+          await supabase.from('task_assignees').insert(childTaskAssigneesToInsert.slice(i, i + CHUNK_SIZE));
+        }
+
       } else {
-        // No units selected
-        // Admins/Gestores podem criar sem unidade
-        // Regular users MUST have a unit_id in their profile
+        // No units selected (Admins/Gestores sem unidade)
         if (!isAdminOrGestor && !userUnitId) {
           throw new Error('Você precisa estar associado a uma unidade para criar rotinas.');
         }
 
-        const { error: taskError } = await supabase
-          .from('tasks')
-          .insert({
+        const checkinsToInsert: any[] = [];
+        const parentTasksToInsert: any[] = [];
+
+        for (let i = 0; i < insertedPeriods.length; i++) {
+          const period = insertedPeriods[i];
+          const t = timeline[i];
+
+          if (userUnitId) {
+            checkinsToInsert.push({
+              routine_period_id: period.id,
+              unit_id: userUnitId,
+            });
+          }
+
+          parentTasksToInsert.push({
             title: `[Rotina] ${routine.title}`,
             description: data.description || `Rotina ${data.frequency}: ${routine.title}`,
-            unit_id: userUnitId || null, // null for admins/gestors without unit
+            unit_id: userUnitId || null,
             sector_id: data.sectorId || null,
             routine_id: routine.id,
             assigned_to: data.parentAssignedTo || user.id,
             created_by: user.id,
-            start_date: periodStart.toISOString(),
-            due_date: periodEnd.toISOString(),
+            start_date: t.start.toISOString(),
+            due_date: t.end.toISOString(),
             status: 'pendente' as const,
             priority: 2,
             parent_task_id: null,
-            is_recurring: true,
+            is_recurring: false, // Cron decoupled
             recurrence_frequency: data.frequency,
             recurrence_mode: data.recurrenceMode || 'schedule',
           });
+        }
 
-        if (taskError) throw taskError;
+        for (let i = 0; i < checkinsToInsert.length; i += CHUNK_SIZE) {
+          await supabase.from('routine_checkins').insert(checkinsToInsert.slice(i, i + CHUNK_SIZE));
+        }
 
-        // Create a checkin for the user's unit only if they have one
-        if (userUnitId) {
-          const { error: checkinError } = await supabase
-            .from('routine_checkins')
-            .insert({
-              routine_period_id: period.id,
-              unit_id: userUnitId,
-            });
-
-          if (checkinError) throw checkinError;
+        for (let i = 0; i < parentTasksToInsert.length; i += CHUNK_SIZE) {
+          await supabase.from('tasks').insert(parentTasksToInsert.slice(i, i + CHUNK_SIZE));
         }
       }
 
@@ -459,12 +496,28 @@ export const useDeleteRoutine = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // 1. Soft-delete the routine
       const { error } = await supabase
         .from('routines')
         .update({ is_active: false })
         .eq('id', id);
 
       if (error) throw error;
+
+      // 2. Cascade delete all pending future tasks for this routine so they don't haunt the dashboards
+      await supabase
+        .from('tasks')
+        .delete()
+        .eq('routine_id', id)
+        .eq('status', 'pendente');
+
+      // 3. Cascade delete all future periods for this routine
+      const today = new Date().toISOString();
+      await supabase
+        .from('routine_periods')
+        .delete()
+        .eq('routine_id', id)
+        .gte('start_date', today);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routines'] });

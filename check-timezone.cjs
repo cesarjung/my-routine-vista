@@ -1,0 +1,49 @@
+const https = require('https');
+const fs = require('fs');
+const env = fs.readFileSync('.env', 'utf8');
+const urlMatch = env.match(/VITE_SUPABASE_URL="(.*?)"/);
+const keyMatch = env.match(/VITE_SUPABASE_ANON_KEY="(.*?)"/);
+const host = urlMatch[1].trim().replace('https://', '');
+const key = keyMatch[1].trim();
+
+const formatBound = (date, isEnd) => {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const time = isEnd ? '23:59:59' : '00:00:00';
+    return `${year}-${month}-${day}T${time}Z`;
+};
+
+const now = new Date();
+const startUtcOffset = formatBound(now, false);
+const endUtcOffset = formatBound(now, true);
+
+const options = {
+    hostname: host,
+    port: 443,
+    path: `/rest/v1/tasks?select=id,title,unit_id,routine_id,due_date,start_date,parent_task_id,status,units(name),routines(title,frequency)&due_date=gte.${startUtcOffset}&due_date=lte.${endUtcOffset}`,
+    method: 'GET',
+    headers: {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`
+    }
+};
+
+const req = https.request(options, (res) => {
+    let data = '';
+    res.on('data', (d) => data += d);
+    res.on('end', () => {
+        const tasks = JSON.parse(data);
+        console.log(`Matched due_date today: ${tasks.length}`);
+        let b = 0;
+        for (const t of tasks) {
+            if (t.units && t.units.name === 'Barreiras') {
+                b++;
+                console.log(t.title);
+            }
+        }
+        console.log(`Barreiras total na API crua: ${b}`);
+    });
+});
+req.on('error', (e) => console.error(e));
+req.end();

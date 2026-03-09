@@ -85,8 +85,11 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       // Get period dates
       const periodDates = getPeriodDates(filters.period || 'all');
 
+      console.log('CustomPanel Debug - Filters:', filters);
+      console.log('CustomPanel Debug - Resolved periodDates:', periodDates);
+
       // Build tasks query
-      let tasksQuery = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, sector_id, due_date');
+      let tasksQuery = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, sector_id, due_date, routine:routines(title)');
 
       if (filters.sector_id) {
         if (Array.isArray(filters.sector_id)) {
@@ -157,7 +160,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, '0');
           const day = String(date.getDate()).padStart(2, '0');
-          const time = isEnd ? '23:59:59' : '00:00:00';
+          const time = isEnd ? '23:59:59.999' : '00:00:00.000';
           return `${year}-${month}-${day}T${time}-03:00`;
         };
 
@@ -169,8 +172,35 @@ const useCustomPanelData = (panel: DashboardPanel) => {
           .lte('due_date', endUtcOffset);
       }
 
-      const { data: rawTasks, error: tasksError } = await tasksQuery;
-      if (tasksError) throw tasksError;
+      // NOVO: Pre-filtrar por Frequência diretamente via Banco antes de puxar as 1000 tarefas
+      // O Supabase tem um limite restrito de 1000 rows, o que corta as tarefas Mensais no final da fila.
+      if (filters.task_frequency && filters.task_frequency.length > 0) {
+        const { data: allowedRoutines } = await supabase
+          .from('routines')
+          .select('id')
+          .in('frequency', filters.task_frequency)
+          .eq('is_active', true);
+
+        if (allowedRoutines && allowedRoutines.length > 0) {
+          const validRoutineIds = allowedRoutines.map((r: any) => r.id);
+          // O Supabase In() tem limites práticos, mas se o array passar de uns mil, precisaria chunking.
+          // Porém, a quantidade de rotinas será menor que o de tarefas cruas.
+          tasksQuery = tasksQuery.in('routine_id', validRoutineIds);
+        } else {
+          // Se pediu Mensal e não tem rotina Mensal, retorne um filtro impossível ou force zero.
+          tasksQuery = tasksQuery.eq('routine_id', '00000000-0000-0000-0000-000000000000');
+        }
+      }
+
+      // Fetch all task rows bypassing the 1000 row Supabase API default (supabase.limit doesn't always break server config):
+      tasksQuery = tasksQuery.limit(20000); // 20k won't work on REST without explicit PG settings, but helps intent.
+      const { data: rawTasks, error: fetchError } = await tasksQuery;
+      if (fetchError) throw fetchError;
+
+      console.log('CustomPanel Debug - rawTasks fetched for', panel.title, ':', rawTasks?.length);
+      if (rawTasks && rawTasks.length > 0) {
+        console.log('CustomPanel Debug - Sample rawTask:', rawTasks[0]);
+      }
 
       // Get routines for frequency mapping
       const routineIds = [...new Set(rawTasks?.filter(t => t.routine_id).map(t => t.routine_id) || [])];
@@ -180,16 +210,20 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       if (routineIds.length > 0) {
         const { data: routines } = await supabase
           .from('routines')
-          .select('id, frequency, title')
+          .select('id, frequency, title, is_active')
           .in('id', routineIds);
 
         routinesMap = (routines || []).reduce((acc, r) => {
-          acc[r.id] = r.frequency;
+          if (r.is_active !== false) {
+            acc[r.id] = r.frequency;
+          }
           return acc;
         }, {} as Record<string, string>);
 
         routineTitlesMap = (routines || []).reduce((acc, r) => {
-          acc[r.id] = r.title;
+          if (r.is_active !== false) {
+            acc[r.id] = r.title;
+          }
           return acc;
         }, {} as Record<string, string>);
       }
@@ -198,7 +232,10 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       const tasks = rawTasks?.filter(t => {
         if (!filters.task_frequency || filters.task_frequency.length === 0) return true;
         if (!t.routine_id) return false; // Non-routine tasks don't have frequency
+
         const freq = routinesMap[t.routine_id];
+        if (!freq) return false; // This filters out tasks belonging to inactive routines automatically!
+
         return filters.task_frequency.includes(freq);
       });
 
@@ -217,7 +254,8 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         const { data: units } = await unitsQuery;
 
         results = (units || []).map(unit => {
-          const unitTasks = tasks?.filter(t => t.unit_id === unit.id) || [];
+          // Strictly filter out global orchestrator tasks!
+          const unitTasks = tasks?.filter(t => t.unit_id === unit.id && t.unit_id !== null) || [];
           const frequencies: Record<string, StatusData> = {};
 
           FREQUENCIES.forEach(f => {
@@ -236,7 +274,9 @@ const useCustomPanelData = (panel: DashboardPanel) => {
           };
 
           return { id: unit.id, name: unit.name, frequencies, totals };
-        }).filter(u => u.totals.total > 0);
+        })
+          .filter(u => u.totals.total > 0)
+          .sort((a, b) => a.name.localeCompare(b.name));
       } else if (filters.group_by === 'responsible') {
         const { data: profiles } = await supabase.from('profiles').select('id, full_name, email');
 
@@ -366,7 +406,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         const routineMap = new Map<string, { id: string, name: string, units: Record<string, any> }>();
 
         // Pre-fill with routines if we have them in the filtered set
-        const distinctRoutineIds = [...new Set(tasks?.map(t => t.routine_id).filter(Boolean))];
+        const distinctRoutineIds = [...new Set((tasks || []).map(t => t.routine_id).filter(Boolean))];
 
         if (distinctRoutineIds.length > 0) {
           const { data: routines } = await supabase
@@ -380,7 +420,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         }
 
         // Also handle ad-hoc tasks by grouping by title
-        tasks?.forEach(task => {
+        (tasks || []).forEach(task => {
           let key = task.routine_id || `title:${task.title} `;
           let name = task.title;
 
@@ -398,11 +438,11 @@ const useCustomPanelData = (panel: DashboardPanel) => {
           };
         });
 
-        results = Array.from(routineMap.values());
-        return { results, routinesMap, routineTitlesMap, units: units || [] };
+        results = Array.from(routineMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        return { results, routinesMap, routineTitlesMap, units: units || [], rawTasks };
       }
 
-      return { results, routinesMap, routineTitlesMap };
+      return { results, routinesMap, routineTitlesMap, rawTasks };
     }
   });
 };
@@ -562,7 +602,7 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
   };
 
   // Filter tasks based on dialog state
-  const filteredTasks = allTasks?.filter(task => {
+  const filteredTasks = (panelData?.rawTasks || [])?.filter(task => {
     if (!tasksDialog.isOpen) return false;
 
     // Filter by entity type
@@ -633,7 +673,19 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
     }
 
     if (!panelData?.results.length) {
-      return <div className="p-4 text-center text-muted-foreground text-xs">Sem dados para os filtros selecionados</div>;
+      return (
+        <div className="p-4 flex flex-col items-center justify-center text-xs text-muted-foreground gap-2">
+          <p className="font-semibold text-destructive">Sem dados para os filtros: {JSON.stringify(panel.filters.task_frequency)}</p>
+          <div className="text-left w-full space-y-1 bg-secondary/20 p-2 rounded">
+            <p><strong>DB rawTasks Total:</strong> {panelData?.rawTasks?.length || 0}</p>
+            <p><strong>Routines Map Keys:</strong> {Object.keys(panelData?.routinesMap || {}).length}</p>
+            <p><strong>Frequencies mapped:</strong> {Object.values(panelData?.routinesMap || {}).join(', ')}</p>
+            <p><strong>Frequencies mapped:</strong> {Object.values(panelData?.routinesMap || {}).join(', ')}</p>
+            <p> Se 'rawTasks' estiver vazio, o Supabase não devolveu tarefas nesse período.</p>
+            <p> Se 'rawTasks' for {'>'} 0, a falha está no filtro routinesMap ou Unit ID.</p>
+          </div>
+        </div>
+      );
     }
 
     if (panel.filters.group_by === 'task_matrix') {

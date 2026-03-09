@@ -229,6 +229,8 @@ export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
       monthlyAnchor: data.monthlyAnchor,
       startDate: combineDateAndTime(data.startDate, data.startTime),
       dueDate: combineDateAndTime(data.dueDate, data.dueTime),
+      repeatForever: data.repeatForever,
+      recurrenceEndDate: data.recurrenceEndDate ? data.recurrenceEndDate.toISOString() : undefined,
     });
 
     form.reset();
@@ -500,33 +502,7 @@ export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="recurrenceMode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Modo de Recorrência</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o modo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {recurrenceModeOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {recurrenceModeOptions.find(o => o.value === field.value)?.description}
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+
 
                 {form.watch('recurrenceFrequency') === 'mensal' && (
                   <FormField
@@ -700,8 +676,8 @@ export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
                   </div>
                 </div>
 
-                <div className="border border-border rounded-md overflow-y-auto max-h-60">
-                  <div className="p-3 space-y-2">
+                <div className="border border-border rounded-md overflow-hidden flex flex-col max-h-60 h-full">
+                  <div className="p-1 space-y-1 flex-1 overflow-y-auto w-full h-full custom-scrollbar">
                     {loadingUnits ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -716,36 +692,34 @@ export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
                           <div
                             key={unit.id}
                             className={cn(
-                              "rounded-md border transition-colors",
-                              isSelected ? 'bg-primary/10 border-primary/30' : 'border-transparent hover:bg-secondary/50'
+                              "rounded-md border transition-colors cursor-pointer",
+                              isSelected ? 'bg-primary/5 border-primary/20' : 'border-transparent hover:bg-secondary/20'
                             )}
                           >
                             <div
                               onClick={() => toggleUnit(unit.id)}
-                              className="flex items-center gap-3 p-3 cursor-pointer"
+                              className="flex items-center gap-3 p-2 py-1.5"
                             >
                               <div className={cn(
-                                "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
-                                isSelected ? 'bg-primary border-primary' : 'border-input'
+                                "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                                isSelected ? 'bg-primary border-primary' : 'border-input hover:border-primary/50'
                               )}>
                                 {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{unit.name}</p>
-                                <p className="text-xs text-muted-foreground">{unit.code}</p>
                               </div>
                             </div>
 
                             {isSelected && (
-                              <div className="px-3 pb-3 pt-0">
+                              <div className="px-3 pb-2 pt-0" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2 pl-7">
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">Responsáveis:</span>
-                                  <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex-1">
                                     <MultiAssigneeSelect
                                       profiles={profilesForUnit}
                                       selectedIds={assignment?.assignedToIds || []}
                                       onChange={(ids) => updateUnitAssignees(unit.id, ids)}
-                                      placeholder="Selecionar responsáveis..."
+                                      placeholder="Padrão: Todos os Gestores"
                                     />
                                   </div>
                                 </div>
