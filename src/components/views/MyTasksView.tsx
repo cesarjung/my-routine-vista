@@ -255,7 +255,8 @@ export const MyTasksView = ({
     if (activeCompletionTab === 'completed' && r.is_active !== false) return false;
 
     // Status Filter (Checkbox Chips)
-    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes((r as any).status);
+    const activeStatuses = (r as any).active_statuses || [(r as any).status];
+    const matchesStatus = selectedStatuses.length === 0 || activeStatuses.some((s: string) => selectedStatuses.includes(s as Enums<'task_status'>));
     if (!matchesStatus) return false;
 
     // Priority Filter (Users request consistency, though Routines might not have priority visibly)

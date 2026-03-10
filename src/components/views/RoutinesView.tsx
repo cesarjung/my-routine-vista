@@ -141,7 +141,8 @@ export const RoutinesView = ({
     // To be safe and functional: I'll stick to Frequency and Search and Priority.
 
     // Status filter logic
-    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes((r as any).status);
+    const activeStatuses = (r as any).active_statuses || [(r as any).status];
+    const matchesStatus = selectedStatuses.length === 0 || activeStatuses.some((s: string) => selectedStatuses.includes(s));
 
     // Use loose check for priority as it might not be strictly typed yet
     const matchesPriority = priorityFilter === 'all' || (r as any).priority?.toString() === priorityFilter;

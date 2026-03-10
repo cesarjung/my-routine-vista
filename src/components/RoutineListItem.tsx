@@ -72,31 +72,38 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
                 <div className="flex items-center justify-between gap-2">
                     <h3 className={cn("font-medium text-sm text-foreground truncate", routine.is_active === false && "line-through text-muted-foreground")}>{routine.title}</h3>
                     <div className="flex items-center gap-2 shrink-0">
-                        {(routine as any).status === 'pendente' && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100">
-                                Pendente
-                            </Badge>
-                        )}
-                        {(routine as any).status === 'em_andamento' && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100">
-                                Em Andamento
-                            </Badge>
-                        )}
-                        {(routine as any).status === 'atrasada' && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-red-600 border-red-200 bg-red-50 hover:bg-red-100">
-                                Atrasada
-                            </Badge>
-                        )}
-                        {(routine as any).status === 'concluida' && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-green-600 border-green-200 bg-green-50 hover:bg-green-100">
-                                Concluída
-                            </Badge>
-                        )}
-                        {(routine as any).status === 'inativa' && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-slate-500 border-slate-200 bg-slate-50">
-                                Inativa
-                            </Badge>
-                        )}
+                        {(() => {
+                            const activeStatuses = (routine as any).active_statuses || [(routine as any).status];
+                            return (
+                                <>
+                                    {activeStatuses.includes('pendente') && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100">
+                                            Pendente
+                                        </Badge>
+                                    )}
+                                    {activeStatuses.includes('em_andamento') && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100">
+                                            Em Andamento
+                                        </Badge>
+                                    )}
+                                    {activeStatuses.includes('atrasada') && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-red-600 border-red-200 bg-red-50 hover:bg-red-100">
+                                            Atrasada
+                                        </Badge>
+                                    )}
+                                    {activeStatuses.includes('concluida') && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-green-600 border-green-200 bg-green-50 hover:bg-green-100">
+                                            Concluída
+                                        </Badge>
+                                    )}
+                                    {activeStatuses.includes('inativa') && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-slate-500 border-slate-200 bg-slate-50">
+                                            Inativa
+                                        </Badge>
+                                    )}
+                                </>
+                            );
+                        })()}
                         <span className="bg-secondary text-secondary-foreground px-1.5 py-0 h-5 flex items-center rounded text-[10px] border border-border">
                             {frequencyLabels[routine.frequency] || routine.frequency}
                         </span>

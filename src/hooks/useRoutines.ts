@@ -6,6 +6,7 @@ import type { Tables, Enums } from '@/integrations/supabase/types';
 
 export type Routine = Tables<'routines'> & {
   status?: 'pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada' | 'inativa';
+  active_statuses?: string[];
 };
 export type TaskFrequency = Enums<'task_frequency'>;
 
@@ -118,6 +119,7 @@ export const useRoutines = (unitId?: string) => {
 
         // Create a map of routine_id to its most relevant status
         const routineStatusMap = new Map<string, Routine['status']>();
+        const routineActiveStatusesMap = new Map<string, string[]>();
 
         if (activeTasks) {
           // Group tasks by routine
@@ -127,7 +129,7 @@ export const useRoutines = (unitId?: string) => {
             return acc;
           }, {} as Record<string, string[]>);
 
-          // Determine priority status
+          // Determine priority status and active statuses
           Object.entries(tasksByRoutine).forEach(([routineId, statuses]: [string, string[]]) => {
             if (statuses.includes('atrasada')) {
               routineStatusMap.set(routineId, 'atrasada');
@@ -140,6 +142,14 @@ export const useRoutines = (unitId?: string) => {
             } else {
               routineStatusMap.set(routineId, 'pendente');
             }
+
+            const uniqueStatuses = Array.from(new Set(statuses));
+            if (uniqueStatuses.every(s => s === 'concluida' || s === 'cancelada' || s === 'nao_aplicavel')) {
+              routineActiveStatusesMap.set(routineId, ['concluida']);
+            } else {
+              const active = uniqueStatuses.filter(s => s !== 'concluida' && s !== 'cancelada' && s !== 'nao_aplicavel');
+              routineActiveStatusesMap.set(routineId, active.length ? active : ['concluida']);
+            }
           });
         }
 
@@ -147,7 +157,10 @@ export const useRoutines = (unitId?: string) => {
           ...r,
           status: !r.is_active
             ? 'inativa'
-            : (routineStatusMap.get(r.id) || 'concluida')
+            : (routineStatusMap.get(r.id) || 'concluida'),
+          active_statuses: !r.is_active
+            ? ['inativa']
+            : (routineActiveStatusesMap.get(r.id) || ['concluida'])
         })) as Routine[];
 
         return routinesWithStatus;
@@ -170,6 +183,7 @@ export const useRoutines = (unitId?: string) => {
 
       // Create a map of routine_id to its most relevant status
       const routineStatusMap = new Map<string, Routine['status']>();
+      const routineActiveStatusesMap = new Map<string, string[]>();
 
       if (activeTasks) {
         // Group tasks by routine
@@ -179,7 +193,7 @@ export const useRoutines = (unitId?: string) => {
           return acc;
         }, {} as Record<string, string[]>);
 
-        // Determine priority status
+        // Determine priority status and active statuses
         Object.entries(tasksByRoutine).forEach(([routineId, statuses]: [string, string[]]) => {
           if (statuses.includes('atrasada')) {
             routineStatusMap.set(routineId, 'atrasada');
@@ -192,6 +206,14 @@ export const useRoutines = (unitId?: string) => {
           } else {
             routineStatusMap.set(routineId, 'pendente');
           }
+
+          const uniqueStatuses = Array.from(new Set(statuses));
+          if (uniqueStatuses.every(s => s === 'concluida' || s === 'cancelada' || s === 'nao_aplicavel')) {
+            routineActiveStatusesMap.set(routineId, ['concluida']);
+          } else {
+            const active = uniqueStatuses.filter(s => s !== 'concluida' && s !== 'cancelada' && s !== 'nao_aplicavel');
+            routineActiveStatusesMap.set(routineId, active.length ? active : ['concluida']);
+          }
         });
       }
 
@@ -199,7 +221,10 @@ export const useRoutines = (unitId?: string) => {
         ...r,
         status: !r.is_active
           ? 'inativa'
-          : (routineStatusMap.get(r.id) || 'concluida')
+          : (routineStatusMap.get(r.id) || 'concluida'),
+        active_statuses: !r.is_active
+          ? ['inativa']
+          : (routineActiveStatusesMap.get(r.id) || ['concluida'])
       })) as Routine[];
 
       return routinesWithStatus;
