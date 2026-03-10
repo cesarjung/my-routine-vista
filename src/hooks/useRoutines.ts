@@ -5,7 +5,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
 export type Routine = Tables<'routines'> & {
-  status?: 'pendente' | 'concluida' | 'inativa';
+  status?: 'pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada' | 'inativa';
 };
 export type TaskFrequency = Enums<'task_frequency'>;
 
@@ -113,22 +113,47 @@ export const useRoutines = (unitId?: string) => {
 
       if (routineIds.length === 0) return routines;
 
-      // Fetch active parent tasks (Tarefas Mães) that are NOT concluded
+      // Fetch active parent tasks (Tarefas Mães) to determine routine status accurately
       const { data: activeTasks } = await supabase
         .from('tasks')
-        .select('routine_id')
+        .select('routine_id, status')
         .in('routine_id', routineIds)
-        .is('parent_task_id', null)
-        .neq('status', 'concluida')
-        .neq('status', 'cancelada'); // Assuming cancelada is also "done" for the queue
+        .is('parent_task_id', null);
 
-      const activeRoutineIds = new Set(activeTasks?.map(t => t.routine_id));
+      // Create a map of routine_id to its most relevant status
+      const routineStatusMap = new Map<string, Routine['status']>();
+
+      if (activeTasks) {
+        // Group tasks by routine
+        const tasksByRoutine = activeTasks.reduce((acc, task) => {
+          if (!acc[task.routine_id]) acc[task.routine_id] = [];
+          acc[task.routine_id].push(task.status);
+          return acc;
+        }, {} as Record<string, string[]>);
+
+        // Determine priority status
+        Object.entries(tasksByRoutine).forEach(([routineId, statuses]) => {
+          if (statuses.includes('atrasada')) {
+            routineStatusMap.set(routineId, 'atrasada');
+          } else if (statuses.includes('em_andamento')) {
+            routineStatusMap.set(routineId, 'em_andamento');
+          } else if (statuses.includes('pendente')) {
+            routineStatusMap.set(routineId, 'pendente');
+          } else if (statuses.every(s => s === 'concluida' || s === 'cancelada' || s === 'nao_aplicavel')) {
+            // Only consider it completed if ALL tasks are concluded/canceled/na
+            // But if there are no tasks at all? We'll handle that next.
+            routineStatusMap.set(routineId, 'concluida');
+          } else {
+            routineStatusMap.set(routineId, 'pendente');
+          }
+        });
+      }
 
       const routinesWithStatus = routines.map(r => ({
         ...r,
         status: !r.is_active
           ? 'inativa'
-          : (activeRoutineIds.has(r.id) ? 'pendente' : 'concluida')
+          : (routineStatusMap.get(r.id) || 'concluida') // Default to concluded if no active pending tasks exist at all (or pending if we want to be safe, but usually empty = done for the period)
       })) as Routine[]; // Cast to ensure TS is happy
 
       // Filter logic for non-admin users (Copied from existing logic but applied to new list)

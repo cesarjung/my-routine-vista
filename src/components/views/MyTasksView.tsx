@@ -254,6 +254,10 @@ export const MyTasksView = ({
     if (activeCompletionTab === 'pending' && r.is_active === false) return false;
     if (activeCompletionTab === 'completed' && r.is_active !== false) return false;
 
+    // Status Filter (Checkbox Chips)
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes((r as any).status);
+    if (!matchesStatus) return false;
+
     // Priority Filter (Users request consistency, though Routines might not have priority visibly)
     const matchesPriority = priorityFilter === 'all' || (r as any).priority?.toString() === priorityFilter;
     if (!matchesPriority) return false;

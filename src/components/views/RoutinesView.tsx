@@ -140,6 +140,9 @@ export const RoutinesView = ({
     // I will simple ignore `selectedStatuses` in the filter loop if I'm not sure, OR assumes it filters logic if `r.status` exists.
     // To be safe and functional: I'll stick to Frequency and Search and Priority.
 
+    // Status filter logic
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes((r as any).status);
+
     // Use loose check for priority as it might not be strictly typed yet
     const matchesPriority = priorityFilter === 'all' || (r as any).priority?.toString() === priorityFilter;
 
@@ -150,7 +153,7 @@ export const RoutinesView = ({
         ? (r.is_active !== false)
         : (r.is_active === false);
 
-    return matchesFrequency && matchesSector && matchesSearch && matchesPriority && matchesActiveStatus;
+    return matchesFrequency && matchesSector && matchesSearch && matchesPriority && matchesActiveStatus && matchesStatus;
   }) || [];
 
   const allFilteredSelected = filteredRoutines && filteredRoutines.length > 0
