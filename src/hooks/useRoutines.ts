@@ -96,7 +96,7 @@ export const useRoutines = (unitId?: string) => {
           }
         }
 
-        return (data as Routine[]).filter(routine => {
+        const routinesToCalculateStatus = (data as Routine[]).filter(routine => {
           // Mostrar se o usuário está na tabela routine_assignees ou task_assignees
           if (assignedRoutineIds.has(routine.id)) return true;
           // Mostrar se a rotina é da unidade do usuário
@@ -105,9 +105,59 @@ export const useRoutines = (unitId?: string) => {
           if (routinesWithUserUnitCheckins.has(routine.id)) return true;
           return false;
         });
+
+        const routineIds = routinesToCalculateStatus.map(r => r.id);
+
+        if (routineIds.length === 0) return routinesToCalculateStatus;
+
+        // Fetch active parent tasks (Tarefas Mães) to determine routine status accurately
+        const { data: activeTasks } = await supabase
+          .from('tasks')
+          .select('routine_id, status')
+          .in('routine_id', routineIds)
+          .is('parent_task_id', null);
+
+        // Create a map of routine_id to its most relevant status
+        const routineStatusMap = new Map<string, Routine['status']>();
+
+        if (activeTasks) {
+          // Group tasks by routine
+          const tasksByRoutine = activeTasks.reduce((acc, task) => {
+            if (!acc[task.routine_id]) acc[task.routine_id] = [];
+            acc[task.routine_id].push(task.status);
+            return acc;
+          }, {} as Record<string, string[]>);
+
+          // Determine priority status
+          Object.entries(tasksByRoutine).forEach(([routineId, statuses]: [string, string[]]) => {
+            if (statuses.includes('atrasada')) {
+              routineStatusMap.set(routineId, 'atrasada');
+            } else if (statuses.includes('em_andamento')) {
+              routineStatusMap.set(routineId, 'em_andamento');
+            } else if (statuses.includes('pendente')) {
+              routineStatusMap.set(routineId, 'pendente');
+            } else if (statuses.every(s => s === 'concluida' || s === 'cancelada' || s === 'nao_aplicavel')) {
+              routineStatusMap.set(routineId, 'concluida');
+            } else {
+              routineStatusMap.set(routineId, 'pendente');
+            }
+          });
+        }
+
+        const routinesWithStatus = routinesToCalculateStatus.map(r => ({
+          ...r,
+          status: !r.is_active
+            ? 'inativa'
+            : (routineStatusMap.get(r.id) || 'concluida')
+        })) as Routine[];
+
+        return routinesWithStatus;
       }
 
-      // Calculate status for each routine
+      // ----------------------------------------------------------------------
+      // If role is ADMIN or GESTOR (Bypass Visibility Filtering)
+      // ----------------------------------------------------------------------
+
       const routines = data as Routine[];
       const routineIds = routines.map(r => r.id);
 
@@ -132,7 +182,7 @@ export const useRoutines = (unitId?: string) => {
         }, {} as Record<string, string[]>);
 
         // Determine priority status
-        Object.entries(tasksByRoutine).forEach(([routineId, statuses]) => {
+        Object.entries(tasksByRoutine).forEach(([routineId, statuses]: [string, string[]]) => {
           if (statuses.includes('atrasada')) {
             routineStatusMap.set(routineId, 'atrasada');
           } else if (statuses.includes('em_andamento')) {
@@ -140,8 +190,6 @@ export const useRoutines = (unitId?: string) => {
           } else if (statuses.includes('pendente')) {
             routineStatusMap.set(routineId, 'pendente');
           } else if (statuses.every(s => s === 'concluida' || s === 'cancelada' || s === 'nao_aplicavel')) {
-            // Only consider it completed if ALL tasks are concluded/canceled/na
-            // But if there are no tasks at all? We'll handle that next.
             routineStatusMap.set(routineId, 'concluida');
           } else {
             routineStatusMap.set(routineId, 'pendente');
@@ -153,48 +201,10 @@ export const useRoutines = (unitId?: string) => {
         ...r,
         status: !r.is_active
           ? 'inativa'
-          : (routineStatusMap.get(r.id) || 'concluida') // Default to concluded if no active pending tasks exist at all (or pending if we want to be safe, but usually empty = done for the period)
-      })) as Routine[]; // Cast to ensure TS is happy
+          : (routineStatusMap.get(r.id) || 'concluida')
+      })) as Routine[];
 
-      // Filter logic for non-admin users (Copied from existing logic but applied to new list)
-      if (role === 'usuario' && user?.id) {
-        // ... (Keep existing filtering logic but use 'routinesWithStatus')
-        // To avoid re-writing the huge block, I will return here if admin, and let the existing block handle filtering if user.
-        // Wait, the existing block uses `(data as Routine[])`. I should apply filtering to `routinesWithStatus`.
-      }
-
-      // Let's refactor slightly to avoid code duplication if possible, or just insert the logic.
-      // The existing code returns at the end.
-
-      let finalRoutines = routinesWithStatus;
-
-      if (role === 'usuario' && user?.id) {
-        // ... (existing helper queries) ...
-        const { data: profile } = await supabase.from('profiles').select('unit_id').eq('id', user.id).single();
-        const userUnitId = profile?.unit_id;
-        const { data: routineAssignees } = await supabase.from('routine_assignees').select('routine_id').eq('user_id', user.id);
-        const assignedRoutineIds = new Set(routineAssignees?.map(ra => ra.routine_id) || []);
-
-        // ... (checkins logic) ...
-        let routinesWithUserUnitCheckins = new Set<string>();
-        if (userUnitId) { // ... existing logic ...
-          const { data: checkins } = await supabase.from('routine_checkins').select('routine_period_id').eq('unit_id', userUnitId);
-          if (checkins && checkins.length > 0) {
-            const periodIds = checkins.map(c => c.routine_period_id);
-            const { data: periods } = await supabase.from('routine_periods').select('routine_id').in('id', periodIds);
-            routinesWithUserUnitCheckins = new Set(periods?.map(p => p.routine_id) || []);
-          }
-        }
-
-        finalRoutines = finalRoutines.filter(routine => {
-          if (assignedRoutineIds.has(routine.id)) return true;
-          if (userUnitId && routine.unit_id === userUnitId) return true;
-          if (routinesWithUserUnitCheckins.has(routine.id)) return true;
-          return false;
-        });
-      }
-
-      return finalRoutines;
+      return routinesWithStatus;
     },
     enabled: !!user?.id,
   });
