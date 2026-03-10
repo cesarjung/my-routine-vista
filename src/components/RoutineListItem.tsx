@@ -77,6 +77,16 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
                                 Pendente
                             </Badge>
                         )}
+                        {(routine as any).status === 'em_andamento' && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100">
+                                Em Andamento
+                            </Badge>
+                        )}
+                        {(routine as any).status === 'atrasada' && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-red-600 border-red-200 bg-red-50 hover:bg-red-100">
+                                Atrasada
+                            </Badge>
+                        )}
                         {(routine as any).status === 'concluida' && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-green-600 border-green-200 bg-green-50 hover:bg-green-100">
                                 Concluída
