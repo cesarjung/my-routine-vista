@@ -110,12 +110,11 @@ export const useRoutines = (unitId?: string) => {
 
         if (routineIds.length === 0) return routinesToCalculateStatus;
 
-        // Fetch active parent tasks (Tarefas Mães) to determine routine status accurately
+        // Fetch active tasks to determine routine status accurately
         const { data: activeTasks } = await supabase
           .from('tasks')
           .select('routine_id, status')
-          .in('routine_id', routineIds)
-          .is('parent_task_id', null);
+          .in('routine_id', routineIds);
 
         // Create a map of routine_id to its most relevant status
         const routineStatusMap = new Map<string, Routine['status']>();
@@ -163,12 +162,11 @@ export const useRoutines = (unitId?: string) => {
 
       if (routineIds.length === 0) return routines;
 
-      // Fetch active parent tasks (Tarefas Mães) to determine routine status accurately
+      // Fetch active tasks to determine routine status accurately
       const { data: activeTasks } = await supabase
         .from('tasks')
         .select('routine_id, status')
-        .in('routine_id', routineIds)
-        .is('parent_task_id', null);
+        .in('routine_id', routineIds);
 
       // Create a map of routine_id to its most relevant status
       const routineStatusMap = new Map<string, Routine['status']>();
