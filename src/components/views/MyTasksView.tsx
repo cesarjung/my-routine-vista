@@ -140,7 +140,7 @@ export const MyTasksView = ({
   const [activeFrequency, setActiveFrequency] = useState<string>('all');
   const [activeStatusFilter, setActiveStatusFilter] = useState<string>('active');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [selectedStatuses, setSelectedStatuses] = useState<Enums<'task_status'>[]>(statusFilters.map((f) => f.value));
+  const [selectedStatuses, setSelectedStatuses] = useState<Enums<'task_status'>[]>(['pendente']);
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any | null>(null);

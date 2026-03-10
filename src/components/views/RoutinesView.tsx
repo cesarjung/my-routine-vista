@@ -88,7 +88,7 @@ export const RoutinesView = ({
   const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
   const [editingRoutine, setEditingRoutine] = useState<Tables<'routines'> | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(statusFilters.map((f) => f.value));
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['pendente']);
   const [activeStatusFilter, setActiveStatusFilter] = useState<string>('active'); // Added state
 
   const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>([]);
