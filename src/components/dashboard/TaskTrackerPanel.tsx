@@ -20,7 +20,7 @@ import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import { TaskHoverCard } from './TaskHoverCard';
 
 interface TaskTrackerPanelProps {
-    sectorId?: string | null;
+    sectorIds?: string[];
     initialRoutineIds?: string[];
     initialFrequencies?: string[];
 }
@@ -33,7 +33,7 @@ const frequencyOptions = [
     { label: 'Mensais', value: 'mensal' },
 ];
 
-export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFrequencies = [] }: TaskTrackerPanelProps) => {
+export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initialFrequencies = [] }: TaskTrackerPanelProps) => {
     const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>(initialRoutineIds);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [trackerSectorIds, setTrackerSectorIds] = useState<string[]>([]);
@@ -49,7 +49,9 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
     const { isGestorOrAdmin } = useIsGestorOrAdmin();
     const updateTaskMutation = useUpdateTask();
 
-    const { settings, saveSettings, isLoading: isLoadingSettings } = useTrackerSettings(sectorId);
+    // Use the first sectorId for settings context if we are matching 1:1, or null for global
+    const singleSectorId = sectorIds.length === 1 ? sectorIds[0] : null;
+    const { settings, saveSettings, isLoading: isLoadingSettings } = useTrackerSettings(singleSectorId);
 
     useEffect(() => {
         if (!isLoadingSettings && !hasLoadedSettings) {
@@ -80,11 +82,11 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
     };
 
     const handleSaveGlobalView = () => {
-        console.log("-> Clicou em Salvar Vista", { sectorId, isLoadingSettings, isPending: saveSettings.isPending });
+        console.log("-> Clicou em Salvar Vista", { singleSectorId, isLoadingSettings, isPending: saveSettings.isPending });
 
         console.log("-> Disparando saveSettings.mutate...");
         saveSettings.mutate({
-            sector_id: sectorId || null,
+            sector_id: singleSectorId,
             filters: { routines: selectedRoutineIds, frequencies: frequencyFilter, sectors: trackerSectorIds },
             layouts: layouts
         });
@@ -116,8 +118,8 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
         const _active = routines?.filter(r => r.is_active !== false) || [];
 
         let filtered = _active;
-        if (sectorId) {
-            filtered = filtered.filter((r: any) => r.sector_id === sectorId);
+        if (sectorIds && sectorIds.length > 0) {
+            filtered = filtered.filter((r: any) => sectorIds.includes(r.sector_id));
         }
 
         if (trackerSectorIds.length > 0) {
@@ -125,7 +127,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
         }
 
         return filtered;
-    }, [routines, sectorId, trackerSectorIds]);
+    }, [routines, sectorIds, trackerSectorIds]);
 
     // determine which routines to show based on the filter
     const routinesToShow = useMemo(() => {
@@ -166,7 +168,7 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
 
     // Fetch active units for this sector
     const { data: sectorUnits, isLoading: isLoadingUnits } = useQuery({
-        queryKey: ['tracker-units', sectorId],
+        queryKey: ['tracker-units', singleSectorId],
         queryFn: async () => {
             const { data, error } = await supabase.from('units').select('id, name, code').not('parent_id', 'is', null).order('name');
             if (error) throw error;
@@ -475,13 +477,13 @@ export const TaskTrackerPanel = ({ sectorId, initialRoutineIds = [], initialFreq
                             <div className="ml-auto mr-1 shrink-0">
                                 <Button
                                     size="sm"
-                                    variant={sectorId ? "default" : "secondary"}
+                                    variant={singleSectorId ? "default" : "secondary"}
                                     disabled={saveSettings.isPending}
                                     onClick={handleSaveGlobalView}
                                     className="gap-1.5 h-8 text-xs px-3"
                                 >
                                     {saveSettings.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                                    {sectorId ? "Salvar Local" : "Salvar Global"}
+                                    {singleSectorId ? "Salvar Local" : "Salvar Global"}
                                 </Button>
                             </div>
                         )}

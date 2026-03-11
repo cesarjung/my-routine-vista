@@ -1,41 +1,22 @@
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env' });
+import { createClient } from 'npm:@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const SUPABASE_URL = "https://curyufedazpkhtxrwhkn.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1cnl1ZmVkYXpwa2h0eHJ3aGtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5NzU5NTIsImV4cCI6MjA4MjU1MTk1Mn0.DGKJPQBmLCTw5YyKwg7LfRQMseeVgXzljD5Z6lCESRs";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function run() {
-    const { data: routines } = await supabase
+    const { data, error } = await supabase
         .from('routines')
-        .select('id, title, sector_id, sector:sectors(id, name)')
-        .in('title', ['Checkpoint Diário', 'Boletim de Produtividade', 'Check de Disponibilidade']);
+        .select('id, title, routine_periods(id, period_start, is_active)')
+        .ilike('title', '%Check%Disponibilidade%')
+        .limit(1);
 
-    console.log("ROTINAS E SEUS SETORES:");
-    console.log(JSON.stringify(routines, null, 2));
-
-    const { data: units } = await supabase.from('units').select('id, name').ilike('name', '%Livramento%');
-    console.log("\nLIVRAMENTO UNIT ID:", units);
-
-    if (units && units.length > 0 && routines) {
-        const livramentoId = units[0].id;
-        const checkRotina = routines.find(r => r.title === 'Check de Disponibilidade');
-
-        if (checkRotina) {
-            const { data: assignees } = await supabase
-                .from('routine_assignees')
-                .select('user_id, profiles!inner(unit_id, full_name)')
-                .eq('routine_id', checkRotina.id);
-
-            console.log(`\nTODOS Assignees de Check de Disponibilidade:`);
-            console.log(assignees?.map(a => `${a.profiles.full_name} (${a.profiles.unit_id})`).slice(0, 5));
-
-            const livramentoAssignees = assignees?.filter(a => (a.profiles as any)?.unit_id === livramentoId);
-            console.log(`\nAssignees de LIVRAMENTO para essa rotina (Qtd: ${livramentoAssignees?.length || 0}):`);
-            console.log(livramentoAssignees);
-        }
+    if (error) console.error(error);
+    else {
+        const routine = data[0];
+        const periods = routine.routine_periods.filter(p => p.period_start.includes('2026-03'));
+        console.log("Periods in March:", JSON.stringify(periods, null, 2));
     }
 }
-
 run();

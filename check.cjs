@@ -1,43 +1,38 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '.env' });
+const dotenv = require('dotenv');
+const path = require('path');
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function run() {
-    const { data: routines } = await supabase
+async function checkData() {
+    const { data, error } = await supabase
         .from('routines')
-        .select('id, title, sector_id, sector:sectors(name)')
-        .in('title', ['Checkpoint Diário', 'Boletim de Produtividade', 'Check de Disponibilidade']);
+        .select('id, title, routine_periods(id, period_start, period_end, is_active)')
+        .ilike('title', '%Check%Disponibilidade%')
+        .limit(1);
 
-    console.log("===============================");
-    console.log("1. ROTINAS E SEUS SETORES NO BANCO:");
-    console.log(JSON.stringify(routines, null, 2));
-
-    const { data: units } = await supabase.from('units').select('id, name').ilike('name', '%Livramento%');
-    console.log("\n2. LIVRAMENTO UNIT ID:", units);
-
-    if (units && units.length > 0 && routines) {
-        const livramentoId = units[0].id;
-        const checkRotina = routines.find(r => r.title === 'Check de Disponibilidade');
-
-        if (checkRotina) {
-            const { data: assignees } = await supabase
-                .from('routine_assignees')
-                .select('user_id, profiles!inner(unit_id, full_name)')
-                .eq('routine_id', checkRotina.id);
-
-            console.log(`\n3. TODOS Assignees de Check de Disponibilidade (Qtd Total: ${assignees?.length}):`);
-            if (assignees) {
-                console.log(assignees.slice(0, 3).map(a => `${a.profiles.full_name} (${a.profiles.unit_id})`));
-            }
-
-            const livramentoAssignees = assignees?.filter(a => a.profiles?.unit_id === livramentoId);
-            console.log(`\n4. Assignees de LIVRAMENTO para essa rotina (Qtd: ${livramentoAssignees?.length || 0}):`);
-            console.log(livramentoAssignees);
-        }
+    if (error) {
+        console.error(error);
+        return;
     }
+
+    const routine = data[0];
+    if (!routine) {
+        console.log("Routine not found");
+        return;
+    }
+
+    console.log("Routine:", routine.title);
+    const periods = routine.routine_periods.sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime());
+
+    console.log("\nTop 5 Most Recent Periods (DB RAW):");
+    periods.slice(0, 5).forEach(p => {
+        console.log(`- ${p.period_start} (Active: ${p.is_active}) ID: ${p.id}`);
+    });
 }
 
-run();
+checkData();

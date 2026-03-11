@@ -13,6 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Tooltip,
@@ -279,7 +287,21 @@ export interface DashboardViewProps {
 
 export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps) => {
   const { user } = useAuth();
-  const [selectedSectorId, setSelectedSectorId] = useState<string | null>(forcedSectorId || null);
+
+  // State for multi-sector filtering
+  const [selectedSectorIds, setSelectedSectorIds] = useState<string[]>(() => {
+    if (forcedSectorId) return [forcedSectorId];
+    try {
+      const stored = localStorage.getItem('dashboard_global_sector_filters');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Track the layout context based strictly on forcedSectorId or 'global'
+  const contextIdentifier = forcedSectorId || 'global';
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState('public');
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
@@ -290,22 +312,28 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
     frequency: '',
   });
 
-  // Effect to update selectedSectorId if forcedSectorId changes
+  // Effect to update if forcedSectorId changes
   useEffect(() => {
     if (forcedSectorId) {
-      setSelectedSectorId(forcedSectorId);
+      setSelectedSectorIds([forcedSectorId]);
     }
   }, [forcedSectorId]);
 
+  // Save to localstorage when changes
+  useEffect(() => {
+    if (!forcedSectorId) {
+      localStorage.setItem('dashboard_global_sector_filters', JSON.stringify(selectedSectorIds));
+    }
+  }, [selectedSectorIds, forcedSectorId]);
+
   const { data: sectors } = useSectors();
-  const { data: statsData } = useOverallStats(selectedSectorId);
+  const { data: statsData } = useOverallStats(selectedSectorIds);
   const { data: customPanels } = useDashboardPanels();
   const { isAdmin } = useIsAdmin();
 
   const overallPercentage = statsData?.percentage || 0;
 
   const filteredPanels = customPanels?.filter(panel => {
-    const contextIdentifier = selectedSectorId || 'global';
     // Backwards compatibility: if dashboard_context doesn't exist, try to infer from sector_id or treat as global
     let panelContext = panel.filters?.dashboard_context;
 
@@ -376,7 +404,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
           </Tabs>
 
           {activeTab === 'tracker' ? (
-            <TaskTrackerPanel sectorId={selectedSectorId} />
+            <TaskTrackerPanel sectorIds={selectedSectorIds} />
           ) : (
             <>
               {/* Legend */}
@@ -457,28 +485,49 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
             </Tooltip>
           </TooltipProvider>
 
-          {isAdmin && <PanelFormDialog panelCount={filteredPanels?.length || 0} dashboardContext={selectedSectorId} />}
+          {isAdmin && <PanelFormDialog panelCount={filteredPanels?.length || 0} dashboardContext={contextIdentifier} />}
 
           {!forcedSectorId && (
-            <Select
-              value={selectedSectorId || 'all'}
-              onValueChange={(value) => setSelectedSectorId(value === 'all' ? null : value)}
-            >
-              <SelectTrigger className="h-8 w-[150px] text-xs">
-                <SelectValue placeholder="Setor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed font-normal">
+                  Filtro Setor
+                  {selectedSectorIds.length > 0 && (
+                    <Badge variant="secondary" className="px-1 rounded-sm text-[10px] h-4">
+                      {selectedSectorIds.length}
+                    </Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                <DropdownMenuLabel>Filtrar por Setor</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={selectedSectorIds.length === 0}
+                  onCheckedChange={() => setSelectedSectorIds([])}
+                >
+                  <span className="font-semibold text-primary">Todos</span>
+                </DropdownMenuCheckboxItem>
                 {sectors?.map(sector => (
-                  <SelectItem key={sector.id} value={sector.id}>
+                  <DropdownMenuCheckboxItem
+                    key={sector.id}
+                    checked={selectedSectorIds.includes(sector.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedSectorIds(prev => [...prev, sector.id]);
+                      } else {
+                        setSelectedSectorIds(prev => prev.filter(id => id !== sector.id));
+                      }
+                    }}
+                  >
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sector.color || '#6366f1' }} />
                       {sector.name}
                     </div>
-                  </SelectItem>
+                  </DropdownMenuCheckboxItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -494,13 +543,14 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
 
       {activeTab === 'tracker' ? (
         <div className="mt-4 flex-1 overflow-hidden min-h-0 flex flex-col border rounded-lg bg-card shadow-sm">
-          <TaskTrackerPanel sectorId={selectedSectorId} />
+          <TaskTrackerPanel sectorIds={selectedSectorIds} />
         </div>
       ) : (
         /* All Panels with Unified Drag and Drop */
         <UnifiedDraggablePanels
           customPanels={filteredPanels}
-          sectorId={selectedSectorId}
+          sectorId={contextIdentifier === 'global' ? null : contextIdentifier}
+          globalSectorFilters={selectedSectorIds}
         />
       )}
     </div>

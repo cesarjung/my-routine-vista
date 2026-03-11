@@ -75,7 +75,12 @@ const getPeriodDates = (period: string) => {
   }
 };
 
-const useCustomPanelData = (panel: DashboardPanel) => {
+export interface CustomPanelProps {
+  panel: DashboardPanel;
+  globalSectorFilters?: string[];
+}
+
+const useCustomPanelData = (panel: DashboardPanel, globalSectorFilters?: string[]) => {
   const { filters } = panel;
 
   return useQuery({
@@ -88,17 +93,18 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       console.log('CustomPanel Debug - Filters:', filters);
       console.log('CustomPanel Debug - Resolved periodDates:', periodDates);
 
-      // Build tasks query
       let tasksQuery = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, sector_id, due_date, routine:routines(title)');
 
-      if (filters.sector_id) {
-        if (Array.isArray(filters.sector_id)) {
-          const validSectors = filters.sector_id.filter(id => id && id.toLowerCase() !== 'todos os setores' && id.toLowerCase() !== 'selecionar todos');
-          if (validSectors.length > 0) tasksQuery = tasksQuery.in('sector_id', validSectors);
-        } else if (filters.sector_id.toLowerCase() !== 'todos os setores' && filters.sector_id.toLowerCase() !== 'selecionar todos') {
-          tasksQuery = tasksQuery.eq('sector_id', filters.sector_id);
-        }
+      // If there are global sector filters, they override/intersect the panel's own filter
+      const activeSectorFilters = (globalSectorFilters && globalSectorFilters.length > 0)
+        ? globalSectorFilters
+        : (filters.sector_id ? (Array.isArray(filters.sector_id) ? filters.sector_id : [filters.sector_id]) : []);
+
+      const validSectors = activeSectorFilters.filter(id => id && id.toLowerCase() !== 'todos os setores' && id.toLowerCase() !== 'selecionar todos');
+      if (validSectors.length > 0) {
+        tasksQuery = tasksQuery.in('sector_id', validSectors);
       }
+
       if (filters.unit_id) {
         if (Array.isArray(filters.unit_id)) {
           const validUnits = filters.unit_id.filter(id => id && id.toLowerCase() !== 'todas as unidades' && id.toLowerCase() !== 'selecionar todos');
@@ -539,12 +545,8 @@ const STATUS_LABELS: Record<string, string> = {
   cancelada: 'Cancelada',
 };
 
-interface CustomPanelProps {
-  panel: DashboardPanel;
-}
-
-export const CustomPanel = ({ panel }: CustomPanelProps) => {
-  const { data: panelData, isLoading } = useCustomPanelData(panel);
+export const CustomPanel = ({ panel, globalSectorFilters }: CustomPanelProps) => {
+  const { data: panelData, isLoading } = useCustomPanelData(panel, globalSectorFilters);
   const { data: allTasks } = useTasks();
   const deletePanel = useDeleteDashboardPanel();
   const updatePanel = useUpdateDashboardPanel();
@@ -832,7 +834,11 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
           )}
         </div>
         <TaskTrackerPanel
-          sectorId={Array.isArray(panel.filters.sector_id) ? panel.filters.sector_id[0] : panel.filters.sector_id}
+          sectorIds={
+            globalSectorFilters && globalSectorFilters.length > 0
+              ? globalSectorFilters
+              : (panel.filters.sector_id ? (Array.isArray(panel.filters.sector_id) ? panel.filters.sector_id : [panel.filters.sector_id as string]) : [])
+          }
           initialFrequencies={panel.filters.task_frequency || []}
           initialRoutineIds={Array.isArray(panel.filters.title_filter) ? panel.filters.title_filter : []}
         />

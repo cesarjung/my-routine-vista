@@ -294,9 +294,9 @@ export const useUnitsSummary = (sectorId?: string | null) => {
   });
 };
 
-export const useOverallStats = (sectorId?: string | null) => {
+export const useOverallStats = (sectorIds?: string[]) => {
   return useQuery({
-    queryKey: ['overall-stats', sectorId],
+    queryKey: ['overall-stats', sectorIds],
     refetchInterval: 5000,
     queryFn: async () => {
       let routineQuery = supabase
@@ -304,8 +304,8 @@ export const useOverallStats = (sectorId?: string | null) => {
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true);
 
-      if (sectorId) {
-        routineQuery = routineQuery.eq('sector_id', sectorId);
+      if (sectorIds && sectorIds.length > 0) {
+        routineQuery = routineQuery.in('sector_id', sectorIds);
       }
 
       const { count: routineCount } = await routineQuery;
@@ -314,8 +314,8 @@ export const useOverallStats = (sectorId?: string | null) => {
         .from('tasks')
         .select('status');
 
-      if (sectorId) {
-        tasksQuery = tasksQuery.eq('sector_id', sectorId);
+      if (sectorIds && sectorIds.length > 0) {
+        tasksQuery = tasksQuery.in('sector_id', sectorIds);
       }
 
       const { data: tasks } = await tasksQuery;

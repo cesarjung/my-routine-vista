@@ -28,6 +28,7 @@ export type UnifiedPanel = {
 interface UnifiedDraggablePanelsProps {
   customPanels: DashboardPanel[];
   sectorId?: string | null;
+  globalSectorFilters?: string[];
 }
 
 // Hook to fetch dashboard layout from database
@@ -224,13 +225,14 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
 };
 
 // Drag Overlay Component  
-const DragOverlayContent = ({ panel }: {
+const DragOverlayContent = ({ panel, globalSectorFilters }: {
   panel: UnifiedPanel;
+  globalSectorFilters?: string[];
 }) => {
   const renderContent = () => {
     switch (panel.type) {
       case 'custom':
-        return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
+        return panel.panel ? <CustomPanel panel={panel.panel} globalSectorFilters={globalSectorFilters} /> : null;
     }
   };
 
@@ -249,6 +251,7 @@ const DragOverlayContent = ({ panel }: {
 export const UnifiedDraggablePanels = ({
   customPanels,
   sectorId,
+  globalSectorFilters,
 }: UnifiedDraggablePanelsProps) => {
   const { user } = useAuth();
   const { isAdmin, isLoading: isLoadingRole } = useIsAdmin();
@@ -350,7 +353,7 @@ export const UnifiedDraggablePanels = ({
   const renderPanelContent = (panel: UnifiedPanel) => {
     switch (panel.type) {
       case 'custom':
-        return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
+        return panel.panel ? <CustomPanel panel={panel.panel} globalSectorFilters={globalSectorFilters} /> : null;
     }
   };
 
@@ -388,6 +391,7 @@ export const UnifiedDraggablePanels = ({
         {activePanel && isAdmin && (
           <DragOverlayContent
             panel={activePanel}
+            globalSectorFilters={globalSectorFilters}
           />
         )}
       </DragOverlay>
