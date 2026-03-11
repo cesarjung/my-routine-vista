@@ -114,11 +114,22 @@ export const useRoutines = (unitId?: string) => {
         // Fetch active tasks to determine routine status accurately
         const todayStr = new Date().toISOString().substring(0, 10);
 
-        const { data: activeTasks } = await supabase
+        let activeTasksQuery = supabase
           .from('tasks')
-          .select('routine_id, status, due_date')
+          .select('routine_id, status, due_date, unit_id, assigned_to')
           .in('routine_id', routineIds)
           .lte('due_date', `${todayStr}T23:59:59.999Z`);
+
+        // NOVO: if NOT admin/gestor, regular users should only have their routines evaluated based on tasks THEY can see.
+        // The tasks should either belong to their unit, or be explicitly assigned to them.
+        // We use an OR filter to achieve this intersection in the calculation loop.
+        if (userUnitId) {
+          activeTasksQuery = activeTasksQuery.or(`unit_id.eq.${userUnitId},assigned_to.eq.${user.id}`);
+        } else {
+          activeTasksQuery = activeTasksQuery.eq('assigned_to', user.id);
+        }
+
+        const { data: activeTasks } = await activeTasksQuery;
 
         // Create a map of routine_id to its most relevant status
         const routineStatusMap = new Map<string, Routine['status']>();
