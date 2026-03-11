@@ -74,29 +74,41 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
                     <div className="flex items-center gap-2 shrink-0">
                         {(() => {
                             const activeStatuses = (routine as any).active_statuses || [(routine as any).status];
+
+                            const getHighestPriorityStatus = (statuses: string[]) => {
+                                if (statuses.includes('atrasada')) return 'atrasada';
+                                if (statuses.includes('em_andamento')) return 'em_andamento';
+                                if (statuses.includes('pendente')) return 'pendente';
+                                if (statuses.includes('concluida')) return 'concluida';
+                                if (statuses.includes('inativa')) return 'inativa';
+                                return statuses[0];
+                            };
+
+                            const displayStatus = getHighestPriorityStatus(activeStatuses);
+
                             return (
                                 <>
-                                    {activeStatuses.includes('pendente') && (
+                                    {displayStatus === 'pendente' && (
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100">
                                             Pendente
                                         </Badge>
                                     )}
-                                    {activeStatuses.includes('em_andamento') && (
+                                    {displayStatus === 'em_andamento' && (
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100">
                                             Em Andamento
                                         </Badge>
                                     )}
-                                    {activeStatuses.includes('atrasada') && (
+                                    {displayStatus === 'atrasada' && (
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-red-600 border-red-200 bg-red-50 hover:bg-red-100">
                                             Atrasada
                                         </Badge>
                                     )}
-                                    {activeStatuses.includes('concluida') && (
+                                    {displayStatus === 'concluida' && (
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-green-600 border-green-200 bg-green-50 hover:bg-green-100">
                                             Concluída
                                         </Badge>
                                     )}
-                                    {activeStatuses.includes('inativa') && (
+                                    {displayStatus === 'inativa' && (
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-slate-500 border-slate-200 bg-slate-50">
                                             Inativa
                                         </Badge>
