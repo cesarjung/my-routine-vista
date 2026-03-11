@@ -112,10 +112,13 @@ export const useRoutines = (unitId?: string) => {
         if (routineIds.length === 0) return routinesToCalculateStatus;
 
         // Fetch active tasks to determine routine status accurately
+        const todayStr = new Date().toISOString().substring(0, 10);
+
         const { data: activeTasks } = await supabase
           .from('tasks')
-          .select('routine_id, status')
-          .in('routine_id', routineIds);
+          .select('routine_id, status, due_date')
+          .in('routine_id', routineIds)
+          .lte('due_date', `${todayStr}T23:59:59.999Z`);
 
         // Create a map of routine_id to its most relevant status
         const routineStatusMap = new Map<string, Routine['status']>();
@@ -125,7 +128,15 @@ export const useRoutines = (unitId?: string) => {
           // Group tasks by routine
           const tasksByRoutine = activeTasks.reduce((acc, task) => {
             if (!acc[task.routine_id]) acc[task.routine_id] = [];
-            acc[task.routine_id].push(task.status);
+
+            let effectiveStatus = task.status;
+            if (effectiveStatus === 'pendente' && task.due_date) {
+              const taskDate = task.due_date.substring(0, 10);
+              if (taskDate < todayStr) {
+                effectiveStatus = 'atrasada';
+              }
+            }
+            acc[task.routine_id].push(effectiveStatus);
             return acc;
           }, {} as Record<string, string[]>);
 
@@ -176,10 +187,13 @@ export const useRoutines = (unitId?: string) => {
       if (routineIds.length === 0) return routines;
 
       // Fetch active tasks to determine routine status accurately
+      const todayStr = new Date().toISOString().substring(0, 10);
+
       const { data: activeTasks } = await supabase
         .from('tasks')
-        .select('routine_id, status')
-        .in('routine_id', routineIds);
+        .select('routine_id, status, due_date')
+        .in('routine_id', routineIds)
+        .lte('due_date', `${todayStr}T23:59:59.999Z`);
 
       // Create a map of routine_id to its most relevant status
       const routineStatusMap = new Map<string, Routine['status']>();
@@ -189,7 +203,15 @@ export const useRoutines = (unitId?: string) => {
         // Group tasks by routine
         const tasksByRoutine = activeTasks.reduce((acc, task) => {
           if (!acc[task.routine_id]) acc[task.routine_id] = [];
-          acc[task.routine_id].push(task.status);
+
+          let effectiveStatus = task.status;
+          if (effectiveStatus === 'pendente' && task.due_date) {
+            const taskDate = task.due_date.substring(0, 10);
+            if (taskDate < todayStr) {
+              effectiveStatus = 'atrasada';
+            }
+          }
+          acc[task.routine_id].push(effectiveStatus);
           return acc;
         }, {} as Record<string, string[]>);
 

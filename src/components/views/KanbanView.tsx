@@ -45,7 +45,7 @@ const columns: Column[] = [
   { id: 'em_andamento', title: 'Em Andamento', icon: Play, color: 'text-primary', bgColor: 'bg-primary/10' },
   { id: 'concluida', title: 'Concluídas', icon: CheckCircle2, color: 'text-success', bgColor: 'bg-success/10' },
   { id: 'atrasada', title: 'Atrasadas', icon: AlertCircle, color: 'text-destructive', bgColor: 'bg-destructive/10' },
-  { id: 'nao_aplicavel', title: 'N/A', icon: MinusCircle, color: 'text-muted-foreground', bgColor: 'bg-secondary' },
+  { id: 'nao_aplicavel', title: 'Não Aplicável', icon: MinusCircle, color: 'text-muted-foreground', bgColor: 'bg-secondary' },
 ];
 
 interface KanbanViewProps {
