@@ -434,7 +434,19 @@ export const MyTasksView = ({
                       onToggleSelect={handleToggleRoutineSelect}
                       onClick={() => {
                         setSelectedRoutine(routine);
-                        setSelectedRoutineDate(null);
+
+                        const periods = (routine as any).routine_periods;
+                        const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+                        let activePeriod = periods?.find((p: any) => p.period_start === todayStr);
+                        if (!activePeriod) {
+                          activePeriod = periods?.find((p: any) => p.is_active);
+                        }
+                        if (!activePeriod) {
+                          activePeriod = periods?.sort((a: any, b: any) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime())[0];
+                        }
+
+                        setSelectedRoutineDate(activePeriod ? activePeriod.period_start : null);
                         setSelectedTask(null);
                       }}
                       onEdit={() => { }}

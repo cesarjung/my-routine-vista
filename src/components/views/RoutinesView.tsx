@@ -191,10 +191,17 @@ export const RoutinesView = ({
     return (
       <div className="divide-y divide-border">
         {filteredRoutines.map((routine) => {
-          // Find active period
+          // Find active period (prioritizing today, then any active, then youngest)
           const periods = (routine as any).routine_periods;
-          const activePeriod = periods?.find((p: any) => p.is_active) ||
-            periods?.sort((a: any, b: any) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime())[0];
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+          let activePeriod = periods?.find((p: any) => p.period_start === todayStr);
+          if (!activePeriod) {
+            activePeriod = periods?.find((p: any) => p.is_active);
+          }
+          if (!activePeriod) {
+            activePeriod = periods?.sort((a: any, b: any) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime())[0];
+          }
 
           return (
             <RoutineListItem

@@ -310,31 +310,22 @@ export const useRoutineTasks = (routineId: string, contextDate?: string, exactDa
         .eq('routine_id', routineId)
         .is('parent_task_id', null);
 
-      if (exactDate) {
-        // O `exactDate` que vem do Tracker pode ser um ISO ou 'YYYY-MM-DD'
-        const safeDateString = exactDate.substring(0, 10);
+      if (exactDate || contextDate) {
+        const targetDate = exactDate || contextDate;
+        const safeDateString = targetDate!.substring(0, 10); // "YYYY-MM-DD"
 
-        // As tarefas são geradas com due_date correspondendo ao final do período (ex: 23:59:59 BRT = 02:59:59 de amanhã UTC)
-        // Precisamos de uma janela generosa de 48h para garantir que pegamos a parentTask daquele dia exato,
-        // dependente das conversões de timezone geradas lá atrás.
-        const startPoint = `${safeDateString}T00:00:00.000Z`;
-
-        const endDay = new Date(safeDateString);
-        endDay.setUTCDate(endDay.getUTCDate() + 1);
-        const endDayString = endDay.toISOString().substring(0, 10);
-        const endPoint = `${endDayString}T23:59:59.999Z`;
-
-        query = query.gte('due_date', startPoint).lte('due_date', endPoint);
-      } else if (contextDate) {
-        const safeDateString = contextDate.substring(0, 10);
+        // As tarefas pré-geradas localmente sempre recebem:
+        // due_date e start_date estritamente com a string "YYYY-MM-DD"
+        // ex: "2025-03-09"
+        // Para garantir que a engine do supabase encontre essas datas strings
+        // com segurança independentemente de HH:mm:ss, vamos buscar usando strict `like`
+        // ou um range gte/lt seguro de 24h exatas limitadas ao timezone UTC.
 
         const startPoint = `${safeDateString}T00:00:00.000Z`;
-        const endDay = new Date(safeDateString);
-        endDay.setUTCDate(endDay.getUTCDate() + 1);
-        const endDayString = endDay.toISOString().substring(0, 10);
-        const endPoint = `${endDayString}T23:59:59.999Z`;
+        const endPoint = `${safeDateString}T23:59:59.999Z`;
 
-        query = query.gte('due_date', startPoint).lte('due_date', endPoint);
+        // Busca hibrida: Tasks novas tem 'YYYY-MM-DD'. Tasks velhas tem ISO.
+        query = query.or(`due_date.eq.${safeDateString},and(due_date.gte.${startPoint},due_date.lte.${endPoint})`);
       }
 
       // Evitar crash do maybeSingle caso existam clones órfãos garantindo ordem descendente
