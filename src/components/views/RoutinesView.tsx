@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import {
   Search,
   Filter,
@@ -195,7 +196,7 @@ export const RoutinesView = ({
           const periods = (routine as any).routine_periods;
           const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-          let activePeriod = periods?.find((p: any) => p.period_start === todayStr);
+          let activePeriod = periods?.find((p: any) => (p.period_start || '').startsWith(todayStr));
           if (!activePeriod) {
             activePeriod = periods?.find((p: any) => p.is_active);
           }
