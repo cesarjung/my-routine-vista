@@ -549,6 +549,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
         /* All Panels with Unified Drag and Drop */
         <UnifiedDraggablePanels
           customPanels={filteredPanels}
+          allPanels={customPanels}
           sectorId={contextIdentifier === 'global' ? null : contextIdentifier}
           globalSectorFilters={selectedSectorIds}
         />

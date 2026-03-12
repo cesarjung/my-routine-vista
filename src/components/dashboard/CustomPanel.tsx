@@ -117,44 +117,16 @@ const useCustomPanelData = (panel: DashboardPanel, globalSectorFilters?: string[
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
 
-      let matchedRoutineIds: string[] = [];
       if (filters.title_filter) {
         if (Array.isArray(filters.title_filter) && filters.title_filter.length > 0) {
           const validTitles = filters.title_filter.filter(t => t && t.toLowerCase() !== 'todas as rotinas' && t.toLowerCase() !== 'selecionar todos');
 
           if (validTitles.length > 0) {
-            // Let's find routines that match these titles first.
-            const { data: matchedRoutines } = await supabase
-              .from('routines')
-              .select('id')
-              .in('title', validTitles);
-
-            if (matchedRoutines && matchedRoutines.length > 0) {
-              matchedRoutineIds = matchedRoutines.map(r => r.id);
-              // Since Supabase `in` chain acts as AND, we need to use `or`
-              const titlesStr = validTitles.map(t => `"${t}"`).join();
-              const routinesStr = matchedRoutineIds.map(id => `"${id}"`).join();
-              tasksQuery = tasksQuery.or(`title.in.(${titlesStr}),routine_id.in.(${routinesStr})`);
-            } else {
-              // Just search by title if no routines matched
-              tasksQuery = tasksQuery.in('title', validTitles);
-            }
+            // Because tasks usually inherit the routine title, we can safely just filter the task title directly instead of querying routines first
+            tasksQuery = tasksQuery.in('title', validTitles);
           }
         } else if (typeof filters.title_filter === 'string' && filters.title_filter.toLowerCase() !== 'todas as rotinas' && filters.title_filter.toLowerCase() !== 'selecionar todos') {
-          // Fallback legacy behavior
-
-          const { data: matchedRoutines } = await supabase
-            .from('routines')
-            .select('id')
-            .ilike('title', `%${filters.title_filter}%`);
-
-          if (matchedRoutines && matchedRoutines.length > 0) {
-            matchedRoutineIds = matchedRoutines.map(r => r.id);
-            const routinesStr = matchedRoutineIds.map(id => `"${id}"`).join();
-            tasksQuery = tasksQuery.or(`title.ilike.%${filters.title_filter}%,routine_id.in.(${routinesStr})`);
-          } else {
-            tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
-          }
+          tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
         }
       }
 
@@ -178,8 +150,8 @@ const useCustomPanelData = (panel: DashboardPanel, globalSectorFilters?: string[
           .lte('due_date', endUtcOffset);
       }
 
-      // NOVO: Pre-filtrar por Frequência diretamente via Banco antes de puxar as 1000 tarefas
-      // O Supabase tem um limite restrito de 1000 rows, o que corta as tarefas Mensais no final da fila.
+      // NOVO: Pre-filtrar por Frequência diretamente via Banco antes de puxar as tarefas
+      // O Supabase tem um limite restrito de requisição. Passar array muito grande para .in() trava o request.
       if (filters.task_frequency && filters.task_frequency.length > 0) {
         const { data: allowedRoutines } = await supabase
           .from('routines')
@@ -189,17 +161,19 @@ const useCustomPanelData = (panel: DashboardPanel, globalSectorFilters?: string[
 
         if (allowedRoutines && allowedRoutines.length > 0) {
           const validRoutineIds = allowedRoutines.map((r: any) => r.id);
-          // O Supabase In() tem limites práticos, mas se o array passar de uns mil, precisaria chunking.
-          // Porém, a quantidade de rotinas será menor que o de tarefas cruas.
-          tasksQuery = tasksQuery.in('routine_id', validRoutineIds);
+          // If the list of IDs exceeds a safe threshold (e.g., 200), we don't pass them in .in() 
+          // to avoid "HTTP 414 Request-URI Too Long" or DB hang. We filter in-memory later instead.
+          if (validRoutineIds.length < 200) {
+            tasksQuery = tasksQuery.in('routine_id', validRoutineIds);
+          }
         } else {
           // Se pediu Mensal e não tem rotina Mensal, retorne um filtro impossível ou force zero.
           tasksQuery = tasksQuery.eq('routine_id', '00000000-0000-0000-0000-000000000000');
         }
       }
 
-      // Fetch all task rows bypassing the 1000 row Supabase API default (supabase.limit doesn't always break server config):
-      tasksQuery = tasksQuery.limit(20000); // 20k won't work on REST without explicit PG settings, but helps intent.
+      // Fetch all task rows bypassing the 1000 row Supabase API default:
+      tasksQuery = tasksQuery.limit(3000); // 3000 is a safe threshold for browser memory per panel.
       const { data: rawTasks, error: fetchError } = await tasksQuery;
       if (fetchError) throw fetchError;
 

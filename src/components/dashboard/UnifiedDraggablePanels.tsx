@@ -27,6 +27,7 @@ export type UnifiedPanel = {
 
 interface UnifiedDraggablePanelsProps {
   customPanels: DashboardPanel[];
+  allPanels?: DashboardPanel[];
   sectorId?: string | null;
   globalSectorFilters?: string[];
 }
@@ -40,25 +41,62 @@ const useDashboardLayout = (sectorId?: string | null) => {
     queryFn: async () => {
       if (!user) return [];
 
-      let query = supabase
-        .from('dashboard_layout')
-        .select('*')
-        .eq('user_id', user.id);
+      let dataToProcess: any[] = [];
 
-      if (sectorId) {
-        query = query.eq('sector_id', sectorId);
-      } else {
-        query = query.is('sector_id', null);
+      try {
+        if (sectorId) {
+          // Fetch sector-specific layout
+          const { data: sectorData, error: sectorError } = await supabase
+            .from('dashboard_layout')
+            .select('*')
+            .eq('sector_id', sectorId);
+
+          if (!sectorError && Array.isArray(sectorData) && sectorData.length > 0) {
+            dataToProcess = sectorData;
+          } else {
+            // Fallback to global
+            const { data: globalData, error: globalErr } = await supabase
+              .from('dashboard_layout')
+              .select('*')
+              .is('sector_id', null);
+
+            if (!globalErr && Array.isArray(globalData)) {
+              dataToProcess = globalData;
+            }
+          }
+        } else {
+          // Fetch global layout directly
+          const { data: globalData, error: globalErr } = await supabase
+            .from('dashboard_layout')
+            .select('*')
+            .is('sector_id', null);
+
+          if (!globalErr && Array.isArray(globalData)) {
+            dataToProcess = globalData;
+          }
+        }
+      } catch (err) {
+        console.error('Safe try/catch in useDashboardLayout:', err);
       }
 
-      const { data, error } = await query;
+      // Since multiple admins/gestors might have saved layouts with their own user_id,
+      // we want to extract the global "most recent" layout for each panel.
+      const layoutMap = new Map<string, any>();
 
-      if (error) {
-        // Build empty array if table doesn't exist yet to avoid crash
-        console.error('Error fetching layout:', error);
-        return [];
+      // Sort data by updated_at desc to prioritize the latest configurations
+      const sortedData = [...dataToProcess].sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+        const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+        return dateB - dateA; // Descending
+      });
+
+      for (const item of sortedData) {
+        if (!layoutMap.has(item.panel_id)) {
+          layoutMap.set(item.panel_id, item);
+        }
       }
-      return data;
+
+      return Array.from(layoutMap.values());
     },
     enabled: !!user,
     // Refetch periodically to get updates
@@ -250,6 +288,7 @@ const DragOverlayContent = ({ panel, globalSectorFilters }: {
 
 export const UnifiedDraggablePanels = ({
   customPanels,
+  allPanels,
   sectorId,
   globalSectorFilters,
 }: UnifiedDraggablePanelsProps) => {
@@ -274,26 +313,50 @@ export const UnifiedDraggablePanels = ({
   };
 
   const buildPanelList = useCallback((): UnifiedPanel[] => {
-    const layoutMap: Record<string, { x: number; y: number }> = {};
+    const layoutMapById: Record<string, { x: number; y: number }> = {};
+    const layoutMapByTitle: Record<string, { x: number; y: number }> = {};
+
     savedLayout?.forEach(item => {
-      layoutMap[item.panel_id] = { x: item.position_x, y: item.position_y };
+      layoutMapById[item.panel_id] = { x: item.position_x, y: item.position_y };
+
+      // Map by title if we know the global panel's title for this ID
+      const globalPanel = allPanels?.find(p => p.id === item.panel_id);
+      if (globalPanel?.title) {
+        layoutMapByTitle[globalPanel.title] = { x: item.position_x, y: item.position_y };
+      }
     });
 
     const panels: UnifiedPanel[] = [];
-    let index = 0;
+    let fallbackIndex = 0;
 
     customPanels.forEach(panel => {
+      let position = layoutMapById[panel.id];
+
+      // If ID didn't match (because it's a Sector copy of a Global panel), match by literal Title
+      if (!position && layoutMapByTitle[panel.title]) {
+        position = layoutMapByTitle[panel.title];
+      }
+
+      // If completely completely unmapped, append to sequential empty slots
+      if (!position) {
+        position = getInitialPosition(fallbackIndex);
+        fallbackIndex++;
+      } else {
+        // Increment fallback index if position occupies early slot naturally
+        // to prevent collisions, but we can just blindly increment
+        fallbackIndex++;
+      }
+
       panels.push({
         id: panel.id,
         type: 'custom',
         panel,
-        position: layoutMap[panel.id] || getInitialPosition(index),
+        position,
       });
-      index++;
     });
 
     return panels;
-  }, [customPanels, savedLayout]);
+  }, [customPanels, savedLayout, allPanels]);
 
   const [panels, setPanels] = useState<UnifiedPanel[]>([]);
   const [initialized, setInitialized] = useState(false);
