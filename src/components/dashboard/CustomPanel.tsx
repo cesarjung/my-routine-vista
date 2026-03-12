@@ -117,16 +117,81 @@ const useCustomPanelData = (panel: DashboardPanel, globalSectorFilters?: string[
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
 
+      let allowedRoutineIds: string[] | null = null;
+      let titleFallback: string[] | null = null;
+      let titleIlikeFallback: string | null = null;
+
+      // 1. Process Title Filter
       if (filters.title_filter) {
         if (Array.isArray(filters.title_filter) && filters.title_filter.length > 0) {
           const validTitles = filters.title_filter.filter(t => t && t.toLowerCase() !== 'todas as rotinas' && t.toLowerCase() !== 'selecionar todos');
 
           if (validTitles.length > 0) {
-            // Because tasks usually inherit the routine title, we can safely just filter the task title directly instead of querying routines first
-            tasksQuery = tasksQuery.in('title', validTitles);
+            const { data: matchedRoutines } = await supabase
+              .from('routines')
+              .select('id')
+              .in('title', validTitles);
+
+            if (matchedRoutines && matchedRoutines.length > 0) {
+              allowedRoutineIds = matchedRoutines.map(r => r.id);
+            } else {
+              titleFallback = validTitles;
+            }
           }
         } else if (typeof filters.title_filter === 'string' && filters.title_filter.toLowerCase() !== 'todas as rotinas' && filters.title_filter.toLowerCase() !== 'selecionar todos') {
-          tasksQuery = tasksQuery.ilike('title', `%${filters.title_filter}%`);
+          const { data: matchedRoutines } = await supabase
+            .from('routines')
+            .select('id')
+            .ilike('title', `%${filters.title_filter}%`);
+
+          if (matchedRoutines && matchedRoutines.length > 0) {
+            allowedRoutineIds = matchedRoutines.map(r => r.id);
+          } else {
+            titleIlikeFallback = filters.title_filter;
+          }
+        }
+      }
+
+      // 2. Process Frequency Filter
+      if (filters.task_frequency && filters.task_frequency.length > 0) {
+        const { data: freqRoutines } = await supabase
+          .from('routines')
+          .select('id')
+          .in('frequency', filters.task_frequency)
+          .eq('is_active', true);
+
+        if (freqRoutines && freqRoutines.length > 0) {
+          const freqIds = freqRoutines.map((r: any) => r.id);
+          if (allowedRoutineIds !== null) {
+            // Intersect arrays
+            allowedRoutineIds = allowedRoutineIds.filter(id => freqIds.includes(id));
+          } else {
+            allowedRoutineIds = freqIds;
+          }
+        } else {
+          // Zero routines match this frequency
+          if (allowedRoutineIds !== null) {
+            allowedRoutineIds = []; // force 0 intersection
+          } else {
+            allowedRoutineIds = [];
+          }
+        }
+      }
+
+      // 3. Apply the assembled routine filters
+      if (allowedRoutineIds !== null) {
+        if (allowedRoutineIds.length === 0) {
+          // Impossible intersection, force 0 results
+          tasksQuery = tasksQuery.eq('routine_id', '00000000-0000-0000-0000-000000000000');
+        } else {
+          // A plain .in() is extremely fast in PostgREST, even up to 1000 IDs, unlike .or()
+          tasksQuery = tasksQuery.in('routine_id', allowedRoutineIds);
+        }
+      } else {
+        if (titleFallback && titleFallback.length > 0) {
+          tasksQuery = tasksQuery.in('title', titleFallback);
+        } else if (titleIlikeFallback) {
+          tasksQuery = tasksQuery.ilike('title', `%${titleIlikeFallback}%`);
         }
       }
 
@@ -148,28 +213,6 @@ const useCustomPanelData = (panel: DashboardPanel, globalSectorFilters?: string[
         tasksQuery = tasksQuery
           .gte('due_date', startUtcOffset)
           .lte('due_date', endUtcOffset);
-      }
-
-      // NOVO: Pre-filtrar por Frequência diretamente via Banco antes de puxar as tarefas
-      // O Supabase tem um limite restrito de requisição. Passar array muito grande para .in() trava o request.
-      if (filters.task_frequency && filters.task_frequency.length > 0) {
-        const { data: allowedRoutines } = await supabase
-          .from('routines')
-          .select('id')
-          .in('frequency', filters.task_frequency)
-          .eq('is_active', true);
-
-        if (allowedRoutines && allowedRoutines.length > 0) {
-          const validRoutineIds = allowedRoutines.map((r: any) => r.id);
-          // If the list of IDs exceeds a safe threshold (e.g., 200), we don't pass them in .in() 
-          // to avoid "HTTP 414 Request-URI Too Long" or DB hang. We filter in-memory later instead.
-          if (validRoutineIds.length < 200) {
-            tasksQuery = tasksQuery.in('routine_id', validRoutineIds);
-          }
-        } else {
-          // Se pediu Mensal e não tem rotina Mensal, retorne um filtro impossível ou force zero.
-          tasksQuery = tasksQuery.eq('routine_id', '00000000-0000-0000-0000-000000000000');
-        }
       }
 
       // Fetch all task rows bypassing the 1000 row Supabase API default:
