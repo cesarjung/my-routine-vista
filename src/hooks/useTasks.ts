@@ -2,15 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
-import type { Tables, Enums } from '@/integrations/supabase/types';
 
-export type Task = Tables<'tasks'>;
-export type TaskStatus = Enums<'task_status'>;
+export type Task = any;
+export type TaskStatus = any;
 
 export interface TaskWithDetails extends Task {
-  routine?: Tables<'routines'> | null;
-  unit?: Tables<'units'> | null;
-  subtasks?: Tables<'subtasks'>[];
+  routine?: any;
+  unit?: any;
+  subtasks?: any[];
   assignees?: any[]; // Array of profiles
 }
 
@@ -77,6 +76,11 @@ export const useTasks = (unitId?: string) => {
   return useQuery({
     queryKey: ['tasks', unitId, user?.id, role],
     queryFn: async () => {
+      // Date limit to prevent fetching thousands of historic tasks
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      const twoMonthsAgoStr = twoMonthsAgo.toISOString();
+
       let query = supabase
         .from('tasks')
         .select(`
@@ -85,6 +89,7 @@ export const useTasks = (unitId?: string) => {
           unit:units(*),
           subtasks(*)
         `)
+        .gte('created_at', twoMonthsAgoStr) // Bound the query!
         .order('due_date', { ascending: true });
 
       if (unitId) {

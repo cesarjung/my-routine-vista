@@ -17,6 +17,10 @@ export const useRealtimeUpdates = () => {
 
             console.log('🔄 Iniciando conexão Realtime...');
 
+            // Ref timeout
+            let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+            let pendingTables = new Set<string>();
+
             // Canal único ouvindo TUDO no schema public
             const channel = supabase
                 .channel('global-db-changes')
@@ -26,13 +30,41 @@ export const useRealtimeUpdates = () => {
                     (payload) => {
                         console.log('📡 Realtime Event:', payload);
 
-                        // Delay de 1s para evitar leitura de réplica desatualizada (Race Condition)
-                        setTimeout(() => {
+                        // Coleciona tabelas afetadas nessa rajada (burst)
+                        if (payload.table) {
+                            pendingTables.add(payload.table);
+                        }
+
+                        // Debounce mechanism: Wait 1.5 seconds after the LAST event to trigger refetches
+                        if (debounceTimer) {
+                            clearTimeout(debounceTimer);
+                        }
+
+                        debounceTimer = setTimeout(() => {
+                            const tablesToUpdate = Array.from(pendingTables);
+                            pendingTables.clear();
+
+                            console.log('🔄 Executing debounced query invalidations for:', tablesToUpdate);
+
                             // Atualiazação dos Dashboards (Keys corretas)
                             queryClient.invalidateQueries({ queryKey: ['unit-routine-status'] });
                             queryClient.invalidateQueries({ queryKey: ['responsible-routine-status'] });
                             queryClient.invalidateQueries({ queryKey: ['units-summary'] });
                             queryClient.invalidateQueries({ queryKey: ['overall-stats'] });
+
+                            // Invalidaqueries baseado na tabela alterada
+                            tablesToUpdate.forEach(table => {
+                                queryClient.invalidateQueries({ queryKey: [table] });
+
+                                // Mapeamentos específicos (ex: checkins afetam rotinas)
+                                if (table === 'routine_checkins') {
+                                    queryClient.invalidateQueries({ queryKey: ['routines'] });
+                                    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                                }
+                                if (table === 'subtasks') {
+                                    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                                }
+                            });
 
                             // Atualização de View de Tarefas e Rotinas
                             queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -40,31 +72,7 @@ export const useRealtimeUpdates = () => {
                             queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
                             queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
                             queryClient.invalidateQueries({ queryKey: ['custom-panel-data'] });
-                        }, 1000);
-
-                        // Invalidaqueries baseado na tabela alterada
-                        if (payload.table) {
-                            queryClient.invalidateQueries({ queryKey: [payload.table] });
-                            // Mapeamentos específicos (ex: checkins afetam rotinas)
-                            if (payload.table === 'routine_checkins') {
-                                queryClient.invalidateQueries({ queryKey: ['routines'] });
-                                queryClient.invalidateQueries({ queryKey: ['tasks'] });
-                            }
-                            if (payload.table === 'subtasks') {
-                                queryClient.invalidateQueries({ queryKey: ['tasks'] });
-                            }
-                        }
-
-                        // Atualiazação dos Dashboards (Keys corretas do useDashboardData.ts)
-                        queryClient.invalidateQueries({ queryKey: ['unit-routine-status'] });
-                        queryClient.invalidateQueries({ queryKey: ['responsible-routine-status'] });
-                        queryClient.invalidateQueries({ queryKey: ['units-summary'] });
-                        queryClient.invalidateQueries({ queryKey: ['overall-stats'] });
-
-                        // Atualização de View de Tarefas e Rotinas
-                        queryClient.invalidateQueries({ queryKey: ['tasks'] });
-                        queryClient.invalidateQueries({ queryKey: ['routines'] });
-                        queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
+                        }, 1500);
                     }
                 )
                 .subscribe((status) => {

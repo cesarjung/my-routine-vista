@@ -13,7 +13,16 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60, // 1 minute
+      gcTime: 1000 * 60 * 5, // 5 minutes Garbage Collection to clear unused RAM
+      refetchOnWindowFocus: false, // Prevents full refetches when tabbing back and forth
+      retry: 1,
+    },
+  },
+});
 
 const AppRoutes = () => {
   useRealtimeUpdates(); // Activate Realtime Subscriptions

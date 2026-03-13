@@ -181,12 +181,24 @@ export const useCreateRoutineWithUnits = () => {
         }
       }
 
-      // Determine the limit date for the pre-generation (defaults to +1 year or provided date)
+      // Determine the limit date for the pre-generation
       let limitDate = new Date();
       if (data.repeatForever || !data.recurrenceEndDate) {
-        limitDate = addYears(baseStart, 1);
+        // Limit initial generation to 3 months to prevent client-side screen freezes
+        const maxMonthsPreGenerated = 3;
+        const targetDate = new Date(baseStart);
+        targetDate.setMonth(targetDate.getMonth() + maxMonthsPreGenerated);
+
+        limitDate = targetDate;
       } else {
         limitDate = new Date(data.recurrenceEndDate);
+
+        // Safety cap even if they choose a date 10 years from now
+        const maxDateSafety = new Date(baseStart);
+        maxDateSafety.setMonth(maxDateSafety.getMonth() + 6);
+        if (limitDate > maxDateSafety) {
+          limitDate = maxDateSafety;
+        }
       }
 
       // Pre-Generate Timeline
