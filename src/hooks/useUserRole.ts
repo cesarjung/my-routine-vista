@@ -14,9 +14,9 @@ export const useUserRole = () => {
       if (!user?.id) return null;
 
       const { data, error } = await supabase
-        .from('user_roles')
+        .from('profiles')
         .select('role')
-        .eq('user_id', user.id)
+        .eq('id', user.id)
         .single();
 
       if (error) throw error;
@@ -33,16 +33,16 @@ export const useIsAdmin = () => {
 
 export const useIsGestorOrAdmin = () => {
   const { data: role, isLoading } = useUserRole();
-  return { 
-    isGestorOrAdmin: role === 'admin' || role === 'gestor', 
-    isLoading 
+  return {
+    isGestorOrAdmin: role === 'admin' || role === 'gestor',
+    isLoading
   };
 };
 
 export const useCanManageUsers = () => {
   const { data: role, isLoading } = useUserRole();
-  return { 
-    canManageUsers: role === 'admin' || role === 'gestor', 
-    isLoading 
+  return {
+    canManageUsers: role === 'admin' || role === 'gestor',
+    isLoading
   };
 };

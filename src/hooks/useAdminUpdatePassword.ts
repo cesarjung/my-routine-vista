@@ -10,25 +10,17 @@ interface UpdatePasswordParams {
 export const useAdminUpdatePassword = () => {
   return useMutation({
     mutationFn: async ({ userId, newPassword }: UpdatePasswordParams) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('Não autenticado');
-      }
-
-      const response = await supabase.functions.invoke('admin-update-password', {
-        body: { userId, newPassword },
+      const { error } = await supabase.rpc('admin_update_password', {
+        target_user_id: userId,
+        new_password: newPassword,
       });
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Erro ao atualizar senha');
+      if (error) {
+        console.error('RPC Error:', error);
+        throw new Error(error.message || 'Erro ao atualizar senha');
       }
 
-      if (response.data?.error) {
-        throw new Error(response.data.error);
-      }
-
-      return response.data;
+      return { success: true };
     },
     onSuccess: () => {
       toast.success('Senha atualizada com sucesso');

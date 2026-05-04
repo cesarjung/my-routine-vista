@@ -3,10 +3,22 @@ import { useTasks } from '@/hooks/useTasks';
 import { useUpdateTask } from '@/hooks/useTaskMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Clock, AlertCircle, Play, Loader2, GripVertical, Pencil, MinusCircle, Check, Circle, MoreVertical } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Play, Loader2, Plus, Check, MinusCircle, Circle, MoreVertical } from 'lucide-react';
 import type { Enums, Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { TaskForm } from '@/components/TaskForm';
+import { RoutineForm } from '@/components/RoutineForm';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { TaskDetailPanel } from '@/components/TaskDetailPanel';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,15 +53,17 @@ const columns: Column[] = [
   { id: 'em_andamento', title: 'Em Andamento', icon: Play, color: 'text-primary', bgColor: 'bg-primary/10' },
   { id: 'concluida', title: 'Concluídas', icon: CheckCircle2, color: 'text-success', bgColor: 'bg-success/10' },
   { id: 'atrasada', title: 'Atrasadas', icon: AlertCircle, color: 'text-destructive', bgColor: 'bg-destructive/10' },
-  { id: 'nao_aplicavel', title: 'N/A', icon: MinusCircle, color: 'text-muted-foreground', bgColor: 'bg-secondary' },
+  { id: 'nao_aplicavel', title: 'Não Aplicável', icon: MinusCircle, color: 'text-muted-foreground', bgColor: 'bg-secondary' },
 ];
 
 interface KanbanViewProps {
   sectorId?: string;
   isMyTasks?: boolean;
+  type?: 'tasks' | 'routines';
+  hideHeader?: boolean;
 }
 
-export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
+export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = false }: KanbanViewProps) => {
   const { data: tasks, isLoading } = useTasks();
   const { user } = useAuth();
   const updateTask = useUpdateTask();
@@ -118,7 +132,36 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 min-h-[600px]">
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                {type === 'routines' ? 'Nova Rotina' : 'Nova Tarefa'}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {type === 'routines' ? 'Criar Nova Rotina' : 'Criar Nova Tarefa'}
+                </DialogTitle>
+              </DialogHeader>
+              {type === 'routines' ? (
+                <RoutineForm
+                  sectorId={sectorId}
+                />
+              ) : (
+                <TaskForm
+                  sectorId={sectorId}
+                  onSuccess={() => setIsCreateDialogOpen(false)}
+                  onCancel={() => setIsCreateDialogOpen(false)}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px] items-start">
         {columns.map((column) => {
           const columnTasks = getTasksByStatus(column.id);
           const Icon = column.icon;
@@ -126,7 +169,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
           return (
             <div
               key={column.id}
-              className="rounded-xl border border-border bg-card/50 flex flex-col"
+              className="min-w-[300px] w-[300px] rounded-xl border border-border bg-card/50 flex flex-col flex-shrink-0"
             >
               {/* Column Header */}
               <div className={cn('p-4 rounded-t-xl border-b border-border', column.bgColor)}>
@@ -151,13 +194,13 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                   columnTasks.map((task, index) => {
                     const isCompleted = task.status === 'concluida';
                     const isNA = task.status === 'nao_aplicavel';
-                    
+
                     return (
                       <div
                         key={task.id}
                         className="bg-card rounded-md border border-border p-2 shadow-sm hover:border-primary/40 transition-shadow cursor-pointer group animate-fade-in"
                         style={{ animationDelay: `${index * 50}ms` }}
-                        onClick={() => handleEditTask(task as Task)}
+                        onClick={() => handleTaskClick(task as Task)}
                       >
                         <div className="flex items-start gap-2">
                           {/* Quick completion checkbox */}
@@ -168,15 +211,15 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                               isCompleted 
                                 ? 'bg-success border-success text-success-foreground' 
                                 : isNA
-                                ? 'bg-muted border-muted-foreground/30'
-                                : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
+                                  ? 'bg-muted border-muted-foreground/30'
+                                  : 'border-muted-foreground/40 hover:border-success hover:bg-success/10'
                             )}
                             title={isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}
                           >
                             {isCompleted && <Check className="h-3 w-3" />}
                             {isNA && <MinusCircle className="h-3 w-3 text-muted-foreground" />}
                           </button>
-                          
+
                           <div className="flex-1 min-w-0">
                             <p className={cn(
                               "text-xs font-medium text-foreground line-clamp-2",
@@ -197,7 +240,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                               )}
                             </div>
                           </div>
-                          
+
                           {/* More options dropdown */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -245,6 +288,41 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
       />
+      <TaskEditDialog
+        task={editingTask}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
+
+      {/* Detail Panel via Sheet */}
+      <Sheet open={!!selectedTask || !!selectedRoutine} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedTask(null);
+          setSelectedRoutine(null);
+          setSelectedRoutineDate(null);
+        }
+      }}>
+        <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
+          <div className="h-full overflow-y-auto">
+            {selectedTask && (
+              <TaskDetailPanel
+                task={selectedTask}
+                onClose={() => setSelectedTask(null)}
+              />
+            )}
+            {selectedRoutine && (
+              <RoutineDetailPanel
+                routine={selectedRoutine}
+                contextDate={selectedRoutineDate || undefined}
+                onClose={() => {
+                  setSelectedRoutine(null);
+                  setSelectedRoutineDate(null);
+                }}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

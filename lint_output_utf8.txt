@@ -1,0 +1,287 @@
+﻿
+> vite_react_shadcn_ts@0.0.0 lint
+> eslint .
+
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\Old\TasksView.tsx
+  52:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\AttachmentsList.tsx
+  142:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\BulkRoutineCompletionDialog.tsx
+  44:8  warning  React Hook useEffect has a missing dependency: 'calculatePendingTasks'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\NoteEditorDialog.tsx
+   16:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   24:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\NotesList.tsx
+   50:14   error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+   60:127  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+   78:46   error  Expected a `const` instead of a literal type assertion  @typescript-eslint/prefer-as-const
+  113:54   error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  113:85   error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  147:54   error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  148:54   error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  185:13   error  'occupied' is never reassigned. Use 'const' instead     prefer-const
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\RichTextEditor.tsx
+  296:41  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  306:37  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  322:25  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\RoutineDetailPanel.tsx
+  103:25   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  208:30   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  657:53   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  661:54   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  661:72   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  745:47   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  760:43   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  760:70   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  762:47   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  762:89   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  769:47   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  770:190  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  771:52   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  790:43   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  790:70   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  792:47   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\RoutineEditDialog.tsx
+  134:3   error  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+  244:39  error  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  246:50  error  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\RoutineListItem.tsx
+  76:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  81:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  86:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\TaskDetailPanel.tsx
+  385:75  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\TaskEditDialog.tsx
+   64:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  154:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  155:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\TaskRowItem.tsx
+   43:11  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  155:72  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\UnitsManagement.tsx
+  159:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  191:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  250:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  267:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\dashboard\CustomPanel.tsx
+  142:20  error  Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  250:94  error  Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  268:15  error  'key' is never reassigned. Use 'const' instead  prefer-const
+  482:41  error  Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  490:42  error  Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  495:43  error  Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\dashboard\UnifiedDraggablePanels.tsx
+  140:70  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\tabs\HistoryTab.tsx
+  75:30  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  88:38  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\badge.tsx
+  29:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\button.tsx
+  47:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\command.tsx
+  24:11  error  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\form.tsx
+  129:10  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\navigation-menu.tsx
+  111:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\sidebar.tsx
+  636:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\sonner.tsx
+  27:19  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\textarea.tsx
+  5:18  error  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\ui\toggle.tsx
+  37:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\CalendarView.tsx
+  152:9   error    Unexpected lexical declaration in case block                                                                                                    no-case-declarations
+  153:9   error    Unexpected lexical declaration in case block                                                                                                    no-case-declarations
+  196:6   warning  React Hook useEffect has missing dependencies: 'fetchEvents', 'rangeEnd', and 'rangeStart'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  224:51  error    Unexpected any. Specify a different type                                                                                                        @typescript-eslint/no-explicit-any
+  228:34  error    Unexpected any. Specify a different type                                                                                                        @typescript-eslint/no-explicit-any
+  243:36  error    Unexpected any. Specify a different type                                                                                                        @typescript-eslint/no-explicit-any
+  244:31  error    Unexpected any. Specify a different type                                                                                                        @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\DashboardView.tsx
+  660:6  error  Parsing error: ')' expected
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\GanttView.tsx
+   55:58   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   58:37   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:35   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:48   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  275:103  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  279:102  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  283:107  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\KanbanView.tsx
+   68:58   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   71:37   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   72:35   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   96:48   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  247:134  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  251:133  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  255:137  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  259:138  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\MyTasksView.tsx
+  146:52   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:54   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:44   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  257:63   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  265:31   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  273:34   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  370:49   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  496:100  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  620:101  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\RoutinesView.tsx
+  105:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  143:63  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  191:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  192:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  192:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\SectorUnitsView.tsx
+  19:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\SettingsView.tsx
+  120:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  177:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  196:85  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  250:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  310:82  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  331:73  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  360:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  680:89  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\components\views\TasksView.tsx
+   87:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   88:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  120:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  120:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  232:96  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\contexts\AuthContext.tsx
+  76:14  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useRoutineCheckins.ts
+   77:11  error  'profilesMap' is never reassigned. Use 'const' instead  prefer-const
+  145:19  error  'period' is never reassigned. Use 'const' instead       prefer-const
+  145:34  error  'periodError' is never reassigned. Use 'const' instead  prefer-const
+  170:13  error  'profilesMap' is never reassigned. Use 'const' instead  prefer-const
+  267:56  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useRoutineEnhancements.ts
+   15:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   22:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   37:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   53:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   71:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   92:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  114:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  120:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  148:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  185:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  217:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  227:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  233:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  248:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  258:62  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  267:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  272:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  290:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  300:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useRoutineMutations.ts
+  167:13  error  Unexpected lexical declaration in case block  no-case-declarations
+  168:13  error  Unexpected lexical declaration in case block  no-case-declarations
+  177:13  error  Unexpected lexical declaration in case block  no-case-declarations
+  178:13  error  Unexpected lexical declaration in case block  no-case-declarations
+  386:28  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  395:38  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useSectorUsers.ts
+  101:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useSectors.ts
+   68:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useTaskEnhancements.ts
+   13:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   43:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   70:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   94:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  153:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  189:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  212:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  236:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  264:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  274:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useTaskMutations.ts
+  505:77  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  510:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  520:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  628:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\hooks\useTasks.ts
+   14:15  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+   37:7   error  'profileMap' is never reassigned. Use 'const' instead  prefer-const
+   37:34  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  106:33  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  210:33  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\src\integrations\supabase\types.ts
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\supabase\functions\google-calendar-sync\index.ts
+   44:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\supabase\functions\process-recurring-tasks\index.ts
+  441:9  error  Parsing error: Expression expected
+
+C:\Users\Sirtec\Desktop\Gestor CCM 2\my-routine-vista\tailwind.config.ts
+  98:13  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  98:45  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+Ô£û 185 problems (175 errors, 10 warnings)
+  8 errors and 0 warnings potentially fixable with the `--fix` option.
+

@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Plus, Search, Filter, Loader2 } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Filter,
+  Loader2,
+  Calendar,
+  ClipboardList,
+  CheckCircle2,
+  Trash2,
+  X
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -16,20 +19,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { useTasks, useDeleteTasks, useBulkUpdateTasks } from '@/hooks/useTasks';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserRole } from '@/hooks/useUserRole';
+import { toast } from 'sonner';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { TaskForm } from '@/components/TaskForm';
-import { TaskListItem } from '@/components/TaskListItem';
-import { useTasks } from '@/hooks/useTasks';
+import { cn } from '@/lib/utils';
 import type { Enums } from '@/integrations/supabase/types';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
-const statusFilters: { value: string; label: string }[] = [
-  { value: 'all', label: 'Todos os Status' },
-  { value: 'pendente', label: 'Pendente' },
-  { value: 'em_andamento', label: 'Em Andamento' },
-  { value: 'concluida', label: 'Concluída' },
-  { value: 'atrasada', label: 'Atrasada' },
-  { value: 'cancelada', label: 'Cancelada' },
+// --- CONFIGURATION ARRAYS ---
+
+const statusFilters: {
+  value: Enums<'task_status'>;
+  label: string;
+  chipClass: string;
+}[] = [
+    { value: 'pendente', label: 'Pendente', chipClass: 'bg-yellow-100 text-yellow-800 border border-yellow-300' },
+    { value: 'em_andamento', label: 'Em Andamento', chipClass: 'bg-orange-100 text-orange-800 border border-orange-300' },
+    { value: 'concluida', label: 'Concluída', chipClass: 'bg-green-100 text-green-800 border border-green-300' },
+    { value: 'atrasada', label: 'Atrasada', chipClass: 'bg-red-100 text-red-800 border border-red-300' },
+    { value: 'cancelada', label: 'Cancelada', chipClass: 'bg-slate-100 text-slate-700 border border-slate-300' },
+  ];
+
+// Local Frequency constant
+const frequencies = [
+  { value: 'all', label: 'Todas' },
+  { value: 'diaria', label: 'Diárias' },
+  { value: 'semanal', label: 'Semanais' },
+  { value: 'quinzenal', label: 'Quinzenais' },
+  { value: 'mensal', label: 'Mensais' },
 ];
 
 const typeFilters = [
@@ -40,9 +68,19 @@ const typeFilters = [
 
 interface TasksViewProps {
   sectorId?: string;
+  sectionId?: string; // New prop
+  isDefaultTasksSection?: boolean;
+  hideHeader?: boolean;
+  viewMode?: ViewMode;
 }
 
-export const TasksView = ({ sectorId }: TasksViewProps) => {
+export const TasksView = ({
+  sectorId,
+  sectionId,
+  isDefaultTasksSection,
+  hideHeader,
+  viewMode = 'list'
+}: TasksViewProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -50,14 +88,30 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
   const [hideCompleted, setHideCompleted] = useState(false);
 
   const { data: tasks, isLoading } = useTasks();
+  const deleteTasks = useDeleteTasks();
+  const bulkUpdateTasks = useBulkUpdateTasks();
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedTaskIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleDelete = (id: string) => {
+    // console.log('Delete', id);
+  };
+
+  const handleStatusChange = (id: string, status: any) => {
+    // console.log('Status', id, status);
+  };
 
   const filteredTasks = tasks?.filter((task) => {
-    const matchesSearch =
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status);
+    const matchesSector = !sectorId || task.sector_id === sectorId;
 
-    const matchesStatus =
-      statusFilter === 'all' || task.status === statusFilter;
+    // Filter by Section ID
+    const matchesSection = !sectionId || isDefaultTasksSection
+      ? (!sectionId || (task as any).section_id === null || (task as any).section_id === 'tasks' || (task as any).section_id === sectorId || (task as any).section_id === sectionId)
+      : (task as any).section_id === sectionId;
 
     const matchesSector = !sectorId || (task as any).sector_id === sectorId;
     
@@ -71,34 +125,26 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Tarefas</h1>
-          <p className="text-muted-foreground">
-            Gerencie e acompanhe todas as tarefas
-          </p>
-        </div>
+    <div className="flex h-full">
+      <div className="w-full flex flex-col transition-all duration-300">
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Nova Tarefa
+        {/* Header Container V3 - Multi-line Local Layout */}
+        {!hideHeader && selectedTaskIds.length > 0 ? (
+          <div className="flex items-center gap-2 p-2 bg-primary/5 border-b border-primary/20 shadow-sm overflow-x-auto shrink-0 min-h-[50px] mb-4 rounded-lg animate-in fade-in slide-in-from-top-1">
+            <span className="text-sm font-medium text-primary ml-2 whitespace-nowrap">
+              {selectedTaskIds.length} selecionado{selectedTaskIds.length !== 1 ? 's' : ''}
+            </span>
+
+            <div className="h-5 w-px bg-primary/20 shrink-0 mx-2" />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleSelectAll}
+              className="h-8 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10"
+            >
+              {allFilteredSelected ? "Deselecionar Tudo" : "Selecionar Tudo"}
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Criar Nova Tarefa</DialogTitle>
-            </DialogHeader>
-            <TaskForm
-              sectorId={sectorId}
-              onSuccess={() => setIsDialogOpen(false)}
-              onCancel={() => setIsDialogOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
-      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

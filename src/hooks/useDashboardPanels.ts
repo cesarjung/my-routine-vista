@@ -2,14 +2,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Json } from '@/integrations/supabase/types';
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export interface PanelFilters {
-  sector_id?: string | null;
-  unit_id?: string | null;
+  sector_id?: string | string[] | null;
+  unit_id?: string | string[] | null;
   status?: string[];
   period?: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
-  group_by: 'unit' | 'responsible' | 'sector';
+  group_by: 'unit' | 'responsible' | 'sector' | 'task_matrix' | 'tracker_gantt' | 'task';
+  title_filter?: string;
+  task_frequency?: string[];
+  dashboard_context?: string;
 }
 
 export interface DashboardPanel {
@@ -20,6 +29,7 @@ export interface DashboardPanel {
   filters: PanelFilters;
   display_config: Record<string, unknown>;
   order_index: number;
+  is_private?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -35,7 +45,7 @@ export const useDashboardPanels = () => {
     queryKey: ['dashboard-panels'],
     queryFn: async () => {
       if (!user) return [];
-      
+
       // Fetch all panels (RLS now allows everyone to view all)
       const { data, error } = await supabase
         .from('dashboard_panels')
@@ -43,7 +53,7 @@ export const useDashboardPanels = () => {
         .order('order_index', { ascending: true });
 
       if (error) throw error;
-      
+
       return (data || []).map(panel => ({
         ...panel,
         filters: { ...defaultFilters, ...(panel.filters as unknown as Partial<PanelFilters>) } as PanelFilters,
@@ -72,7 +82,8 @@ export const useCreateDashboardPanel = () => {
           panel_type: panel.panel_type,
           filters: panel.filters as unknown as Json,
           display_config: panel.display_config as unknown as Json,
-          order_index: panel.order_index
+          order_index: panel.order_index,
+          is_private: panel.is_private || false
         })
         .select()
         .single();
@@ -98,7 +109,7 @@ export const useUpdateDashboardPanel = () => {
       const updateData: Record<string, unknown> = { ...updates };
       if (filters) updateData.filters = filters as unknown as Json;
       if (display_config) updateData.display_config = display_config as unknown as Json;
-      
+
       const { data, error } = await supabase
         .from('dashboard_panels')
         .update(updateData)
@@ -148,7 +159,7 @@ export const useReorderDashboardPanels = () => {
   return useMutation({
     mutationFn: async (panels: { id: string; order_index: number }[]) => {
       // Update all panels in parallel
-      const updates = panels.map(panel => 
+      const updates = panels.map(panel =>
         supabase
           .from('dashboard_panels')
           .update({ order_index: panel.order_index })
@@ -157,11 +168,11 @@ export const useReorderDashboardPanels = () => {
 
       const results = await Promise.all(updates);
       const errors = results.filter(r => r.error);
-      
+
       if (errors.length > 0) {
         throw new Error('Erro ao reordenar painéis');
       }
-      
+
       return panels;
     },
     onMutate: async (newOrder) => {
@@ -178,7 +189,7 @@ export const useReorderDashboardPanels = () => {
           const bOrder = newOrder.find(p => p.id === b.id)?.order_index ?? b.order_index;
           return aOrder - bOrder;
         });
-        
+
         queryClient.setQueryData(['dashboard-panels'], updatedPanels);
       }
 

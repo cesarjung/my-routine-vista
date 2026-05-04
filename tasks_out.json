@@ -1,0 +1,82 @@
+[
+  {
+    "id": "4e88f7bd-8f25-4d54-b200-672f43adcf72",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "fe823fc0-915e-4341-afe0-a53fc1e87f20",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "18987aab-6e43-41be-83f6-e8cb1f837870",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "b6c452f1-e62e-457e-bc1d-bbad2dcb2133",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "bc146166-7608-4dc9-a489-50269281aab7",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "2b430f2d-37e2-4343-8248-27e80698e5ab",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": null
+  },
+  {
+    "id": "0234171d-8fc9-4708-92d8-a0d82c19aab2",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "f47a3ea4-9568-4dfd-9f18-bf331edcc276",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  },
+  {
+    "id": "56bc995a-4d16-4e6d-8ac9-d2236d3854bd",
+    "title": "[Rotina] Teste Diário Hoje",
+    "start_date": "2026-02-26T15:24:00+00:00",
+    "due_date": "2026-02-26T16:24:00+00:00",
+    "created_at": "2026-02-25T17:19:04.95061+00:00",
+    "parent_task_id": "fc383e6c-4130-45b6-8c7d-76a78b9c0495"
+  }
+]

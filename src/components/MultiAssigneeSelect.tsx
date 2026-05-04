@@ -1,4 +1,4 @@
-import { useState, useMemo, forwardRef } from 'react';
+import { useState, useMemo, forwardRef, memo } from 'react';
 import { Check, X, Users, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ interface MultiAssigneeSelectProps {
   className?: string;
 }
 
-export const MultiAssigneeSelect = forwardRef<HTMLButtonElement, MultiAssigneeSelectProps>(({
+export const MultiAssigneeSelect = memo(forwardRef<HTMLButtonElement, MultiAssigneeSelectProps>(({
   profiles,
   selectedIds,
   onChange,
@@ -102,39 +102,41 @@ export const MultiAssigneeSelect = forwardRef<HTMLButtonElement, MultiAssigneeSe
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Buscar usuário..." />
-          <CommandList>
-            <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
-            <CommandGroup>
-              {profiles.map((profile) => (
-                <CommandItem
-                  key={profile.id}
-                  value={getDisplayName(profile) || profile.id}
-                  onSelect={() => toggleProfile(profile.id)}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      selectedIds.includes(profile.id) ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <div className="flex flex-col">
-                    <span>{getDisplayName(profile)}</span>
-                    {profile.full_name && (
-                      <span className="text-xs text-muted-foreground">
-                        {profile.email}
-                      </span>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        {open && (
+          <Command>
+            <CommandInput placeholder="Buscar usuário..." />
+            <CommandList>
+              <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
+              <CommandGroup>
+                {profiles.map((profile) => (
+                  <CommandItem
+                    key={profile.id}
+                    value={getDisplayName(profile) || profile.id}
+                    onSelect={() => toggleProfile(profile.id)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        selectedIds.includes(profile.id) ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col">
+                      <span>{getDisplayName(profile)}</span>
+                      {profile.full_name && (
+                        <span className="text-xs text-muted-foreground">
+                          {profile.email}
+                        </span>
+                      )}
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        )}
       </PopoverContent>
     </Popover>
   );
-});
+}));
 
 MultiAssigneeSelect.displayName = 'MultiAssigneeSelect';

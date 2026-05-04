@@ -11,8 +11,10 @@ import { useUnits } from '@/hooks/useUnits';
 import { useProfiles, Profile } from '@/hooks/useProfiles';
 import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key, Moon } from 'lucide-react';
+import { useTheme } from '@/components/ThemeProvider';
 import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
 import { SectorUsersManagement } from '@/components/SectorUsersManagement';
@@ -25,13 +27,18 @@ interface UserWithRole extends Profile {
   role?: AppRole;
 }
 
-export const SettingsView = () => {
+interface SettingsViewProps {
+  hideHeader?: boolean;
+}
+
+export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
   const { canManageUsers, isLoading: isLoadingRole } = useCanManageUsers();
   const { isAdmin } = useIsAdmin();
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
   const { data: units } = useUnits();
   const { data: profiles, refetch: refetchProfiles } = useProfiles();
-  
+
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
@@ -69,28 +76,28 @@ export const SettingsView = () => {
     setEditingUser(profile);
     setEditName(profile.full_name || '');
     setEditEmail(profile.email || '');
-    
+
     // Fetch user's managed units
     const { data: managedUnits } = await supabase
       .from('unit_managers')
       .select('unit_id')
       .eq('user_id', profile.id);
-    
+
     const managedUnitIds = managedUnits?.map(u => u.unit_id) || [];
     // Include profile unit_id if exists and not already in managed units
     const allUnits = profile.unit_id && !managedUnitIds.includes(profile.unit_id)
       ? [profile.unit_id, ...managedUnitIds]
       : managedUnitIds.length > 0 ? managedUnitIds : (profile.unit_id ? [profile.unit_id] : []);
-    
+
     setEditUnits(allUnits);
-    
+
     // Fetch user role
     const { data: roleData } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', profile.id)
       .maybeSingle();
-    
+
     setEditRole((roleData?.role as AppRole) || 'usuario');
   };
 
@@ -186,27 +193,15 @@ export const SettingsView = () => {
 
     setIsUpdating(true);
     try {
-      // Update email if changed (requires edge function with admin API)
+      // Update email if changed (via RPC Admin)
       if (editEmail && editEmail !== editingUser.email) {
-        const { data: session } = await supabase.auth.getSession();
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-user-email`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.session?.access_token}`,
-            },
-            body: JSON.stringify({
-              userId: editingUser.id,
-              newEmail: editEmail.trim(),
-            }),
-          }
-        );
+        const { error: emailError } = await supabase.rpc('update_user_email_rpc' as any, {
+          target_user_id: editingUser.id,
+          new_email: editEmail.trim()
+        });
 
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || 'Erro ao atualizar email');
+        if (emailError) {
+          throw new Error(emailError.message || 'Erro ao atualizar email');
         }
       }
 
@@ -214,9 +209,9 @@ export const SettingsView = () => {
       const primaryUnitId = editUnits.length > 0 ? editUnits[0] : null;
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ 
-          full_name: editName.trim(), 
-          unit_id: primaryUnitId 
+        .update({
+          full_name: editName.trim(),
+          unit_id: primaryUnitId
         })
         .eq('id', editingUser.id);
 
@@ -227,13 +222,13 @@ export const SettingsView = () => {
         .from('unit_managers')
         .delete()
         .eq('user_id', editingUser.id);
-      
+
       if (editUnits.length > 0) {
         await supabase
           .from('unit_managers')
-          .insert(editUnits.map(unitId => ({ 
-            user_id: editingUser.id, 
-            unit_id: unitId 
+          .insert(editUnits.map(unitId => ({
+            user_id: editingUser.id,
+            unit_id: unitId
           })));
       }
 
@@ -278,34 +273,83 @@ export const SettingsView = () => {
 
     setIsCreating(true);
     try {
-      // Get current session token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Sessão não encontrada');
-      }
+      // 1. Create a temporary client to sign up the new user without logging out the admin
+      const tempClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            persistSession: false, // Critical: Don't overwrite admin session
+            autoRefreshToken: false,
+            detectSessionInUrl: false
+          }
+        }
+      );
 
-      // Call edge function to create user (doesn't change current session)
-      const response = await supabase.functions.invoke('admin-create-user', {
-        body: {
-          email: newUserEmail,
-          password: newUserPassword,
-          fullName: newUserName,
-          unitIds: newUserUnits.length > 0 ? newUserUnits : null,
-          role: newUserRole,
-        },
+      // 2. Sign Up via API (This guarantees valid Hashing and Metadata)
+      const { data: signUpData, error: signUpError } = await tempClient.auth.signUp({
+        email: newUserEmail,
+        password: newUserPassword,
+        options: {
+          data: {
+            full_name: newUserName,
+          }
+        }
       });
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Erro ao criar usuário');
+      if (signUpError) {
+        throw new Error(signUpError.message);
       }
 
-      if (response.data?.error) {
-        throw new Error(response.data.error);
+      if (!signUpData.user?.id) {
+        throw new Error('Usuário criado mas ID não retornado.');
+      }
+
+      const newUserId = signUpData.user.id;
+
+      // 3. Confirm Email (via Admin RPC)
+      // Use 'as any' to bypass the type check for the new RPC
+      const { error: confirmError } = await supabase.rpc('confirm_user_email' as any, {
+        target_email: newUserEmail
+      });
+
+      if (confirmError) {
+        console.error('Error confirming email:', confirmError);
+        // Don't throw, user created but needs confirmation
+        toast({
+          title: 'Atenção',
+          description: 'Usuário criado, mas houve erro ao confirmar email automaticamente.',
+          variant: 'destructive'
+        });
+      }
+
+      // 4. Update Profile & Role (The trigger on_auth_user_created created the profile, we update it)
+      // Check if profile exists (wait a bit? Trigger is usually fast, but let's be safe)
+      // We can just UPDATE directly.
+
+      // Update Role
+      if (newUserRole !== 'usuario') {
+        // Using as any for update because the generated types might not have 'role' if it's new
+        await supabase.from('profiles').update({ role: newUserRole } as any).eq('id', newUserId);
+        // Also update user_roles if needed
+        if (isAdmin) {
+          await supabase.from('user_roles').insert({ user_id: newUserId, role: newUserRole });
+        }
+      }
+
+      // Update Units
+      if (newUserUnits.length > 0) {
+        // Update unit_managers
+        await supabase.from('unit_managers').insert(
+          newUserUnits.map(unitId => ({ user_id: newUserId, unit_id: unitId }))
+        );
+        // Update primary unit in profile
+        await supabase.from('profiles').update({ unit_id: newUserUnits[0] }).eq('id', newUserId);
       }
 
       toast({
         title: 'Usuário criado',
-        description: `${newUserName} foi cadastrado com sucesso.`,
+        description: `${newUserName} foi cadastrado com sucesso e já pode fazer login.`,
       });
 
       // Reset form
@@ -339,7 +383,7 @@ export const SettingsView = () => {
   // For regular users (not admin or gestor), show only their profile settings
   if (!canManageUsers) {
     const userUnit = units?.find(u => u.id === myProfile?.unit_id);
-    
+
     return (
       <div className="p-6 space-y-6">
         <div>
@@ -391,8 +435,8 @@ export const SettingsView = () => {
                 />
               </div>
 
-              <Button 
-                onClick={handleUpdateMyProfile} 
+              <Button
+                onClick={handleUpdateMyProfile}
                 disabled={isUpdatingProfile || !myName.trim()}
               >
                 {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
@@ -434,12 +478,40 @@ export const SettingsView = () => {
                 />
               </div>
 
-              <Button 
-                onClick={handleChangePassword} 
+              <Button
+                onClick={handleChangePassword}
                 disabled={isChangingPassword || !newPassword || !confirmPassword}
               >
                 {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Theme / Appearance Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Moon className="w-5 h-5" />
+                Aparência
+              </CardTitle>
+              <CardDescription>
+                Personalize o tema visual do sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="theme-select-user">Tema da Interface</Label>
+                <Select value={theme} onValueChange={(v: "light" | "dark" | "system") => setTheme(v)}>
+                  <SelectTrigger id="theme-select-user">
+                    <SelectValue placeholder="Selecione um tema" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Claro</SelectItem>
+                    <SelectItem value="dark">Escuro</SelectItem>
+                    <SelectItem value="system">Padrão do Sistema</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -452,10 +524,12 @@ export const SettingsView = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-        <p className="text-muted-foreground">Gerencie usuários, unidades e permissões</p>
-      </div>
+      {!hideHeader && (
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
+          <p className="text-muted-foreground">Gerencie usuários, unidades e permissões</p>
+        </div>
+      )}
 
       <Tabs defaultValue="profile" className="space-y-4">
         <TabsList className="flex-wrap">
@@ -478,7 +552,7 @@ export const SettingsView = () => {
           {isAdmin && (
             <TabsTrigger value="sectors" className="flex items-center gap-2">
               <FolderKey className="w-4 h-4" />
-              Setores
+              Espaços
             </TabsTrigger>
           )}
           {isAdmin && (
@@ -526,8 +600,8 @@ export const SettingsView = () => {
                   />
                 </div>
 
-                <Button 
-                  onClick={handleUpdateMyProfile} 
+                <Button
+                  onClick={handleUpdateMyProfile}
                   disabled={isUpdatingProfile || !myName.trim()}
                 >
                   {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
@@ -569,12 +643,40 @@ export const SettingsView = () => {
                   />
                 </div>
 
-                <Button 
-                  onClick={handleChangePassword} 
+                <Button
+                  onClick={handleChangePassword}
                   disabled={isChangingPassword || !newPassword || !confirmPassword}
                 >
                   {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Theme / Appearance Card (Admin) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Moon className="w-5 h-5" />
+                  Aparência
+                </CardTitle>
+                <CardDescription>
+                  Personalize o tema visual do sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="theme-select-admin">Tema da Interface</Label>
+                  <Select value={theme} onValueChange={(v: "light" | "dark" | "system") => setTheme(v)}>
+                    <SelectTrigger id="theme-select-admin">
+                      <SelectValue placeholder="Selecione um tema" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Claro</SelectItem>
+                      <SelectItem value="dark">Escuro</SelectItem>
+                      <SelectItem value="system">Padrão do Sistema</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -732,7 +834,7 @@ export const SettingsView = () => {
               Altere os dados do usuário {editingUser?.email}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Nome Completo</Label>
@@ -759,7 +861,7 @@ export const SettingsView = () => {
                 )}
               </div>
             )}
-            
+
             <div className="space-y-2">
               <Label>Unidades</Label>
               <MultiAssigneeSelect
@@ -769,7 +871,7 @@ export const SettingsView = () => {
                 placeholder="Selecione as unidades"
               />
             </div>
-            
+
             {isAdmin && (
               <div className="space-y-2">
                 <Label htmlFor="edit-role">Função</Label>
@@ -786,7 +888,7 @@ export const SettingsView = () => {
               </div>
             )}
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingUser(null)}>
               Cancelar

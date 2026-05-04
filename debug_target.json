@@ -1,0 +1,25 @@
+[
+  {
+    "id": "a624801c-9515-4df1-bbd6-977297b86cc0",
+    "routine_id": "910cc76b-4d83-4050-acc2-55b220991176",
+    "title": "[Rotina] [Rotina] Debug Browser Test",
+    "description": "Rotina diaria: [Rotina] Debug Browser Test",
+    "status": "pendente",
+    "priority": 2,
+    "due_date": "2026-02-25T12:00:00+00:00",
+    "start_date": "2026-02-25T11:00:00+00:00",
+    "completed_at": null,
+    "assigned_to": "664cbb58-ebf3-43de-86f4-440163e6d166",
+    "unit_id": null,
+    "sector_id": "b77fb328-2a85-45ea-8062-326fa08686e9",
+    "section_id": null,
+    "google_event_id": null,
+    "created_by": "664cbb58-ebf3-43de-86f4-440163e6d166",
+    "created_at": "2026-02-25T20:41:44.471398+00:00",
+    "updated_at": "2026-02-25T20:41:44.471398+00:00",
+    "recurrence_mode": null,
+    "is_recurring": false,
+    "recurrence_frequency": null,
+    "parent_task_id": null
+  }
+]

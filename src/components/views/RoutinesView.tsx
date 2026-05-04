@@ -1,20 +1,32 @@
-import { useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { RoutineForm } from '@/components/RoutineForm';
-import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
-import { RoutineEditDialog } from '@/components/RoutineEditDialog';
-import { useRoutines } from '@/hooks/useRoutines';
-import { useRoutinePeriods, useAllActiveRoutinePeriods } from '@/hooks/useRoutineCheckins';
-import { useIsGestorOrAdmin } from '@/hooks/useUserRole';
-import { cn } from '@/lib/utils';
-import { Loader2, Calendar, ChevronRight, Clock } from 'lucide-react';
+import {
+  Search,
+  Filter,
+  Loader2,
+  Calendar,
+  Plus,
+  CheckCircle2,
+  Trash2,
+  X,
+  StickyNote
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useTasks } from '@/hooks/useTasks';
 import type { Tables, Enums } from '@/integrations/supabase/types';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
+import { RoutineListItem } from '@/components/RoutineListItem';
+import { ViewMode } from '@/types/navigation';
+import { KanbanView } from './KanbanView';
+import { GanttView } from './GanttView';
+import { CalendarView } from './CalendarView';
+import { RoutineEditDialog } from '@/components/RoutineEditDialog';
+import { BulkRoutineCompletionDialog } from '@/components/BulkRoutineCompletionDialog';
+import { useUserRole } from '@/hooks/useUserRole';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { NotesList } from '@/components/NotesList';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
@@ -112,15 +124,40 @@ const RoutineListItem = ({ routine, isSelected, onClick, onEdit, canEdit, period
 interface RoutinesViewProps {
   sectorId?: string;
   frequency?: string;
+  hideHeader?: boolean;
+  viewMode?: ViewMode;
 }
 
-export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
-  const [activeFrequency, setActiveFrequency] = useState<TaskFrequency | 'all'>(
-    (frequency as TaskFrequency) || 'all'
-  );
+export const RoutinesView = ({
+  sectorId,
+  frequency,
+  hideHeader,
+  viewMode = 'list'
+}: RoutinesViewProps) => {
+  const [activeFrequency, setActiveFrequency] = useState<string>(frequency || 'all');
+  const [activeTab, setActiveTab] = useState('routines');
+
+  // Sync activeFrequency with frequency prop from navigation changes
+  useEffect(() => {
+    if (frequency) {
+      setActiveFrequency(frequency);
+    } else {
+      setActiveFrequency('all');
+    }
+  }, [frequency]);
+  const [search, setSearch] = useState('');
   const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
   const [editingRoutine, setEditingRoutine] = useState<Tables<'routines'> | null>(null);
-  const { isGestorOrAdmin } = useIsGestorOrAdmin();
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['pendente']);
+  const [activeStatusFilter, setActiveStatusFilter] = useState<string>('active'); // Added state
+
+  const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>([]);
+  const [isBulkCompleteDialogOpen, setIsBulkCompleteDialogOpen] = useState(false);
+  const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null);
+
+  const { data: userRole } = useUserRole(); // Assuming this hook exists
+  const isGestorOrAdmin = userRole === 'admin' || userRole === 'gestor';
   const { data: routines, isLoading } = useRoutines();
   const { data: periodsByRoutine } = useAllActiveRoutinePeriods();
   const { data: allTasks } = useTasks();
@@ -156,20 +193,10 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
   });
 
   return (
-    <div className="flex h-full">
-      {/* Left Panel - List */}
-      <div className={cn(
-        'flex flex-col border-r border-border transition-all',
-        selectedRoutine ? 'w-1/2' : 'w-full'
-      )}>
-        <div className="p-6 border-b border-border">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground mb-1">Rotinas</h1>
-              <p className="text-muted-foreground">Gerencie rotinas com checkins por unidade</p>
-            </div>
-            <RoutineForm sectorId={sectorId} />
-          </div>
+    <div className="flex h-full flex-col">
+      {!hideHeader && (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col flex h-full">
+          {/* Header removed from here to save vertical space. Tabs moved to inner toolbars. */}
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-wrap gap-2">
@@ -200,54 +227,50 @@ export const RoutinesView = ({ sectorId, frequency }: RoutinesViewProps) => {
               </Label>
             </div>
           </div>
-        </div>
+        </Tabs>
+      )}
 
-        <div className="flex-1 overflow-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (!filteredRoutines || filteredRoutines.length === 0) ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhuma rotina encontrada</p>
-              <p className="text-sm mt-2">Crie rotinas para começar a gerenciar checkins por unidade</p>
-            </div>
-          ) : (
-            <div>
-              {filteredRoutines.map((routine) => (
-                <RoutineListItem
-                  key={routine.id}
-                  routine={routine}
-                  isSelected={selectedRoutine?.id === routine.id}
-                  onClick={() => setSelectedRoutine(routine)}
-                  onEdit={(e) => {
-                    e.stopPropagation();
-                    setEditingRoutine(routine);
-                  }}
-                  canEdit={isGestorOrAdmin}
-                  periodDates={periodsByRoutine?.get(routine.id) || null}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right Panel - Detail */}
-      {selectedRoutine && (
-        <div className="w-1/2">
-          <RoutineDetailPanel
-            routine={selectedRoutine}
-            onClose={() => setSelectedRoutine(null)}
-          />
+      {/* Fallback for when HideHeader is true (if accessed via embedding, unlikely for main view but good for safety) */}
+      {hideHeader && (
+        <div className="w-full h-full flex flex-col p-4">
+          {renderContent()}
         </div>
       )}
+
+      {/* Detail Panel via Sheet */}
+      <Sheet open={!!selectedRoutine} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedRoutine(null);
+          setSelectedRoutineDate(null);
+        }
+      }}>
+        <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
+          {selectedRoutine && (
+            <div className="h-full overflow-y-auto">
+              <RoutineDetailPanel
+                routine={selectedRoutine}
+                onClose={() => {
+                  setSelectedRoutine(null);
+                  setSelectedRoutineDate(null);
+                }}
+                contextDate={selectedRoutineDate}
+              />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <RoutineEditDialog
         routine={editingRoutine}
         open={!!editingRoutine}
         onOpenChange={(open) => !open && setEditingRoutine(null)}
+      />
+
+      <BulkRoutineCompletionDialog
+        open={isBulkCompleteDialogOpen}
+        onOpenChange={setIsBulkCompleteDialogOpen}
+        selectedRoutineIds={selectedRoutineIds}
+        onSuccess={() => setSelectedRoutineIds([])}
       />
     </div>
   );

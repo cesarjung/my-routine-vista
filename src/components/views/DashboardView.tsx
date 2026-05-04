@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Building2, Users, Loader2, CheckCircle2, Maximize2, X, ExternalLink } from 'lucide-react';
-import { useUnitRoutineStatus, useResponsibleRoutineStatus, useOverallStats } from '@/hooks/useDashboardData';
+import { useOverallStats } from '@/hooks/useDashboardData';
 import { useDashboardPanels } from '@/hooks/useDashboardPanels';
-import { useSectors } from '@/hooks/useSectors';
 import { useTasks } from '@/hooks/useTasks';
 import { useIsAdmin } from '@/hooks/useUserRole';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -13,6 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Tooltip,
   TooltipContent,
@@ -30,7 +39,8 @@ import { Badge } from '@/components/ui/badge';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
 import { CustomPanel } from '@/components/dashboard/CustomPanel';
 import { UnifiedDraggablePanels } from '@/components/dashboard/UnifiedDraggablePanels';
-import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
+import { TaskTrackerPanel } from '@/components/dashboard/TaskTrackerPanel';
+
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -147,9 +157,9 @@ const ResizablePanel = ({ title, icon: Icon, count, children, defaultHeight = 28
   return (
     <div
       className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
-      style={{ 
-        minHeight: 150, 
-        minWidth: 280, 
+      style={{
+        minHeight: 150,
+        minWidth: 280,
         height: defaultHeight,
         width: defaultWidth,
         maxWidth: '100%'
@@ -178,7 +188,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
   const { data: allTasks, isLoading } = useTasks(undefined, { enabled: state.isOpen });
 
   // Filter tasks based on entity type and frequency
-  const filteredTasks = allTasks?.filter(task => {
+  const filteredTasks = allTasks?.filter((task: any) => {
     // Filter by entity (unit or responsible)
     if (state.entityType === 'unit') {
       if (task.unit_id !== state.entityId) return false;
@@ -193,7 +203,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
     // Note: We need to check if the task has a routine with the matching frequency
     // For now, we show all tasks for the entity since we don't have routine data here
     // This will be filtered in the hook if needed
-    
+
     return true;
   }) || [];
 
@@ -215,7 +225,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
             )}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="flex-1 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -227,7 +237,7 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredTasks.map(task => (
+              {filteredTasks.map((task: any) => (
                 <div
                   key={task.id}
                   className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
@@ -244,9 +254,9 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
                     <Badge
                       variant={
                         task.status === 'concluida' ? 'default' :
-                        task.status === 'atrasada' ? 'destructive' :
-                        task.status === 'em_andamento' ? 'secondary' :
-                        'outline'
+                          task.status === 'atrasada' ? 'destructive' :
+                            task.status === 'em_andamento' ? 'secondary' :
+                              'outline'
                       }
                       className="shrink-0"
                     >
@@ -264,13 +274,36 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
           )}
         </div>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 };
 
-export const DashboardView = () => {
-  const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
+import { useSectors } from '@/hooks/useSectors';
+
+export interface DashboardViewProps {
+  forcedSectorId?: string;
+  hideHeader?: boolean;
+}
+
+export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps) => {
+  const { user } = useAuth();
+
+  // State for multi-sector filtering
+  const [selectedSectorIds, setSelectedSectorIds] = useState<string[]>(() => {
+    if (forcedSectorId) return [forcedSectorId];
+    try {
+      const stored = localStorage.getItem('dashboard_global_sector_filters');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Track the layout context based strictly on forcedSectorId or 'global'
+  const contextIdentifier = forcedSectorId || 'global';
+
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [activeTab, setActiveTab] = useState('public');
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
     isOpen: false,
     title: '',
@@ -278,16 +311,49 @@ export const DashboardView = () => {
     entityType: 'unit',
     frequency: '',
   });
-  
+
+  // Effect to update if forcedSectorId changes
+  useEffect(() => {
+    if (forcedSectorId) {
+      setSelectedSectorIds([forcedSectorId]);
+    }
+  }, [forcedSectorId]);
+
+  // Save to localstorage when changes
+  useEffect(() => {
+    if (!forcedSectorId) {
+      localStorage.setItem('dashboard_global_sector_filters', JSON.stringify(selectedSectorIds));
+    }
+  }, [selectedSectorIds, forcedSectorId]);
+
   const { data: sectors } = useSectors();
-  const { data: statsData } = useOverallStats(selectedSectorId);
-  const { data: unitStatus, isLoading: loadingUnits } = useUnitRoutineStatus(selectedSectorId);
-  const { data: responsibleStatus, isLoading: loadingResponsibles } = useResponsibleRoutineStatus(selectedSectorId);
-  const { data: customPanels, isLoading: loadingPanels } = useDashboardPanels();
+  const { data: statsData } = useOverallStats(selectedSectorIds);
+  const { data: customPanels } = useDashboardPanels();
   const { isAdmin } = useIsAdmin();
 
-  const isLoading = loadingUnits || loadingResponsibles;
   const overallPercentage = statsData?.percentage || 0;
+
+  const filteredPanels = customPanels?.filter(panel => {
+    // Backwards compatibility: if dashboard_context doesn't exist, try to infer from sector_id or treat as global
+    let panelContext = panel.filters?.dashboard_context;
+
+    if (!panelContext) {
+      if (panel.filters?.sector_id && typeof panel.filters.sector_id === 'string') {
+        panelContext = panel.filters.sector_id;
+      } else {
+        panelContext = 'global';
+      }
+    }
+
+    if (panelContext !== contextIdentifier) return false;
+
+    // Permissions checking
+    if (activeTab === 'public') {
+      return !panel.is_private;
+    } else {
+      return panel.is_private && panel.user_id === user?.id;
+    }
+  }) || [];
 
   const openTasksDialog = (
     entityId: string,
@@ -314,10 +380,10 @@ export const DashboardView = () => {
       <div className="fixed inset-0 z-50 bg-background overflow-auto">
         {/* Fullscreen Header */}
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-8 py-4 flex items-center justify-between">
-          <img src={sirtecLogoHeader} alt="Sirtec" className="h-12 object-contain" />
+
           <h1 className="text-2xl font-bold text-foreground">Gerenciamento de Rotinas</h1>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={() => setIsFullscreen(false)}
             className="hover:bg-destructive/10"
@@ -328,14 +394,14 @@ export const DashboardView = () => {
 
         {/* Fullscreen Content */}
         <div className="p-8 space-y-6">
-          {/* Legend */}
-          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-            <span><b>D</b>=Diária <b>S</b>=Semanal <b>Q</b>=Quinzenal <b>M</b>=Mensal</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-success/30" />100%</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-500/30" />≥70%</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-warning/30" />≥40%</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-destructive/30" />&lt;40%</span>
-          </div>
+          {/* Tabs for fullscreen */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[500px]">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="public">Dashboard Público</TabsTrigger>
+              <TabsTrigger value="private">Meu Dashboard Privado</TabsTrigger>
+              <TabsTrigger value="tracker">Rastreador de Tarefas</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
           {/* Custom Panels */}
           {customPanels && customPanels.length > 0 && (
@@ -352,117 +418,66 @@ export const DashboardView = () => {
             </div>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground font-medium">Painéis Padrão</p>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                {/* Units Panel */}
-                <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0} defaultHeight={400}>
-                  {unitStatus?.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">Sem dados</div>
-                  ) : (
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-card z-10">
-                        <tr className="border-b border-border">
-                          <th className="text-left p-3 font-medium text-muted-foreground">Nome</th>
-                          {FREQUENCIES.map(f => <th key={f} className="p-2 text-center font-medium text-muted-foreground w-12">{FREQUENCY_LABELS[f]}</th>)}
-                          <th className="p-3 text-right font-medium text-muted-foreground w-14">%</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/50">
-                        {unitStatus?.map(unit => (
-                          <tr key={unit.id} className="hover:bg-secondary/20">
-                            <td className="p-3">
-                              <p className="font-medium text-foreground">{unit.name}</p>
-                            </td>
-                            {FREQUENCIES.map(f => (
-                              <td key={f} className="p-2 text-center">
-                                <StatusBadge 
-                                  data={unit.frequencies[f]} 
-                                  frequency={f}
-                                  onClick={unit.frequencies[f].total > 0 
-                                    ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
-                                    : undefined
-                                  }
-                                />
-                              </td>
-                            ))}
-                            <td className="p-3 text-right"><TotalBadge data={unit.totals} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </ResizablePanel>
-
-                {/* Responsibles Panel */}
-                <ResizablePanel title="Responsáveis" icon={Users} count={responsibleStatus?.length || 0} defaultHeight={400}>
-                  {responsibleStatus?.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">Sem dados</div>
-                  ) : (
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-card z-10">
-                        <tr className="border-b border-border">
-                          <th className="text-left p-3 font-medium text-muted-foreground">Nome</th>
-                          {FREQUENCIES.map(f => <th key={f} className="p-2 text-center font-medium text-muted-foreground w-12">{FREQUENCY_LABELS[f]}</th>)}
-                          <th className="p-3 text-right font-medium text-muted-foreground w-14">%</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/50">
-                        {responsibleStatus?.map(person => (
-                          <tr key={person.id} className="hover:bg-secondary/20">
-                            <td className="p-3">
-                              <p className="font-medium text-foreground">{person.name}</p>
-                            </td>
-                            {FREQUENCIES.map(f => (
-                              <td key={f} className="p-2 text-center">
-                                <StatusBadge 
-                                  data={person.frequencies[f]} 
-                                  frequency={f}
-                                  onClick={person.frequencies[f].total > 0 
-                                    ? () => openTasksDialog(person.id, person.name, 'responsible', f)
-                                    : undefined
-                                  }
-                                />
-                              </td>
-                            ))}
-                            <td className="p-3 text-right"><TotalBadge data={person.totals} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </ResizablePanel>
+              {/* Legend */}
+              <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                <span><b>D</b>=Diária <b>S</b>=Semanal <b>Q</b>=Quinzenal <b>M</b>=Mensal</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-success/30" />100%</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-500/30" />≥70%</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-warning/30" />≥40%</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-destructive/30" />&lt;40%</span>
               </div>
+
+              {/* Custom Panels */}
+              {filteredPanels && filteredPanels.length > 0 ? (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                  {filteredPanels.map(panel => (
+                    <CustomPanel key={panel.id} panel={panel} />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-lg border border-border border-dashed">
+                  <p className="text-lg font-medium">Nenhum painel configurado</p>
+                  <p className="text-sm">Vá até as Engrenagens do Topo Direto ou '+' para adicionar painéis customizados.</p>
+                </div>
+              )}
             </>
           )}
-        </div>
 
-        {/* Tasks Dialog */}
-        <TasksDialog 
-          state={tasksDialog} 
-          onClose={closeTasksDialog}
-          sectorId={selectedSectorId}
-        />
+          {/* Tasks Dialog */}
+          <TasksDialog
+            state={tasksDialog}
+            onClose={closeTasksDialog}
+            sectorId={selectedSectorId}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className={cn("flex flex-col h-full", activeTab === 'tracker' ? "overflow-hidden" : "overflow-auto space-y-3")}>
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
           <div className={cn(
             'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold',
             overallPercentage >= 70 ? 'bg-success/20 text-success' :
-            overallPercentage >= 40 ? 'bg-warning/20 text-warning' :
-            'bg-destructive/20 text-destructive'
+              overallPercentage >= 40 ? 'bg-warning/20 text-warning' :
+                'bg-destructive/20 text-destructive'
           )}>
             {overallPercentage}%
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[450px] hidden sm:block">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="public">Público</TabsTrigger>
+              <TabsTrigger value="private">Minha Visão</TabsTrigger>
+              <TabsTrigger value="tracker">Rastreador</TabsTrigger>
+            </TabsList>
+          </Tabs>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -481,32 +496,55 @@ export const DashboardView = () => {
             </Tooltip>
           </TooltipProvider>
 
-          {isAdmin && <PanelFormDialog panelCount={customPanels?.length || 0} />}
-          
-          <Select
-            value={selectedSectorId || 'all'}
-            onValueChange={(value) => setSelectedSectorId(value === 'all' ? null : value)}
-          >
-            <SelectTrigger className="h-8 w-[150px] text-xs">
-              <SelectValue placeholder="Setor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {sectors?.map(sector => (
-                <SelectItem key={sector.id} value={sector.id}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sector.color || '#6366f1' }} />
-                    {sector.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {isAdmin && <PanelFormDialog panelCount={filteredPanels?.length || 0} dashboardContext={contextIdentifier} />}
+
+          {!forcedSectorId && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed font-normal">
+                  Filtro Setor
+                  {selectedSectorIds.length > 0 && (
+                    <Badge variant="secondary" className="px-1 rounded-sm text-[10px] h-4">
+                      {selectedSectorIds.length}
+                    </Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                <DropdownMenuLabel>Filtrar por Setor</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={selectedSectorIds.length === 0}
+                  onCheckedChange={() => setSelectedSectorIds([])}
+                >
+                  <span className="font-semibold text-primary">Todos</span>
+                </DropdownMenuCheckboxItem>
+                {sectors?.map(sector => (
+                  <DropdownMenuCheckboxItem
+                    key={sector.id}
+                    checked={selectedSectorIds.includes(sector.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedSectorIds(prev => [...prev, sector.id]);
+                      } else {
+                        setSelectedSectorIds(prev => prev.filter(id => id !== sector.id));
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sector.color || '#6366f1' }} />
+                      {sector.name}
+                    </div>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+      <div className={cn("flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap", activeTab === 'tracker' ? "hidden" : "flex-shrink-0")}>
         <span><b>D</b>=Diária <b>S</b>=Semanal <b>Q</b>=Quinzenal <b>M</b>=Mensal</span>
         <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-success/30" />100%</span>
         <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-emerald-500/30" />≥70%</span>
@@ -514,12 +552,12 @@ export const DashboardView = () => {
         <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-destructive/30" />&lt;40%</span>
       </div>
 
-      {/* All Panels with Unified Drag and Drop */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-5 h-5 animate-spin text-primary" />
+      {activeTab === 'tracker' ? (
+        <div className="mt-4 flex-1 overflow-hidden min-h-0 flex flex-col border rounded-lg bg-card shadow-sm">
+          <TaskTrackerPanel sectorIds={selectedSectorIds} />
         </div>
       ) : (
+        /* All Panels with Unified Drag and Drop */
         <UnifiedDraggablePanels
           customPanels={customPanels || []}
           selectedSectorId={selectedSectorId}
@@ -603,13 +641,6 @@ export const DashboardView = () => {
           )}
         />
       )}
-
-      {/* Tasks Dialog */}
-      <TasksDialog 
-        state={tasksDialog} 
-        onClose={closeTasksDialog}
-        sectorId={selectedSectorId}
-      />
     </div>
   );
 };

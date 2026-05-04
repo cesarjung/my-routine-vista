@@ -1,13 +1,14 @@
+import { useState } from 'react';
 import { NavigationContext, ViewMode } from '@/types/navigation';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { DashboardView } from '@/components/views/DashboardView';
-import { TasksView } from '@/components/views/TasksView';
-import { RoutinesView } from '@/components/views/RoutinesView';
+import { TasksView } from './views/TasksView';
+import { RoutinesView } from './views/RoutinesView';
 import { MyTasksView } from '@/components/views/MyTasksView';
 import { SectorUnitsView } from '@/components/views/SectorUnitsView';
-import { KanbanView } from '@/components/views/KanbanView';
-import { GanttView } from '@/components/views/GanttView';
-import { CalendarView } from '@/components/views/CalendarView';
+import { KanbanView } from './views/KanbanView';
+import { GanttView } from './views/GanttView';
+import { CalendarView } from './views/CalendarView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { useSectors } from '@/hooks/useSectors';
 import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
@@ -28,7 +29,7 @@ export interface ContentAreaProps {
 }
 
 export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentAreaProps) => {
-  const { data: sectors = [] } = useSectors();
+  const { data: sectors } = useSectors();
 
   const getTitle = () => {
     switch (context.type) {
@@ -75,8 +76,12 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     }
   };
 
-  const showViewToggle = context.type === 'all-sectors' || 
-    (context.type === 'sector' && context.folder !== 'units');
+  // Dashboard View
+  if (context.type === 'dashboard') {
+    return (
+      <div className="h-full flex flex-col p-6">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
 
   const renderContent = () => {
     // Views especiais sem toggle
@@ -106,54 +111,166 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       return <EtapasView />;
     }
 
-    // Contextos com toggle de visualização
-    const sectorId = context.type === 'sector' ? context.sectorId : undefined;
-    const folder = context.type === 'sector' ? context.folder : undefined;
-    const frequency = context.type === 'sector' ? context.frequency : undefined;
+  // Settings View
+  if (context.type === 'settings') {
+    return (
+      <div className="h-full flex flex-col p-6">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
 
-    // Unidades view dentro do setor
-    if (context.type === 'sector' && folder === 'units' && sectorId) {
-      return <SectorUnitsView sectorId={sectorId} />;
-    }
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Configurações</h1>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                <span>Sistema</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="w-full h-full">
+          <SettingsView hideHeader={true} />
+        </div>
+      </div>
+    );
+  }
 
-    switch (viewMode) {
-      case 'list':
-        if (folder === 'routines') {
-          return <RoutinesView sectorId={sectorId} frequency={frequency} />;
-        }
-        return <TasksView sectorId={sectorId} />;
-      case 'kanban':
-        return <KanbanView sectorId={sectorId} />;
-      case 'calendar':
-        return <CalendarView sectorId={sectorId} />;
-      case 'gantt':
-        return <GanttView sectorId={sectorId} />;
-      default:
-        return <TasksView sectorId={sectorId} />;
-    }
-  };
+  // My Tasks View
+  if (context.type === 'my-tasks') {
+    return (
+      <div className="h-full flex flex-col p-6">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
 
   const isDashboard = context.type === 'dashboard';
   const isPlanejamento = context.type === 'planejamento' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas';
 
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="px-6 py-4 border-b border-border flex items-center justify-between">
-        {isDashboard ? (
-          <img src={sirtecLogoHeader} alt="Sirtec" className="h-10 object-contain" />
-        ) : (
-          <h1 className="text-xl font-semibold text-foreground">{getTitle()}</h1>
-        )}
-        <div className="flex items-center gap-4">
-          {isDashboard && (
-            <h1 className="text-lg font-bold text-foreground">Gerenciamento de Rotinas</h1>
-          )}
-          {showViewToggle && (
+          <div className="flex items-center gap-4">
             <ViewModeToggle value={viewMode} onChange={onViewModeChange} />
+          </div>
+        </header>
+        <div className="w-full h-full">
+          <MyTasksView viewMode={viewMode} />
+        </div>
+      </div>
+    );
+  }
+
+  // Notes View
+  if (context.type === 'notes') {
+    return (
+      <div className="h-full flex flex-col p-6">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
+
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Anotações e Quadros</h1>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                <span>Geral</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="w-full h-full overflow-hidden">
+          <NotesList />
+        </div>
+      </div>
+    );
+  }
+
+  // Sector specific view
+  if (context.type === 'sector') {
+    const { sectorId, folder, frequency } = context;
+    const sector = sectors?.find(s => s.id === sectorId);
+
+    const currentSection = sector?.sections?.find(s => s.id === folder || s.type === folder);
+
+    // Handle Dashboard folder specifically
+    if (folder === 'dashboard' || currentSection?.type === 'dashboard') {
+      return (
+        <div className="h-full flex flex-col p-6">
+          <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+            <div className="flex items-center gap-4">
+
+              <div>
+                <h1 className="text-base font-semibold text-foreground leading-none mb-1">
+                  {sector?.name}
+                </h1>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                  <span>Dashboard</span>
+                </div>
+              </div>
+            </div>
+          </header>
+          <div className="w-full h-full">
+            <DashboardView key={`dashboard-${sectorId}`} forcedSectorId={sectorId} hideHeader={true} />
+          </div>
+        </div>
+      );
+    }
+
+    const getTitle = () => {
+      if (context.type === 'sector') {
+        return sector ? sector.name : 'Setor';
+      }
+      return 'Gestão CCM';
+    };
+
+    const sectionTitle = currentSection ? currentSection.title : (folder === 'routines' ? 'Rotinas' : folder === 'tasks' ? 'Tarefas' : folder === 'notes' ? 'Anotações' : folder);
+
+    const showViewToggle = folder !== 'units';
+
+    return (
+      <div className="h-full flex flex-col p-6">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
+
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">
+                {getTitle()}
+              </h1>
+              {sector && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                  <span className="capitalize">{sectionTitle}</span>
+                  {frequency && (
+                    <>
+                      <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
+                      <span className="capitalize">{frequency}</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 overflow-x-auto pb-1 md:pb-0">
+            {showViewToggle && (
+              <ViewModeToggle value={viewMode} onChange={onViewModeChange} />
+            )}
+          </div>
+        </header>
+
+        <div className="w-full h-full">
+          {folder === 'units' ? (
+            <SectorUnitsView sectorId={sectorId} />
+          ) : folder === 'routines' ? (
+            <RoutinesView
+              sectorId={sectorId}
+              frequency={frequency}
+              viewMode={viewMode}
+            />
+          ) : folder === 'notes' ? (
+            <NotesList sectorId={sectorId} />
+          ) : (
+            <TasksView
+              sectorId={sectorId}
+              sectionId={folder}
+              isDefaultTasksSection={currentSection?.type === 'tasks' || folder === 'tasks'}
+              viewMode={viewMode}
+            />
           )}
         </div>
-      </header>
+      </div>
+    );
+  }
 
       {/* Content */}
       <main className={cn("flex-1 flex flex-col", isPlanejamento ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>

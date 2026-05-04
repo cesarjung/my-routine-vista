@@ -78,20 +78,22 @@ const formSchema = z.object({
   repeatForever: z.boolean().optional(),
   recurrenceEndDate: z.date().optional(),
   skipWeekendsHolidays: z.boolean().optional(),
+  monthlyAnchor: z.enum(['date', 'weekday'] as const).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface RoutineFormProps {
   sectorId?: string;
+  onSuccess?: () => void;
 }
 
-export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
+export const RoutineForm = ({ sectorId, onSuccess }: RoutineFormProps) => {
   const [open, setOpen] = useState(false);
   const [unitAssignments, setUnitAssignments] = useState<UnitAssignment[]>([]);
   const [unitError, setUnitError] = useState<string | null>(null);
   const [parentAssignees, setParentAssignees] = useState<string[]>([]);
-  
+
   const { user } = useAuth();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
   const createRoutine = useCreateRoutineWithUnits();
@@ -115,6 +117,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
       repeatForever: true,
       recurrenceEndDate: undefined,
       skipWeekendsHolidays: false,
+      monthlyAnchor: 'date',
     },
   });
 
@@ -129,7 +132,7 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     const managerUserIds = unitManagers
       ?.filter(um => um.unit_id === unitId)
       ?.map(um => um.user_id) || [];
-    return allProfiles.filter(p => 
+    return allProfiles.filter(p =>
       p.unit_id === unitId || managerUserIds.includes(p.id)
     );
   }, [allProfiles, unitManagers]);
@@ -146,9 +149,18 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
   }, []);
 
   const updateUnitAssignees = useCallback((unitId: string, assignedToIds: string[]) => {
-    setUnitAssignments(prev => 
-      prev.map(a => a.unitId === unitId ? { ...a, assignedToIds } : a)
-    );
+    setUnitAssignments(prev => {
+      const updated = prev.map(a => {
+        if (a.unitId === unitId) {
+          return {
+            ...a,
+            assignedToIds: [...assignedToIds] // Create copy to ensure new reference
+          };
+        }
+        return a;
+      });
+      return updated;
+    });
   }, []);
 
   const selectAllUnits = useCallback(() => {
@@ -175,32 +187,65 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
     const effectiveParentAssignees = isGestorOrAdmin
       ? (parentAssignees.length > 0 ? parentAssignees : [user?.id || ''].filter(Boolean))
       : [user?.id || ''].filter(Boolean);
-    
+
+    // Deep copy unitAssignments to avoid mutation issues
+    const currentAssignments = [...unitAssignments];
+
+    console.log('[RoutineForm] 1. Initial State:', currentAssignments);
+
+    // Process assignments to include defaults
+    const resolvedUnitAssignments = currentAssignments.map(ua => {
+      // 1. If we have manual assignments, USE THEM.
+      if (ua.assignedToIds && ua.assignedToIds.length > 0) {
+        console.log(`[RoutineForm] Unit ${ua.unitId} has manual assignees:`, ua.assignedToIds);
+        return { ...ua };
+      }
+
+      // 2. If NO manual assignments, use ALL Unit Managers for that unit.
+      const defaultManagers = unitManagers
+        ?.filter(um => um.unit_id === ua.unitId)
+        .map(um => um.user_id) || [];
+
+      console.log(`[RoutineForm] Unit ${ua.unitId} using default managers:`, defaultManagers);
+
+      return {
+        ...ua,
+        assignedToIds: defaultManagers
+      };
+    });
+
+    console.log('[RoutineForm] 2. Final Payload to Mutation:', resolvedUnitAssignments);
+
     await createRoutine.mutateAsync({
       title: data.title,
       description: data.description,
       frequency: data.isRecurring ? (data.recurrenceFrequency || 'semanal') : 'semanal',
       recurrenceMode: data.isRecurring ? (data.recurrenceMode || 'schedule') : 'schedule',
-      unitAssignments: unitAssignments,
+      unitAssignments: resolvedUnitAssignments,
       parentAssignedTo: effectiveParentAssignees[0] || null,
       parentAssignees: effectiveParentAssignees as string[],
       sectorId: sectorId,
       skipWeekendsHolidays: data.skipWeekendsHolidays || false,
+      monthlyAnchor: data.monthlyAnchor,
       startDate: combineDateAndTime(data.startDate, data.startTime),
       dueDate: combineDateAndTime(data.dueDate, data.dueTime),
+      repeatForever: data.repeatForever,
+      recurrenceEndDate: data.recurrenceEndDate ? data.recurrenceEndDate.toISOString() : undefined,
     });
+
     form.reset();
     setUnitAssignments([]);
     setUnitError(null);
     setParentAssignees([]);
     setOpen(false);
+    onSuccess?.();
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
+        <Button className="h-8 gap-1.5 text-xs px-3 whitespace-nowrap shrink-0">
+          <Plus className="h-3.5 w-3.5" />
           Nova Rotina
         </Button>
       </DialogTrigger>
@@ -457,33 +502,36 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="recurrenceMode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Modo de Recorrência</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o modo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {recurrenceModeOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {recurrenceModeOptions.find(o => o.value === field.value)?.description}
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+
+
+                {form.watch('recurrenceFrequency') === 'mensal' && (
+                  <FormField
+                    control={form.control}
+                    name="monthlyAnchor"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Repetição Mensal</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || 'date'}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o tipo de repetição" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="date">Mesmo dia do Mês (ex: todo dia 15)</SelectItem>
+                            <SelectItem value="weekday">Mesmo dia da Semana (ex: toda 2ª Quarta-feira)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription className="text-xs">
+                          {field.value === 'date'
+                            ? 'A tarefa será criada sempre na mesma data, ajustando se cair em fim de semana.'
+                            : 'A tarefa será criada mantendo a posição na semana.'}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}
@@ -627,9 +675,9 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                     </Button>
                   </div>
                 </div>
-                
-                <div className="border border-border rounded-md overflow-y-auto max-h-60">
-                  <div className="p-3 space-y-2">
+
+                <div className="border border-border rounded-md overflow-hidden flex flex-col max-h-60 h-full">
+                  <div className="p-1 space-y-1 flex-1 overflow-y-auto w-full h-full custom-scrollbar">
                     {loadingUnits ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -639,41 +687,39 @@ export const RoutineForm = ({ sectorId }: RoutineFormProps) => {
                         const isSelected = selectedSet.has(unit.id);
                         const assignment = unitAssignments.find(a => a.unitId === unit.id);
                         const profilesForUnit = getProfilesForUnit(unit.id);
-                        
+
                         return (
                           <div
                             key={unit.id}
                             className={cn(
-                              "rounded-md border transition-colors",
-                              isSelected ? 'bg-primary/10 border-primary/30' : 'border-transparent hover:bg-secondary/50'
+                              "rounded-md border transition-colors cursor-pointer",
+                              isSelected ? 'bg-primary/5 border-primary/20' : 'border-transparent hover:bg-secondary/20'
                             )}
                           >
                             <div
                               onClick={() => toggleUnit(unit.id)}
-                              className="flex items-center gap-3 p-3 cursor-pointer"
+                              className="flex items-center gap-3 p-2 py-1.5"
                             >
                               <div className={cn(
-                                "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0",
-                                isSelected ? 'bg-primary border-primary' : 'border-input'
+                                "h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                                isSelected ? 'bg-primary border-primary' : 'border-input hover:border-primary/50'
                               )}>
                                 {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{unit.name}</p>
-                                <p className="text-xs text-muted-foreground">{unit.code}</p>
                               </div>
                             </div>
-                            
+
                             {isSelected && (
-                              <div className="px-3 pb-3 pt-0">
+                              <div className="px-3 pb-2 pt-0" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2 pl-7">
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">Responsáveis:</span>
-                                  <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex-1">
                                     <MultiAssigneeSelect
                                       profiles={profilesForUnit}
                                       selectedIds={assignment?.assignedToIds || []}
                                       onChange={(ids) => updateUnitAssignees(unit.id, ids)}
-                                      placeholder="Selecionar responsáveis..."
+                                      placeholder="Padrão: Todos os Gestores"
                                     />
                                   </div>
                                 </div>

@@ -1,16 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
-import type { Tables, Enums } from '@/integrations/supabase/types';
 
-export type Task = Tables<'tasks'>;
-export type TaskStatus = Enums<'task_status'>;
+export type Task = any;
+export type TaskStatus = any;
 
 export interface TaskWithDetails extends Task {
-  routine?: Tables<'routines'> | null;
-  unit?: Tables<'units'> | null;
-  subtasks?: Tables<'subtasks'>[];
+  routine?: any;
+  unit?: any;
+  subtasks?: any[];
+  assignees?: any[]; // Array of profiles
 }
 
 export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
@@ -20,6 +20,11 @@ export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['tasks', unitId, user?.id, role],
     queryFn: async () => {
+      // Date limit to prevent fetching thousands of historic tasks
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      const twoMonthsAgoStr = twoMonthsAgo.toISOString();
+
       let query = supabase
         .from('tasks')
         .select(`
@@ -28,6 +33,7 @@ export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
           unit:units(*),
           subtasks(*)
         `)
+        .gte('created_at', twoMonthsAgoStr) // Bound the query!
         .order('due_date', { ascending: true });
 
       if (unitId) {
@@ -38,18 +44,27 @@ export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
 
       if (error) throw error;
 
-      // Se usuário não é admin/gestor, filtrar para mostrar apenas suas tarefas ou tarefas da sua unidade
+      let filteredTasks = data as TaskWithDetails[];
+
+      // Filter out tasks from inactive routines AND orphan tasks (routine deleted but task remains)
+      filteredTasks = filteredTasks.filter(task => {
+        // If task has a routine_id but no joined routine data, it's an orphan (zombie) task -> Hide it
+        if (task.routine_id && !task.routine) return false;
+
+        if (!task.routine) return true; // Genuine standalone task
+        return (task.routine as any).is_active !== false; // Active routine
+      });
+
+      // Permission Filtering
       if (role === 'usuario' && user?.id) {
-        // Buscar unit_id do usuário
         const { data: profile } = await supabase
           .from('profiles')
           .select('unit_id')
           .eq('id', user.id)
           .single();
-        
+
         const userUnitId = profile?.unit_id;
 
-        // Buscar tarefas atribuídas ao usuário
         const { data: taskAssignees } = await supabase
           .from('task_assignees')
           .select('task_id')
@@ -57,20 +72,59 @@ export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
 
         const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
 
-        return (data as TaskWithDetails[]).filter(task => {
-          // Mostrar se o usuário é o assigned_to
+        filteredTasks = filteredTasks.filter(task => {
           if (task.assigned_to === user.id) return true;
-          // Mostrar se o usuário está na tabela task_assignees
           if (assignedTaskIds.has(task.id)) return true;
-          // Mostrar se a tarefa é da unidade do usuário
           if (userUnitId && task.unit_id === userUnitId) return true;
           return false;
         });
       }
 
-      return data as TaskWithDetails[];
+      // Fetch and merge assignees for the filtered tasks
+      return await fetchAndMergeAssignees(filteredTasks);
     },
     enabled: !!user?.id && (options?.enabled !== false),
+  });
+};
+
+export const useDeleteTasks = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskIds: string[]) => {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .in('id', taskIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+    },
+  });
+};
+
+export const useBulkUpdateTasks = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ taskIds, status }: { taskIds: string[], status: TaskStatus }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status })
+        .in('id', taskIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['routines'] });
+    },
   });
 };
 
@@ -94,14 +148,25 @@ export const useTasksByStatus = (status: TaskStatus) => {
 
       if (error) throw error;
 
-      // Se usuário não é admin/gestor, filtrar
+      let filteredTasks = data as TaskWithDetails[];
+
+      // Filter out tasks from inactive routines AND orphan tasks
+      filteredTasks = filteredTasks.filter(task => {
+        // If task has a routine_id but no joined routine data, it's an orphan (zombie) task -> Hide it
+        if (task.routine_id && !task.routine) return false;
+
+        if (!task.routine) return true; // Standalone task
+        return (task.routine as any).is_active !== false; // Active routine
+      });
+
+      // Permission Filtering
       if (role === 'usuario' && user?.id) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('unit_id')
           .eq('id', user.id)
           .single();
-        
+
         const userUnitId = profile?.unit_id;
 
         const { data: taskAssignees } = await supabase
@@ -111,7 +176,7 @@ export const useTasksByStatus = (status: TaskStatus) => {
 
         const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
 
-        return (data as TaskWithDetails[]).filter(task => {
+        filteredTasks = filteredTasks.filter(task => {
           if (task.assigned_to === user.id) return true;
           if (assignedTaskIds.has(task.id)) return true;
           if (userUnitId && task.unit_id === userUnitId) return true;
@@ -119,7 +184,8 @@ export const useTasksByStatus = (status: TaskStatus) => {
         });
       }
 
-      return data as TaskWithDetails[];
+      // Fetch and merge assignees for the filtered tasks
+      return await fetchAndMergeAssignees(filteredTasks);
     },
     enabled: !!user?.id,
   });
@@ -147,7 +213,7 @@ export const useTaskStats = () => {
           .select('unit_id')
           .eq('id', user.id)
           .single();
-        
+
         const userUnitId = profile?.unit_id;
 
         const { data: taskAssignees } = await supabase
@@ -180,22 +246,41 @@ export const useTaskStats = () => {
 };
 
 // Hook to get tasks linked to a specific routine
-export const useRoutineTasks = (routineId: string) => {
+export const useRoutineTasks = (routineId: string, contextDate?: string, exactDate?: string) => {
   return useQuery({
-    queryKey: ['routine-tasks', routineId],
+    queryKey: ['routine-tasks', routineId, contextDate, exactDate],
     queryFn: async () => {
-      // Get parent task for this routine
-      const { data: parentTask, error: parentError } = await supabase
+      let query = supabase
         .from('tasks')
         .select(`
           *,
           unit:units(id, name, code)
         `)
         .eq('routine_id', routineId)
-        .is('parent_task_id', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .is('parent_task_id', null);
+
+      if (exactDate || contextDate) {
+        const targetDate = exactDate || contextDate;
+        const safeDateString = targetDate!.substring(0, 10); // "YYYY-MM-DD"
+
+        // As tarefas pré-geradas localmente sempre recebem:
+        // due_date e start_date estritamente com a string "YYYY-MM-DD"
+        // ex: "2025-03-09"
+        // Para garantir que a engine do supabase encontre essas datas strings
+        // com segurança independentemente de HH:mm:ss, vamos buscar usando strict `like`
+        // ou um range gte/lt seguro de 24h exatas limitadas ao timezone UTC.
+
+        const startPoint = `${safeDateString}T00:00:00.000Z`;
+        const endPoint = `${safeDateString}T23:59:59.999Z`;
+
+        // Busca hibrida: Tasks novas tem 'YYYY-MM-DD'. Tasks velhas tem ISO.
+        query = query.or(`due_date.eq.${safeDateString},and(due_date.gte.${startPoint},due_date.lte.${endPoint})`);
+      }
+
+      // Evitar crash do maybeSingle caso existam clones órfãos garantindo ordem descendente
+      query = query.order('created_at', { ascending: false }).limit(1);
+
+      const { data: parentTask, error: parentError } = await query.maybeSingle();
 
       if (parentError) throw parentError;
       if (!parentTask) return { parentTask: null, childTasks: [] };
@@ -205,17 +290,19 @@ export const useRoutineTasks = (routineId: string) => {
         .from('tasks')
         .select(`
           *,
-          unit:units(id, name, code),
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email)
+          unit:units(id, name, code)
         `)
         .eq('parent_task_id', parentTask.id)
         .order('created_at', { ascending: true });
 
       if (childError) throw childError;
 
+      // Use the helper to fetch and merge assignees
+      const tasksWithAssignees = await fetchAndMergeAssignees(childTasks as TaskWithDetails[]);
+
       return {
         parentTask,
-        childTasks: childTasks || [],
+        childTasks: tasksWithAssignees || [],
       };
     },
     enabled: !!routineId,
@@ -229,18 +316,19 @@ export const useChildTasks = (parentTaskId: string | null | undefined) => {
     queryFn: async () => {
       if (!parentTaskId) return [];
 
-      const { data, error } = await supabase
+      const { data: tasks, error } = await supabase
         .from('tasks')
         .select(`
           *,
-          unit:units(id, name, code),
-          assignee:profiles!tasks_assigned_to_fkey(id, full_name, email)
+          unit:units(id, name, code)
         `)
         .eq('parent_task_id', parentTaskId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return data || [];
+
+      // Use the helper to fetch and merge assignees
+      return await fetchAndMergeAssignees(tasks as TaskWithDetails[]);
     },
     enabled: !!parentTaskId,
   });

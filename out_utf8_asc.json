@@ -1,0 +1,42 @@
+[
+  {
+    "id": "716a6565-f4a5-4e23-bd62-18292ff21232",
+    "title": "[Rotina] Teste Calendário Rotinas",
+    "start_date": "2026-02-24T03:00:00+00:00",
+    "due_date": "2026-02-25T02:59:59.999+00:00",
+    "created_at": "2026-02-24T20:06:59.872556+00:00",
+    "parent_task_id": null
+  },
+  {
+    "id": "274e58a6-8cfe-486f-ad27-8b13a6af277a",
+    "title": "[Rotina] Teste Calendário Rotinas",
+    "start_date": "2026-02-24T03:00:00+00:00",
+    "due_date": "2026-02-25T02:59:59.999+00:00",
+    "created_at": "2026-02-24T20:07:00.197808+00:00",
+    "parent_task_id": "716a6565-f4a5-4e23-bd62-18292ff21232"
+  },
+  {
+    "id": "1c2a2fa7-80e7-4514-9b11-b125fe1397cf",
+    "title": "[Rotina] Teste Calendário Rotinas",
+    "start_date": "2026-02-24T03:00:00+00:00",
+    "due_date": "2026-02-25T02:59:59.999+00:00",
+    "created_at": "2026-02-24T20:07:00.197808+00:00",
+    "parent_task_id": "716a6565-f4a5-4e23-bd62-18292ff21232"
+  },
+  {
+    "id": "6b6205f5-30c9-4f0c-ba96-51aba95d68c1",
+    "title": "[Rotina] Teste Calendário Rotinas",
+    "start_date": "2026-02-24T03:00:00+00:00",
+    "due_date": "2026-02-25T02:59:59.999+00:00",
+    "created_at": "2026-02-24T20:07:00.197808+00:00",
+    "parent_task_id": "716a6565-f4a5-4e23-bd62-18292ff21232"
+  },
+  {
+    "id": "61a2a3b1-b7ca-4615-8359-d8a1f0d18ed6",
+    "title": "[Rotina] Teste Calendário Rotinas",
+    "start_date": "2026-02-24T03:00:00+00:00",
+    "due_date": "2026-02-25T02:59:59.999+00:00",
+    "created_at": "2026-02-24T20:07:00.197808+00:00",
+    "parent_task_id": "716a6565-f4a5-4e23-bd62-18292ff21232"
+  }
+]

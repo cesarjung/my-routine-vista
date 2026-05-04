@@ -9,7 +9,6 @@ import { MultiAssigneeSelect } from './MultiAssigneeSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { Tables } from '@/integrations/supabase/types';
 
 interface Manager {
   id: string;
@@ -41,7 +40,9 @@ interface CheckinRowProps {
   onMarkNotCompleted?: () => void;
   isToggling: boolean;
   isGestorOrAdmin: boolean;
-  allProfiles?: Tables<'profiles'>[];
+  allProfiles?: any[];
+  getAvatarColor?: (id: string) => string;
+  getInitials?: (name: string | null | undefined) => string;
 }
 
 const getInitials = (name: string | null | undefined): string => {
@@ -103,7 +104,7 @@ export const CheckinRow = ({
         .from('unit_managers')
         .delete()
         .eq('unit_id', checkin.unit_id);
-      
+
       if (deleteError) throw deleteError;
 
       // Insert new managers
@@ -116,7 +117,7 @@ export const CheckinRow = ({
               user_id: userId,
             }))
           );
-        
+
         if (insertError) throw insertError;
       }
     },
@@ -136,9 +137,9 @@ export const CheckinRow = ({
   };
 
   // Display name: prefer assignee name, fallback to unit name
-  const displayName = checkin.assignee_profile?.full_name || 
-    checkin.assignee_profile?.email || 
-    checkin.unit?.name || 
+  const displayName = checkin.assignee_profile?.full_name ||
+    checkin.assignee_profile?.email ||
+    checkin.unit?.name ||
     'Responsável';
 
   return (
@@ -159,8 +160,8 @@ export const CheckinRow = ({
             isCompleted
               ? 'bg-success border-success text-success-foreground'
               : isNotCompleted
-              ? 'bg-destructive border-destructive text-destructive-foreground'
-              : 'border-muted-foreground/50 hover:border-primary'
+                ? 'bg-destructive border-destructive text-destructive-foreground'
+                : 'border-muted-foreground/50 hover:border-primary'
           )}
         >
           {isCompleted && <Check className="w-3 h-3" />}
@@ -173,8 +174,8 @@ export const CheckinRow = ({
               isCompleted
                 ? 'text-muted-foreground line-through'
                 : isNotCompleted
-                ? 'text-destructive line-through'
-                : 'text-foreground'
+                  ? 'text-destructive line-through'
+                  : 'text-foreground'
             )}
           >
             {displayName}
