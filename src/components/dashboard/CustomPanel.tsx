@@ -72,20 +72,21 @@ const getPeriodDates = (period: string) => {
   }
 };
 
-const useCustomPanelData = (panel: DashboardPanel) => {
+const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | null) => {
   const { filters } = panel;
 
   return useQuery({
-    queryKey: ['custom-panel-data', panel.id, filters],
+    queryKey: ['custom-panel-data', panel.id, filters, dashboardSectorId],
     queryFn: async () => {
       // Get period dates
       const periodDates = getPeriodDates(filters.period || 'all');
 
       // Build tasks query
-      let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at');
+      let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, sector_id');
       
-      if (filters.sector_id) {
-        tasksQuery = tasksQuery.eq('sector_id', filters.sector_id);
+      const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : filters.sector_id;
+      if (effectiveSectorId) {
+        tasksQuery = tasksQuery.eq('sector_id', effectiveSectorId);
       }
       if (filters.unit_id) {
         tasksQuery = tasksQuery.eq('unit_id', filters.unit_id);
@@ -95,8 +96,8 @@ const useCustomPanelData = (panel: DashboardPanel) => {
       }
       if (periodDates) {
         tasksQuery = tasksQuery
-          .gte('created_at', periodDates.start.toISOString())
-          .lte('created_at', periodDates.end.toISOString());
+          .gte('due_date', periodDates.start.toISOString())
+          .lte('due_date', periodDates.end.toISOString());
       }
 
       const { data: tasks, error: tasksError } = await tasksQuery;
@@ -177,7 +178,7 @@ const useCustomPanelData = (panel: DashboardPanel) => {
         // Get tasks with sector
         const { data: tasksWithSector } = await supabase
           .from('tasks')
-          .select('id, status, sector_id, routine_id, created_at')
+          .select('id, status, sector_id, routine_id, created_at, due_date')
           .not('sector_id', 'is', null);
 
         return (sectors || []).map(sector => {
@@ -301,13 +302,11 @@ const STATUS_LABELS: Record<string, string> = {
 
 interface CustomPanelProps {
   panel: DashboardPanel;
+  dashboardSectorId?: string | null;
 }
 
-export const CustomPanel = ({ panel }: CustomPanelProps) => {
-  const { data, isLoading } = useCustomPanelData(panel);
-  const { data: allTasks } = useTasks();
-  const deletePanel = useDeleteDashboardPanel();
-  const { isAdmin } = useIsAdmin();
+export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
+  const { data, isLoading } = useCustomPanelData(panel, dashboardSectorId);
   const Icon = getGroupIcon(panel.filters.group_by);
   
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
@@ -317,6 +316,10 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
     entityType: 'unit',
     frequency: '',
   });
+
+  const { data: allTasks } = useTasks(undefined, { enabled: tasksDialog.isOpen });
+  const deletePanel = useDeleteDashboardPanel();
+  const { isAdmin } = useIsAdmin();
 
   const openTasksDialog = (
     entityId: string,
@@ -350,8 +353,9 @@ export const CustomPanel = ({ panel }: CustomPanelProps) => {
       if (task.sector_id !== tasksDialog.entityId) return false;
     }
     
-    // Filter by panel's sector if set
-    if (panel.filters.sector_id && task.sector_id !== panel.filters.sector_id) return false;
+    // Filter by effective sector
+    const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : panel.filters.sector_id;
+    if (effectiveSectorId && task.sector_id !== effectiveSectorId) return false;
     
     return true;
   }) || [];

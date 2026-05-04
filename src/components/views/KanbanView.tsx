@@ -13,6 +13,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Filter } from 'lucide-react';
 
 type Task = Tables<'tasks'> & {
   unit?: { name: string; code: string } | null;
@@ -47,6 +55,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
   const updateTask = useUpdateTask();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
@@ -66,7 +75,10 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
     return tasks?.filter(t => {
       const matchesSector = !sectorId || (t as any).sector_id === sectorId;
       const matchesUser = !isMyTasks || t.assigned_to === user?.id;
-      return t.status === status && matchesSector && matchesUser;
+      const matchesType = typeFilter === 'all' 
+        || (typeFilter === 'tasks_only' && !t.routine_id) 
+        || (typeFilter === 'routines_only' && !!t.routine_id);
+      return t.status === status && matchesSector && matchesUser && matchesType;
     }) || [];
   };
 
@@ -86,9 +98,24 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Kanban</h1>
-        <p className="text-muted-foreground">Visualize e gerencie tarefas por status</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-1">Kanban</h1>
+          <p className="text-muted-foreground">Visualize e gerencie tarefas por status</p>
+        </div>
+        <div className="flex gap-2">
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[180px]">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Rotinas e Tarefas</SelectItem>
+              <SelectItem value="tasks_only">Apenas Tarefas</SelectItem>
+              <SelectItem value="routines_only">Apenas Rotinas</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 min-h-[600px]">
@@ -128,7 +155,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                     return (
                       <div
                         key={task.id}
-                        className="bg-card rounded-lg border border-border p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer group animate-fade-in"
+                        className="bg-card rounded-md border border-border p-2 shadow-sm hover:border-primary/40 transition-shadow cursor-pointer group animate-fade-in"
                         style={{ animationDelay: `${index * 50}ms` }}
                         onClick={() => handleEditTask(task as Task)}
                       >
@@ -137,7 +164,7 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                           <button
                             onClick={(e) => handleStatusChange(task.id, isCompleted ? 'pendente' : 'concluida', e)}
                             className={cn(
-                              'w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 mt-0.5',
+                              'w-4 h-4 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 mt-0.5',
                               isCompleted 
                                 ? 'bg-success border-success text-success-foreground' 
                                 : isNA
@@ -152,21 +179,23 @@ export const KanbanView = ({ sectorId, isMyTasks }: KanbanViewProps) => {
                           
                           <div className="flex-1 min-w-0">
                             <p className={cn(
-                              "text-sm font-medium text-foreground truncate",
+                              "text-xs font-medium text-foreground line-clamp-2",
                               isCompleted && "line-through text-muted-foreground"
                             )}>
                               {task.title}
                             </p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded">
-                                {task.unit?.name}
-                              </span>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              {task.unit && (
+                                <span className="px-1.5 py-0 rounded bg-blue-500/10 text-blue-600 text-[10px] font-medium truncate max-w-[120px]">
+                                  {task.unit.name}
+                                </span>
+                              )}
+                              {task.due_date && (
+                                <span className="px-1.5 py-0 rounded bg-slate-500/10 text-slate-600 text-[10px] font-medium flex items-center gap-1">
+                                  📅 {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
                             </div>
-                            {task.due_date && (
-                              <p className="text-xs text-muted-foreground mt-2">
-                                📅 {new Date(task.due_date).toLocaleDateString('pt-BR')}
-                              </p>
-                            )}
                           </div>
                           
                           {/* More options dropdown */}

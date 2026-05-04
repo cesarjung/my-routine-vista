@@ -18,6 +18,7 @@ import {
   Ban,
   Check,
   X,
+  Flag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,12 +61,12 @@ const statusConfig: Record<
   nao_aplicavel: { label: 'N/A', className: 'bg-secondary text-muted-foreground border-secondary' },
 };
 
-const priorityConfig: Record<number, { label: string; className: string }> = {
-  1: { label: 'Baixa', className: 'text-muted-foreground' },
-  2: { label: 'Normal', className: 'text-foreground' },
-  3: { label: 'Média', className: 'text-warning' },
-  4: { label: 'Alta', className: 'text-orange-500' },
-  5: { label: 'Urgente', className: 'text-destructive' },
+const priorityConfig: Record<number, { label: string; iconClass: string }> = {
+  1: { label: 'Baixa', iconClass: 'text-slate-300' },
+  2: { label: 'Normal', iconClass: 'text-slate-400' },
+  3: { label: 'Média', iconClass: 'text-yellow-500 fill-yellow-500' },
+  4: { label: 'Alta', iconClass: 'text-orange-500 fill-orange-500' },
+  5: { label: 'Urgente', iconClass: 'text-red-500 fill-red-500' },
 };
 
 interface TaskListItemProps {
@@ -126,101 +127,106 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-card p-4 shadow-card transition-all hover:border-primary/30">
-        <div className="flex items-start gap-4">
-          {/* Status Toggle */}
-          <button
-            onClick={() =>
-              handleStatusChange(task.status === 'concluida' ? 'pendente' : 'concluida')
-            }
-            className="mt-1 flex-shrink-0"
-          >
-            {task.status === 'concluida' ? (
-              <CheckCircle2 className="h-5 w-5 text-success" />
-            ) : (
-              <Circle className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
-            )}
-          </button>
+      <div className="border-b border-border bg-card px-4 py-2.5 transition-colors hover:bg-muted/50 last:border-b-0">
+        <div className="flex items-center gap-3 w-full">
+          {/* Status Toggle & Priority */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() =>
+                handleStatusChange(task.status === 'concluida' ? 'pendente' : 'concluida')
+              }
+              className="flex-shrink-0"
+            >
+              {task.status === 'concluida' ? (
+                <CheckCircle2 className="h-4 w-4 text-success" />
+              ) : (
+                <Circle className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
+              )}
+            </button>
+            <Flag 
+              className={cn("h-3.5 w-3.5", priorityInfo.iconClass)} 
+              title={`Prioridade: ${priorityInfo.label}`}
+            />
+          </div>
 
-          {/* Main Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1">
-                <h3
-                  className={cn(
-                    'font-medium text-foreground',
-                    task.status === 'concluida' && 'line-through text-muted-foreground'
-                  )}
-                >
-                  {task.title}
-                </h3>
-                {task.description && (
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                    {task.description}
-                  </p>
+          {/* Main Content & Meta */}
+          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            
+            {/* Title & Description */}
+            <div className="flex-1 min-w-0">
+              <h3
+                className={cn(
+                  'font-medium text-sm text-foreground truncate',
+                  task.status === 'concluida' && 'line-through text-muted-foreground'
                 )}
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge variant="outline" className={statusInfo.className}>
-                  {statusInfo.label}
-                </Badge>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleStatusChange('pendente')}>
-                      Marcar como Pendente
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleStatusChange('em_andamento')}>
-                      Marcar como Em Andamento
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleStatusChange('concluida')}>
-                      Marcar como Concluída
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setDeleteDialogOpen(true)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Excluir
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              >
+                {task.title}
+              </h3>
+              {task.description && (
+                <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[500px]">
+                  {task.description}
+                </p>
+              )}
             </div>
 
-            {/* Meta Info */}
-            <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
+            {/* Meta Info & Actions Right Side */}
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap sm:flex-nowrap justify-end">
               {task.unit && (
-                <span className="flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5" />
+                <Badge variant="secondary" className="bg-blue-100 hover:bg-blue-200 text-blue-700 text-[10px] px-1.5 py-0 border-none">
+                  <Building2 className="h-3 w-3 mr-1" />
                   {task.unit.name}
-                </span>
+                </Badge>
               )}
               {task.due_date && (
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5" />
+                <Badge variant="secondary" className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] px-1.5 py-0 border-none">
+                  <Calendar className="h-3 w-3 mr-1" />
                   {format(new Date(task.due_date), 'dd/MM/yyyy', { locale: ptBR })}
-                </span>
+                </Badge>
               )}
               {task.routine && (
-                <span className="flex items-center gap-1.5">
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  {task.routine.title}
-                </span>
+                <Badge variant="secondary" className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] px-1.5 py-0 border-none max-w-[120px] truncate">
+                  <RefreshCw className="h-3 w-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">{task.routine.title}</span>
+                </Badge>
               )}
-              <span className={cn('flex items-center gap-1.5', priorityInfo.className)}>
-                Prioridade: {priorityInfo.label}
-              </span>
+              <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-medium tracking-tight', statusInfo.className)}>
+                {statusInfo.label}
+              </Badge>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleStatusChange('pendente')}>
+                    Marcar como Pendente
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusChange('em_andamento')}>
+                    Marcar como Em Andamento
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusChange('concluida')}>
+                    Marcar como Concluída
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setDeleteDialogOpen(true)}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
+          </div>
+        </div>
+
+        {/* Child Tasks & Subtasks row below if existing */}
+        <div className="pl-6 w-full">
 
             {/* Child Tasks Summary (for parent tasks) */}
             {hasChildTasks && (
-              <div className="mt-3">
+              <div className="mt-2">
                 <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
                   <span className="flex items-center gap-1">
                     <Users className="w-3 h-3" />
@@ -331,7 +337,7 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
             {totalSubtasks > 0 && (
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-2 mt-3 text-sm text-primary hover:underline"
+                className="flex items-center gap-2 mt-2 text-sm text-primary hover:underline"
               >
                 {expanded ? (
                   <ChevronUp className="h-4 w-4" />
@@ -369,7 +375,6 @@ export const TaskListItem = ({ task }: TaskListItemProps) => {
                   ))}
               </div>
             )}
-          </div>
         </div>
       </div>
 

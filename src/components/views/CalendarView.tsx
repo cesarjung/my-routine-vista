@@ -6,7 +6,7 @@ import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
@@ -42,6 +42,13 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface GoogleCalendarEvent {
   id: string;
@@ -86,6 +93,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [routineDialogOpen, setRoutineDialogOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState('all');
 
   // Fetch active routine periods
   const { data: routinePeriods } = useQuery({
@@ -220,7 +228,9 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
         return;
       }
       
-      if (matchesSector && matchesUser && isSameDay(new Date(task.due_date), date)) {
+      const matchesType = typeFilter === 'all' || (typeFilter === 'tasks_only' && !task.routine_id) || (typeFilter === 'routines_only' && !!task.routine_id);
+      
+      if (matchesSector && matchesUser && matchesType && isSameDay(new Date(task.due_date), date)) {
         const dueDate = new Date(task.due_date);
         const isAllDay = dueDate.getHours() === 0 && dueDate.getMinutes() === 0;
         
@@ -238,6 +248,7 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
 
     // Add routine periods
     routinePeriods?.forEach(period => {
+      if (typeFilter === 'tasks_only') return;
       if (!period.routine) return;
       const periodStart = new Date(period.period_start);
       const periodEnd = new Date(period.period_end);
@@ -643,23 +654,36 @@ export const CalendarView = ({ sectorId, isMyTasks }: CalendarViewProps) => {
           </h2>
         </div>
 
-        {/* View Mode Toggle */}
-        <ToggleGroup 
-          type="single" 
-          value={viewMode} 
-          onValueChange={(value) => value && setViewMode(value as ViewMode)}
-          className="border rounded-lg"
-        >
-          <ToggleGroupItem value="day" className="px-4">
-            Dia
-          </ToggleGroupItem>
-          <ToggleGroupItem value="week" className="px-4">
-            Semana
-          </ToggleGroupItem>
-          <ToggleGroupItem value="month" className="px-4">
-            Mês
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {/* View Mode Toggle & Filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[160px] bg-background">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tudo</SelectItem>
+              <SelectItem value="tasks_only">Apenas Tarefas</SelectItem>
+              <SelectItem value="routines_only">Apenas Rotinas</SelectItem>
+            </SelectContent>
+          </Select>
+          <ToggleGroup 
+            type="single" 
+            value={viewMode} 
+            onValueChange={(value) => value && setViewMode(value as ViewMode)}
+            className="border rounded-lg bg-background flex-shrink-0"
+          >
+            <ToggleGroupItem value="day" className="px-4">
+              Dia
+            </ToggleGroupItem>
+            <ToggleGroupItem value="week" className="px-4">
+              Semana
+            </ToggleGroupItem>
+            <ToggleGroupItem value="month" className="px-4">
+              Mês
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
 
       {/* Calendar View */}

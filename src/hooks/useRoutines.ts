@@ -67,6 +67,8 @@ export const useRoutines = (unitId?: string) => {
         }
 
         return (data as Routine[]).filter(routine => {
+          // Mostrar se for o criador da rotina
+          if (routine.created_by === user.id) return true;
           // Mostrar se o usuário está na tabela routine_assignees
           if (assignedRoutineIds.has(routine.id)) return true;
           // Mostrar se a rotina é da unidade do usuário
@@ -136,6 +138,7 @@ export const useRoutinesByFrequency = (frequency: TaskFrequency) => {
         }
 
         return (data as Routine[]).filter(routine => {
+          if (routine.created_by === user.id) return true;
           if (assignedRoutineIds.has(routine.id)) return true;
           if (userUnitId && routine.unit_id === userUnitId) return true;
           if (routinesWithUserUnitCheckins.has(routine.id)) return true;

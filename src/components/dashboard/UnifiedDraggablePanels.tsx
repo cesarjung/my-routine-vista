@@ -27,6 +27,7 @@ export type UnifiedPanel = {
 
 interface UnifiedDraggablePanelsProps {
   customPanels: DashboardPanel[];
+  selectedSectorId?: string | null;
   renderUnitsPanel: () => React.ReactNode;
   renderResponsiblesPanel: () => React.ReactNode;
 }
@@ -143,15 +144,16 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
 };
 
 // Drag Overlay Component  
-const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }: {
+const DragOverlayContent = ({ panel, selectedSectorId, renderUnitsPanel, renderResponsiblesPanel }: {
   panel: UnifiedPanel;
+  selectedSectorId?: string | null;
   renderUnitsPanel: () => React.ReactNode;
   renderResponsiblesPanel: () => React.ReactNode;
 }) => {
   const renderContent = () => {
     switch (panel.type) {
       case 'custom':
-        return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
+        return panel.panel ? <CustomPanel panel={panel.panel} dashboardSectorId={selectedSectorId} /> : null;
       case 'units':
         return renderUnitsPanel();
       case 'responsibles':
@@ -173,6 +175,7 @@ const DragOverlayContent = ({ panel, renderUnitsPanel, renderResponsiblesPanel }
 
 export const UnifiedDraggablePanels = ({
   customPanels,
+  selectedSectorId,
   renderUnitsPanel,
   renderResponsiblesPanel,
 }: UnifiedDraggablePanelsProps) => {
@@ -288,7 +291,7 @@ export const UnifiedDraggablePanels = ({
   const renderPanelContent = (panel: UnifiedPanel) => {
     switch (panel.type) {
       case 'custom':
-        return panel.panel ? <CustomPanel panel={panel.panel} /> : null;
+        return panel.panel ? <CustomPanel panel={panel.panel} dashboardSectorId={selectedSectorId} /> : null;
       case 'units':
         return renderUnitsPanel();
       case 'responsibles':
@@ -330,6 +333,7 @@ export const UnifiedDraggablePanels = ({
         {activePanel && isAdmin && (
           <DragOverlayContent
             panel={activePanel}
+            selectedSectorId={selectedSectorId}
             renderUnitsPanel={renderUnitsPanel}
             renderResponsiblesPanel={renderResponsiblesPanel}
           />

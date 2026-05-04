@@ -175,7 +175,7 @@ interface TasksDialogProps {
 }
 
 const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
-  const { data: allTasks, isLoading } = useTasks();
+  const { data: allTasks, isLoading } = useTasks(undefined, { enabled: state.isOpen });
 
   // Filter tasks based on entity type and frequency
   const filteredTasks = allTasks?.filter(task => {
@@ -341,7 +341,7 @@ export const DashboardView = () => {
           {customPanels && customPanels.length > 0 && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
               {customPanels.map(panel => (
-                <CustomPanel key={panel.id} panel={panel} />
+                <CustomPanel key={panel.id} panel={panel} dashboardSectorId={selectedSectorId} />
               ))}
             </div>
           )}
@@ -522,6 +522,7 @@ export const DashboardView = () => {
       ) : (
         <UnifiedDraggablePanels
           customPanels={customPanels || []}
+          selectedSectorId={selectedSectorId}
           renderUnitsPanel={() => (
             <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
               {unitStatus?.length === 0 ? (

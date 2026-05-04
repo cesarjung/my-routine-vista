@@ -11,8 +11,17 @@ import { CalendarView } from '@/components/views/CalendarView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { useSectors } from '@/hooks/useSectors';
 import sirtecLogoHeader from '@/assets/sirtec-logo-header.png';
+import { PlanejamentoGanttView } from '@/components/views/PlanejamentoGanttView';
+import { PlanejamentoEquipesGanttView } from '@/components/views/PlanejamentoEquipesGanttView';
+import { PostesTurnoView } from '@/components/views/PostesTurnoView';
+import { DeslocamentoView } from '@/components/views/DeslocamentoView';
+import { PlanejadoMetaView } from '@/components/views/PlanejadoMetaView';
+import { CumprimentoView } from '@/components/views/CumprimentoView';
+import { EtapasView } from '@/components/views/EtapasView';
+import { cn } from '@/lib/utils';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-interface ContentAreaProps {
+export interface ContentAreaProps {
   context: NavigationContext;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
@@ -31,6 +40,19 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         return 'Minhas Tarefas';
       case 'settings':
         return 'Configurações';
+      case 'planejamento':
+        if (context.section === 'carteira') return 'Carteira de Planejamento';
+        return 'Planejamento';
+      case 'planejamento_equipes':
+        return 'Equipes de Planejamento';
+      case 'poste_turno':
+        return 'Média de Postes Planejados por Turno';
+      case 'deslocamento':
+        return 'Tempo de Deslocamento (Horas)';
+      case 'planejado_meta':
+        return 'Percentual Planejado x Meta';
+      case 'cumprimento_planejamento':
+        return 'Cumprimento Planejamento';
       case 'sector': {
         const sector = sectors.find(s => s.id === context.sectorId);
         const sectorName = sector?.name || 'Setor';
@@ -61,6 +83,28 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     if (context.type === 'dashboard') return <DashboardView />;
     if (context.type === 'settings') return <SettingsView />;
     if (context.type === 'my-tasks') return <MyTasksView />;
+    if (context.type === 'planejamento') {
+      if (context.section === 'carteira') return <PlanejamentoGanttView />;
+    }
+    if (context.type === 'planejamento_equipes') {
+      return <PlanejamentoEquipesGanttView />;
+    }
+    if (context.type === 'poste_turno') {
+      return <PostesTurnoView />;
+    }
+    if (context.type === 'deslocamento') {
+      return <DeslocamentoView />;
+    }
+    if (context.type === 'planejado_meta') {
+      return <PlanejadoMetaView />;
+    }
+    if (context.type === 'cumprimento_planejamento') {
+      return <CumprimentoView />;
+    }
+
+    if (context.type === 'etapas') {
+      return <EtapasView />;
+    }
 
     // Contextos com toggle de visualização
     const sectorId = context.type === 'sector' ? context.sectorId : undefined;
@@ -90,6 +134,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
   };
 
   const isDashboard = context.type === 'dashboard';
+  const isPlanejamento = context.type === 'planejamento' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas';
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -111,11 +156,14 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       </header>
 
       {/* Content */}
-      <main className="flex-1 p-6 overflow-auto">
-        <div className="max-w-7xl mx-auto">
-          {renderContent()}
+      <main className={cn("flex-1 flex flex-col", isPlanejamento ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>
+        <div className={cn("mx-auto h-full flex flex-col w-full", isPlanejamento ? "max-w-none" : "max-w-7xl")}>
+          <ErrorBoundary>
+            {renderContent()}
+          </ErrorBoundary>
         </div>
       </main>
     </div>
   );
 };
+// Trigger HMR

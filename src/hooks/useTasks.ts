@@ -13,7 +13,7 @@ export interface TaskWithDetails extends Task {
   subtasks?: Tables<'subtasks'>[];
 }
 
-export const useTasks = (unitId?: string) => {
+export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
   const { user } = useAuth();
   const { data: role } = useUserRole();
 
@@ -70,7 +70,7 @@ export const useTasks = (unitId?: string) => {
 
       return data as TaskWithDetails[];
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && (options?.enabled !== false),
   });
 };
 

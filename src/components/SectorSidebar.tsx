@@ -12,7 +12,13 @@ import {
   Building2,
   Settings,
   LogOut,
-  Users
+  Users,
+  Map,
+  Activity,
+  Navigation,
+  Target,
+  CheckCircle,
+  Layers
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -56,6 +62,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const [expandedRoutineFreqs, setExpandedRoutineFreqs] = useState<Set<string>>(new Set());
   const [newSectorName, setNewSectorName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isRotinasExpanded, setIsRotinasExpanded] = useState(true);
+  const [isPlanejamentoExpanded, setIsPlanejamentoExpanded] = useState(true);
 
   const toggleSector = (sectorId: string) => {
     const newExpanded = new Set(expandedSectors);
@@ -244,28 +252,21 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
 
       {/* Navigation - flex-1 to fill space, no overflow scroll */}
       <nav className="flex-1 p-3 space-y-1">
-        {/* Dashboard */}
-        <button
-          onClick={() => onNavigate({ type: 'dashboard' })}
-          className={cn(
-            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-            context.type === 'dashboard'
-              ? 'bg-sidebar-accent text-sidebar-primary shadow-glow'
-              : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-          )}
-        >
-          <LayoutDashboard className={cn('w-5 h-5 flex-shrink-0', context.type === 'dashboard' && 'text-primary')} />
-          {!collapsed && <span className="font-medium">Dashboard</span>}
-        </button>
-
-        {/* Setores header */}
+        
+        {/* Rotinas header */}
         {!collapsed && (
-          <div className="flex items-center justify-between px-3 pt-4 pb-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Setores</span>
+          <div className="flex items-center justify-between px-3 pt-2 pb-2">
+            <button
+              onClick={() => setIsRotinasExpanded(!isRotinasExpanded)}
+              className="flex-1 flex items-center justify-between text-xs font-semibold text-white uppercase tracking-wider transition-colors mr-2"
+            >
+              <span>Rotinas</span>
+              {isRotinasExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
             {isAdmin && (
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <button className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground">
+                  <button className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground shrink-0">
                     <Plus className="w-4 h-4" />
                   </button>
                 </DialogTrigger>
@@ -289,6 +290,23 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
             )}
           </div>
         )}
+
+        {(!collapsed ? isRotinasExpanded : true) && (
+          <div className="space-y-0.5">
+
+        {/* Dashboard */}
+        <button
+          onClick={() => onNavigate({ type: 'dashboard' })}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+            context.type === 'dashboard'
+              ? 'bg-sidebar-accent text-sidebar-primary'
+              : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+          )}
+        >
+          <LayoutDashboard className={cn('w-4 h-4 flex-shrink-0', context.type === 'dashboard' && 'text-primary')} />
+          {!collapsed && <span className="text-sm">Dashboard</span>}
+        </button>
 
         {/* Minhas Tarefas */}
         <button
@@ -324,6 +342,102 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         ) : (
           <div className="space-y-0.5">
             {sectors.map(renderSectorItem)}
+          </div>
+        )}
+
+          </div>
+        )}
+
+        {/* Módulo Planejamento Header */}
+        {!collapsed && (
+          <div className="px-3 pt-4 pb-2">
+            <button
+              onClick={() => setIsPlanejamentoExpanded(!isPlanejamentoExpanded)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-white uppercase tracking-wider transition-colors"
+            >
+              <span>Planejamento</span>
+              {isPlanejamentoExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+          </div>
+        )}
+        {(!collapsed ? isPlanejamentoExpanded : true) && (
+          <div className="space-y-0.5 px-3">
+            <button
+              onClick={() => onNavigate({ type: 'planejamento', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Map className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Carteira</span>}
+            </button>
+            
+            <button
+              onClick={() => onNavigate({ type: 'planejamento_equipes', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'planejamento_equipes' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Users className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Equipes</span>}
+            </button>
+
+            <button
+              onClick={() => onNavigate({ type: 'poste_turno', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'poste_turno' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Activity className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Poste/Turno</span>}
+            </button>
+
+            <button
+              onClick={() => onNavigate({ type: 'deslocamento', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'deslocamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Navigation className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Deslocamento</span>}
+            </button>
+
+            <button
+              onClick={() => onNavigate({ type: 'planejado_meta', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'planejado_meta' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Target className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Planejado x Meta</span>}
+            </button>
+
+            <button
+              onClick={() => onNavigate({ type: 'cumprimento_planejamento', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'cumprimento_planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <CheckCircle className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Cumprimento Plan.</span>}
+            </button>
+
+            <button
+              onClick={() => onNavigate({ type: 'etapas', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'etapas' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Layers className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Etapas</span>}
+            </button>
           </div>
         )}
       </nav>

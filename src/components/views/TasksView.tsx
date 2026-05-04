@@ -20,6 +20,8 @@ import { TaskForm } from '@/components/TaskForm';
 import { TaskListItem } from '@/components/TaskListItem';
 import { useTasks } from '@/hooks/useTasks';
 import type { Enums } from '@/integrations/supabase/types';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const statusFilters: { value: string; label: string }[] = [
   { value: 'all', label: 'Todos os Status' },
@@ -30,6 +32,12 @@ const statusFilters: { value: string; label: string }[] = [
   { value: 'cancelada', label: 'Cancelada' },
 ];
 
+const typeFilters = [
+  { value: 'all', label: 'Rotinas e Tarefas' },
+  { value: 'tasks_only', label: 'Apenas Tarefas' },
+  { value: 'routines_only', label: 'Apenas Rotinas' },
+];
+
 interface TasksViewProps {
   sectorId?: string;
 }
@@ -38,6 +46,8 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [hideCompleted, setHideCompleted] = useState(false);
 
   const { data: tasks, isLoading } = useTasks();
 
@@ -50,8 +60,14 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
       statusFilter === 'all' || task.status === statusFilter;
 
     const matchesSector = !sectorId || (task as any).sector_id === sectorId;
+    
+    const matchesType = typeFilter === 'all' 
+      || (typeFilter === 'tasks_only' && !task.routine_id) 
+      || (typeFilter === 'routines_only' && !!task.routine_id);
 
-    return matchesSearch && matchesStatus && matchesSector;
+    const matchesHideCompleted = hideCompleted ? task.status !== 'concluida' : true;
+
+    return matchesSearch && matchesStatus && matchesSector && matchesType && matchesHideCompleted;
   });
 
   return (
@@ -95,7 +111,20 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[180px]">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {typeFilters.map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[180px]">
               <Filter className="h-4 w-4 mr-2" />
@@ -109,6 +138,16 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center space-x-2 border rounded-md px-3 border-input bg-background">
+            <Switch
+              id="hide-completed"
+              checked={hideCompleted}
+              onCheckedChange={setHideCompleted}
+            />
+            <Label htmlFor="hide-completed" className="text-sm cursor-pointer whitespace-nowrap">
+              Ocultar Concluídas
+            </Label>
+          </div>
         </div>
       </div>
 
@@ -118,10 +157,20 @@ export const TasksView = ({ sectorId }: TasksViewProps) => {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : filteredTasks && filteredTasks.length > 0 ? (
-        <div className="space-y-3">
-          {filteredTasks.map((task) => (
-            <TaskListItem key={task.id} task={task} />
-          ))}
+        <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-card">
+          {filteredTasks?.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              Nenhuma tarefa encontrada.
+            </div>
+          ) : (
+            filteredTasks?.map((task) => (
+              <TaskListItem
+                key={task.id}
+                task={task as any}
+                isMyTasks={false}
+              />
+            ))
+          )}
         </div>
       ) : (
         <div className="text-center py-12">
