@@ -10,6 +10,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { usePlanejadoMetaData } from '@/hooks/usePlanejadoMetaData';
+import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
+import { useBdMetasData } from '@/hooks/useBdMetasData';
+import { useReprogramadasData } from '@/hooks/useReprogramadasData';
 import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -22,15 +25,20 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  LabelList
+  LabelList,
+  ComposedChart,
+  Line
 } from 'recharts';
 
 export const PlanejadoMetaView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([UNIDADES_PLANEJAMENTO[0].id]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
+  const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
-  const { data, isLoading, isError, refetch, isRefetching } = usePlanejadoMetaData(selectedUnidadesIds);
+  const { data, isLoading, isError, lastUpdated } = usePlanejadoMetaData(selectedUnidadesIds);
+  const { data: bdMetasData = [], isLoading: isBdMetasLoading } = useBdMetasData(selectedUnidadesIds);
+  const { data: reprogData = [], isLoading: isReprogLoading } = useReprogramadasData(selectedUnidadesIds);
 
   // Filtros locais
   const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
@@ -51,7 +59,33 @@ export const PlanejadoMetaView = () => {
   // Toggle "Somente Disponíveis" (Coluna BB == 1)
   const [somenteDisponiveis, setSomenteDisponiveis] = useState(false);
 
-  // Extrair opções únicas dos dados
+  // Toggle "Apenas dias com meta" (Coluna AM > 0)
+  const [somenteDiasComMeta, setSomenteDiasComMeta] = useState(false);
+
+  // Toggle "Base Metas"
+  const [isBaseMetas, setIsBaseMetas] = useState(false);
+
+  // Filtro "Tipo de Equipe"
+  const [selectedTiposEquipe, setSelectedTiposEquipe] = useState<string[]>(['CONSTRUÇÃO', 'LINHA VIVA']);
+  const [tiposEquipeDropdownOpen, setTiposEquipeDropdownOpen] = useState(false);
+
+  // Mapear Equipe para TipoEquipe e Extrair Tipos Únicos da BD_Metas
+  const { equipeToTipo, tiposEquipeUnicos } = useMemo(() => {
+    const map = new Map<string, string>();
+    const tipos = new Set<string>();
+    
+    bdMetasData.forEach(row => {
+      map.set(row.equipe, row.tipoEquipe);
+      tipos.add(row.tipoEquipe);
+    });
+    
+    return {
+      equipeToTipo: map,
+      tiposEquipeUnicos: Array.from(tipos).sort()
+    };
+  }, [bdMetasData]);
+
+  // Extrair opções únicas dos dados (Plan_Principal)
   const { mesesUnicos, supervisoresUnicos, equipesUnicas, projetosUnicos } = useMemo(() => {
     const meses = new Set<string>();
     const supervisores = new Set<string>();
@@ -84,6 +118,14 @@ export const PlanejadoMetaView = () => {
   // Aplicar Filtros Locais
   const filteredData = useMemo(() => {
     return data.filter(row => {
+      // Filtrar pelo Tipo de Equipe
+      if (bdMetasData.length > 0 && selectedTiposEquipe.length > 0) {
+        const tipoEquipe = equipeToTipo.get(row.equipe.trim().toUpperCase());
+        if (!tipoEquipe || !selectedTiposEquipe.includes(tipoEquipe)) {
+          return false;
+        }
+      }
+
       // Mês
       if (selectedMeses.length > 0 && !selectedMeses.includes(row.mesCurto)) return false;
       // Período
@@ -108,15 +150,73 @@ export const PlanejadoMetaView = () => {
 
       return true;
     });
-  }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos]);
+  }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos, selectedTiposEquipe, equipeToTipo]);
+
+  // Meses a serem exibidos nas tabelas e gráficos
+  const mesesExibidos = useMemo(() => {
+    const ORDER = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    if (selectedMeses.length > 0) {
+      return [...selectedMeses].sort((a, b) => {
+        let iA = ORDER.indexOf(a);
+        let iB = ORDER.indexOf(b);
+        if (iA === -1) iA = 99;
+        if (iB === -1) iB = 99;
+        return iA - iB;
+      });
+    } else {
+      const meses = new Set<string>();
+      filteredData.forEach(row => {
+        if (row.mesCurto) meses.add(row.mesCurto);
+      });
+      return Array.from(meses).sort((a, b) => {
+        let iA = ORDER.indexOf(a);
+        let iB = ORDER.indexOf(b);
+        if (iA === -1) iA = 99;
+        if (iB === -1) iB = 99;
+        return iA - iB;
+      });
+    }
+  }, [selectedMeses, filteredData]);
+
+  // Cálculo da Meta global via BD_Metas quando Base Metas ativo
+  const metaPorUnidadeBdMetas = useMemo(() => {
+    const map = new Map<string, { total: number, porMes: Record<string, number> }>();
+    
+    if (!isBaseMetas) return map;
+
+    bdMetasData.forEach(row => {
+      if (selectedTiposEquipe.length > 0 && !selectedTiposEquipe.includes(row.tipoEquipe)) return;
+      if (selectedMeses.length > 0 && !selectedMeses.includes(row.mesCurto)) return;
+      if (filterStart) {
+        const start = startOfDay(parse(filterStart, 'yyyy-MM-dd', new Date()));
+        if (row.dataParsed < start) return;
+      }
+      if (filterEnd) {
+        const end = endOfDay(parse(filterEnd, 'yyyy-MM-dd', new Date()));
+        if (row.dataParsed > end) return;
+      }
+
+      const uNome = row.unidadeNome.replace('UNIDADE ', '').trim().toUpperCase();
+      if (!map.has(uNome)) {
+        map.set(uNome, { total: 0, porMes: {} });
+      }
+      const g = map.get(uNome)!;
+      g.total += row.valorMeta;
+      
+      if (!g.porMes[row.mesCurto]) g.porMes[row.mesCurto] = 0;
+      g.porMes[row.mesCurto] += row.valorMeta;
+    });
+
+    return map;
+  }, [bdMetasData, isBaseMetas, selectedTiposEquipe, selectedMeses, filterStart, filterEnd]);
 
   // Cálculos de Agrupamento
   const chartData = useMemo(() => {
     const agrupado: Record<string, any> = {};
 
     filteredData.forEach(row => {
-      // Somente considera as linhas em que a coluna AM (Meta) seja maior que zero
-      if (row.valProdTurno <= 0) return;
+      if (somenteDiasComMeta && row.valProdTurno <= 0) return;
 
       // Se "Somente Disponíveis" estiver ativo, exclui tudo que NÃO FOR 1 (100%) na coluna BB
       if (somenteDisponiveis && row.valDisponivel !== 1) return;
@@ -128,7 +228,8 @@ export const PlanejadoMetaView = () => {
           // Totais globais da unidade para média geral e prod%
           sumU: 0, countU: 0, countAM: 0,
           sumAQ: 0, sumAMGlob: 0,
-          meses: {} as Record<string, { sumU: number, countU: number, countAM: number, sumAQ: number, sumAM: number }>
+          sumUMisto: 0,
+          meses: {} as Record<string, { sumU: number, countU: number, countAM: number, sumAQ: number, sumAM: number, sumUMisto: number }>
         };
       }
 
@@ -136,6 +237,7 @@ export const PlanejadoMetaView = () => {
       
       // Global
       g.sumU += row.valPlanejado;
+      g.sumUMisto += row.valPlanejadoMisto;
       if (row.valPlanejado > 0) g.countU += 1;
       if (row.valProdTurno > 0) g.countAM += 1;
       
@@ -144,76 +246,236 @@ export const PlanejadoMetaView = () => {
 
       // Por Mês
       if (!g.meses[row.mesCurto]) {
-        g.meses[row.mesCurto] = { sumU: 0, countU: 0, countAM: 0, sumAQ: 0, sumAM: 0 };
+        g.meses[row.mesCurto] = { sumU: 0, countU: 0, countAM: 0, sumAQ: 0, sumAM: 0, sumUMisto: 0 };
       }
       const gm = g.meses[row.mesCurto];
       gm.sumU += row.valPlanejado;
+      gm.sumUMisto += row.valPlanejadoMisto;
       if (row.valPlanejado > 0) gm.countU += 1;
       if (row.valProdTurno > 0) gm.countAM += 1;
       gm.sumAQ += row.valProgTurno;
-      gm.sumAM += row.valProdTurno;
+      if (!isBaseMetas) gm.sumAM += row.valProdTurno;
     });
+
+    // Sobrescrever a meta (AM) se Base Metas estiver ativado
+    if (isBaseMetas) {
+      Object.keys(agrupado).forEach(uNome => {
+        const base = metaPorUnidadeBdMetas.get(uNome.trim().toUpperCase());
+        if (base) {
+          agrupado[uNome].sumAMGlob = base.total;
+          Object.keys(agrupado[uNome].meses).forEach(m => {
+             agrupado[uNome].meses[m].sumAM = base.porMes[m] || 0;
+          });
+        } else {
+          agrupado[uNome].sumAMGlob = 0;
+          Object.keys(agrupado[uNome].meses).forEach(m => {
+             agrupado[uNome].meses[m].sumAM = 0;
+          });
+        }
+      });
+    }
 
     const resultadoFinal = Object.values(agrupado).map(u => {
       const item: any = { 
         name: u.name,
-        _producaoPerc: u.sumAMGlob > 0 ? (u.sumAQ / u.sumAMGlob) * 100 : 0
+        _producaoPerc: u.sumAMGlob > 0 ? (u.sumAQ / u.sumAMGlob) * 100 : 0,
+        vlrPlanejado: u.sumU,
+        vlrProduzido: u.sumAQ,
+        vlrMeta: u.sumAMGlob,
+        vlrPlanejadoMisto: u.sumUMisto
       };
 
       // Média Geral da Unidade
       item._mediaGeral = u.sumAMGlob > 0 ? (u.sumU / u.sumAMGlob) * 100 : 0;
+      item._mediaMista = u.sumAMGlob > 0 ? (u.sumUMisto / u.sumAMGlob) * 100 : 0;
+      item._producaoPerc = u.sumAMGlob > 0 ? (Object.values(u.meses).reduce((acc, curr) => acc + curr.sumAQ, 0) / u.sumAMGlob) * 100 : 0;
 
       // Médias por mês (para o chart e tabela)
-      mesesUnicos.forEach(m => {
-        if (u.meses[m]) {
-          item[m] = u.meses[m].sumAM > 0 ? Number(((u.meses[m].sumU / u.meses[m].sumAM) * 100).toFixed(1)) : null;
-          item[`${m}_prod`] = u.meses[m].sumAM > 0 ? (u.meses[m].sumAQ / u.meses[m].sumAM) * 100 : 0;
+      mesesExibidos.forEach(m => {
+        if (u.meses[m] && u.meses[m].sumAM > 0) {
+          item[m] = Number(((u.meses[m].sumU / u.meses[m].sumAM) * 100).toFixed(1));
+          item[`${m}_prod`] = Number(((u.meses[m].sumAQ / u.meses[m].sumAM) * 100).toFixed(1));
+          item[`${m}_mista`] = Number(((u.meses[m].sumUMisto / u.meses[m].sumAM) * 100).toFixed(1));
         } else {
           item[m] = null;
           item[`${m}_prod`] = null;
+          item[`${m}_mista`] = null;
         }
       });
 
       return item;
     });
 
-    // Ordenar alfabeticamente pela unidade
-    resultadoFinal.sort((a, b) => a.name.localeCompare(b.name));
+    // Ordenar do maior pro menor pela Produção
+    resultadoFinal.sort((a, b) => b._producaoPerc - a._producaoPerc);
 
     return resultadoFinal;
-  }, [filteredData, somenteDisponiveis, mesesUnicos]);
+  }, [filteredData, mesesExibidos, isBaseMetas, metaPorUnidadeBdMetas]);
+
+  // Totais Globais para o Painel de Resumo
+  const totals = useMemo(() => {
+    let totalMeta = 0;
+    let totalPlanejado = 0;
+    let totalProduzido = 0;
+
+    filteredData.forEach(row => {
+      if (somenteDiasComMeta && row.valProdTurno <= 0) return;
+      if (somenteDisponiveis && row.valDisponivel !== 1) return;
+
+      totalPlanejado += row.valPlanejado;
+      totalProduzido += row.valProgTurno;
+      if (!isBaseMetas) totalMeta += row.valProdTurno;
+    });
+
+    if (isBaseMetas) {
+      metaPorUnidadeBdMetas.forEach(val => totalMeta += val.total);
+    }
+
+    return { totalMeta, totalPlanejado, totalProduzido, desvio: totalPlanejado - totalMeta };
+  }, [filteredData, somenteDiasComMeta, somenteDisponiveis, isBaseMetas, metaPorUnidadeBdMetas]);
+
+  // Cálculos do Gráfico de Pareto de Reprogramadas
+  const paretoData = useMemo(() => {
+    const filteredReprog = reprogData.filter(row => {
+      if (bdMetasData.length > 0 && selectedTiposEquipe.length > 0) {
+        const tipoEquipe = equipeToTipo.get(row.equipe.trim().toUpperCase());
+        if (!tipoEquipe || !selectedTiposEquipe.includes(tipoEquipe)) {
+          return false;
+        }
+      }
+      if (selectedMeses.length > 0 && !selectedMeses.includes(row.mesCurto)) return false;
+      if (filterStart || filterEnd) {
+        let isWithin = true;
+        if (filterStart) {
+          const start = startOfDay(parse(filterStart, 'yyyy-MM-dd', new Date()));
+          if (row.dataParsed < start) isWithin = false;
+        }
+        if (filterEnd) {
+          const end = endOfDay(parse(filterEnd, 'yyyy-MM-dd', new Date()));
+          if (row.dataParsed > end) isWithin = false;
+        }
+        if (!isWithin) return false;
+      }
+      if (selectedEquipes.length > 0 && !selectedEquipes.includes(row.equipe)) return false;
+      if (selectedProjetos.length > 0 && !selectedProjetos.includes(row.projeto)) return false;
+
+      return true;
+    });
+
+    const prodMap = new Map<string, number>();
+    filteredData.forEach(r => {
+      if (r.valProgTurno > 0) {
+        const k = `${r.dataParsed.getTime()}|${r.equipe.trim().toUpperCase()}`;
+        prodMap.set(k, (prodMap.get(k) || 0) + r.valProgTurno);
+      }
+    });
+
+    const map = new Map<string, { motivo: string; count: number; planejado: number; produzido: number; seenProdKeys: Set<string> }>();
+
+    filteredReprog.forEach(r => {
+      const mRaw = r.motivo ? r.motivo.toUpperCase() : 'NÃO INFORMADO';
+      const m = mRaw.includes('|') ? mRaw.split('|')[0].trim() : mRaw.trim();
+      if (!map.has(m)) {
+        map.set(m, { motivo: m, count: 0, planejado: 0, produzido: 0, seenProdKeys: new Set() });
+      }
+
+      const g = map.get(m)!;
+      g.count += 1;
+      g.planejado += r.valPlanejado;
+
+      const prodKey = `${r.dataParsed.getTime()}|${r.equipe.trim().toUpperCase()}`;
+      if (!g.seenProdKeys.has(prodKey)) {
+        g.seenProdKeys.add(prodKey);
+        g.produzido += (prodMap.get(prodKey) || 0);
+      }
+    });
+
+    const arr = Array.from(map.values()).map(x => ({
+      motivo: x.motivo,
+      count: x.count,
+      planejado: x.planejado,
+      produzido: x.produzido
+    }));
+
+    arr.sort((a, b) => b.planejado - a.planejado);
+
+    return arr;
+  }, [reprogData, filteredData, selectedTiposEquipe, selectedMeses, filterStart, filterEnd, selectedEquipes, selectedProjetos, equipeToTipo, bdMetasData]);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-card border border-border p-3 rounded-lg shadow-lg">
+          <p className="font-bold mb-2">{label}</p>
+          
+          <div className="flex items-center justify-between gap-4 mb-1">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-[#ef4444]" />
+              <span className="text-sm">Produção: <strong>{data._producaoPerc.toFixed(0)}%</strong></span>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-[#f59e0b]" />
+              <span className="text-sm">Planejado: <strong>{data._mediaGeral.toFixed(0)}%</strong></span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 mt-1">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-[#000000]" />
+              <span className="text-sm">Plan. Original: <strong>{data._mediaMista.toFixed(0)}%</strong></span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const COLORS = [
-    'hsl(25, 95%, 50%)', // Laranja Principal (Primary)
-    'hsl(0, 0%, 10%)',   // Preto (Foreground/Black)
-    'hsl(0, 72%, 51%)',  // Vermelho (Destructive)
-    'hsl(38, 92%, 50%)', // Amarelo/Âmbar (Warning)
-    'hsl(30, 20%, 60%)', // Cinza Quente
-    'hsl(25, 95%, 35%)', // Laranja Escuro
-    'hsl(38, 92%, 35%)', // Âmbar Escuro
-    'hsl(0, 0%, 45%)',   // Cinza Neutro
+    'hsl(25, 95%, 50%)',
+    'hsl(0, 0%, 10%)',
+    'hsl(0, 72%, 51%)',
+    'hsl(38, 92%, 50%)',
+    'hsl(30, 20%, 60%)',
+    'hsl(25, 95%, 35%)',
+    'hsl(38, 92%, 35%)',
+    'hsl(0, 0%, 45%)',
   ];
 
-  const getCellColor = (perc: number | null) => {
+  const getGradualColor = (perc: number) => {
+    let hue = 0;
+    if (perc < 70) {
+      hue = (perc / 70) * 35; 
+    } else if (perc < 90) {
+      hue = 35 + ((perc - 70) / 20) * 25; 
+    } else if (perc <= 110) {
+      hue = 60 + ((perc - 90) / 20) * 60;
+    } else {
+      hue = 210;
+    }
+    return `hsl(${hue}, 85%, 45%)`;
+  };
+
+  const getCellClassName = (perc: number | null) => {
     if (perc === null || perc === undefined) return 'bg-muted/30 text-muted-foreground';
-    if (perc >= 110) return 'bg-blue-500 text-white font-bold';
-    if (perc >= 90) return 'bg-green-500 text-white font-bold';
-    if (perc >= 70) return 'bg-yellow-500 text-white font-bold';
-    return 'bg-red-500 text-white font-bold';
+    return 'text-white font-bold';
   };
 
-  const getProdColor = (perc: number) => {
-    if (perc >= 110) return 'bg-blue-500';
-    if (perc >= 90) return 'bg-green-500';
-    if (perc >= 70) return 'bg-yellow-500';
-    return 'bg-red-500';
+  const getCellStyle = (perc: number | null): React.CSSProperties => {
+    if (perc === null || perc === undefined) return {};
+    return { backgroundColor: getGradualColor(perc) };
   };
 
-  if (isLoading) {
+  if (isLoading || isBdMetasLoading) {
     return (
       <div className="flex-1 flex flex-col h-full w-full items-center justify-center bg-background">
         <div className="animate-spin text-primary mb-4"><RefreshCw className="w-8 h-8" /></div>
         <p>Carregando dados de Planejado x Meta...</p>
+        {isBdMetasLoading && <p className="text-xs text-muted-foreground mt-2">Sincronizando Base Metas...</p>}
       </div>
     );
   }
@@ -230,7 +492,6 @@ export const PlanejadoMetaView = () => {
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       
-      {/* HEADER COMPACTO */}
       <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border">
         <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto no-scrollbar-custom">
           <div className="shrink-0 mb-1">
@@ -240,23 +501,53 @@ export const PlanejadoMetaView = () => {
           
           <div className="w-px h-10 bg-border shrink-0"></div>
 
-          {/* FILTROS */}
           <div className="flex flex-nowrap items-end gap-2 shrink-0">
             
-            {/* Toggle Button */}
-            <div className="flex flex-col justify-center mr-2">
+            <div className="flex flex-col justify-center gap-1.5 mr-2">
+              <Toggle 
+                pressed={somenteDiasComMeta} 
+                onPressedChange={setSomenteDiasComMeta}
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-7 px-2 text-[10px] border transition-colors", 
+                  somenteDiasComMeta ? "border-primary bg-primary/10 text-primary" : ""
+                )}
+                title="Desconsiderar linhas onde a coluna AM (Meta) estiver zerada"
+              >
+                <Hash className="w-3 h-3 mr-1.5" />
+                Apenas dias c/ meta
+              </Toggle>
+
               <Toggle 
                 pressed={somenteDisponiveis} 
                 onPressedChange={setSomenteDisponiveis}
                 variant="outline"
+                size="sm"
                 className={cn(
-                  "h-10 px-3 border transition-colors", 
+                  "h-7 px-2 text-[10px] border transition-colors", 
                   somenteDisponiveis ? "border-primary bg-primary/10 text-primary" : ""
                 )}
                 title="Considerar apenas linhas onde a coluna BB (Disponível) é igual a 1"
               >
-                <Hash className="w-4 h-4 mr-2" />
+                <Hash className="w-3 h-3 mr-1.5" />
                 Somente Disponíveis
+              </Toggle>
+            </div>
+
+            <div className="flex flex-col justify-center mr-2">
+              <Toggle 
+                pressed={isBaseMetas} 
+                onPressedChange={setIsBaseMetas}
+                variant="outline"
+                className={cn(
+                  "h-8 px-3 border transition-colors text-[11px]", 
+                  isBaseMetas ? "border-primary bg-primary/10 text-primary" : ""
+                )}
+                title="Usar meta mensal acumulada da Base Metas"
+              >
+                <BarChart2 className="w-4 h-4 mr-2" />
+                Base Metas
               </Toggle>
             </div>
 
@@ -271,7 +562,7 @@ export const PlanejadoMetaView = () => {
                 }}
               >
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
+                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
                     <span className="truncate">
                       {draftUnidadesIds.length === 0 
                         ? 'Unidades' 
@@ -307,11 +598,32 @@ export const PlanejadoMetaView = () => {
               </DropdownMenu>
             </div>
 
+            <div className="flex flex-col justify-center min-w-[110px]">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Tipo Equipe</span>
+              <DropdownMenu open={tiposEquipeDropdownOpen} onOpenChange={setTiposEquipeDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
+                    <span className="truncate">{selectedTiposEquipe.length === 0 ? 'Todos' : `${selectedTiposEquipe.length} selec.`}</span>
+                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
+                  <DropdownMenuCheckboxItem checked={selectedTiposEquipe.length === 0} onCheckedChange={() => setSelectedTiposEquipe([])}>Todos os Tipos</DropdownMenuCheckboxItem>
+                  {tiposEquipeUnicos.map(t => (
+                    <DropdownMenuCheckboxItem key={t} checked={selectedTiposEquipe.includes(t)} onCheckedChange={(checked) => {
+                      if (checked) setSelectedTiposEquipe([...selectedTiposEquipe.filter(x => x !== t), t]);
+                      else setSelectedTiposEquipe(selectedTiposEquipe.filter(x => x !== t));
+                    }}>{t}</DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
             <div className="flex flex-col justify-center min-w-[90px]">
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Mês</span>
               <DropdownMenu open={mesesDropdownOpen} onOpenChange={setMesesDropdownOpen}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
+                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
                     <span className="truncate">{selectedMeses.length === 0 ? 'Todos' : selectedMeses.join(', ')}</span>
                     <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
                   </Button>
@@ -332,11 +644,11 @@ export const PlanejadoMetaView = () => {
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 flex justify-between">Período
                 {(filterStart || filterEnd) && <button onClick={() => { setFilterStart(''); setFilterEnd(''); }} className="text-foreground hover:underline ml-1">Limpar</button>}
               </span>
-              <div className="flex items-center gap-1 border border-input bg-background rounded-md h-10 px-2 focus-within:ring-1 focus-within:ring-ring">
+              <div className="flex items-center gap-1 border border-input bg-background rounded-md h-8 px-2 focus-within:ring-1 focus-within:ring-ring">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-xs outline-none w-[100px] text-foreground" title="Data Inicial" />
-                <span className="text-muted-foreground text-xs shrink-0">-</span>
-                <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-xs outline-none w-[100px] text-foreground" title="Data Final" />
+                <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Inicial" />
+                <span className="text-muted-foreground text-[11px] shrink-0">-</span>
+                <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Final" />
               </div>
             </div>
 
@@ -344,7 +656,7 @@ export const PlanejadoMetaView = () => {
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Supervisor</span>
               <DropdownMenu open={supervisoresDropdownOpen} onOpenChange={setSupervisoresDropdownOpen}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
+                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
                     <span className="truncate">{selectedSupervisores.length === 0 ? 'Todos' : `${selectedSupervisores.length} selec.`}</span>
                     <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
                   </Button>
@@ -365,7 +677,7 @@ export const PlanejadoMetaView = () => {
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Equipe</span>
               <DropdownMenu open={equipesDropdownOpen} onOpenChange={setEquipesDropdownOpen}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
+                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
                     <span className="truncate">{selectedEquipes.length === 0 ? 'Todas' : `${selectedEquipes.length} selec.`}</span>
                     <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
                   </Button>
@@ -386,7 +698,7 @@ export const PlanejadoMetaView = () => {
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Projeto</span>
               <DropdownMenu open={projetosDropdownOpen} onOpenChange={setProjetosDropdownOpen}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
+                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
                     <span className="truncate">{selectedProjetos.length === 0 ? 'Todos' : `${selectedProjetos.length} selec.`}</span>
                     <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
                   </Button>
@@ -403,24 +715,32 @@ export const PlanejadoMetaView = () => {
               </DropdownMenu>
             </div>
 
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => refetch()}
-              disabled={isRefetching}
-              title="Atualizar Dados"
-              className="h-10 w-10 p-0 ml-1 shrink-0"
-            >
-              <RefreshCw className={cn("w-4 h-4", isRefetching && "animate-spin")} />
-            </Button>
+            <div className="flex items-center ml-2">
+              {lastUpdated && (
+                <div className="text-right mr-2 flex flex-col justify-center ">
+                  <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
+                  <span className="text-xs text-foreground font-medium">
+                    {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
+                disabled={isSyncing}
+                title="Sincronizar Dados (Google Sheets -> Nuvem)"
+                className="h-8 w-8 p-0 shrink-0"
+              >
+                <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* CONTEÚDO PRINCIPAL (Gráfico + Tabela) */}
       <div className="flex-1 overflow-auto flex flex-col gap-6 p-4">
         
-        {/* Gráfico */}
         <div className="w-full h-[320px] shrink-0 border border-border rounded-xl bg-card p-4 shadow-sm flex flex-col">
           <div className="mb-4">
             <h2 className="text-lg font-bold text-foreground">Média por Unidade</h2>
@@ -437,7 +757,7 @@ export const PlanejadoMetaView = () => {
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                 />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                {mesesUnicos.map((m, i) => (
+                {mesesExibidos.map((m, i) => (
                   <Bar key={m} dataKey={m} name={m} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} maxBarSize={25}>
                     <LabelList dataKey={m} position="top" fill="currentColor" fontSize={10} formatter={(v: any) => v || ''} />
                   </Bar>
@@ -447,8 +767,7 @@ export const PlanejadoMetaView = () => {
           </div>
         </div>
 
-        {/* Tabela */}
-        <div className="w-full border border-border rounded-xl bg-card shadow-sm flex flex-col mb-4 overflow-hidden">
+        <div className="w-full shrink-0 border border-border rounded-xl bg-card shadow-sm flex flex-col mb-4 overflow-hidden">
           <div className="p-4 border-b border-border bg-muted/30">
             <h2 className="text-lg font-bold text-foreground">Indicadores de Produção</h2>
             <p className="text-xs text-muted-foreground">Detalhamento por Unidade</p>
@@ -460,9 +779,9 @@ export const PlanejadoMetaView = () => {
                 <tr>
                   <th className="px-3 py-2 w-[250px] font-bold text-muted-foreground border-b border-border bg-muted/10 rounded-tl-lg">Unidade</th>
                   <th className="px-3 py-2 w-[120px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center">Prod %</th>
-                  {mesesUnicos.map(m => [
+                  {mesesExibidos.map(m => [
                     <th key={m} className="px-2 py-2 font-bold text-muted-foreground border-b border-border bg-muted/10 text-center">{m}</th>,
-                    <th key={`${m}_prod`} className="px-1 py-2 w-[80px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center text-[10px]">Prod {m}</th>
+                    <th key={`${m}_prod`} className="px-1 py-2 w-[80px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center text-[10px]">Plan {m}</th>
                   ])}
                   <th className="px-2 py-2 w-[100px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center rounded-tr-lg">Média</th>
                 </tr>
@@ -472,34 +791,35 @@ export const PlanejadoMetaView = () => {
                   <tr key={i} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
                     <td className="px-3 py-2.5 font-medium whitespace-nowrap">{row.name}</td>
                     
-                    {/* Prod % */}
                     <td className="px-3 py-2.5 text-center relative min-w-[100px]">
                       <div className="absolute inset-y-1.5 left-2 right-2 bg-muted/50 rounded-sm overflow-hidden border border-border/50">
                         <div 
-                          className={cn("h-full transition-all", getProdColor(row._producaoPerc))} 
-                          style={{ width: `${Math.min(row._producaoPerc, 100)}%` }}
+                          className="h-full transition-all" 
+                          style={{ width: `${Math.min(row._producaoPerc, 100)}%`, backgroundColor: getGradualColor(row._producaoPerc) }}
                         ></div>
                       </div>
                       <span className="relative z-10 text-xs font-bold text-white">{row._producaoPerc.toFixed(1)}%</span>
                     </td>
 
-                    {/* Meses */}
-                    {mesesUnicos.map(m => {
+                    {mesesExibidos.map(m => {
                       const val = row[m];
                       const prodVal = row[`${m}_prod`];
                       return [
                         <td key={m} className="p-0 border border-background">
-                          <div className={cn("w-full max-w-[64px] mx-auto h-full min-h-[32px] flex items-center justify-center text-xs rounded-sm", getCellColor(val))}>
-                            {val !== null ? val.toFixed(1) + '%' : '-'}
+                          <div 
+                            className={cn("w-full max-w-[64px] mx-auto h-full min-h-[32px] flex items-center justify-center text-xs rounded-sm", getCellClassName(val))}
+                            style={getCellStyle(val)}
+                          >
+                            {val !== null && val !== undefined ? val.toFixed(1) + '%' : '-'}
                           </div>
                         </td>,
                         <td key={`${m}_prod`} className="px-1 py-2 text-center relative min-w-[70px]">
-                          {prodVal !== null ? (
+                          {prodVal !== null && prodVal !== undefined ? (
                             <>
                               <div className="absolute inset-y-1.5 left-1 right-1 bg-muted/50 rounded-sm overflow-hidden border border-border/50">
                                 <div 
-                                  className={cn("h-full transition-all", getProdColor(prodVal))} 
-                                  style={{ width: `${Math.min(prodVal, 100)}%` }}
+                                  className="h-full transition-all" 
+                                  style={{ width: `${Math.min(prodVal, 100)}%`, backgroundColor: getGradualColor(prodVal) }}
                                 ></div>
                               </div>
                               <span className="relative z-10 text-[10px] font-bold text-white">{prodVal.toFixed(1)}%</span>
@@ -511,9 +831,11 @@ export const PlanejadoMetaView = () => {
                       ];
                     })}
 
-                    {/* Média Geral */}
                     <td className="p-0 border border-background">
-                      <div className={cn("w-full max-w-[64px] mx-auto h-full min-h-[32px] flex items-center justify-center text-xs rounded-sm", getCellColor(row._mediaGeral))}>
+                      <div 
+                        className={cn("w-full max-w-[64px] mx-auto h-full min-h-[32px] flex items-center justify-center text-xs rounded-sm", getCellClassName(row._mediaGeral))}
+                        style={getCellStyle(row._mediaGeral)}
+                      >
                         {row._mediaGeral !== null ? row._mediaGeral.toFixed(1) + '%' : '-'}
                       </div>
                     </td>
@@ -544,6 +866,208 @@ export const PlanejadoMetaView = () => {
 
           </div>
         </div>
+
+        {/* GRÁFICO PLANEJADO X META e RESUMO */}
+        <div className="w-full shrink-0 flex flex-col md:flex-row gap-4 mb-4">
+          
+          {/* Gráfico */}
+          <div className="flex-1 border border-border rounded-xl bg-card shadow-sm flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-border bg-muted/30">
+              <h2 className="text-lg font-bold text-foreground">Visão Global Planejado x Meta</h2>
+              <p className="text-xs text-muted-foreground">Desempenho por Unidade (Produção e Planejado sobre a Meta)</p>
+            </div>
+            
+            <div className="p-6 h-[400px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData} margin={{ top: 30, right: 30, bottom: 40, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 'bold' }} 
+                    interval={0}
+                    tickFormatter={(v) => v === 'VITORIA DA CONQUISTA' ? 'V. DA CONQUISTA' : v === 'BOM JESUS DA LAPA' ? 'B. J. DA LAPA' : v}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 11 }} 
+                    domain={[0, 120]} 
+                    ticks={[0, 20, 40, 60, 80, 100, 120]}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }} />
+                  
+                  <Bar 
+                    dataKey="_producaoPerc" 
+                    name="Produção (%)" 
+                    fill="#ef4444" 
+                    radius={[4, 4, 0, 0]} 
+                    barSize={50}
+                    background={{ fill: 'hsl(var(--muted))', radius: [4, 4, 0, 0] }}
+                  >
+                    <LabelList 
+                      dataKey="_producaoPerc" 
+                      position="center" 
+                      fill="#ffffff" 
+                      fontSize={12} 
+                      fontWeight="bold" 
+                      formatter={(val: number) => val > 0 ? `${val.toFixed(0)}%` : ''} 
+                    />
+                  </Bar>
+                  
+                  <Line 
+                    type="monotone" 
+                    dataKey="_mediaGeral" 
+                    name="Planejado (%)" 
+                    stroke="#f59e0b" 
+                    strokeWidth={3} 
+                    dot={{ r: 5, fill: '#f59e0b', strokeWidth: 2 }} 
+                    activeDot={{ r: 7 }} 
+                  >
+                    <LabelList 
+                      dataKey="_mediaGeral" 
+                      position="top" 
+                      offset={10}
+                      fill="#d97706" 
+                      fontSize={12} 
+                      fontWeight="bold" 
+                      formatter={(val: number) => val > 0 ? `${val.toFixed(0)}%` : ''} 
+                      style={{ backgroundColor: 'rgba(255,255,255,0.8)', padding: '2px 4px', borderRadius: '4px' }}
+                    />
+                  </Line>
+
+                  <Line 
+                    type="monotone" 
+                    dataKey="_mediaMista" 
+                    name="Planejado Original (%)" 
+                    stroke="#000000" 
+                    strokeWidth={3} 
+                    dot={{ r: 5, fill: '#000000', strokeWidth: 2 }} 
+                    activeDot={{ r: 7 }} 
+                  >
+                    <LabelList 
+                      dataKey="_mediaMista" 
+                      position="bottom" 
+                      offset={10}
+                      fill="#000000" 
+                      fontSize={12} 
+                      fontWeight="bold" 
+                      formatter={(val: number) => val > 0 ? `${val.toFixed(0)}%` : ''} 
+                      style={{ backgroundColor: 'rgba(255,255,255,0.8)', padding: '2px 4px', borderRadius: '4px' }}
+                    />
+                  </Line>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* KPI Dashboard */}
+          <div className="w-full md:w-[280px] shrink-0 bg-[#dc2626] rounded-xl shadow-sm flex flex-col p-6 text-white justify-center">
+            <div className="mb-8">
+              <h3 className="text-2xl font-black">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalMeta)}</h3>
+              <p className="text-sm font-semibold opacity-90">VlrMeta</p>
+            </div>
+            
+            <div className="mb-8">
+              <h3 className="text-xl font-bold opacity-80">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.desvio)}</h3>
+              <p className="text-sm font-semibold opacity-70">Desvio</p>
+            </div>
+            
+            <div>
+              <h3 className="text-2xl font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalPlanejado)}</h3>
+              <p className="text-sm font-semibold opacity-90">VlrPlanejado</p>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Gráfico de Pareto de Reprogramadas */}
+        {paretoData.length > 0 && (
+          <div className="bg-card border border-border rounded-xl shadow-sm p-6 mb-8 mt-8">
+            <div className="mb-6 border-b border-border pb-4">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <BarChart2 className="w-5 h-5" />
+                Motivos de Reprogramação (Pareto)
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">Impacto planejado vs produção realizada por motivo</p>
+            </div>
+
+            <div className="h-[400px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={paretoData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="motivo" 
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} 
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                    tickLine={false}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                  />
+                  <YAxis 
+                    yAxisId="left"
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(val) => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(val)}
+                  />
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  
+                  <Tooltip 
+                    cursor={{ fill: 'hsl(var(--muted)/0.5)' }}
+                    content={({ active, payload, label }: any) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-card border border-border p-3 rounded-lg shadow-lg">
+                            <p className="font-bold mb-2">{label}</p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="w-3 h-3 rounded-full bg-[#f59e0b]" />
+                              <span className="text-sm">Planejado Original: <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payload[0]?.value || 0)}</strong></span>
+                            </div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-3 h-3 rounded-full bg-[#ef4444]" />
+                              <span className="text-sm">Produção Realizada: <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payload[1]?.value || 0)}</strong></span>
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-border flex items-center justify-between gap-4">
+                              <span className="text-sm text-muted-foreground">Qtd Obras (linhas):</span>
+                              <span className="text-sm font-bold">{payload[2]?.value || 0}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  
+                  <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }} />
+                  
+                  <Bar yAxisId="left" dataKey="planejado" name="Planejado Original (R$)" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={40} />
+                  <Bar yAxisId="left" dataKey="produzido" name="Produção Efetiva (R$)" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={40} />
+                  
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="count" 
+                    name="Quantidade de Obras" 
+                    stroke="#000000" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#000000' }} 
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

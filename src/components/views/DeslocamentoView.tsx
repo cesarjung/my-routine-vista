@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { useDeslocamentoData } from '@/hooks/useDeslocamentoData';
+import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -26,11 +27,12 @@ import {
 } from 'recharts';
 
 export const DeslocamentoView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([UNIDADES_PLANEJAMENTO[0].id]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
+  const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
-  const { data, isLoading, isError, refetch, isRefetching } = useDeslocamentoData(selectedUnidadesIds);
+  const { data, isLoading, isError, lastUpdated } = useDeslocamentoData(selectedUnidadesIds);
 
   // Filtros locais
   const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
@@ -110,6 +112,33 @@ export const DeslocamentoView = () => {
     });
   }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos]);
 
+  // Meses a serem exibidos nas tabelas e gráficos
+  const mesesExibidos = useMemo(() => {
+    const ORDER = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    if (selectedMeses.length > 0) {
+      return [...selectedMeses].sort((a, b) => {
+        let iA = ORDER.indexOf(a);
+        let iB = ORDER.indexOf(b);
+        if (iA === -1) iA = 99;
+        if (iB === -1) iB = 99;
+        return iA - iB;
+      });
+    } else {
+      const meses = new Set<string>();
+      filteredData.forEach(row => {
+        if (row.mesCurto) meses.add(row.mesCurto);
+      });
+      return Array.from(meses).sort((a, b) => {
+        let iA = ORDER.indexOf(a);
+        let iB = ORDER.indexOf(b);
+        if (iA === -1) iA = 99;
+        if (iB === -1) iB = 99;
+        return iA - iB;
+      });
+    }
+  }, [selectedMeses, filteredData]);
+
   // Cálculos de Agrupamento
   const chartData = useMemo(() => {
     const agrupado: Record<string, any> = {};
@@ -159,7 +188,7 @@ export const DeslocamentoView = () => {
       item._mediaGeral = denomGeral > 0 ? u.sumU / denomGeral : null;
 
       // Médias por mês (para o chart e tabela)
-      mesesUnicos.forEach(m => {
+      mesesExibidos.forEach(m => {
         if (u.meses[m]) {
           const denomMes = mediaTodosTurnos ? u.meses[m].countAM : u.meses[m].countU;
           item[m] = denomMes > 0 ? Number((u.meses[m].sumU / denomMes).toFixed(1)) : null;
@@ -177,7 +206,7 @@ export const DeslocamentoView = () => {
     resultadoFinal.sort((a, b) => a.name.localeCompare(b.name));
 
     return resultadoFinal;
-  }, [filteredData, mediaTodosTurnos, mesesUnicos]);
+  }, [filteredData, mediaTodosTurnos, mesesExibidos]);
 
   const COLORS = [
     'hsl(25, 95%, 50%)', // Laranja Principal (Primary)
@@ -399,16 +428,26 @@ export const DeslocamentoView = () => {
               </DropdownMenu>
             </div>
 
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => refetch()}
-              disabled={isRefetching}
-              title="Atualizar Dados"
-              className="h-10 w-10 p-0 ml-1 shrink-0"
-            >
-              <RefreshCw className={cn("w-4 h-4", isRefetching && "animate-spin")} />
-            </Button>
+            <div className="flex items-center ml-2">
+              {lastUpdated && (
+                <div className="text-right mr-2 flex flex-col justify-center ">
+                  <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
+                  <span className="text-xs text-foreground font-medium">
+                    {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
+                disabled={isSyncing}
+                title="Sincronizar Dados (Google Sheets -> Nuvem)"
+                className="h-10 w-10 p-0 shrink-0"
+              >
+                <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -433,7 +472,7 @@ export const DeslocamentoView = () => {
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                 />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                {mesesUnicos.map((m, i) => (
+                {mesesExibidos.map((m, i) => (
                   <Bar key={m} dataKey={m} name={m} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} maxBarSize={25}>
                     <LabelList dataKey={m} position="top" fill="currentColor" fontSize={10} formatter={(v: any) => v || ''} />
                   </Bar>
@@ -450,13 +489,13 @@ export const DeslocamentoView = () => {
             <p className="text-xs text-muted-foreground">Detalhamento por Unidade</p>
           </div>
           
-          <div className="w-full overflow-x-auto p-4">
-            <table className="w-auto text-sm text-left border-collapse">
+          <div className="w-full p-4">
+            <table className="w-full text-sm text-left border-collapse">
               <thead>
                 <tr>
                   <th className="px-3 py-2 w-[250px] font-bold text-muted-foreground border-b border-border bg-muted/10 rounded-tl-lg">Unidade</th>
                   <th className="px-3 py-2 w-[120px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center">Prod %</th>
-                  {mesesUnicos.map(m => [
+                  {mesesExibidos.map(m => [
                     <th key={m} className="px-2 py-2 font-bold text-muted-foreground border-b border-border bg-muted/10 text-center">{m}</th>,
                     <th key={`${m}_prod`} className="px-1 py-2 w-[80px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center text-[10px]">Prod {m}</th>
                   ])}
@@ -480,17 +519,17 @@ export const DeslocamentoView = () => {
                     </td>
 
                     {/* Meses */}
-                    {mesesUnicos.map(m => {
+                    {mesesExibidos.map(m => {
                       const val = row[m];
                       const prodVal = row[`${m}_prod`];
                       return [
                         <td key={m} className="p-0 border border-background">
                           <div className={cn("w-full max-w-[64px] mx-auto h-full min-h-[32px] flex items-center justify-center text-xs rounded-sm", getCellColor(val))}>
-                            {val !== null ? val.toFixed(1) : '-'}
+                            {val !== null && val !== undefined ? val.toFixed(1) : '-'}
                           </div>
                         </td>,
                         <td key={`${m}_prod`} className="px-1 py-2 text-center relative min-w-[70px]">
-                          {prodVal !== null ? (
+                          {prodVal !== null && prodVal !== undefined ? (
                             <>
                               <div className="absolute inset-y-1.5 left-1 right-1 bg-muted/50 rounded-sm overflow-hidden border border-border/50">
                                 <div 

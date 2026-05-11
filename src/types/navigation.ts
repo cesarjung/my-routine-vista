@@ -6,13 +6,14 @@ export type NavigationContext =
   | { type: 'sector'; sectorId: string; folder?: string; frequency?: string }
   | { type: 'dashboard' }
   | { type: 'settings' }
-  | { type: 'planejamento'; section: 'carteira' }
+  | { type: 'planejamento'; section: 'carteira' | 'carteira_dashboard' }
   | { type: 'planejamento_equipes'; section: 'carteira' }
   | { type: 'poste_turno'; section: 'carteira' }
   | { type: 'deslocamento'; section: 'carteira' }
   | { type: 'planejado_meta'; section: 'carteira' }
   | { type: 'cumprimento_planejamento'; section: 'carteira' }
-  | { type: 'etapas'; section: 'carteira' };
+  | { type: 'etapas'; section: 'carteira' }
+  | { type: 'planejamento_semanal'; section: 'carteira' };
 
 export interface NavigationState {
   context: NavigationContext;
@@ -54,5 +55,10 @@ export const VIEW_CONFIG = {
     id: 'etapas',
     label: 'Etapas',
     icon: 'Layers'
+  },
+  planejamento_semanal: {
+    id: 'planejamento_semanal',
+    label: 'Planejamento Semanal',
+    icon: 'CalendarDays'
   }
 } as const;

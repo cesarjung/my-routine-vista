@@ -1,0 +1,836 @@
+import React, { useState, useMemo, Fragment } from 'react';
+import { useCarteiraDashboardData } from '@/hooks/useCarteiraDashboardData';
+import { CarteiraMapView } from './CarteiraMapView';
+import { format, differenceInMonths, parse, startOfDay, endOfDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { RefreshCw, Filter, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
+import { useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
+import { cn } from '@/lib/utils';
+
+const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: number, colorClass: string, size?: number }) => {
+  const strokeWidth = size * 0.12;
+  const radius = size / 2 - strokeWidth;
+  const circumference = radius * Math.PI;
+  const percent = max > 0 ? Math.min(value / max, 1) : 0;
+  const strokeDashoffset = circumference * (1 - percent);
+
+  return (
+    <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size / 2 + strokeWidth }}>
+      <svg width={size} height={size / 2 + strokeWidth} className="overflow-visible">
+        <path
+          d={`M ${strokeWidth} ${size/2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth} ${size/2}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          className="text-muted/30"
+        />
+        <path
+          d={`M ${strokeWidth} ${size/2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth} ${size/2}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          className={`transition-all duration-1000 ease-out ${colorClass}`}
+        />
+      </svg>
+      <div className="absolute bottom-0 left-0 w-full text-center" style={{ marginBottom: -strokeWidth }}>
+        <span className="text-[10px] font-bold text-muted-foreground">{(percent * 100).toFixed(0)}%</span>
+      </div>
+    </div>
+  );
+};
+
+export const CarteiraDashboardView = () => {
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
+  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
+  const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
+  const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
+
+  const { data, isLoading } = useCarteiraDashboardData(selectedUnidadesIds);
+
+  // Estados dos filtros
+  const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
+  const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
+  const [selectedMunicipios, setSelectedMunicipios] = useState<string[]>([]);
+  const [selectedPrioridades, setSelectedPrioridades] = useState<string[]>([]);
+  const [selectedVistorias, setSelectedVistorias] = useState<string[]>([]); // 'SIM', 'NÃO', 'VENCIDAS'
+  const [selectedAVNPs, setSelectedAVNPs] = useState<number[]>([]);
+  const [filterStart, setFilterStart] = useState<string>('');
+  const [filterEnd, setFilterEnd] = useState<string>('');
+  const [considerarInaptas, setConsiderarInaptas] = useState(false);
+
+  // Listas de opções para os filtros
+  const options = useMemo(() => {
+    const meses = new Set<string>();
+    const status = new Set<string>();
+    const projetos = new Set<string>();
+    const municipios = new Set<string>();
+    const prioridades = new Set<string>();
+    const avnps = new Set<number>();
+
+    data.carteira.forEach(row => {
+      row.meses.forEach(m => meses.add(m));
+      if (row.statusExecucao) status.add(row.statusExecucao);
+      if (row.projeto) projetos.add(row.projeto);
+      if (row.municipio) municipios.add(row.municipio);
+      if (row.prioridade) prioridades.add(row.prioridade);
+      avnps.add(row.avnpMaisRecente);
+      Object.values(row.avnpMap).forEach(v => avnps.add(v));
+    });
+
+    const parseMesToDate = (m: string) => {
+      if (m === 'OBRA RETIRADA') return 0;
+      try {
+        const cleanStr = m.replace('./', ' ');
+        return parse(cleanStr, 'MMM yy', new Date(), { locale: ptBR }).getTime();
+      } catch (e) {
+        return 0;
+      }
+    };
+
+    return {
+      meses: Array.from(meses).sort((a, b) => parseMesToDate(a) - parseMesToDate(b)),
+      status: Array.from(status).sort(),
+      projetos: Array.from(projetos).sort(),
+      municipios: Array.from(municipios).sort(),
+      prioridades: Array.from(prioridades).sort(),
+      avnps: Array.from(avnps).sort((a, b) => b - a),
+    };
+  }, [data.carteira]);
+
+  // Aplicação dos filtros
+  const filteredData = useMemo(() => {
+    const now = new Date();
+    
+    return data.carteira.filter(row => {
+      // Filtro Mês
+      if (selectedMeses.length > 0) {
+        const hasMes = selectedMeses.some(m => row.meses.includes(m));
+        if (!hasMes) return false;
+      }
+
+      // Filtro Status
+      if (selectedStatus.length > 0 && !selectedStatus.includes(row.statusExecucao)) return false;
+      
+      // Filtro Projeto
+      if (selectedProjetos.length > 0 && !selectedProjetos.includes(row.projeto)) return false;
+      
+      // Filtro Municipio
+      if (selectedMunicipios.length > 0 && !selectedMunicipios.includes(row.municipio)) return false;
+      
+      // Filtro Prioridade
+      if (selectedPrioridades.length > 0 && !selectedPrioridades.includes(row.prioridade)) return false;
+
+      // Filtro Vistoria
+      if (selectedVistorias.length > 0) {
+        let vistoriaStatus = 'NÃO';
+        if (row.dataVistoria) {
+          const diff = differenceInMonths(now, row.dataVistoria);
+          vistoriaStatus = diff <= 6 ? 'SIM' : 'VENCIDAS';
+        }
+        if (!selectedVistorias.includes(vistoriaStatus)) return false;
+      }
+
+      // Filtro AVNP
+      if (selectedAVNPs.length > 0) {
+        let avnpAplicavel = row.avnpMaisRecente;
+        if (selectedMeses.length === 1) {
+          const mes = selectedMeses[0];
+          avnpAplicavel = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
+        } else if (selectedMeses.length > 1) {
+          const matchAVNP = selectedMeses.some(mes => {
+            const val = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
+            return selectedAVNPs.includes(val);
+          });
+          if (!matchAVNP) return false;
+        } else {
+           if (!selectedAVNPs.includes(avnpAplicavel)) return false;
+        }
+      }
+
+      // Filtro de Conclusões (Datas J e K)
+      if (filterStart || filterEnd) {
+        let isWithin = true;
+        if (filterStart) {
+          const start = startOfDay(parse(filterStart, 'yyyy-MM-dd', new Date()));
+          if (!row.dataFim || row.dataFim < start) isWithin = false;
+        }
+        if (filterEnd) {
+          const end = endOfDay(parse(filterEnd, 'yyyy-MM-dd', new Date()));
+          if (!row.dataFim || row.dataFim > end) isWithin = false;
+        }
+        if (!isWithin) return false;
+      }
+
+      return true;
+    });
+  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedVistorias, selectedAVNPs, filterStart, filterEnd]);
+
+  // Indicadores
+  const indicators = useMemo(() => {
+    let sumPostes = 0;
+    let sumFaturamento = 0;
+    let countVistoriadas = 0;
+    let countSemOrcamento = 0;
+    let sumGpm = 0;
+    let sumNeoex = 0;
+    let countEnergizadas = 0;
+    let countConcluidas = 0;
+    let countAvnp100 = 0;
+    let countAvnp100Eficaz = 0;
+
+    let countInaptas = 0;
+    let sumPostesInaptas = 0;
+    let sumFaturamentoInaptas = 0;
+
+    let totalObrasAptas = 0;
+
+    const municipioMap: Record<string, { count: number, postes: number, valor: number }> = {};
+
+    filteredData.forEach(row => {
+      const isInapta = row.obrasInaptasVal === '0';
+      const considerarApta = considerarInaptas || !isInapta;
+
+      if (isInapta) {
+        countInaptas++;
+        sumPostesInaptas += row.postesDisponiveis;
+        sumFaturamentoInaptas += row.capacidadeFaturamento;
+      }
+      if (considerarApta) {
+        totalObrasAptas++;
+        sumPostes += row.postesDisponiveis;
+        sumFaturamento += row.capacidadeFaturamento;
+        
+        if (row.dataVistoria) countVistoriadas++;
+        if (row.obrasSemOrcamentoVal === '0') countSemOrcamento++;
+        if (row.dataEnergizacao) countEnergizadas++;
+        if (row.statusExecucao.toUpperCase().includes('CONCLUÍD')) countConcluidas++;
+
+        const mun = row.municipio || 'Não Informado';
+        if (!municipioMap[mun]) municipioMap[mun] = { count: 0, postes: 0, valor: 0 };
+        municipioMap[mun].count += 1;
+        municipioMap[mun].postes += row.postesDisponiveis;
+        municipioMap[mun].valor += row.capacidadeFaturamento;
+
+        sumGpm += row.qtdGpm || 0;
+        sumNeoex += row.qtdNeoex || 0;
+
+        // Eficácia Prevista Logic
+        let avnpAplicavel = row.avnpMaisRecente;
+        if (selectedMeses.length === 1) {
+          avnpAplicavel = row.avnpMap[selectedMeses[0]] !== undefined ? row.avnpMap[selectedMeses[0]] : row.avnpMaisRecente;
+        } else if (selectedMeses.length > 1) {
+          avnpAplicavel = Math.max(...selectedMeses.map(m => row.avnpMap[m] !== undefined ? row.avnpMap[m] : row.avnpMaisRecente));
+        }
+
+        if (avnpAplicavel === 1) {
+          countAvnp100++;
+          if (row.dataFim) {
+             const mStr = `${format(row.dataFim, 'MMM', { locale: ptBR })}./${format(row.dataFim, 'yy')}`.toLowerCase();
+             if (selectedMeses.length > 0) {
+               if (selectedMeses.includes(mStr)) {
+                 countAvnp100Eficaz++;
+               }
+             } else {
+               countAvnp100Eficaz++;
+             }
+          }
+        }
+      }
+    });
+
+    const totalObras = totalObrasAptas;
+    const mediaPostes = totalObras > 0 ? sumPostes / totalObras : 0;
+    const eficaciaPrevista = countAvnp100 > 0 ? (countAvnp100Eficaz / countAvnp100) * 100 : 0;
+
+    // Municípios ranking
+    const municipiosRanking = Object.entries(municipioMap)
+      .map(([nome, data]) => ({
+        nome,
+        count: data.count,
+        postes: data.postes,
+        valor: data.valor,
+        percent: totalObras > 0 ? (data.count / totalObras) * 100 : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // Metas
+    let sumMetaPostes = 0;
+    let sumEquipes = 0;
+    let sumMetaFaturamento = 0;
+    let sumMetaPostesEquipe = 0;
+    let countMetaEquipe = 0;
+    
+    data.baseCurva.forEach(bc => {
+      if (selectedMeses.length > 0 && !selectedMeses.includes(bc.mesMeta)) return;
+      sumMetaPostes += bc.totalPostes;
+      sumEquipes += bc.totalEquipes;
+      sumMetaPostesEquipe += bc.metaPostesEquipe;
+      countMetaEquipe++;
+    });
+
+    data.metasFaturamento.forEach(mf => {
+      if (selectedMeses.length > 0 && !selectedMeses.includes(mf.mesMeta)) return;
+      sumMetaFaturamento += mf.valor;
+    });
+
+    const percentMeta = sumMetaPostes > 0 ? (sumPostes / sumMetaPostes) * 100 : 0;
+    const ratioEquipes = sumEquipes > 0 ? sumPostes / sumEquipes : 0;
+    const metaPostesEquipeAvg = countMetaEquipe > 0 ? sumMetaPostesEquipe / countMetaEquipe : 0;
+
+    const carteiraApta = data.carteira.filter(r => considerarInaptas || r.obrasInaptasVal !== '0');
+    const geralTotalObras = carteiraApta.length;
+    const geralSumPostes = carteiraApta.reduce((acc, r) => acc + r.postesDisponiveis, 0);
+
+    return {
+      totalObras,
+      mediaPostes,
+      sumPostes,
+      sumFaturamento,
+      countVistoriadas,
+      countInaptas,
+      countSemOrcamento,
+      countEnergizadas,
+      sumGpm,
+      sumNeoex,
+      countConcluidas,
+      municipiosRanking,
+      sumMetaPostes,
+      percentMeta,
+      sumEquipes,
+      ratioEquipes,
+      metaPostesEquipeAvg,
+      sumMetaFaturamento,
+      eficaciaPrevista,
+      
+      sumPostesInaptas,
+      sumFaturamentoInaptas,
+      geralTotalObras,
+      geralSumPostes
+    };
+  }, [filteredData, data.baseCurva, data.metasFaturamento, selectedMeses, data.carteira, considerarInaptas]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
+  // Componente de badge para filtros ativos
+  const FilterBadge = ({ label, onRemove }: { label: string, onRemove: () => void }) => (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+      {label}
+      <button onClick={onRemove} className="ml-1 text-primary hover:text-primary/70 focus:outline-none">×</button>
+    </span>
+  );
+
+  // Helper para renderizar os filtros multi-select (estilo novo, linear com Select All)
+  const renderMultiSelect = (
+    label: string, 
+    options: { value: string | number; label: string }[], 
+    selectedValues: any[], 
+    onChange: (val: any[]) => void
+  ) => {
+    return (
+      <div className="flex flex-col justify-center min-w-[90px]">
+        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">
+              <span className="truncate">{selectedValues.length === 0 ? 'Todos' : `${selectedValues.length} selec.`}</span>
+              <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Todas</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => onChange([])}>Limpar</Button>
+            </div>
+            {options.map((opt) => (
+              <DropdownMenuCheckboxItem
+                key={opt.value}
+                checked={selectedValues.includes(opt.value)}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    onChange([...selectedValues, opt.value]);
+                  } else {
+                    onChange(selectedValues.filter((v) => v !== opt.value));
+                  }
+                }}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {options.length === 0 && (
+               <div className="px-2 py-2 text-sm text-muted-foreground text-center">Nenhuma opção</div>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-auto bg-background custom-scrollbar relative">
+      
+      {/* HEADER / FILTROS BÁSICOS (Sticky) */}
+      <div className="sticky top-0 z-[100] bg-background border-b border-border space-y-3 pt-4 px-6 pb-4">
+        
+        <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto no-scrollbar-custom">
+          {/* Header Title */}
+          <div className="shrink-0 mb-1">
+            <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Dashboard da Carteira</h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Gestão à Vista</p>
+          </div>
+          
+          <div className="w-px h-10 bg-border shrink-0"></div>
+
+          {/* Filters Row */}
+          <div className="flex flex-nowrap items-end gap-2 shrink-0 pb-1">
+             
+             {/* Filtro Unidade */}
+             <div className="flex flex-col justify-center min-w-[100px]">
+               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Unidade</span>
+               <DropdownMenu 
+                 open={unidadesDropdownOpen} 
+                 onOpenChange={(open) => {
+                   setUnidadesDropdownOpen(open);
+                   if (!open) setSelectedUnidadesIds(draftUnidadesIds);
+                   else setDraftUnidadesIds(selectedUnidadesIds);
+                 }}
+               >
+                 <DropdownMenuTrigger asChild>
+                   <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">
+                     <span className="truncate">
+                       {draftUnidadesIds.length === 0 
+                         ? 'Unidades' 
+                         : draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
+                           ? 'Todas Unidades'
+                           : `${draftUnidadesIds.length} selec.`}
+                     </span>
+                     <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
+                   </Button>
+                 </DropdownMenuTrigger>
+                 <DropdownMenuContent className="w-56" align="start">
+                   <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                     <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Todas</Button>
+                     <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
+                   </div>
+                   {UNIDADES_PLANEJAMENTO.map(u => (
+                     <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
+                       if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
+                       else setDraftUnidadesIds(draftUnidadesIds.filter(id => id !== u.id));
+                     }} onSelect={(e) => e.preventDefault()}>{u.nome}</DropdownMenuCheckboxItem>
+                   ))}
+                 </DropdownMenuContent>
+               </DropdownMenu>
+             </div>
+
+             {/* Outros filtros combinados na mesma linha, unidade ao lado de prioridade */}
+             {renderMultiSelect("Projeto", options.projetos.map(m => ({ value: m, label: m })), selectedProjetos, setSelectedProjetos)}
+             {renderMultiSelect("Prioridade", options.prioridades.map(m => ({ value: m, label: m })), selectedPrioridades, setSelectedPrioridades)}
+             {renderMultiSelect("Mês", options.meses.map(m => ({ value: m, label: m })), selectedMeses, setSelectedMeses)}
+             {renderMultiSelect("Vistoria", [
+               { value: "SIM", label: "SIM (Válidas)" },
+               { value: "VENCIDAS", label: "VENCIDAS (+6 meses)" },
+               { value: "NÃO", label: "NÃO (Sem Data)" }
+             ], selectedVistorias, setSelectedVistorias)}
+             {renderMultiSelect("Status", options.status.map(m => ({ value: m, label: m })), selectedStatus, setSelectedStatus)}
+             {renderMultiSelect("AVNP", options.avnps.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` })), selectedAVNPs, setSelectedAVNPs)}
+
+             <Toggle 
+               pressed={considerarInaptas} 
+               onPressedChange={setConsiderarInaptas} 
+               variant="outline" 
+               size="sm" 
+               className="h-8 mb-0.5 text-[10px] uppercase font-bold tracking-wider data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground shrink-0"
+               title="Considerar obras inaptas nos totais e cálculos"
+             >
+               + INAPTAS
+             </Toggle>
+
+             {/* DateRangePicker para Conclusões */}
+             <div className="flex flex-col justify-center min-w-[130px]">
+               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 flex justify-between">Conclusões
+                 {(filterStart || filterEnd) && <button onClick={() => { setFilterStart(''); setFilterEnd(''); }} className="text-foreground hover:underline ml-1">Limpar</button>}
+               </span>
+               <div className="flex items-center gap-1 border border-input bg-background rounded-md h-8 px-2 focus-within:ring-1 focus-within:ring-ring">
+                 <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                 <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Inicial" />
+                 <span className="text-muted-foreground text-[11px] shrink-0">-</span>
+                 <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Final" />
+               </div>
+             </div>
+
+             {/* Botão Sincronizar (Estilo PlanejadoMetaView) */}
+             <div className="flex items-center ml-2">
+               {data.lastUpdated && (
+                 <div className="text-right mr-2 flex flex-col justify-center">
+                   <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
+                   <span className="text-xs text-foreground font-medium">
+                     {format(data.lastUpdated, "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                   </span>
+                 </div>
+               )}
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
+                 disabled={isSyncing}
+                 title="Sincronizar Dados (Google Sheets -> Nuvem)"
+                 className="h-8 w-8 p-0 shrink-0"
+               >
+                 <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin text-primary")} />
+               </Button>
+             </div>
+             
+          </div>
+        </div>
+
+        {/* Filtros Ativos Badge row (Opcional, mas útil) */}
+        {(selectedMeses.length > 0 || selectedVistorias.length > 0 || selectedStatus.length > 0 || selectedAVNPs.length > 0 || selectedPrioridades.length > 0) && (
+          <div className="flex flex-wrap gap-2 pt-2">
+            {selectedMeses.map(m => <FilterBadge key={m} label={`Mês: ${m}`} onRemove={() => setSelectedMeses(selectedMeses.filter(x => x !== m))} />)}
+            {selectedVistorias.map(m => <FilterBadge key={m} label={`Vistoria: ${m}`} onRemove={() => setSelectedVistorias(selectedVistorias.filter(x => x !== m))} />)}
+            {selectedStatus.map(m => <FilterBadge key={m} label={`Status: ${m}`} onRemove={() => setSelectedStatus(selectedStatus.filter(x => x !== m))} />)}
+            {selectedAVNPs.map(m => <FilterBadge key={m} label={`AVNP: ${(m*100).toFixed(0)}%`} onRemove={() => setSelectedAVNPs(selectedAVNPs.filter(x => x !== m))} />)}
+            {selectedPrioridades.map(m => <FilterBadge key={m} label={`Prioridade: ${m}`} onRemove={() => setSelectedPrioridades(selectedPrioridades.filter(x => x !== m))} />)}
+          </div>
+        )}
+      </div>
+
+      <div className="px-6 pb-6 pt-6">
+        {/* DASHBOARD GRID (11 Indicadores - 4 por linha) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
+        
+        {/* LINHA 1 */}
+        {/* 1. Total de obras */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Total de Obras</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-primary">{indicators.totalObras}</p>
+              <p className="text-xs text-muted-foreground mb-1">Geral: {indicators.geralTotalObras}</p>
+            </div>
+          </div>
+          <Gauge value={indicators.totalObras} max={indicators.geralTotalObras || 1} colorClass="text-primary" />
+        </div>
+
+        {/* 2. Total de Postes Disponíveis */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center min-w-[120px]">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Postes Disponíveis</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-foreground">{indicators.sumPostes.toLocaleString('pt-BR')}</p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2 mb-1">
+                <span>Geral: {indicators.geralSumPostes.toLocaleString('pt-BR')}</span>
+                <span className="font-semibold text-primary">Meta: {indicators.sumMetaPostes.toLocaleString('pt-BR')}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 flex justify-center items-center px-2">
+            <span className="text-2xl font-black text-primary">{indicators.percentMeta.toFixed(1)}%</span>
+          </div>
+          <Gauge value={indicators.sumPostes} max={indicators.sumMetaPostes || indicators.geralSumPostes || 1} colorClass="text-foreground" />
+        </div>
+
+        {/* 3. Obras Sem Orçamento */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Sem Orçamento</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-orange-500">{indicators.countSemOrcamento}</p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                <span>Total: {indicators.totalObras}</span>
+              </div>
+            </div>
+          </div>
+          <Gauge value={indicators.countSemOrcamento} max={indicators.totalObras || 1} colorClass="text-orange-500" />
+        </div>
+
+        {/* 4. Obras Vistoriadas */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Vistoriadas</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-blue-500">{indicators.countVistoriadas}</p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                <span>Total: {indicators.totalObras}</span>
+              </div>
+            </div>
+          </div>
+          <Gauge value={indicators.countVistoriadas} max={indicators.totalObras || 1} colorClass="text-blue-500" />
+        </div>
+
+        {/* LINHA 2 */}
+        {/* 5. Obras Concluídas */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Concluídas</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-green-600">{indicators.countConcluidas}</p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                <span>Total: {indicators.totalObras}</span>
+              </div>
+            </div>
+          </div>
+          <Gauge value={indicators.countConcluidas} max={indicators.totalObras || 1} colorClass="text-green-600" />
+        </div>
+
+        {/* 6. Obras Energizadas */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Energizadas</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-yellow-500">{indicators.countEnergizadas}</p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                <span>Total: {indicators.totalObras}</span>
+              </div>
+            </div>
+          </div>
+          <Gauge value={indicators.countEnergizadas} max={indicators.totalObras || 1} colorClass="text-yellow-500" />
+        </div>
+
+        {/* 7. Obras Inaptas */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Inaptas</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-destructive">{indicators.countInaptas}</p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                <span>Postes: {indicators.sumPostesInaptas}</span>
+                <span>Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(indicators.sumFaturamentoInaptas)}</span>
+              </div>
+            </div>
+          </div>
+          <Gauge value={indicators.countInaptas} max={indicators.totalObras + indicators.countInaptas || 1} colorClass="text-destructive" />
+        </div>
+
+        {/* 8. Postes / Equipes */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Postes / Equipes</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-foreground">{indicators.ratioEquipes.toFixed(2)}</p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2 mb-1">
+                <span>Ut: {indicators.sumPostes} / Eq: {indicators.sumEquipes}</span>
+                <span className="font-semibold text-primary">Meta: {indicators.metaPostesEquipeAvg.toFixed(1)}</span>
+              </div>
+            </div>
+          </div>
+          <Gauge value={indicators.ratioEquipes} max={indicators.metaPostesEquipeAvg || 1} colorClass="text-foreground" />
+        </div>
+
+        {/* LINHA 3 */}
+        {/* 9. GPM x NEOEX */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1" title="Déficit de lançamentos (GPM - NEOEX)">Déficit NEOEX</p>
+            <div className="flex items-end gap-2">
+              <p className={`text-3xl font-bold ${(indicators.sumGpm - indicators.sumNeoex) < 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {(indicators.sumGpm - indicators.sumNeoex).toLocaleString('pt-BR')}
+              </p>
+              <div className="flex flex-col text-[10px] text-muted-foreground ml-2 mb-1">
+                <span>GPM: {indicators.sumGpm.toLocaleString('pt-BR')}</span>
+                <span>NEX: {indicators.sumNeoex.toLocaleString('pt-BR')}</span>
+              </div>
+            </div>
+          </div>
+          <Gauge value={Math.abs(indicators.sumGpm - indicators.sumNeoex)} max={indicators.sumGpm || 1} colorClass={(indicators.sumGpm - indicators.sumNeoex) < 0 ? 'text-green-500' : 'text-red-500'} />
+        </div>
+
+        {/* 10. Média de Postes por Obra */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Média Postes/Obra</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-foreground">{indicators.mediaPostes.toFixed(1)}</p>
+              <p className="text-[10px] text-muted-foreground mb-1">Geral: {indicators.geralTotalObras > 0 ? (indicators.geralSumPostes / indicators.geralTotalObras).toFixed(1) : 0}</p>
+            </div>
+          </div>
+          <Gauge value={indicators.mediaPostes} max={indicators.geralTotalObras > 0 ? (indicators.geralSumPostes / indicators.geralTotalObras) * 1.5 : 1} colorClass="text-foreground" />
+        </div>
+
+        {/* 10. Capacidade Faturamento */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center min-w-0">
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1">Capacidade Faturamento</p>
+            <div className="flex flex-col gap-0.5">
+              <p className="text-xl sm:text-2xl font-bold text-green-500 truncate" title={indicators.sumFaturamento.toString()}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(indicators.sumFaturamento)}
+              </p>
+              <div className="text-[10px] text-muted-foreground">
+                <span className="font-semibold text-primary" title={`Meta: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(indicators.sumMetaFaturamento)}`}>
+                  Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(indicators.sumMetaFaturamento)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex-shrink-0 ml-2">
+            <Gauge value={indicators.sumFaturamento} max={indicators.sumMetaFaturamento || indicators.sumFaturamento || 1} colorClass="text-green-500" />
+          </div>
+        </div>
+
+        {/* 11. Eficácia Prevista */}
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Eficácia Prevista</p>
+            <div className="flex items-end gap-2">
+              <p className="text-3xl font-bold text-indigo-500">{indicators.eficaciaPrevista.toFixed(1)}%</p>
+            </div>
+          </div>
+          <Gauge value={indicators.eficaciaPrevista} max={100} colorClass="text-indigo-500" />
+        </div>
+
+      </div>
+
+
+
+      {/* NOVO: RELAÇÃO DE OBRAS CONSIDERADAS NO FILTRO */}
+      <div className="px-6 pb-6">
+        <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[400px] min-h-[250px] max-h-[1000px] resize-y pb-1">
+          <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
+            <h3 className="font-bold text-sm">Relação de Obras Filtradas ({considerarInaptas ? 'Aptas + Inaptas' : 'Aptas'}) ({indicators.totalObras})</h3>
+          </div>
+          <div className="flex-1 overflow-auto custom-scrollbar p-0">
+            <table className="w-full text-sm text-left whitespace-nowrap">
+              <thead className="bg-muted sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">Obra</th>
+                  <th className="px-4 py-2 font-semibold min-w-[200px]">Título</th>
+                  <th className="px-4 py-2 font-semibold">Município</th>
+                  <th className="px-4 py-2 font-semibold">Prioridade</th>
+                  <th className="px-4 py-2 font-semibold">Status Execução</th>
+                  <th className="px-4 py-2 font-semibold text-right">Postes Disp.</th>
+                  <th className="px-4 py-2 font-semibold text-right">Valor Considerado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').map(obra => (
+                  <tr key={obra.id} className="border-b border-border/50 hover:bg-muted/20">
+                    <td className="px-4 py-2 font-medium">{obra.projeto}</td>
+                    <td className="px-4 py-2 text-muted-foreground truncate max-w-[300px]" title={obra.titulo}>{obra.titulo}</td>
+                    <td className="px-4 py-2">{obra.municipio}</td>
+                    <td className="px-4 py-2">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground">
+                        {obra.prioridade || '-'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">{obra.statusExecucao || '-'}</td>
+                    <td className="px-4 py-2 text-right">{obra.postesDisponiveis}</td>
+                    <td className="px-4 py-2 text-right text-green-600 font-medium">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
+                    </td>
+                  </tr>
+                ))}
+                {filteredData.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* MAPA */}
+      <div className="w-full h-[80vh] min-h-[700px] mb-8 relative z-0">
+        <CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} />
+      </div>
+
+      {/* 10. Localização das Obras (Tabela) */}
+      <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden mb-6 h-[400px]">
+        <div className="p-4 border-b border-border bg-muted/20">
+          <h3 className="font-bold text-sm">Localização (Municípios)</h3>
+        </div>
+        <div className="flex-1 overflow-auto custom-scrollbar p-0">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-muted sticky top-0 z-10 shadow-sm">
+              <tr>
+                <th className="px-4 py-2 font-semibold">Município</th>
+                <th className="px-4 py-2 font-semibold text-right">Qtd Obras</th>
+                <th className="px-4 py-2 font-semibold text-right">%</th>
+                <th className="px-4 py-2 font-semibold text-right">Postes Disp.</th>
+                <th className="px-4 py-2 font-semibold text-right">Valor Considerado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {indicators.municipiosRanking.map(m => (
+                <tr key={m.nome} className="border-b border-border/50 hover:bg-muted/20">
+                  <td className="px-4 py-2 font-medium truncate max-w-[150px]" title={m.nome}>{m.nome}</td>
+                  <td className="px-4 py-2 text-right">{m.count}</td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">{m.percent.toFixed(1)}%</td>
+                  <td className="px-4 py-2 text-right font-medium">{m.postes}</td>
+                  <td className="px-4 py-2 text-right text-green-600 font-medium">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.valor)}
+                  </td>
+                </tr>
+              ))}
+              {indicators.municipiosRanking.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhum dado</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* OBRAS COM DÉFICIT NEOEX */}
+      <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[400px] min-h-[250px] max-h-[1000px] resize-y mb-6">
+        <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
+          <h3 className="font-bold text-sm text-red-500">Obras com Divergência de Lançamento (GPM x NEOEX)</h3>
+        </div>
+        <div className="flex-1 overflow-auto custom-scrollbar p-0">
+          <table className="w-full text-sm text-left whitespace-nowrap">
+            <thead className="bg-muted sticky top-0 z-10 shadow-sm">
+              <tr>
+                <th className="px-4 py-2 font-semibold">Obra</th>
+                <th className="px-4 py-2 font-semibold min-w-[200px]">Título</th>
+                <th className="px-4 py-2 font-semibold text-right">GPM</th>
+                <th className="px-4 py-2 font-semibold text-right">NEOEX</th>
+                <th className="px-4 py-2 font-semibold text-right">Diferença</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).map(obra => (
+                <tr key={`deficit-${obra.id}`} className="border-b border-border/50 hover:bg-muted/20">
+                  <td className="px-4 py-2 font-medium">{obra.projeto}</td>
+                  <td className="px-4 py-2 text-muted-foreground truncate max-w-[300px]" title={obra.titulo}>{obra.titulo}</td>
+                  <td className="px-4 py-2 text-right">{obra.qtdGpm}</td>
+                  <td className="px-4 py-2 text-right">{obra.qtdNeoex}</td>
+                  <td className={`px-4 py-2 text-right font-bold ${(obra.qtdGpm - obra.qtdNeoex) < 0 ? 'text-green-500' : 'text-red-500'}`}>{obra.qtdGpm - obra.qtdNeoex}</td>
+                </tr>
+              ))}
+              {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra com divergência encontrada.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      </div>
+    </div>
+  );
+};
+

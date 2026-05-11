@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { usePlanejamentoEquipesData, PlanejamentoEquipeRow } from '@/hooks/usePlanejamentoEquipesData';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { getEtapaColorClass } from '@/hooks/usePlanejamentoData';
+import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight, Filter, Calendar, RefreshCw } from 'lucide-react';
 import { format, differenceInDays, startOfDay, addDays, subDays, parseISO, parse, isValid, startOfMonth, getDaysInMonth } from 'date-fns';
@@ -11,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 export const PlanejamentoEquipesGanttView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([UNIDADES_PLANEJAMENTO[0].id]);
-  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>([UNIDADES_PLANEJAMENTO[0].id]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
+  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>([]);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
-  const { data, isLoading, isError, error, refetch, isRefetching } = usePlanejamentoEquipesData(selectedUnidadesIds);
+  const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
+
+  const { data, isLoading, isError, error, lastUpdated } = usePlanejamentoEquipesData(selectedUnidadesIds);
   const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
   const [filterStart, setFilterStart] = useState<string>('');
   const [filterEnd, setFilterEnd] = useState<string>('');
@@ -565,15 +568,23 @@ export const PlanejamentoEquipesGanttView = () => {
           </div>
           
           <div className="flex items-center gap-1">
+            {lastUpdated && (
+              <div className="text-right mr-2 flex flex-col justify-center ">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
+                <span className="text-[10px] text-foreground font-medium">
+                  {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => refetch()}
-              disabled={isRefetching}
-              title="Atualizar Dados"
+              onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
+              disabled={isSyncing}
+              title="Sincronizar Dados (Google Sheets -> Nuvem)"
               className="h-8 text-xs mr-1"
             >
-              <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", isRefetching && "animate-spin")} />
+              <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", isSyncing && "animate-spin")} />
               Atualizar
             </Button>
             <div className="w-px h-5 bg-border mr-1"></div>

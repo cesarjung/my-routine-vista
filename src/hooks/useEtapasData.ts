@@ -118,5 +118,6 @@ export const useEtapasData = (selectedUnidadesIds: string[]) => {
   return {
     ...rawQuery,
     data: parsedData,
+    lastUpdated: rawQuery.data?.[0]?.lastUpdated || null,
   };
 };

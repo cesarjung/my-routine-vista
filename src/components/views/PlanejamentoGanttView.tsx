@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { usePlanejamentoData, PlanejamentoRow, getEtapaColorClass } from '@/hooks/usePlanejamentoData';
+import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight, Filter, Calendar, RefreshCw } from 'lucide-react';
@@ -31,10 +32,12 @@ const getStatusColorClass = (status: string) => {
 };
 
 export const PlanejamentoGanttView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([UNIDADES_PLANEJAMENTO[0].id]);
-  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>([UNIDADES_PLANEJAMENTO[0].id]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
+  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>([]);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
-  const { data, isLoading, isError, error, refetch, isRefetching } = usePlanejamentoData(selectedUnidadesIds);
+  const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
+
+  const { data, isLoading, isError, error, lastUpdated } = usePlanejamentoData(selectedUnidadesIds);
   const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
   const [filterStart, setFilterStart] = useState<string>('');
   const [filterEnd, setFilterEnd] = useState<string>('');
@@ -381,15 +384,23 @@ export const PlanejamentoGanttView = () => {
           </div>
           
           <div className="flex items-center gap-2 ml-auto">
+            {lastUpdated && (
+              <div className="text-right mr-2 flex flex-col justify-center ">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
+                <span className="text-[10px] text-foreground font-medium">
+                  {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => refetch()}
-              disabled={isRefetching}
-              title="Atualizar Dados"
+              onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
+              disabled={isSyncing}
+              title="Sincronizar Dados (Google Sheets -> Nuvem)"
               className="h-9 mr-1"
             >
-              <RefreshCw className={cn("w-4 h-4 mr-1.5", isRefetching && "animate-spin")} />
+              <RefreshCw className={cn("w-4 h-4 mr-1.5", isSyncing && "animate-spin")} />
               Atualizar
             </Button>
             <div className="w-px h-6 bg-border mr-1"></div>
@@ -407,7 +418,7 @@ export const PlanejamentoGanttView = () => {
       </div>
 
         {/* Filtros de Status em Botões Coloridos */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar-custom pb-1">
           <span className="text-sm font-semibold text-foreground mr-2">Status:</span>
           {statusDisponiveis.map(s => {
             const isSelected = selectedStatuses.length === 0 || selectedStatuses.includes(s);
@@ -418,7 +429,7 @@ export const PlanejamentoGanttView = () => {
                 key={s}
                 onClick={() => toggleStatus(s)}
                 className={cn(
-                  "px-3 py-1 rounded-full text-xs font-semibold transition-all border",
+                  "px-2 py-1 rounded-full text-[10px] font-semibold transition-all border shrink-0",
                   isSelected 
                     ? cn(colorClass, "border-transparent shadow-sm") 
                     : "bg-transparent text-muted-foreground border-border hover:bg-secondary/50 opacity-60 hover:opacity-100"
@@ -431,7 +442,7 @@ export const PlanejamentoGanttView = () => {
           {selectedStatuses.length > 0 && (
             <button
               onClick={() => setSelectedStatuses([])}
-              className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground underline ml-2"
+              className="px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground underline ml-2 shrink-0"
             >
               Limpar Filtros
             </button>

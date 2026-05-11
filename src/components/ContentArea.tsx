@@ -19,6 +19,8 @@ import { DeslocamentoView } from '@/components/views/DeslocamentoView';
 import { PlanejadoMetaView } from '@/components/views/PlanejadoMetaView';
 import { CumprimentoView } from '@/components/views/CumprimentoView';
 import { EtapasView } from '@/components/views/EtapasView';
+import { CarteiraDashboardView } from '@/components/views/CarteiraDashboardView';
+import { PlanejamentoSemanalView } from '@/components/views/PlanejamentoSemanalView';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -42,7 +44,8 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       case 'settings':
         return 'Configurações';
       case 'planejamento':
-        if (context.section === 'carteira') return 'Carteira de Planejamento';
+        if (context.section === 'carteira_dashboard') return 'Carteira';
+        if (context.section === 'carteira') return 'Carteira Planejada';
         return 'Planejamento';
       case 'planejamento_equipes':
         return 'Equipes de Planejamento';
@@ -89,7 +92,13 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     if (context.type === 'settings') return <SettingsView />;
     if (context.type === 'my-tasks') return <MyTasksView />;
     if (context.type === 'planejamento') {
+      if (context.section === 'carteira_dashboard') return <CarteiraDashboardView />;
       if (context.section === 'carteira') return <PlanejamentoGanttView />;
+      return (
+        <div className="flex h-full items-center justify-center text-muted-foreground">
+          Módulo de Planejamento - Selecione uma seção no menu lateral
+        </div>
+      );
     }
     if (context.type === 'planejamento_equipes') {
       return <PlanejamentoEquipesGanttView />;
@@ -109,6 +118,9 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
 
     if (context.type === 'etapas') {
       return <EtapasView />;
+    }
+    if (context.type === 'planejamento_semanal') {
+      return <PlanejamentoSemanalView />;
     }
 
   // Settings View

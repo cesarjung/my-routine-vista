@@ -1,38 +1,40 @@
 import { useMemo } from 'react';
 import { usePlanejamentoRaw } from './usePlanejamentoRaw';
-import { parse, isValid, startOfDay, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { parse, isValid, startOfDay, isWithinInterval } from 'date-fns';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
-export interface DeslocamentoRow {
+export interface PlanejamentoSemanalRow {
   id: string;
   unidadeId: string;
   unidadeNome: string;
   dataParsed: Date;
-  mesAno: string; // ex: 'Jan 2026'
-  mesCurto: string; // ex: 'Jan'
-  supervisor: string;
+  dataString: string;
   equipe: string;
-  projeto: string;
-  valDeslocamento: number; // Coluna U (index 20)
-  valProdTurno: number; // Coluna AM (index 38)
-  valProgTurno: number; // Coluna AQ (index 42)
+  supervisor: string;
+  valPlanejado: number; // AL (37)
+  metaEquipe: number;   // AM (38)
+  tempoDeslocamento: number; // BM (64)
+  tempoPlanejado: number;    // BP (67)
 }
 
-export const useDeslocamentoData = (selectedUnidadesIds: string[]) => {
+export const usePlanejamentoSemanalData = (selectedUnidadesIds: string[], startDate?: Date, endDate?: Date) => {
   const rawQuery = usePlanejamentoRaw(selectedUnidadesIds);
 
   const parsedData = useMemo(() => {
     if (!rawQuery.data || !Array.isArray(rawQuery.data)) return [];
     
     try {
-      const data: DeslocamentoRow[] = [];
+      const data: PlanejamentoSemanalRow[] = [];
 
-      const parseNumber = (val: string) => {
+      const parseNumber = (val: any) => {
         if (!val) return 0;
-        const clean = String(val).replace(/[R$\s\.]/g, '').replace(',', '.');
-        const num = Number(clean);
-        return isNaN(num) ? 0 : num;
+        let str = String(val).trim();
+        const isPercent = str.includes('%');
+        
+        const clean = str.replace(/[R$%\s\.]/g, '').replace(',', '.');
+        let num = Number(clean);
+        if (isNaN(num)) return 0;
+        return isPercent ? num / 100 : num;
       };
 
       const parseTimeInHours = (val: any) => {
@@ -47,14 +49,10 @@ export const useDeslocamentoData = (selectedUnidadesIds: string[]) => {
            return h + (m / 60) + (s / 3600);
         }
 
-        // Se for um número decimal (Google Sheets envia tempo como fração de 24h em alguns casos)
-        // Precisamos ter cuidado com pontos e vírgulas.
-        // Se vier "0,0416" -> "0.0416"
         const clean = str.replace(/[R$\s]/g, '').replace(',', '.');
         const num = Number(clean);
         if (isNaN(num)) return 0;
         
-        // Multiplica por 24 para converter fração do dia em horas.
         return num * 24;
       };
 
@@ -65,16 +63,16 @@ export const useDeslocamentoData = (selectedUnidadesIds: string[]) => {
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || row.length < 43) continue; // Precisa ir até AQ (42)
+          if (!row || row.length < 68) continue; // Precisa ir até BP (67)
 
           const dataStringFull = row[1]; // Coluna B
           const supervisor = row[4];     // Coluna E
           const equipe = row[6];         // Coluna G
-          const projeto = row[7];        // Coluna H
 
-          const valDeslocamento = parseTimeInHours(row[64]); // Coluna BM (64) convertido para Horas
-          const valProdTurno = parseNumber(row[38]); // Coluna AM
-          const valProgTurno = parseNumber(row[42]); // Coluna AQ
+          const valPlanejado = parseNumber(row[37]); // Coluna AL
+          const metaEquipe = parseNumber(row[38]);   // Coluna AM
+          const tempoDeslocamento = parseTimeInHours(row[64]); // Coluna BM
+          const tempoPlanejado = parseTimeInHours(row[67]);    // Coluna BP
 
           const dataApenas = dataStringFull ? String(dataStringFull).split(' - ')[0].trim() : '';
           let dataParsed: Date | null = null;
@@ -87,23 +85,25 @@ export const useDeslocamentoData = (selectedUnidadesIds: string[]) => {
           }
 
           if (dataParsed) {
-            const mesCurtoRaw = format(dataParsed, 'MMM', { locale: ptBR });
-            const mesCurto = mesCurtoRaw.charAt(0).toUpperCase() + mesCurtoRaw.slice(1);
-            const mesAno = format(dataParsed, 'MMM yyyy', { locale: ptBR });
+            // Filtrar por data, se fornecido
+            if (startDate && endDate) {
+              if (!isWithinInterval(dataParsed, { start: startOfDay(startDate), end: startOfDay(endDate) })) {
+                continue;
+              }
+            }
 
             data.push({
               id: `${unidadeData.unidadeId}-${i}-${dataParsed.getTime()}`,
               unidadeId: unidadeData.unidadeId,
               unidadeNome,
               dataParsed,
-              mesAno,
-              mesCurto,
-              supervisor: supervisor?.trim() || '',
-              equipe: equipe?.trim() || '',
-              projeto: projeto?.trim() || 'Sem Projeto',
-              valDeslocamento,
-              valProdTurno,
-              valProgTurno
+              dataString: dataApenas,
+              equipe: equipe?.trim() || 'SEM EQUIPE',
+              supervisor: supervisor?.trim() || 'SEM SUPERVISOR',
+              valPlanejado,
+              metaEquipe,
+              tempoDeslocamento,
+              tempoPlanejado
             });
           }
         }
@@ -114,10 +114,10 @@ export const useDeslocamentoData = (selectedUnidadesIds: string[]) => {
       
       return data;
     } catch (err) {
-      console.error('Erro ao processar dados de poste_turno:', err);
+      console.error('Erro ao processar dados de planejamento semanal:', err);
       return [];
     }
-  }, [rawQuery.data]);
+  }, [rawQuery.data, startDate, endDate]);
 
   return {
     ...rawQuery,

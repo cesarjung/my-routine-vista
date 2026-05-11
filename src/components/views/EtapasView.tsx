@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { useEtapasData } from '@/hooks/useEtapasData';
-import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differenceInDays } from 'date-fns';
+import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
+import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differenceInDays, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
@@ -26,11 +27,12 @@ import {
 } from 'recharts';
 
 export const EtapasView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([UNIDADES_PLANEJAMENTO[0].id]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
+  const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
-  const { data, isLoading, isError, refetch, isRefetching } = useEtapasData(selectedUnidadesIds);
+  const { data, isLoading, isError, lastUpdated } = useEtapasData(selectedUnidadesIds);
 
   // Filtros locais
   const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
@@ -110,6 +112,33 @@ export const EtapasView = () => {
     });
   }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos]);
 
+  // Meses a serem exibidos nas tabelas e gráficos
+  const mesesExibidos = useMemo(() => {
+    const ORDER = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    if (selectedMeses.length > 0) {
+      return [...selectedMeses].sort((a, b) => {
+        let iA = ORDER.indexOf(a);
+        let iB = ORDER.indexOf(b);
+        if (iA === -1) iA = 99;
+        if (iB === -1) iB = 99;
+        return iA - iB;
+      });
+    } else {
+      const meses = new Set<string>();
+      filteredData.forEach(row => {
+        if (row.mesCurto) meses.add(row.mesCurto);
+      });
+      return Array.from(meses).sort((a, b) => {
+        let iA = ORDER.indexOf(a);
+        let iB = ORDER.indexOf(b);
+        if (iA === -1) iA = 99;
+        if (iB === -1) iB = 99;
+        return iA - iB;
+      });
+    }
+  }, [selectedMeses, filteredData]);
+
   // Construir dados para o Grid
   const gridData = useMemo(() => {
     const agrupado: Record<string, any> = {};
@@ -149,7 +178,7 @@ export const EtapasView = () => {
     const resultadoFinal = Object.values(agrupado).map(u => {
       const unitChartData = categories.map(cat => {
         const point: any = { category: cat };
-        mesesUnicos.forEach(m => {
+        mesesExibidos.forEach(m => {
           const mData = u.mesesObj[m];
           if (mData && mData.totalRows > 0) {
             point[m] = Number(((mData.grupos[cat] / mData.totalRows) * 100).toFixed(1));
@@ -168,7 +197,7 @@ export const EtapasView = () => {
 
     resultadoFinal.sort((a, b) => a.name.localeCompare(b.name));
     return resultadoFinal;
-  }, [filteredData, somenteDisponiveis, mesesUnicos]);
+  }, [filteredData, somenteDisponiveis, mesesExibidos]);
 
   const COLORS = [
     'hsl(25, 95%, 50%)', // Laranja Principal (Primary)
@@ -180,8 +209,6 @@ export const EtapasView = () => {
     'hsl(38, 92%, 35%)', // Âmbar Escuro
     'hsl(0, 0%, 45%)',   // Cinza Neutro
   ];
-
-
 
   const handleQuickDateFilter = (days: number) => {
     if (days === 0) {
@@ -389,16 +416,26 @@ export const EtapasView = () => {
               </DropdownMenu>
             </div>
 
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => refetch()}
-              disabled={isRefetching}
-              title="Atualizar Dados"
-              className="h-10 w-10 p-0 ml-1 shrink-0"
-            >
-              <RefreshCw className={cn("w-4 h-4", isRefetching && "animate-spin")} />
-            </Button>
+            <div className="flex items-center ml-2">
+              {lastUpdated && (
+                <div className="text-right mr-2 flex flex-col justify-center ">
+                  <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
+                  <span className="text-xs text-foreground font-medium">
+                    {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
+                disabled={isSyncing}
+                title="Sincronizar Dados (Google Sheets -> Nuvem)"
+                className="h-10 w-10 p-0 shrink-0"
+              >
+                <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -417,7 +454,7 @@ export const EtapasView = () => {
             {/* Legend for Months */}
             <div className="flex gap-4 text-xs font-medium bg-muted/30 px-3 py-1.5 rounded-md border border-border">
               <span className="text-muted-foreground mr-1">Cores = meses:</span>
-              {mesesUnicos.map((m, i) => (
+              {mesesExibidos.map((m, i) => (
                 <div key={m} className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
                   {m}
@@ -454,7 +491,7 @@ export const EtapasView = () => {
                         itemStyle={{ fontWeight: 'bold' }}
                         cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
                       />
-                      {mesesUnicos.map((m, i) => (
+                      {mesesExibidos.map((m, i) => (
                         <Bar key={m} dataKey={m} name={m} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} maxBarSize={20}>
                           <LabelList 
                             dataKey={m} 

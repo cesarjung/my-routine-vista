@@ -431,8 +431,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         </button>
       </div>
 
-      {/* Navigation - flex-1 to fill space, no overflow scroll */}
-      <nav className="flex-1 p-3 space-y-1">
+      {/* Navigation - scrollable but invisible scrollbar */}
+      <nav className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-3 space-y-1">
         
         {/* Rotinas header */}
         {!collapsed && (
@@ -586,14 +586,35 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         {(!collapsed ? isPlanejamentoExpanded : true) && (
           <div className="space-y-0.5 px-3">
             <button
+              onClick={() => onNavigate({ type: 'planejamento', section: 'carteira_dashboard' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'planejamento' && context.section === 'carteira_dashboard' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Carteira</span>}
+            </button>
+            <button
               onClick={() => onNavigate({ type: 'planejamento', section: 'carteira' })}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                context.type === 'planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                context.type === 'planejamento' && context.section === 'carteira' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
               <Map className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Carteira</span>}
+              {!collapsed && <span className="text-sm">Carteira Planejada</span>}
+            </button>
+
+            <button
+              onClick={() => onNavigate({ type: 'planejamento_semanal', section: 'carteira' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'planejamento_semanal' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Calendar className="w-4 h-4" />
+              {!collapsed && <span className="text-sm">Planejamento Semanal</span>}
             </button>
             
             <button

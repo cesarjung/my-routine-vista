@@ -19,6 +19,8 @@ export interface CumprimentoRow {
   valProdTurno: number; // Coluna AM (index 38)
   valProgTurno: number; // Coluna AQ (index 42)
   valDisponivel: number; // Coluna BB (index 53)
+  planilha: string; // Coluna BE (index 56)
+  dataString: string;
 }
 
 export const useCumprimentoData = (selectedUnidadesIds: string[]) => {
@@ -63,6 +65,7 @@ export const useCumprimentoData = (selectedUnidadesIds: string[]) => {
           const valProdTurno = parseNumber(row[38]); // Coluna AM
           const valProgTurno = parseNumber(row[42]); // Coluna AQ
           const valDisponivel = parseNumber(row[53]); // Coluna BB
+          const planilha = row[56] ? String(row[56]).trim() : ''; // Coluna BE
 
           const dataApenas = dataStringFull ? String(dataStringFull).split(' - ')[0].trim() : '';
           let dataParsed: Date | null = null;
@@ -93,7 +96,9 @@ export const useCumprimentoData = (selectedUnidadesIds: string[]) => {
               valRealizado,
               valProdTurno,
               valProgTurno,
-              valDisponivel
+              valDisponivel,
+              planilha,
+              dataString: dataApenas
             });
           }
         }
@@ -112,5 +117,6 @@ export const useCumprimentoData = (selectedUnidadesIds: string[]) => {
   return {
     ...rawQuery,
     data: parsedData,
+    lastUpdated: rawQuery.data?.[0]?.lastUpdated || null,
   };
 };
