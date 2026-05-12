@@ -531,47 +531,47 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
           {!collapsed && <span className="text-sm">Minhas Tarefas</span>}
         </button>
 
-          {/* Espaços list */}
-          {isLoading ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">Carregando...</div>
-          ) : (
-            <div className="space-y-4">
-              {/* Públicos */}
-              <div className="space-y-0.5">
-                {sectors.filter(s => !s.is_private).map(renderSectorItem)}
-              </div>
-
-              {/* Privados do Usuário */}
-              {sectors.filter(s => s.is_private).length > 0 && (
-                <div className="pt-2 border-t border-sidebar-border/50">
-                  {!collapsed && (
-                    <div className="px-2 mb-1">
-                      <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest pl-1">
-                        Meus Espaços Privados
-                      </span>
-                    </div>
-                  )}
-                  <div className="space-y-0.5">
-                    {sectors.filter(s => s.is_private).map(renderSectorItem)}
-                  </div>
-                </div>
-              )}
-            </div>
+        {/* Todos os setores */}
+        <button
+          onClick={() => onNavigate({ type: 'all-sectors' })}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+            context.type === 'all-sectors'
+              ? 'bg-sidebar-accent text-sidebar-primary'
+              : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
           )}
         >
           <Folder className="w-4 h-4" />
           {!collapsed && <span className="text-sm">Todos os setores</span>}
         </button>
 
-        {/* Sectors list */}
+        {/* Espaços list */}
         {isLoading ? (
-          <div className="px-3 py-2 text-sm text-muted-foreground">Carregando...</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">Carregando...</div>
         ) : (
-          <div className="space-y-0.5">
-            {sectors.map(renderSectorItem)}
+          <div className="space-y-4">
+            {/* Públicos */}
+            <div className="space-y-0.5">
+              {sectors.filter(s => !s.is_private).map(renderSectorItem)}
+            </div>
+
+            {/* Privados do Usuário */}
+            {sectors.filter(s => s.is_private).length > 0 && (
+              <div className="pt-2 border-t border-sidebar-border/50">
+                {!collapsed && (
+                  <div className="px-2 mb-1">
+                    <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest pl-1">
+                      Meus Espaços Privados
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-0.5">
+                  {sectors.filter(s => s.is_private).map(renderSectorItem)}
+                </div>
+              </div>
+            )}
           </div>
         )}
-
           </div>
         )}
 
