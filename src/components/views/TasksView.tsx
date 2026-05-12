@@ -91,9 +91,6 @@ export const TasksView = ({
   const deleteTasks = useDeleteTasks();
   const bulkUpdateTasks = useBulkUpdateTasks();
 
-  const handleToggleSelect = (id: string) => {
-    setSelectedTaskIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
 
   const handleDelete = (id: string) => {
     // console.log('Delete', id);
@@ -105,15 +102,13 @@ export const TasksView = ({
 
   const filteredTasks = tasks?.filter((task) => {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status);
+    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     const matchesSector = !sectorId || task.sector_id === sectorId;
 
     // Filter by Section ID
     const matchesSection = !sectionId || isDefaultTasksSection
       ? (!sectionId || (task as any).section_id === null || (task as any).section_id === 'tasks' || (task as any).section_id === sectorId || (task as any).section_id === sectionId)
       : (task as any).section_id === sectionId;
-
-    const matchesSector = !sectorId || (task as any).sector_id === sectorId;
     
     const matchesType = typeFilter === 'all' 
       || (typeFilter === 'tasks_only' && !task.routine_id) 
@@ -121,30 +116,12 @@ export const TasksView = ({
 
     const matchesHideCompleted = hideCompleted ? task.status !== 'concluida' : true;
 
-    return matchesSearch && matchesStatus && matchesSector && matchesType && matchesHideCompleted;
+    return matchesSearch && matchesStatus && matchesSector && matchesSection && matchesType && matchesHideCompleted;
   });
 
   return (
     <div className="flex h-full">
       <div className="w-full flex flex-col transition-all duration-300">
-
-        {/* Header Container V3 - Multi-line Local Layout */}
-        {!hideHeader && selectedTaskIds.length > 0 ? (
-          <div className="flex items-center gap-2 p-2 bg-primary/5 border-b border-primary/20 shadow-sm overflow-x-auto shrink-0 min-h-[50px] mb-4 rounded-lg animate-in fade-in slide-in-from-top-1">
-            <span className="text-sm font-medium text-primary ml-2 whitespace-nowrap">
-              {selectedTaskIds.length} selecionado{selectedTaskIds.length !== 1 ? 's' : ''}
-            </span>
-
-            <div className="h-5 w-px bg-primary/20 shrink-0 mx-2" />
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleSelectAll}
-              className="h-8 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10"
-            >
-              {allFilteredSelected ? "Deselecionar Tudo" : "Selecionar Tudo"}
-            </Button>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -227,6 +204,7 @@ export const TasksView = ({
           </p>
         </div>
       )}
+    </div>
     </div>
   );
 };

@@ -327,7 +327,9 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
   }, [selectedSectorIds, forcedSectorId]);
 
   const { data: sectors } = useSectors();
-  const { data: statsData } = useOverallStats(selectedSectorIds);
+  const { data: statsData, isLoading } = useOverallStats(selectedSectorIds);
+  const unitStatus = statsData?.unitStatus || [];
+  const responsibleStatus = statsData?.responsibleStatus || [];
   const { data: customPanels } = useDashboardPanels();
   const { isAdmin } = useIsAdmin();
 
@@ -407,7 +409,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
           {customPanels && customPanels.length > 0 && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
               {customPanels.map(panel => (
-                <CustomPanel key={panel.id} panel={panel} dashboardSectorId={selectedSectorId} />
+                <CustomPanel key={panel.id} panel={panel} dashboardSectorId={selectedSectorIds[0] || undefined} />
               ))}
             </div>
           )}
@@ -447,7 +449,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
           <TasksDialog
             state={tasksDialog}
             onClose={closeTasksDialog}
-            sectorId={selectedSectorId}
+            sectorId={selectedSectorIds[0] || undefined}
           />
         </div>
       </div>
@@ -560,7 +562,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
         /* All Panels with Unified Drag and Drop */
         <UnifiedDraggablePanels
           customPanels={customPanels || []}
-          selectedSectorId={selectedSectorId}
+          selectedSectorId={selectedSectorIds[0] || undefined}
           renderUnitsPanel={() => (
             <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
               {unitStatus?.length === 0 ? (

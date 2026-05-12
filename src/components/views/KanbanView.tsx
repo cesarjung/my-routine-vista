@@ -70,6 +70,22 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState('all');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedRoutine, setSelectedRoutine] = useState<Tables<'routines'> | null>(null);
+  const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null);
+
+  const handleTaskClick = (task: Task) => {
+    if (task.routine_id && (task as any).routine) {
+      setSelectedRoutine((task as any).routine);
+      setSelectedRoutineDate(task.due_date);
+      setSelectedTask(null);
+    } else {
+      setSelectedTask(task);
+      setSelectedRoutine(null);
+      setSelectedRoutineDate(null);
+    }
+  };
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
@@ -112,7 +128,8 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {!hideHeader && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground mb-1">Kanban</h1>
           <p className="text-muted-foreground">Visualize e gerencie tarefas por status</p>
@@ -130,7 +147,6 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
             </SelectContent>
           </Select>
         </div>
-      </div>
 
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
@@ -283,11 +299,6 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
         })}
       </div>
 
-      <TaskEditDialog
-        task={editingTask}
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-      />
       <TaskEditDialog
         task={editingTask}
         open={editDialogOpen}

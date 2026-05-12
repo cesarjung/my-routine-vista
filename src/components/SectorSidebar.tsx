@@ -85,7 +85,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const [isNewSectorPrivate, setIsNewSectorPrivate] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isRotinasExpanded, setIsRotinasExpanded] = useState(true);
+
   const [isPlanejamentoExpanded, setIsPlanejamentoExpanded] = useState(true);
 
   // Section Creation State
