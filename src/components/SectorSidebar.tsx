@@ -410,7 +410,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
     <aside
       className={cn(
         'min-h-screen flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300',
-        collapsed ? 'w-16' : 'w-60' // Reduced width slightly
+        collapsed ? 'w-16' : 'w-64' // Increased width slightly to fit text
       )}
     >
       {/* Header */}
@@ -598,7 +598,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'planejamento' && context.section === 'carteira_dashboard' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <LayoutDashboard className="w-4 h-4" />
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
               {!collapsed && <span className="text-sm">Carteira</span>}
             </button>
             <button
@@ -608,7 +608,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'planejamento' && context.section === 'carteira' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Map className="w-4 h-4" />
+              <Map className="w-4 h-4 shrink-0" />
               {!collapsed && <span className="text-sm whitespace-nowrap">Carteira Planejada</span>}
             </button>
 
@@ -619,7 +619,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'planejamento_semanal' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Calendar className="w-4 h-4" />
+              <Calendar className="w-4 h-4 shrink-0" />
               {!collapsed && <span className="text-sm whitespace-nowrap">Planejamento Semanal</span>}
             </button>
             
@@ -630,7 +630,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'planejamento_equipes' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-4 h-4 shrink-0" />
               {!collapsed && <span className="text-sm">Equipes</span>}
             </button>
 
@@ -641,8 +641,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'poste_turno' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Activity className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Poste/Turno</span>}
+              <Activity className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="text-sm whitespace-nowrap">Poste/Turno</span>}
             </button>
 
             <button
@@ -652,8 +652,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'deslocamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Navigation className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Deslocamento</span>}
+              <Navigation className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="text-sm whitespace-nowrap">Deslocamento</span>}
             </button>
 
             <button
@@ -663,8 +663,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'planejado_meta' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Target className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Planejado x Meta</span>}
+              <Target className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="text-sm whitespace-nowrap">Planejado x Meta</span>}
             </button>
 
             <button
@@ -674,8 +674,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'cumprimento_planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <CheckCircle className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Cumprimento Plan.</span>}
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="text-sm whitespace-nowrap">Cumprimento Plan.</span>}
             </button>
 
             <button
@@ -685,8 +685,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 context.type === 'etapas' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Layers className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Etapas</span>}
+              <Layers className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="text-sm whitespace-nowrap">Etapas</span>}
             </button>
           </div>
         )}
