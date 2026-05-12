@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { usePlanejamentoSemanalData } from '@/hooks/usePlanejamentoSemanalData';
-import { startOfWeek, endOfWeek } from 'date-fns';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { RefreshCw, Filter, Calendar, Settings, AlertTriangle, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
@@ -49,7 +50,7 @@ export const PlanejamentoSemanalView = () => {
   const [selectedEquipes, setSelectedEquipes] = useState<string[]>([]);
   const [selectedSupervisores, setSelectedSupervisores] = useState<string[]>([]);
 
-  const { data: rawData, isLoading, refetch, isRefetching } = usePlanejamentoSemanalData(
+  const { data: rawData, isLoading, refetch, isRefetching, lastUpdated } = usePlanejamentoSemanalData(
     selectedUnidades, 
     dateRange.from, 
     dateRange.to
@@ -356,9 +357,19 @@ export const PlanejamentoSemanalView = () => {
           
           <div className="flex-1"></div>
           
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isLoading} className="h-8 w-8 shrink-0 mb-1">
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin' : ''}`} />
-          </Button>
+          <div className="flex items-center ml-2 mb-1">
+            {lastUpdated && (
+              <div className="text-right mr-2 flex flex-col justify-center">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
+                <span className="text-xs text-foreground font-medium">
+                  {format(new Date(lastUpdated), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                </span>
+              </div>
+            )}
+            <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isLoading} className="h-8 w-8 shrink-0">
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-primary' : ''}`} />
+            </Button>
+          </div>
         </div>
       </div>
 
