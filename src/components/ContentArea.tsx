@@ -259,7 +259,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Content for Planejamento Views */}
       <main className={cn("flex-1 flex flex-col", isGanttView ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>
         <div className={cn("mx-auto flex flex-col w-full min-h-full", isPlanejamento ? "max-w-none" : "max-w-7xl")}>
