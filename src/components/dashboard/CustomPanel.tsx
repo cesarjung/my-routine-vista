@@ -527,6 +527,7 @@ interface CustomPanelProps {
 export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
   const { data, isLoading } = useCustomPanelData(panel, dashboardSectorId);
   const Icon = getGroupIcon(panel.filters.group_by);
+  const updatePanel = useUpdateDashboardPanel();
 
   const panelRef = useRef<HTMLDivElement>(null);
 
