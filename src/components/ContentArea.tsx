@@ -165,28 +165,6 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
 
   const isPlanejamento = context.type === 'planejamento' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal';
 
-  // Notes View
-  if (context.type === 'notes') {
-    return (
-      <div className="h-full flex flex-col p-6">
-        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
-          <div className="flex items-center gap-4">
-
-            <div>
-              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Anotações e Quadros</h1>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-                <span>Geral</span>
-              </div>
-            </div>
-          </div>
-        </header>
-        <div className="w-full h-full overflow-hidden">
-          <NotesList />
-        </div>
-      </div>
-    );
-  }
-
   // Sector specific view
   if (context.type === 'sector') {
     const { sectorId, folder, frequency } = context;
@@ -200,7 +178,6 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         <div className="h-full flex flex-col p-6">
           <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
             <div className="flex items-center gap-4">
-
               <div>
                 <h1 className="text-base font-semibold text-foreground leading-none mb-1">
                   {sector?.name}
@@ -225,7 +202,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       return 'Gestão CCM';
     };
 
-    const sectionTitle = currentSection ? currentSection.title : (folder === 'routines' ? 'Rotinas' : folder === 'tasks' ? 'Tarefas' : folder === 'notes' ? 'Anotações' : folder);
+    const sectionTitle = currentSection ? currentSection.title : (folder === 'routines' ? 'Rotinas' : folder === 'tasks' ? 'Tarefas' : folder);
 
     const showViewToggle = folder !== 'units';
 
@@ -233,7 +210,6 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-
             <div>
               <h1 className="text-base font-semibold text-foreground leading-none mb-1">
                 {getTitle()}
@@ -268,8 +244,6 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
               frequency={frequency}
               viewMode={viewMode}
             />
-          ) : folder === 'notes' ? (
-            <NotesList sectorId={sectorId} />
           ) : (
             <TasksView
               sectorId={sectorId}
@@ -283,7 +257,9 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     );
   }
 
-      {/* Content */}
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Content for Planejamento Views */}
       <main className={cn("flex-1 flex flex-col", isPlanejamento ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>
         <div className={cn("mx-auto h-full flex flex-col w-full", isPlanejamento ? "max-w-none" : "max-w-7xl")}>
           <ErrorBoundary>
