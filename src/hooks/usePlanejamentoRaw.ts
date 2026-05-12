@@ -67,42 +67,54 @@ export const useSyncPlanejamento = () => {
     mutationFn: async (selectedUnidadesIds: string[]) => {
       if (!selectedUnidadesIds || selectedUnidadesIds.length === 0) return [];
 
-      const promises = selectedUnidadesIds.map(async (unidadeId) => {
-        const url = `${API_URL}?token=${SECRET_TOKEN}&id=${unidadeId}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config`;
-        const res = await fetch(url);
-        const data = await res.json();
-        
-        if (!data.success) {
-          console.error(`Falha ao baixar abas da unidade ${unidadeId}`, data.error);
-          return null;
+      const results = [];
+      for (const unidadeId of selectedUnidadesIds) {
+        try {
+          const url = `${API_URL}?token=${SECRET_TOKEN}&id=${unidadeId}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config`;
+          const res = await fetch(url);
+          
+          let data;
+          try {
+            data = await res.json();
+          } catch (e) {
+            console.error(`Falha ao parsear JSON da unidade ${unidadeId}. O Google Apps Script pode estar limitando as requisições.`, e);
+            continue;
+          }
+          
+          if (!data || !data.success) {
+            console.error(`Falha ao baixar abas da unidade ${unidadeId}`, data?.error);
+            continue;
+          }
+
+          const payload = {
+            unidade_id: unidadeId,
+            carteira: data.data.Carteira_Planejador || [],
+            principal: data.data.Plan_Principal || [],
+            bd_metas: {
+              bd_metas: data.data.BD_Metas || [],
+              base_curva: data.data.Base_Curva || [],
+              bd_config: data.data.BD_Config || []
+            },
+            reprogramadas: data.data.Reprogramadas || [],
+            updated_at: new Date().toISOString()
+          };
+
+          const { error } = await supabase
+            .from('planejamento_cache')
+            .upsert(payload);
+
+          if (error) {
+            console.error(`Falha ao gravar no Supabase para ${unidadeId}`, error);
+            throw error;
+          }
+          
+          results.push(payload);
+        } catch (err) {
+          console.error(`Erro ao processar unidade ${unidadeId}`, err);
+          // Continua para a próxima unidade mesmo se esta falhar
         }
+      }
 
-        const payload = {
-          unidade_id: unidadeId,
-          carteira: data.data.Carteira_Planejador || [],
-          principal: data.data.Plan_Principal || [],
-          bd_metas: {
-            bd_metas: data.data.BD_Metas || [],
-            base_curva: data.data.Base_Curva || [],
-            bd_config: data.data.BD_Config || []
-          },
-          reprogramadas: data.data.Reprogramadas || [],
-          updated_at: new Date().toISOString()
-        };
-
-        const { error } = await supabase
-          .from('planejamento_cache')
-          .upsert(payload);
-
-        if (error) {
-          console.error(`Falha ao gravar no Supabase para ${unidadeId}`, error);
-          throw error;
-        }
-        
-        return payload;
-      });
-
-      await Promise.all(promises);
       return selectedUnidadesIds;
     },
     onSuccess: () => {
