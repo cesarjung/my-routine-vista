@@ -609,7 +609,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               )}
             >
               <Map className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Carteira Planejada</span>}
+              {!collapsed && <span className="text-sm whitespace-nowrap">Carteira Planejada</span>}
             </button>
 
             <button
@@ -620,7 +620,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               )}
             >
               <Calendar className="w-4 h-4" />
-              {!collapsed && <span className="text-sm">Planejamento Semanal</span>}
+              {!collapsed && <span className="text-sm whitespace-nowrap">Planejamento Semanal</span>}
             </button>
             
             <button

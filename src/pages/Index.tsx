@@ -18,7 +18,7 @@ const Index = () => {
         collapsed={collapsed}
         onCollapseChange={setCollapsed}
       />
-      <div className="flex-1 w-full overflow-hidden">
+      <div className="flex-1 w-full h-full flex flex-col overflow-hidden">
         <ContentArea
           context={context}
           viewMode={viewMode}
