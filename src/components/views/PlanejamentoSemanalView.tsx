@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { usePlanejamentoSemanalData } from '@/hooks/usePlanejamentoSemanalData';
+import { useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RefreshCw, Filter, Calendar, Settings, AlertTriangle, Target } from 'lucide-react';
@@ -55,6 +56,8 @@ export const PlanejamentoSemanalView = () => {
     dateRange.from, 
     dateRange.to
   );
+
+  const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
   // Processamento de Dados (Agrupamento por Dia/Equipe e Semana/Equipe)
   const { dailyStats, weeklyStats, equipesUnicas, supervisoresUnicos } = useMemo(() => {
@@ -260,7 +263,7 @@ export const PlanejamentoSemanalView = () => {
 
   // Handlers
   const handleRefresh = () => {
-    refetch();
+    syncPlanejamento(selectedUnidades.length > 0 ? selectedUnidades : UNIDADES_PLANEJAMENTO.map(u => u.id));
   };
 
   const renderMultiSelect = (
@@ -366,8 +369,8 @@ export const PlanejamentoSemanalView = () => {
                 </span>
               </div>
             )}
-            <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isLoading} className="h-8 w-8 shrink-0">
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-primary' : ''}`} />
+            <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isLoading || isSyncing} className="h-8 w-8 shrink-0">
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching || isSyncing ? 'animate-spin text-primary' : ''}`} />
             </Button>
           </div>
         </div>
