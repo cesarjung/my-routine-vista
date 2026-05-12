@@ -85,43 +85,20 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-
-  const renderContent = () => {
-    // Views especiais sem toggle
-    if (context.type === 'dashboard') return <DashboardView />;
-    if (context.type === 'settings') return <SettingsView />;
-    if (context.type === 'my-tasks') return <MyTasksView />;
-    if (context.type === 'planejamento') {
-      if (context.section === 'carteira_dashboard') return <CarteiraDashboardView />;
-      if (context.section === 'carteira') return <PlanejamentoGanttView />;
-      return (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
-          Módulo de Planejamento - Selecione uma seção no menu lateral
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Dashboard</h1>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                <span>Visão Geral</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="w-full h-full">
+          <DashboardView hideHeader={true} />
         </div>
-      );
-    }
-    if (context.type === 'planejamento_equipes') {
-      return <PlanejamentoEquipesGanttView />;
-    }
-    if (context.type === 'poste_turno') {
-      return <PostesTurnoView />;
-    }
-    if (context.type === 'deslocamento') {
-      return <DeslocamentoView />;
-    }
-    if (context.type === 'planejado_meta') {
-      return <PlanejadoMetaView />;
-    }
-    if (context.type === 'cumprimento_planejamento') {
-      return <CumprimentoView />;
-    }
-
-    if (context.type === 'etapas') {
-      return <EtapasView />;
-    }
-    if (context.type === 'planejamento_semanal') {
-      return <PlanejamentoSemanalView />;
-    }
+      </div>
+    );
+  }
 
   // Settings View
   if (context.type === 'settings') {
@@ -129,7 +106,6 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-
             <div>
               <h1 className="text-base font-semibold text-foreground leading-none mb-1">Configurações</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -151,10 +127,10 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <div className="h-full flex flex-col p-6">
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-4">
-
-  const isDashboard = context.type === 'dashboard';
-  const isPlanejamento = context.type === 'planejamento' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas';
-
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Minhas Tarefas</h1>
+            </div>
+          </div>
           <div className="flex items-center gap-4">
             <ViewModeToggle value={viewMode} onChange={onViewModeChange} />
           </div>
@@ -165,6 +141,29 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       </div>
     );
   }
+
+  const renderContent = () => {
+    if (context.type === 'planejamento') {
+      if (context.section === 'carteira_dashboard') return <CarteiraDashboardView />;
+      if (context.section === 'carteira') return <PlanejamentoGanttView />;
+      return (
+        <div className="flex h-full items-center justify-center text-muted-foreground">
+          Módulo de Planejamento - Selecione uma seção no menu lateral
+        </div>
+      );
+    }
+    if (context.type === 'planejamento_equipes') return <PlanejamentoEquipesGanttView />;
+    if (context.type === 'poste_turno') return <PostesTurnoView />;
+    if (context.type === 'deslocamento') return <DeslocamentoView />;
+    if (context.type === 'planejado_meta') return <PlanejadoMetaView />;
+    if (context.type === 'cumprimento_planejamento') return <CumprimentoView />;
+    if (context.type === 'etapas') return <EtapasView />;
+    if (context.type === 'planejamento_semanal') return <PlanejamentoSemanalView />;
+    
+    return null;
+  };
+
+  const isPlanejamento = context.type === 'planejamento' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal';
 
   // Notes View
   if (context.type === 'notes') {
