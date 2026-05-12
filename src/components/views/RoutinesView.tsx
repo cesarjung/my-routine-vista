@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { useTasks } from '@/hooks/useTasks';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
-import { RoutineListItem } from '@/components/RoutineListItem';
+
 import { ViewMode } from '@/types/navigation';
 import { KanbanView } from './KanbanView';
 import { GanttView } from './GanttView';
