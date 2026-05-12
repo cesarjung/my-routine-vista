@@ -311,18 +311,10 @@ export const PostesTurnoView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-                  <DropdownMenuCheckboxItem 
-                    checked={draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length} 
-                    onCheckedChange={() => {
-                      if (draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length) {
-                        setDraftUnidadesIds([]);
-                      } else {
-                        setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id));
-                      }
-                    }}
-                  >
-                    Todas as Unidades
-                  </DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
+            </div>
                   {UNIDADES_PLANEJAMENTO.map(u => (
                     <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
                       if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
@@ -343,7 +335,10 @@ export const PostesTurnoView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-48" align="start">
-                  <DropdownMenuCheckboxItem checked={selectedMeses.length === 0} onCheckedChange={() => setSelectedMeses([])}>Todos os Meses</DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedMeses(mesesUnicos)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedMeses([])}>Limpar</Button>
+            </div>
                   {mesesUnicos.map(m => (
                     <DropdownMenuCheckboxItem key={m} checked={selectedMeses.includes(m)} onCheckedChange={(checked) => {
                       if (checked) setSelectedMeses([...selectedMeses.filter(x => x !== m), m]);
@@ -376,7 +371,10 @@ export const PostesTurnoView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-                  <DropdownMenuCheckboxItem checked={selectedSupervisores.length === 0} onCheckedChange={() => setSelectedSupervisores([])}>Todos os Supervisores</DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores(supervisoresUnicos)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores([])}>Limpar</Button>
+            </div>
                   {supervisoresUnicos.map(s => (
                     <DropdownMenuCheckboxItem key={s} checked={selectedSupervisores.includes(s)} onCheckedChange={(checked) => {
                       if (checked) setSelectedSupervisores([...selectedSupervisores.filter(x => x !== s), s]);
@@ -397,7 +395,10 @@ export const PostesTurnoView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
-                  <DropdownMenuCheckboxItem checked={selectedEquipes.length === 0} onCheckedChange={() => setSelectedEquipes([])}>Todas as Equipes</DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes(equipesUnicas)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes([])}>Limpar</Button>
+            </div>
                   {equipesUnicas.map(e => (
                     <DropdownMenuCheckboxItem key={e} checked={selectedEquipes.includes(e)} onCheckedChange={(checked) => {
                       if (checked) setSelectedEquipes([...selectedEquipes.filter(x => x !== e), e]);
@@ -418,7 +419,10 @@ export const PostesTurnoView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
-                  <DropdownMenuCheckboxItem checked={selectedProjetos.length === 0} onCheckedChange={() => setSelectedProjetos([])}>Todos os Projetos</DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos(projetosUnicos)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos([])}>Limpar</Button>
+            </div>
                   {projetosUnicos.map(p => (
                     <DropdownMenuCheckboxItem key={p} checked={selectedProjetos.includes(p)} onCheckedChange={(checked) => {
                       if (checked) setSelectedProjetos([...selectedProjetos.filter(x => x !== p), p]);

@@ -371,19 +371,10 @@ export const PlanejamentoEquipesGanttView = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64 max-h-72 overflow-y-auto">
-                <DropdownMenuCheckboxItem
-                  checked={draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length}
-                  onSelect={(e) => e.preventDefault()}
-                  onCheckedChange={() => {
-                    if (draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length) {
-                      setDraftUnidadesIds([]);
-                    } else {
-                      setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id));
-                    }
-                  }}
-                >
-                  Todas Unidades
-                </DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
+            </div>
                 {UNIDADES_PLANEJAMENTO.map(uni => (
                   <DropdownMenuCheckboxItem
                     key={uni.id}
@@ -416,13 +407,10 @@ export const PlanejamentoEquipesGanttView = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64 max-h-72 overflow-y-auto">
-                <DropdownMenuCheckboxItem
-                  checked={selectedSupervisores.length === 0}
-                  onSelect={(e) => e.preventDefault()}
-                  onCheckedChange={() => setSelectedSupervisores([])}
-                >
-                  Todos Supervisores
-                </DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores(supervisoresDisponiveis)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores([])}>Limpar</Button>
+            </div>
                 {supervisoresDisponiveis.map(sup => (
                   <DropdownMenuCheckboxItem
                     key={sup}
@@ -450,13 +438,10 @@ export const PlanejamentoEquipesGanttView = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64 max-h-72 overflow-y-auto">
-                <DropdownMenuCheckboxItem
-                  checked={selectedEquipes.length === 0}
-                  onSelect={(e) => e.preventDefault()}
-                  onCheckedChange={() => setSelectedEquipes([])}
-                >
-                  Todas as Equipes
-                </DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes(equipesDisponiveis)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes([])}>Limpar</Button>
+            </div>
                 {equipesDisponiveis.map(eq => (
                   <DropdownMenuCheckboxItem
                     key={eq}
@@ -484,13 +469,10 @@ export const PlanejamentoEquipesGanttView = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64 max-h-72 overflow-y-auto">
-                <DropdownMenuCheckboxItem
-                  checked={selectedProjetos.length === 0}
-                  onSelect={(e) => e.preventDefault()}
-                  onCheckedChange={() => setSelectedProjetos([])}
-                >
-                  Todos Projetos
-                </DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos(projetosDisponiveis)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos([])}>Limpar</Button>
+            </div>
                 {projetosDisponiveis.map(proj => (
                   <DropdownMenuCheckboxItem
                     key={proj}
@@ -519,13 +501,10 @@ export const PlanejamentoEquipesGanttView = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64 max-h-72 overflow-y-auto">
-                <DropdownMenuCheckboxItem
-                  checked={selectedMeses.length === 0}
-                  onSelect={(e) => e.preventDefault()}
-                  onCheckedChange={() => setSelectedMeses([])}
-                >
-                  Todos Meses
-                </DropdownMenuCheckboxItem>
+            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedMeses(mesesDisponiveis)}>Selecionar todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedMeses([])}>Limpar</Button>
+            </div>
                 {mesesDisponiveis.map(mes => (
                   <DropdownMenuCheckboxItem
                     key={mes}

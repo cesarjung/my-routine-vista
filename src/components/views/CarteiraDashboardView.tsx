@@ -358,7 +358,7 @@ export const CarteiraDashboardView = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
             <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Todas</Button>
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Selecionar todos</Button>
               <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => onChange([])}>Limpar</Button>
             </div>
             {options.map((opt) => (

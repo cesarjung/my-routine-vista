@@ -138,7 +138,8 @@ export const PlanejamentoSemanalView = () => {
     const weeklyMap = new Map<string, { equipe: string, valPlanejado: number, metaEquipe: number }>();
     
     let totalPlanejado = 0;
-    let totalMeta = 0;
+    let totalMetaGeral = 0;
+    let totalMetaAtiva = 0;
     
     let totalDeslocamento = 0;
     let countDeslocamento = 0;
@@ -168,15 +169,20 @@ export const PlanejamentoSemanalView = () => {
     
     weeklyArr.forEach(w => {
       totalPlanejado += w.valPlanejado;
-      totalMeta += w.metaEquipe;
+      totalMetaGeral += w.metaEquipe;
+      if (w.valPlanejado > 0) {
+        totalMetaAtiva += w.metaEquipe;
+      }
     });
 
     return {
       filteredWeeklyStats: weeklyArr,
       totals: {
         totalPlanejado,
-        totalMeta,
-        percentMeta: totalMeta > 0 ? (totalPlanejado / totalMeta) * 100 : 0,
+        totalMetaAtiva,
+        totalMetaGeral,
+        percentMetaAtiva: totalMetaAtiva > 0 ? (totalPlanejado / totalMetaAtiva) * 100 : 0,
+        percentMetaGeral: totalMetaGeral > 0 ? (totalPlanejado / totalMetaGeral) * 100 : 0,
         avgDeslocamento: countDeslocamento > 0 ? totalDeslocamento / countDeslocamento : 0,
         avgTempoServico: countServico > 0 ? totalTempoServico / countServico : 0
       }
@@ -186,7 +192,7 @@ export const PlanejamentoSemanalView = () => {
   // Filtros de Escalação (Tabelas)
   const deficitMetaEquipes = useMemo(() => {
     return filteredWeeklyStats
-      .filter(w => w.metaEquipe > 0)
+      .filter(w => w.metaEquipe > 0 && w.valPlanejado > 0)
       .sort((a, b) => {
         const aDeficit = a.valPlanejado < a.metaEquipe;
         const bDeficit = b.valPlanejado < b.metaEquipe;
@@ -203,17 +209,52 @@ export const PlanejamentoSemanalView = () => {
       });
   }, [filteredWeeklyStats]);
 
+  const todasEquipesComMeta = useMemo(() => {
+    return filteredWeeklyStats
+      .filter(w => w.metaEquipe > 0)
+      .sort((a, b) => {
+        const aDeficit = a.valPlanejado < a.metaEquipe;
+        const bDeficit = b.valPlanejado < b.metaEquipe;
+
+        if (aDeficit && !bDeficit) return -1;
+        if (!aDeficit && bDeficit) return 1;
+
+        const percentA = a.valPlanejado / a.metaEquipe;
+        const percentB = b.valPlanejado / b.metaEquipe;
+        
+        return percentB - percentA;
+      });
+  }, [filteredWeeklyStats]);
+
   const hasDeficit = deficitMetaEquipes.some(w => w.valPlanejado < w.metaEquipe);
 
-  const excessoDeslocamento = useMemo(() => {
-    return filteredDailyStats.filter(d => d.tempoDeslocamento > limiteDeslocamento)
-      .sort((a, b) => b.tempoDeslocamento - a.tempoDeslocamento);
+  const deslocamentoEquipes = useMemo(() => {
+    return filteredDailyStats
+      .filter(d => d.tempoDeslocamento > 0)
+      .sort((a, b) => {
+        const aBad = a.tempoDeslocamento > limiteDeslocamento;
+        const bBad = b.tempoDeslocamento > limiteDeslocamento;
+        if (aBad && !bBad) return -1;
+        if (!aBad && bBad) return 1;
+        return b.tempoDeslocamento - a.tempoDeslocamento;
+      });
   }, [filteredDailyStats, limiteDeslocamento]);
 
-  const subutilizadas = useMemo(() => {
-    return filteredDailyStats.filter(d => d.tempoPlanejado < 8.0 && d.tempoPlanejado > 0)
-      .sort((a, b) => a.tempoPlanejado - b.tempoPlanejado);
+  const hasExcessoDeslocamento = deslocamentoEquipes.some(d => d.tempoDeslocamento > limiteDeslocamento);
+
+  const tempoPlanejadoEquipes = useMemo(() => {
+    return filteredDailyStats
+      .filter(d => d.tempoPlanejado > 0)
+      .sort((a, b) => {
+        const aBad = a.tempoPlanejado < 8.0;
+        const bBad = b.tempoPlanejado < 8.0;
+        if (aBad && !bBad) return -1;
+        if (!aBad && bBad) return 1;
+        return b.tempoPlanejado - a.tempoPlanejado;
+      });
   }, [filteredDailyStats]);
+
+  const hasSubutilizadas = tempoPlanejadoEquipes.some(d => d.tempoPlanejado < 8.0);
 
 
   // Handlers
@@ -239,7 +280,7 @@ export const PlanejamentoSemanalView = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
             <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Todas</Button>
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Selecionar todos</Button>
               <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => onChange([])}>Limpar</Button>
             </div>
             {options.map((opt) => (
@@ -316,25 +357,25 @@ export const PlanejamentoSemanalView = () => {
 
       {/* 2. CARDS DE RESUMO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card 1: Meta vs Planejado */}
+        {/* Card 1: Meta vs Planejado (Ativas) */}
         <div className="bg-card border border-border p-5 rounded-xl shadow-sm flex flex-col justify-between">
           <div>
-            <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider mb-2">01. Meta das Equipes Ativas</h3>
-            <p className="text-xs text-muted-foreground mb-4">Mostra se o plano cobre a meta das equipes que de fato vão rodar na semana.</p>
+            <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider mb-2">01. Meta vs Plan. (Ativas)</h3>
+            <p className="text-xs text-muted-foreground mb-4">Aderência da carteira em relação à meta (considera apenas equipes com planejamento).</p>
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <p className={`text-4xl font-bold ${totals.percentMeta >= 100 ? 'text-green-500' : 'text-red-500'}`}>
-                {totals.percentMeta.toFixed(1)}%
+              <p className={`text-4xl font-bold ${totals.percentMetaAtiva < 100 ? 'text-red-500' : 'text-green-500'}`}>
+                {totals.percentMetaAtiva.toFixed(1)}%
               </p>
               <p className="text-[10px] font-semibold mt-1 text-muted-foreground">
                 Plan: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totals.totalPlanejado)} / 
-                Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totals.totalMeta)}
+                Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totals.totalMetaAtiva)}
               </p>
             </div>
-            {hasDeficit && (
-              <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md animate-pulse">
-                DISPARA ESCALAÇÃO
+            {totals.percentMetaAtiva < 100 && (
+              <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-md animate-pulse">
+                ABAIXO DA META
               </div>
             )}
           </div>
@@ -353,7 +394,7 @@ export const PlanejamentoSemanalView = () => {
               </p>
               <p className="text-xs font-semibold mt-1 text-muted-foreground">média por dia/equipe</p>
             </div>
-            {excessoDeslocamento.length > 0 && (
+            {hasExcessoDeslocamento && (
               <div className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-md animate-pulse">
                 DISPARA ESCALAÇÃO
               </div>
@@ -374,7 +415,7 @@ export const PlanejamentoSemanalView = () => {
               </p>
               <p className="text-xs font-semibold mt-1 text-muted-foreground">média por dia/equipe</p>
             </div>
-            {subutilizadas.length > 0 && (
+            {hasSubutilizadas && (
               <div className="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-md animate-pulse">
                 DISPARA ESCALAÇÃO
               </div>
@@ -386,60 +427,139 @@ export const PlanejamentoSemanalView = () => {
       {/* 3. TABELAS DE DETALHAMENTO / ESCALAÇÃO */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Tabela 1: Equipes Fora da Meta */}
-        <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px]">
-          <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
-            <Target className="w-4 h-4 text-primary" />
-            <h3 className="font-bold text-sm text-foreground">Aderência da Meta por Equipe</h3>
-          </div>
-          <div className="flex-1 overflow-auto custom-scrollbar p-0">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-muted/50 sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">Equipe</th>
-                  <th className="px-3 py-2 font-semibold text-right">Plan. Total</th>
-                  <th className="px-3 py-2 font-semibold text-right">Meta Total</th>
-                  <th className="px-3 py-2 font-semibold text-right">% Atingido</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deficitMetaEquipes.map((d, i) => {
-                  const isDeficit = d.valPlanejado < d.metaEquipe;
-                  const valColor = isDeficit ? "text-red-500" : "text-green-500";
-                  const percent = d.metaEquipe > 0 ? (d.valPlanejado / d.metaEquipe) * 100 : 0;
-                  
-                  return (
-                    <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
-                      <td className="px-3 py-2 font-bold truncate max-w-[120px]" title={d.equipe}>
-                        {d.equipe}
-                      </td>
-                      <td className={`px-3 py-2 text-right font-medium ${valColor}`}>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(d.valPlanejado)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(d.metaEquipe)}
-                      </td>
-                      <td className={`px-3 py-2 text-right font-bold ${valColor}`}>
-                        {percent.toFixed(1)}%
-                      </td>
-                    </tr>
-                  );
-                })}
-                {deficitMetaEquipes.length === 0 && (
+        <div className="flex flex-col gap-6">
+          {/* Tabela 1: Equipes Fora da Meta */}
+          <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[200px] min-h-[150px] max-h-[800px] resize-y">
+            <div className="p-3 border-b border-border bg-muted/30 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-primary" />
+                <h3 className="font-bold text-sm text-foreground">Aderência (Equipes Ativas)</h3>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto custom-scrollbar p-0">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-muted/50 sticky top-0 z-10 shadow-sm">
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Nenhuma equipe com meta</td>
+                    <th className="px-3 py-2 font-semibold">Equipe</th>
+                    <th className="px-3 py-2 font-semibold text-right">Plan.</th>
+                    <th className="px-3 py-2 font-semibold text-right">Meta</th>
+                    <th className="px-3 py-2 font-semibold text-right">%</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {deficitMetaEquipes.map((d, i) => {
+                    const isDeficit = d.valPlanejado < d.metaEquipe;
+                    const valColor = isDeficit ? "text-red-500" : "text-green-500";
+                    const percent = d.metaEquipe > 0 ? (d.valPlanejado / d.metaEquipe) * 100 : 0;
+                    
+                    return (
+                      <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
+                        <td className="px-3 py-2 font-bold truncate max-w-[120px]" title={d.equipe}>
+                          {d.equipe}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-medium ${valColor}`}>
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(d.valPlanejado)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(d.metaEquipe)}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-bold ${valColor}`}>
+                          {percent.toFixed(0)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {deficitMetaEquipes.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Nenhuma equipe ativa com meta</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Tabela 1B: Todas as Equipes */}
+          <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[200px] min-h-[150px] max-h-[800px] resize-y">
+            <div className="p-3 border-b border-border bg-muted/30 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-muted-foreground" />
+                <h3 className="font-bold text-sm text-foreground">Aderência (Todas com Meta)</h3>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto custom-scrollbar p-0">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-muted/50 sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Equipe</th>
+                    <th className="px-3 py-2 font-semibold text-right">Plan.</th>
+                    <th className="px-3 py-2 font-semibold text-right">Meta</th>
+                    <th className="px-3 py-2 font-semibold text-right">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todasEquipesComMeta.map((d, i) => {
+                    const isDeficit = d.valPlanejado < d.metaEquipe;
+                    const valColor = isDeficit ? "text-red-500" : "text-green-500";
+                    const percent = d.metaEquipe > 0 ? (d.valPlanejado / d.metaEquipe) * 100 : 0;
+                    
+                    return (
+                      <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
+                        <td className="px-3 py-2 font-bold truncate max-w-[120px]" title={d.equipe}>
+                          {d.equipe}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-medium ${valColor}`}>
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(d.valPlanejado)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(d.metaEquipe)}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-bold ${valColor}`}>
+                          {percent.toFixed(0)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {todasEquipesComMeta.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Nenhuma equipe com meta</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Card 1B: Meta (Todas) */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider mb-2">Aderência Geral (Todas)</h3>
+              <p className="text-[10px] text-muted-foreground mb-3">Diagnóstico considerando todas as equipes da carteira que possuem meta.</p>
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className={`text-3xl font-bold ${totals.percentMetaGeral < 100 ? 'text-red-500' : 'text-green-500'}`}>
+                  {totals.percentMetaGeral.toFixed(1)}%
+                </p>
+                <p className="text-[10px] font-semibold mt-1 text-muted-foreground">
+                  Plan: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totals.totalPlanejado)} / 
+                  Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totals.totalMetaGeral)}
+                </p>
+              </div>
+              {totals.percentMetaGeral < 100 && (
+                <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-md animate-pulse">
+                  ABAIXO DA META
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Tabela 2: Excesso de Deslocamento */}
-        <div className="bg-card border border-orange-500/20 rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px]">
-          <div className="p-3 border-b border-border bg-orange-500/5 flex items-center gap-2">
+        {/* Tabela 2: Deslocamento */}
+        <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px] min-h-[150px] max-h-[1200px] resize-y">
+          <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-orange-500" />
-            <h3 className="font-bold text-sm text-orange-600">Deslocamento &gt; {limiteDeslocamento}h</h3>
+            <h3 className="font-bold text-sm text-foreground">Deslocamento (Meta &le; {limiteDeslocamento}h)</h3>
           </div>
           <div className="flex-1 overflow-auto custom-scrollbar p-0">
             <table className="w-full text-xs text-left">
@@ -450,18 +570,22 @@ export const PlanejamentoSemanalView = () => {
                 </tr>
               </thead>
               <tbody>
-                {excessoDeslocamento.map((d, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
-                    <td className="px-3 py-2">
-                      <div className="font-bold truncate max-w-[150px]" title={d.equipe}>{d.equipe}</div>
-                      <div className="text-[10px] text-muted-foreground">{d.data}</div>
-                    </td>
-                    <td className="px-3 py-2 text-right text-orange-500 font-bold">
-                      {d.tempoDeslocamento.toFixed(1)}h
-                    </td>
-                  </tr>
-                ))}
-                {excessoDeslocamento.length === 0 && (
+                {deslocamentoEquipes.map((d, i) => {
+                  const isBad = d.tempoDeslocamento > limiteDeslocamento;
+                  const colorClass = isBad ? "text-red-500" : "text-green-500";
+                  return (
+                    <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
+                      <td className="px-3 py-2">
+                        <div className="font-bold truncate max-w-[150px]" title={d.equipe}>{d.equipe}</div>
+                        <div className="text-[10px] text-muted-foreground">{d.data}</div>
+                      </td>
+                      <td className={`px-3 py-2 text-right font-bold ${colorClass}`}>
+                        {d.tempoDeslocamento.toFixed(1)}h
+                      </td>
+                    </tr>
+                  );
+                })}
+                {deslocamentoEquipes.length === 0 && (
                   <tr>
                     <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">Nenhuma escalação</td>
                   </tr>
@@ -471,11 +595,11 @@ export const PlanejamentoSemanalView = () => {
           </div>
         </div>
 
-        {/* Tabela 3: Subutilizadas (< 8h) */}
-        <div className="bg-card border border-green-600/20 rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px]">
-          <div className="p-3 border-b border-border bg-green-600/5 flex items-center gap-2">
+        {/* Tabela 3: Tempo Planejado */}
+        <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px] min-h-[150px] max-h-[1200px] resize-y">
+          <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-green-600" />
-            <h3 className="font-bold text-sm text-green-600">Planejadas &lt; 8.0h</h3>
+            <h3 className="font-bold text-sm text-foreground">Planejadas (Meta &ge; 8.0h)</h3>
           </div>
           <div className="flex-1 overflow-auto custom-scrollbar p-0">
             <table className="w-full text-xs text-left">
@@ -486,18 +610,22 @@ export const PlanejamentoSemanalView = () => {
                 </tr>
               </thead>
               <tbody>
-                {subutilizadas.map((d, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
-                    <td className="px-3 py-2">
-                      <div className="font-bold truncate max-w-[150px]" title={d.equipe}>{d.equipe}</div>
-                      <div className="text-[10px] text-muted-foreground">{d.data}</div>
-                    </td>
-                    <td className="px-3 py-2 text-right text-green-600 font-bold">
-                      {d.tempoPlanejado.toFixed(1)}h
-                    </td>
-                  </tr>
-                ))}
-                {subutilizadas.length === 0 && (
+                {tempoPlanejadoEquipes.map((d, i) => {
+                  const isBad = d.tempoPlanejado < 8.0;
+                  const colorClass = isBad ? "text-red-500" : "text-green-500";
+                  return (
+                    <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
+                      <td className="px-3 py-2">
+                        <div className="font-bold truncate max-w-[150px]" title={d.equipe}>{d.equipe}</div>
+                        <div className="text-[10px] text-muted-foreground">{d.data}</div>
+                      </td>
+                      <td className={`px-3 py-2 text-right font-bold ${colorClass}`}>
+                        {d.tempoPlanejado.toFixed(1)}h
+                      </td>
+                    </tr>
+                  );
+                })}
+                {tempoPlanejadoEquipes.length === 0 && (
                   <tr>
                     <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">Nenhuma escalação</td>
                   </tr>
