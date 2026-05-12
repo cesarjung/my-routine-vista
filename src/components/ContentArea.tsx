@@ -93,7 +93,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
             </div>
           </div>
         </header>
-        <div className="w-full h-full">
+        <div className="w-full flex-1 min-h-0">
           <DashboardView hideHeader={true} />
         </div>
       </div>
@@ -114,7 +114,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
             </div>
           </div>
         </header>
-        <div className="w-full h-full">
+        <div className="w-full flex-1 min-h-0">
           <SettingsView hideHeader={true} />
         </div>
       </div>
@@ -135,7 +135,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
             <ViewModeToggle value={viewMode} onChange={onViewModeChange} />
           </div>
         </header>
-        <div className="w-full h-full">
+        <div className="w-full flex-1 min-h-0">
           <MyTasksView viewMode={viewMode} />
         </div>
       </div>
@@ -188,7 +188,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
               </div>
             </div>
           </header>
-          <div className="w-full h-full">
+          <div className="w-full flex-1 min-h-0">
             <DashboardView key={`dashboard-${sectorId}`} forcedSectorId={sectorId} hideHeader={true} />
           </div>
         </div>
