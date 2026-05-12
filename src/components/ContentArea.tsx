@@ -164,6 +164,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
   };
 
   const isPlanejamento = context.type === 'planejamento' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal';
+  const isGanttView = (context.type === 'planejamento' && context.section === 'carteira') || context.type === 'planejamento_equipes';
 
   // Sector specific view
   if (context.type === 'sector') {
@@ -260,8 +261,8 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Content for Planejamento Views */}
-      <main className={cn("flex-1 flex flex-col", isPlanejamento ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>
-        <div className={cn("mx-auto h-full flex flex-col w-full", isPlanejamento ? "max-w-none" : "max-w-7xl")}>
+      <main className={cn("flex-1 flex flex-col", isGanttView ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>
+        <div className={cn("mx-auto flex flex-col w-full min-h-full", isPlanejamento ? "max-w-none" : "max-w-7xl")}>
           <ErrorBoundary>
             {renderContent()}
           </ErrorBoundary>
