@@ -583,7 +583,7 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
   };
 
   // Filter tasks based on dialog state
-  const filteredTasks = (panelData?.rawTasks || [])?.filter(task => {
+  const filteredTasks = (data?.rawTasks || [])?.filter(task => {
     if (!tasksDialog.isOpen) return false;
 
     // Filter by entity type
@@ -624,15 +624,15 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
       );
     }
 
-    if (!panelData?.results.length) {
+    if (!data?.results?.length) {
       return (
         <div className="p-4 flex flex-col items-center justify-center text-xs text-muted-foreground gap-2">
           <p className="font-semibold text-destructive">Sem dados para os filtros: {JSON.stringify(panel.filters.task_frequency)}</p>
           <div className="text-left w-full space-y-1 bg-secondary/20 p-2 rounded">
-            <p><strong>DB rawTasks Total:</strong> {panelData?.rawTasks?.length || 0}</p>
-            <p><strong>Routines Map Keys:</strong> {Object.keys(panelData?.routinesMap || {}).length}</p>
-            <p><strong>Frequencies mapped:</strong> {Object.values(panelData?.routinesMap || {}).join(', ')}</p>
-            <p><strong>Frequencies mapped:</strong> {Object.values(panelData?.routinesMap || {}).join(', ')}</p>
+            <p><strong>DB rawTasks Total:</strong> {data?.rawTasks?.length || 0}</p>
+            <p><strong>Routines Map Keys:</strong> {Object.keys(data?.routinesMap || {}).length}</p>
+            <p><strong>Frequencies mapped:</strong> {Object.values(data?.routinesMap || {}).join(', ')}</p>
+            <p><strong>Frequencies mapped:</strong> {Object.values(data?.routinesMap || {}).join(', ')}</p>
             <p> Se 'rawTasks' estiver vazio, o Supabase não devolveu tarefas nesse período.</p>
             <p> Se 'rawTasks' for {'>'} 0, a falha está no filtro routinesMap ou Unit ID.</p>
           </div>
@@ -646,7 +646,7 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
           <thead className="sticky top-0 bg-card z-10 shadow-sm">
             <tr className="border-b border-border">
               <th className="text-left p-2 font-medium text-muted-foreground min-w-[200px] sticky left-0 bg-card z-20 border-r">Tarefa</th>
-              {panelData.units?.map((u: any) => (
+              {data?.units?.map((u: any) => (
                 <th key={u.id} className="p-2 text-center font-medium text-muted-foreground min-w-[60px] whitespace-nowrap" title={u.name}>
                   {u.code || u.name}
                 </th>
@@ -654,12 +654,12 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
-            {panelData.results.map((row: any) => (
+            {data?.results?.map((row: any) => (
               <tr key={row.id} className="hover:bg-secondary/20">
                 <td className="p-2 font-medium text-foreground sticky left-0 bg-card z-10 border-r group-hover:bg-secondary/20 truncate max-w-[200px]" title={row.name}>
                   {row.name}
                 </td>
-                {panelData.units?.map((u: any) => {
+                {data?.units?.map((u: any) => {
                   const cell = row.units[u.id];
                   return (
                     <td key={u.id} className="p-2 text-center border-l border-border/30">
@@ -703,7 +703,7 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          {panelData?.results.map((item: { id: string; name: string; frequencies: Record<string, StatusData>; totals: StatusData }) => (
+          {data?.results?.map((item: { id: string; name: string; frequencies: Record<string, StatusData>; totals: StatusData }) => (
             <tr key={item.id} className="hover:bg-secondary/20">
               <td className="p-2">
                 <p className="font-medium text-foreground" title={item.name}>{item.name}</p>
@@ -785,8 +785,8 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
         </div>
         <TaskTrackerPanel
           sectorIds={
-            globalSectorFilters && globalSectorFilters.length > 0
-              ? globalSectorFilters
+            dashboardSectorId && dashboardSectorId !== 'all'
+              ? [dashboardSectorId]
               : (panel.filters.sector_id ? (Array.isArray(panel.filters.sector_id) ? panel.filters.sector_id : [panel.filters.sector_id as string]) : [])
           }
           initialFrequencies={panel.filters.task_frequency || []}
@@ -813,7 +813,7 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30 flex-shrink-0">
           <Icon className="w-4 h-4 text-primary" />
           <span className="font-medium text-sm truncate">{panel.title}</span>
-          <span className="text-[10px] text-muted-foreground ml-auto">{panelData?.results.length || 0}</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">{data?.results?.length || 0}</span>
 
           {isAdmin && (
             <div className="flex items-center gap-1 ml-2">
