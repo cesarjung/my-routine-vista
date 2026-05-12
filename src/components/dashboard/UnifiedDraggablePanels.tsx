@@ -300,7 +300,7 @@ export const UnifiedDraggablePanels = ({
 }: UnifiedDraggablePanelsProps) => {
   const { user } = useAuth();
   const { isAdmin, isLoading: isLoadingRole } = useIsAdmin();
-  const { data: savedLayout, isLoading: isLoadingLayout } = useDashboardLayout(sectorId);
+  const { data: savedLayout, isLoading: isLoadingLayout } = useDashboardLayout(selectedSectorId);
   const saveLayout = useSaveDashboardLayout();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [containerHeight, setContainerHeight] = useState(600);
@@ -326,7 +326,7 @@ export const UnifiedDraggablePanels = ({
       layoutMapById[item.panel_id] = { x: item.position_x, y: item.position_y };
 
       // Map by title if we know the global panel's title for this ID
-      const globalPanel = allPanels?.find(p => p.id === item.panel_id);
+      const globalPanel = customPanels?.find(p => p.id === item.panel_id);
       if (globalPanel?.title) {
         layoutMapByTitle[globalPanel.title] = { x: item.position_x, y: item.position_y };
       }
@@ -362,7 +362,7 @@ export const UnifiedDraggablePanels = ({
     });
 
     return panels;
-  }, [customPanels, savedLayout, allPanels]);
+  }, [customPanels, savedLayout]);
 
   const [panels, setPanels] = useState<UnifiedPanel[]>([]);
   const [initialized, setInitialized] = useState(false);
@@ -415,8 +415,8 @@ export const UnifiedDraggablePanels = ({
     setPanels(newPanels);
 
     // Save to database (admin only - RLS will enforce this)
-    console.log('handleDragEnd sectorId:', sectorId);
-    saveLayout.mutate({ panels: newPanels, sectorId });
+    console.log('handleDragEnd sectorId:', selectedSectorId);
+    saveLayout.mutate({ panels: newPanels, sectorId: selectedSectorId });
   };
 
   const renderPanelContent = (panel: UnifiedPanel) => {
