@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   Search,
   Filter,
@@ -9,7 +10,10 @@ import {
   CheckCircle2,
   Trash2,
   X,
-  StickyNote
+  StickyNote,
+  Pencil,
+  Clock,
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -27,6 +31,7 @@ import { BulkRoutineCompletionDialog } from '@/components/BulkRoutineCompletionD
 import { useUserRole } from '@/hooks/useUserRole';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NotesList } from '@/components/NotesList';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
@@ -192,12 +197,48 @@ export const RoutinesView = ({
     return matchesFrequency && matchesSector && matchesHideCompleted;
   });
 
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-48">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    if (!filteredRoutines || filteredRoutines.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+          <Calendar className="w-12 h-12 mb-4 opacity-20" />
+          <p>Nenhuma rotina encontrada</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex-1 overflow-y-auto custom-scrollbar bg-card rounded-xl border border-border shadow-sm">
+        {filteredRoutines.map((routine) => (
+          <RoutineListItem
+            key={routine.id}
+            routine={routine}
+            isSelected={selectedRoutine?.id === routine.id}
+            onClick={() => setSelectedRoutine(routine)}
+            onEdit={(e) => {
+              e.stopPropagation();
+              setEditingRoutine(routine);
+            }}
+            canEdit={isGestorOrAdmin}
+            periodDates={periodsByRoutine?.get(routine.id) || null}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-full flex-col">
       {!hideHeader && (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col flex h-full">
-          {/* Header removed from here to save vertical space. Tabs moved to inner toolbars. */}
-
+        <div className="w-full flex-col flex h-full gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-wrap gap-2">
               {frequencies.map((freq) => (
@@ -227,10 +268,13 @@ export const RoutinesView = ({
               </Label>
             </div>
           </div>
-        </Tabs>
+          
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {renderContent()}
+          </div>
+        </div>
       )}
 
-      {/* Fallback for when HideHeader is true (if accessed via embedding, unlikely for main view but good for safety) */}
       {hideHeader && (
         <div className="w-full h-full flex flex-col p-4">
           {renderContent()}

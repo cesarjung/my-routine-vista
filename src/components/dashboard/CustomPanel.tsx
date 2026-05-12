@@ -103,11 +103,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       if (filters.status && filters.status.length > 0) {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
-      if (periodDates) {
-        tasksQuery = tasksQuery
-          .gte('due_date', periodDates.start.toISOString())
-          .lte('due_date', periodDates.end.toISOString());
-      }
+      // Period dates will be applied properly with timezone offset later.
 
       // 2. Process Frequency Filter
       if (filters.task_frequency && filters.task_frequency.length > 0) {
