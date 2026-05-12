@@ -150,6 +150,33 @@
   [data-radix-focus-guard] {
     display: none !important;
   }
+
+  /* Custom softer scrollbars globally */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  .no-scrollbar-custom::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar-custom {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @layer utilities {

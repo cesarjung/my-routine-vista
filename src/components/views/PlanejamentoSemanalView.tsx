@@ -311,47 +311,54 @@ export const PlanejamentoSemanalView = () => {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       
-      {/* 1. HEADER E FILTROS */}
-      <div className="flex flex-col justify-between items-start gap-4 bg-card p-4 rounded-xl shadow-sm border border-border">
-        <div className="flex flex-row justify-between w-full items-center">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Planejamento Semanal</h2>
-            <p className="text-sm text-muted-foreground">Monitoramento de aderência aos 3 critérios de planejamento.</p>
+      {/* HEADER / FILTROS BÁSICOS (Sticky) */}
+      <div className="sticky top-0 z-[100] bg-background border-b border-border space-y-3 pt-4 px-6 pb-4 -mx-6 mb-6">
+        <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto no-scrollbar-custom">
+          {/* Header Title */}
+          <div className="shrink-0 mb-1">
+            <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Planejamento Semanal</h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Monitoramento de Aderência</p>
           </div>
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isLoading} className="h-9 w-9">
-            <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-        
-        <div className="flex flex-wrap items-end gap-3 w-full">
-          {renderMultiSelect("Unidade", UNIDADES_PLANEJAMENTO.map(u => ({ value: u.id, label: u.nome })), selectedUnidades, setSelectedUnidades)}
-          {renderMultiSelect("Supervisor", supervisoresUnicos.map(s => ({ value: s, label: s })), selectedSupervisores, setSelectedSupervisores)}
-          {renderMultiSelect("Equipe", equipesUnicas.map(e => ({ value: e, label: e })), selectedEquipes, setSelectedEquipes)}
+          
+          <div className="w-px h-10 bg-border shrink-0"></div>
 
-          <div className="flex flex-col justify-center min-w-[200px]">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Período</span>
-            <DatePickerWithRange 
-              date={dateRange} 
-              setDate={(r) => setDateRange(r || {})} 
-              className="h-8 w-full"
-            />
-          </div>
+          {/* Filters Row */}
+          <div className="flex flex-nowrap items-end gap-2 shrink-0 pb-1">
+            {renderMultiSelect("Unidade", UNIDADES_PLANEJAMENTO.map(u => ({ value: u.id, label: u.nome })), selectedUnidades, setSelectedUnidades)}
+            {renderMultiSelect("Supervisor", supervisoresUnicos.map(s => ({ value: s, label: s })), selectedSupervisores, setSelectedSupervisores)}
+            {renderMultiSelect("Equipe", equipesUnicas.map(e => ({ value: e, label: e })), selectedEquipes, setSelectedEquipes)}
 
-          <div className="flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Limite Deslocamento</span>
-            <div className="flex items-center gap-2 border border-input rounded-md px-2 h-8 bg-background focus-within:ring-1 focus-within:ring-ring">
-              <Settings className="w-3.5 h-3.5 text-muted-foreground" />
-              <Input 
-                type="number" 
-                step="0.5" 
-                min="0"
-                value={limiteDeslocamento} 
-                onChange={(e) => setLimiteDeslocamento(Number(e.target.value) || 0)}
-                className="w-16 h-6 px-1 py-0 text-center text-[11px] font-bold border-none shadow-none focus-visible:ring-0"
+            <div className="flex flex-col justify-center min-w-[200px]">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Período</span>
+              <DatePickerWithRange 
+                date={dateRange} 
+                setDate={(r) => setDateRange(r || {})} 
+                className="h-8 w-full"
               />
-              <span className="text-[11px] font-medium text-muted-foreground">h</span>
+            </div>
+
+            <div className="flex flex-col justify-center">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Limite Deslocamento</span>
+              <div className="flex items-center gap-2 border border-input rounded-md px-2 h-8 bg-background focus-within:ring-1 focus-within:ring-ring">
+                <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+                <Input 
+                  type="number" 
+                  step="0.5" 
+                  min="0"
+                  value={limiteDeslocamento} 
+                  onChange={(e) => setLimiteDeslocamento(Number(e.target.value) || 0)}
+                  className="w-16 h-6 px-1 py-0 text-center text-[11px] font-bold border-none shadow-none focus-visible:ring-0"
+                />
+                <span className="text-[11px] font-medium text-muted-foreground">h</span>
+              </div>
             </div>
           </div>
+          
+          <div className="flex-1"></div>
+          
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isLoading} className="h-8 w-8 shrink-0 mb-1">
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
       </div>
 
