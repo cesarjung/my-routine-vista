@@ -526,6 +526,10 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               ? 'bg-sidebar-accent text-sidebar-primary'
               : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
           )}
+        >
+          <ClipboardList className={cn('w-4 h-4 flex-shrink-0', context.type === 'my-tasks' && 'text-primary')} />
+          {!collapsed && <span className="text-sm">Minhas Tarefas</span>}
+        </button>
 
           {/* Espaços list */}
           {isLoading ? (
