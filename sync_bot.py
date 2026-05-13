@@ -77,7 +77,13 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             for sheet_name in sheets_to_fetch:
                 try:
                     worksheet = spreadsheet.worksheet(sheet_name)
-                    result[sheet_name] = worksheet.get_all_values()
+                    raw_data = worksheet.get_all_values()
+                    
+                    # O gspread as vezes traz milhares de linhas vazias se a planilha for grande.
+                    # Vamos filtrar para enviar ao Supabase APENAS as linhas que tem algum conteúdo.
+                    cleaned_data = [row for row in raw_data if any(str(cell).strip() for cell in row)]
+                    
+                    result[sheet_name] = cleaned_data
                     time.sleep(2.5) # Pausa maior (2.5s) pois o limite é estrito de 60 req/minuto
                 except gspread.exceptions.WorksheetNotFound:
                     logging.warning(f"Aba '{sheet_name}' não encontrada na planilha {unidade_id}.")
