@@ -39,7 +39,10 @@ def load_env():
     # No GitHub Actions as variáveis virão do os.environ
     for key, val in os.environ.items():
         if key.startswith('VITE_'):
-            env_vars[key] = val.strip().strip('"').strip("'")
+            cleaned_val = val.strip().strip('"').strip("'")
+            if cleaned_val.startswith(f"{key}="):
+                cleaned_val = cleaned_val.split('=', 1)[1].strip().strip('"').strip("'")
+            env_vars[key] = cleaned_val
             
     return env_vars
 
