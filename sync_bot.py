@@ -47,21 +47,33 @@ def load_env():
             
     return env_vars
 
-def fetch_google_sheets(unidade_id):
+def fetch_google_sheets(unidade_id, retries=3):
     url = f"{API_URL}?token={SECRET_TOKEN}&id={unidade_id}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config"
-    try:
-        logging.info(f"Baixando dados do Google para a unidade {unidade_id}...")
-        res = requests.get(url, timeout=45)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get('success'):
-                return data.get('data')
+    
+    for attempt in range(retries):
+        try:
+            logging.info(f"Baixando dados do Google para a unidade {unidade_id} (Tentativa {attempt + 1}/{retries})...")
+            # Aumentando timeout para 300s (5min) porque os dados sao muitos e o Apps Script pode demorar
+            res = requests.get(url, timeout=300)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get('success'):
+                    return data.get('data')
+                else:
+                    logging.error(f"Erro no retorno do script para {unidade_id}: {data.get('error')}")
+                    return None # Erro do script não se resolve com retry
             else:
-                logging.error(f"Erro no retorno do script para {unidade_id}: {data.get('error')}")
-        else:
-            logging.error(f"Erro HTTP {res.status_code} na unidade {unidade_id}")
-    except Exception as e:
-        logging.error(f"Falha ao conectar no Google para {unidade_id}: {e}")
+                logging.error(f"Erro HTTP {res.status_code} na unidade {unidade_id}")
+        except requests.exceptions.ReadTimeout:
+            logging.warning(f"Timeout de leitura na unidade {unidade_id}. O Google demorou mais de 5 minutos para responder.")
+        except Exception as e:
+            logging.error(f"Falha ao conectar no Google para {unidade_id}: {e}")
+            
+        if attempt < retries - 1:
+            logging.info(f"Aguardando 10 segundos antes de tentar novamente a unidade {unidade_id}...")
+            time.sleep(10)
+            
+    logging.error(f"Todas as {retries} tentativas falharam para a unidade {unidade_id}.")
     return None
 
 def upsert_supabase(env_vars, payload):
