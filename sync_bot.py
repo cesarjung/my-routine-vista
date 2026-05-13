@@ -73,15 +73,30 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             logging.info(f"Baixando dados do Google (via gspread) para a unidade {unidade_id} (Tentativa {attempt + 1}/{retries})...")
             spreadsheet = gc.open_by_key(unidade_id)
             
+            # Limite maximo de colunas a extrair de cada aba (para evitar lixo infinito)
+            MAX_COLS = {
+                "Carteira_Planejador": 50,
+                "Plan_Principal": 55,
+                "Reprogramadas": 55,
+                "Base_Curva": 10,
+                "BD_Config": 100,
+                "BD_Metas": 20
+            }
+            
             result = {}
             for sheet_name in sheets_to_fetch:
                 try:
                     worksheet = spreadsheet.worksheet(sheet_name)
                     raw_data = worksheet.get_all_values()
                     
+                    max_col = MAX_COLS.get(sheet_name, 100)
+                    
                     # O gspread as vezes traz milhares de linhas e colunas vazias
                     cleaned_data = []
                     for row in raw_data:
+                        # Corta a linha no tamanho maximo permitido pela aba ANTES de verificar vazios
+                        row = row[:max_col]
+                        
                         # Encontra o ultimo indice nao vazio
                         last_non_empty = -1
                         for i in range(len(row) - 1, -1, -1):
@@ -126,50 +141,33 @@ def upsert_supabase(env_vars, payload):
     headers = {
         "apikey": supabase_key,
         "Authorization": f"Bearer {supabase_key}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates"
+        "Content-Type": "application/json"
     }
     
     unidade_id = payload['unidade_id']
     
-    # Passo 1: Criar a linha (UPSERT) com dados mínimos
-    init_payload = {
-        "unidade_id": unidade_id,
-        "updated_at": payload["updated_at"]
-    }
-    
     try:
         import json
+        
+        # O POSTGRESQL (Supabase) sofre muito para fazer UPDATE de colunas JSONB gigantes (TOAST rewrite).
+        # A estrategia mais rapida eh DELETAR a linha e dar um INSERT limpo.
+        
+        # 1. Deleta a linha atual
+        delete_url = f"{url}?unidade_id=eq.{unidade_id}"
+        requests.delete(delete_url, headers=headers, timeout=10)
+        
+        # 2. Insere a nova linha completa (muito mais rapido que update)
         total_size = len(json.dumps(payload))
         logging.info(f"Tamanho total do payload para a unidade {unidade_id}: {total_size / 1024 / 1024:.2f} MB")
         
-        # 1. Cria a linha basica (Upsert rapido)
-        res = requests.post(url, headers=headers, json=init_payload, timeout=30)
-        if res.status_code not in [200, 201, 204]:
-            logging.error(f"Falha ao inicializar linha Supabase {res.status_code}: {res.text}")
+        res = requests.post(url, headers=headers, json=payload, timeout=60)
+        if res.status_code in [200, 201, 204]:
+            logging.info(f"Unidade {unidade_id} salva no Supabase via INSERT com sucesso.")
+            return True
+        else:
+            logging.error(f"Falha Supabase ao inserir unidade {res.status_code}: {res.text}")
             return False
             
-        # 2. Atualiza cada grande coluna separadamente com PATCH para nao estrangular o banco de dados
-        patch_url = f"{url}?unidade_id=eq.{unidade_id}"
-        patch_headers = headers.copy()
-        if "Prefer" in patch_headers:
-            del patch_headers["Prefer"]
-            
-        colunas = ["carteira", "principal", "bd_metas", "reprogramadas"]
-        for col in colunas:
-            if col in payload:
-                col_payload = {col: payload[col]}
-                col_size = len(json.dumps(col_payload))
-                logging.info(f"Enviando coluna '{col}' ({col_size / 1024 / 1024:.2f} MB)...")
-                
-                # Usa PATCH para atualizar apenas aquela coluna especifica na linha da unidade
-                patch_res = requests.patch(patch_url, headers=patch_headers, json=col_payload, timeout=120)
-                if patch_res.status_code not in [200, 201, 204]:
-                    logging.error(f"Falha Supabase ao atualizar {col} ({patch_res.status_code}): {patch_res.text}")
-                    return False
-                
-        logging.info(f"Unidade {unidade_id} salva no Supabase com sucesso em partes.")
-        return True
     except Exception as e:
         logging.error(f"Falha de conexão com Supabase: {e}")
     return False
