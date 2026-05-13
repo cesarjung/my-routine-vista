@@ -37,7 +37,14 @@ def load_env():
                     key, val = line.strip().split('=', 1)
                     env_vars[key] = val.strip('"').strip("'")
     except Exception as e:
-        logging.error(f"Erro ao ler .env: {e}")
+        # Se não achar o .env, não tem problema no GitHub Actions
+        pass
+        
+    # No GitHub Actions as variáveis virão do os.environ
+    for key, val in os.environ.items():
+        if key.startswith('VITE_'):
+            env_vars[key] = val
+            
     return env_vars
 
 def fetch_google_sheets(unidade_id):
@@ -113,27 +120,33 @@ def run_sync_cycle():
     logging.info("--- Ciclo concluido ---")
 
 if __name__ == "__main__":
-    logging.info("Sync Bot iniciado. Pressione Ctrl+C para parar.")
-    while True:
-        try:
-            current_hour = datetime.now().hour
-            
-            # Pausa as atualizações entre 22h e 05h59
-            if current_hour >= 22 or current_hour < 6:
-                logging.info(f"Horário de descanso ({current_hour}h). O bot voltará a sincronizar às 06h da manhã.")
-                time.sleep(60 * 60) # Dorme por 1 hora e verifica novamente
-                continue
+    # Se estiver rodando no GitHub Actions, roda apenas um ciclo e encerra
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        logging.info("Executando em modo GitHub Actions (ciclo único)")
+        run_sync_cycle()
+    else:
+        # Modo local: loop infinito
+        logging.info("Sync Bot iniciado localmente. Pressione Ctrl+C para parar.")
+        while True:
+            try:
+                current_hour = datetime.now().hour
+                
+                # Pausa as atualizações entre 22h e 05h59
+                if current_hour >= 22 or current_hour < 6:
+                    logging.info(f"Horário de descanso ({current_hour}h). O bot voltará a sincronizar às 06h da manhã.")
+                    time.sleep(60 * 60) # Dorme por 1 hora e verifica novamente
+                    continue
 
-            run_sync_cycle()
-            
-            # Aguarda 10 minutos para o próximo ciclo
-            WAIT_TIME = 10 * 60
-            logging.info(f"Aguardando 10 minutos ate a proxima execucao...")
-            time.sleep(WAIT_TIME)
-            
-        except KeyboardInterrupt:
-            logging.info("Bot finalizado pelo usuario.")
-            break
-        except Exception as e:
-            logging.error(f"Erro critico no loop principal: {e}")
-            time.sleep(60) # Espera 1 minuto antes de tentar de novo caso de erro
+                run_sync_cycle()
+                
+                # Aguarda 10 minutos para o próximo ciclo
+                WAIT_TIME = 10 * 60
+                logging.info(f"Aguardando 10 minutos ate a proxima execucao...")
+                time.sleep(WAIT_TIME)
+                
+            except KeyboardInterrupt:
+                logging.info("Bot finalizado pelo usuario.")
+                break
+            except Exception as e:
+                logging.error(f"Erro critico no loop principal: {e}")
+                time.sleep(60) # Espera 1 minuto antes de tentar de novo caso de erro
