@@ -130,13 +130,46 @@ def upsert_supabase(env_vars, payload):
         "Prefer": "resolution=merge-duplicates"
     }
     
+    unidade_id = payload['unidade_id']
+    
+    # Passo 1: Criar a linha (UPSERT) com dados mínimos
+    init_payload = {
+        "unidade_id": unidade_id,
+        "updated_at": payload["updated_at"]
+    }
+    
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=120)
-        if res.status_code in [200, 201, 204]:
-            logging.info(f"Unidade {payload['unidade_id']} salva no Supabase com sucesso.")
-            return True
-        else:
-            logging.error(f"Falha Supabase {res.status_code}: {res.text}")
+        import json
+        total_size = len(json.dumps(payload))
+        logging.info(f"Tamanho total do payload para a unidade {unidade_id}: {total_size / 1024 / 1024:.2f} MB")
+        
+        # 1. Cria a linha basica (Upsert rapido)
+        res = requests.post(url, headers=headers, json=init_payload, timeout=30)
+        if res.status_code not in [200, 201, 204]:
+            logging.error(f"Falha ao inicializar linha Supabase {res.status_code}: {res.text}")
+            return False
+            
+        # 2. Atualiza cada grande coluna separadamente com PATCH para nao estrangular o banco de dados
+        patch_url = f"{url}?unidade_id=eq.{unidade_id}"
+        patch_headers = headers.copy()
+        if "Prefer" in patch_headers:
+            del patch_headers["Prefer"]
+            
+        colunas = ["carteira", "principal", "bd_metas", "reprogramadas"]
+        for col in colunas:
+            if col in payload:
+                col_payload = {col: payload[col]}
+                col_size = len(json.dumps(col_payload))
+                logging.info(f"Enviando coluna '{col}' ({col_size / 1024 / 1024:.2f} MB)...")
+                
+                # Usa PATCH para atualizar apenas aquela coluna especifica na linha da unidade
+                patch_res = requests.patch(patch_url, headers=patch_headers, json=col_payload, timeout=120)
+                if patch_res.status_code not in [200, 201, 204]:
+                    logging.error(f"Falha Supabase ao atualizar {col} ({patch_res.status_code}): {patch_res.text}")
+                    return False
+                
+        logging.info(f"Unidade {unidade_id} salva no Supabase com sucesso em partes.")
+        return True
     except Exception as e:
         logging.error(f"Falha de conexão com Supabase: {e}")
     return False
