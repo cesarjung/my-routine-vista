@@ -169,15 +169,21 @@ def upsert_supabase(env_vars, payload):
         
         # 1. Deleta a linha atual
         delete_url = f"{url}?unidade_id=eq.{unidade_id}"
-        requests.delete(delete_url, headers=headers, timeout=10)
-        
+        try:
+            requests.delete(delete_url, headers=headers, timeout=60)
+        except Exception as delete_e:
+            logging.warning(f"Aviso no DELETE da unidade {unidade_id}: {delete_e}")
+            
         # 2. Insere a nova linha completa (muito mais rapido que update)
         total_size = len(json.dumps(payload))
         logging.info(f"Tamanho total do payload para a unidade {unidade_id}: {total_size / 1024 / 1024:.2f} MB")
         
-        res = requests.post(url, headers=headers, json=payload, timeout=60)
+        # Volta o cabeçalho merge-duplicates para garantir que o POST funcione caso o DELETE tenha falhado
+        headers["Prefer"] = "resolution=merge-duplicates"
+        
+        res = requests.post(url, headers=headers, json=payload, timeout=90)
         if res.status_code in [200, 201, 204]:
-            logging.info(f"Unidade {unidade_id} salva no Supabase via INSERT com sucesso.")
+            logging.info(f"Unidade {unidade_id} salva no Supabase via UPSERT/INSERT com sucesso.")
             return True
         else:
             logging.error(f"Falha Supabase ao inserir unidade {res.status_code}: {res.text}")
