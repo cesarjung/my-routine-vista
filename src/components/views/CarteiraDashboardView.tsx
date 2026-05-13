@@ -429,7 +429,7 @@ export const CarteiraDashboardView = () => {
                      <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
                    </Button>
                  </DropdownMenuTrigger>
-                 <DropdownMenuContent className="w-56" align="start">
+                 <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
                    <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
                      <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Todas</Button>
                      <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
