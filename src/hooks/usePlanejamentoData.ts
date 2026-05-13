@@ -121,14 +121,21 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
           const projeto = row[12];
           if (!projeto || projeto.trim() === '') continue;
 
-          let mesFiltro = row[8] || '';
-          if (mesFiltro && mesFiltro !== '-') {
-            const match = mesFiltro.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+          let mesFiltroStr = row[8] ? String(row[8]).trim() : '';
+          
+          const normalizeMes = (m: string) => {
+            if (!m || m === '-') return '';
+            const match = m.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
             if (match) {
               const date = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
-              mesFiltro = `${format(date, "MMM", { locale: ptBR })}./${format(date, "yy")}`.toLowerCase(); 
+              return `${format(date, "MMM", { locale: ptBR })}./${format(date, "yy")}`.toLowerCase(); 
             }
-          }
+            return m.toLowerCase();
+          };
+
+          const mesFiltro = mesFiltroStr 
+            ? mesFiltroStr.split(',').map(m => normalizeMes(m.trim())).filter(Boolean).join(', ')
+            : '';
           
           const dataInicio = row[9] || '';
           const dataFim = row[10] || '';
