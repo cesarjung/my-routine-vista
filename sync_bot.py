@@ -116,7 +116,7 @@ def upsert_supabase(env_vars, payload):
     }
     
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=15)
+        res = requests.post(url, headers=headers, json=payload, timeout=120)
         if res.status_code in [200, 201, 204]:
             logging.info(f"Unidade {payload['unidade_id']} salva no Supabase com sucesso.")
             return True
