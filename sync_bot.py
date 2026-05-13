@@ -206,16 +206,17 @@ def run_sync_cycle():
         sheets_data = fetch_google_sheets(unidade_id, gc)
         
         if sheets_data:
+            import json
             payload = {
                 "unidade_id": unidade_id,
-                "carteira": sheets_data.get("Carteira_Planejador", []),
-                "principal": sheets_data.get("Plan_Principal", []),
-                "bd_metas": {
+                "carteira": json.dumps(sheets_data.get("Carteira_Planejador", [])),
+                "principal": json.dumps(sheets_data.get("Plan_Principal", [])),
+                "bd_metas": json.dumps({
                     "bd_metas": sheets_data.get("BD_Metas", []),
                     "base_curva": sheets_data.get("Base_Curva", []),
                     "bd_config": sheets_data.get("BD_Config", [])
-                },
-                "reprogramadas": sheets_data.get("Reprogramadas", []),
+                }),
+                "reprogramadas": json.dumps(sheets_data.get("Reprogramadas", [])),
                 "updated_at": datetime.utcnow().isoformat() + "Z"
             }
             upsert_supabase(env_vars, payload)
