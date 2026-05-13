@@ -591,7 +591,7 @@ export const MyTasksView = ({
             <div className="flex flex-col gap-2 p-2 bg-card border-b border-border shadow-sm mb-4 rounded-lg">
 
               {/* ROW 1: Tabs + Search + Frequency + New */}
-              <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-2 w-full overflow-x-auto custom-scrollbar pb-2">
                 {/* Tabs */}
                 <TabsList className="justify-start h-8 bg-secondary/50 p-0.5 shrink-0">
                   <TabsTrigger value="tasks" className="gap-1.5 h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
@@ -673,7 +673,7 @@ export const MyTasksView = ({
               </div>
 
               {/* ROW 2: Status + Priority + Active Filter */}
-              <div className="flex items-center gap-2 w-full overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-2 w-full overflow-x-auto custom-scrollbar pb-2">
 
                 {/* Status Chips */}
                 <div className="flex items-center gap-1 shrink-0">

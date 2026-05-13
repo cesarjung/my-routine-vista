@@ -318,7 +318,7 @@ export const PlanejamentoSemanalView = () => {
       
       {/* HEADER / FILTROS BÁSICOS (Sticky) */}
       <div className="sticky top-0 z-[100] bg-background border-b border-border space-y-3 pt-4 px-6 pb-4 -mx-6 mb-6">
-        <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto no-scrollbar-custom">
+        <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto custom-scrollbar w-full pb-2">
           {/* Header Title */}
           <div className="shrink-0 mb-1">
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Planejamento Semanal</h1>

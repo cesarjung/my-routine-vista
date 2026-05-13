@@ -292,7 +292,7 @@ export const PlanejamentoEquipesGanttView = () => {
         </div>
       </div>
 
-      <div className="px-6 py-3 bg-background border-b border-border flex flex-row flex-nowrap gap-4 items-end overflow-x-auto no-scrollbar-custom">
+      <div className="px-6 py-3 bg-background border-b border-border flex flex-row flex-nowrap gap-4 items-end overflow-x-auto custom-scrollbar pb-2">
         
         <div className="flex flex-nowrap items-end gap-2 shrink-0">
           {/* Valor Planejado + Cumprimento Planejamento */}
@@ -566,7 +566,7 @@ export const PlanejamentoEquipesGanttView = () => {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col bg-card relative">
-        <div className="flex-1 overflow-auto relative flex no-scrollbar-custom">
+        <div className="flex-1 overflow-auto relative flex custom-scrollbar">
           <div className="flex min-w-max h-max">
             
             <div className="w-[280px] flex-shrink-0 sticky left-0 z-30 bg-card border-r border-border flex flex-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">

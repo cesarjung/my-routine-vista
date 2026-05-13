@@ -220,7 +220,7 @@ export const PlanejamentoGanttView = () => {
   return (
     <div className="flex flex-col h-full w-full bg-background">
       <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border">
-        <div className="flex flex-row flex-nowrap items-end gap-6 overflow-x-auto no-scrollbar-custom">
+        <div className="flex flex-row flex-nowrap items-end gap-6 overflow-x-auto custom-scrollbar pb-2">
           <div className="shrink-0 mb-1">
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Carteira de Planejamento</h1>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Filtros e Visualização</p>
@@ -387,7 +387,7 @@ export const PlanejamentoGanttView = () => {
       </div>
 
         {/* Filtros de Status em Botões Coloridos */}
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar-custom pb-1">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
           <span className="text-sm font-semibold text-foreground mr-2">Status:</span>
           {statusDisponiveis.map(s => {
             const isSelected = selectedStatuses.length === 0 || selectedStatuses.includes(s);
@@ -421,7 +421,7 @@ export const PlanejamentoGanttView = () => {
 
       <div className="flex-1 overflow-hidden flex flex-col bg-card relative">
         {/* Contêiner de Scroll Único para X e Y */}
-        <div className="flex-1 overflow-auto relative flex no-scrollbar-custom">
+        <div className="flex-1 overflow-auto relative flex custom-scrollbar">
           <div className="flex min-w-max h-max">
             
             {/* Left Column (Sticky Left) */}

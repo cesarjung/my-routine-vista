@@ -408,11 +408,11 @@ export const CumprimentoView = () => {
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-background overflow-auto custom-scrollbar relative">
+    <div className="flex flex-col h-full w-full bg-background overflow-y-auto overflow-x-hidden custom-scrollbar relative">
       
       {/* HEADER COMPACTO */}
-      <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border sticky top-0 z-10 bg-background">
-        <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto no-scrollbar-custom">
+      <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border sticky top-0 z-10 bg-background w-full min-w-0">
+        <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto custom-scrollbar w-full pb-2">
           <div className="shrink-0 mb-1">
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Percentual Cumprimento Planejamento</h1>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Módulo Cumprimento Planejamento</p>
@@ -880,7 +880,7 @@ export const CumprimentoView = () => {
           </div>
           
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
               {globalChartData.map((unidade) => (
                 <div key={unidade.name} className="border border-border/50 rounded-lg p-3 bg-muted/10">
                   <h3 className="text-sm font-bold text-center mb-2 text-foreground">{unidade.name}</h3>
