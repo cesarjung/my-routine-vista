@@ -44,12 +44,25 @@ export const usePlanejamentoRaw = (selectedUnidadesIds: string[]) => {
           } as RawUnidadeData;
         }
 
+        const safeParse = (val: any) => {
+          if (!val) return [];
+          if (typeof val === 'string') {
+            try {
+              return JSON.parse(val);
+            } catch (e) {
+              console.error('Falha ao parsear JSON no frontend:', e);
+              return [];
+            }
+          }
+          return val;
+        };
+
         return {
           unidadeId: row.unidade_id,
-          carteira: (row.carteira as unknown as string[][]) || [],
-          principal: (row.principal as unknown as string[][]) || [],
-          bdMetas: (row.bd_metas as unknown as any) || [],
-          reprogramadas: (row.reprogramadas as unknown as string[][]) || [],
+          carteira: safeParse(row.carteira),
+          principal: safeParse(row.principal),
+          bdMetas: safeParse(row.bd_metas),
+          reprogramadas: safeParse(row.reprogramadas),
           lastUpdated: row.updated_at
         } as RawUnidadeData;
       });
