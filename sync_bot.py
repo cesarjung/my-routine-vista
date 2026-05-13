@@ -79,9 +79,18 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                     worksheet = spreadsheet.worksheet(sheet_name)
                     raw_data = worksheet.get_all_values()
                     
-                    # O gspread as vezes traz milhares de linhas vazias se a planilha for grande.
-                    # Vamos filtrar para enviar ao Supabase APENAS as linhas que tem algum conteúdo.
-                    cleaned_data = [row for row in raw_data if any(str(cell).strip() for cell in row)]
+                    # O gspread as vezes traz milhares de linhas e colunas vazias
+                    cleaned_data = []
+                    for row in raw_data:
+                        # Encontra o ultimo indice nao vazio
+                        last_non_empty = -1
+                        for i in range(len(row) - 1, -1, -1):
+                            if str(row[i]).strip():
+                                last_non_empty = i
+                                break
+                        # Se a linha nao for totalmente vazia, adiciona apenas ate a ultima coluna preenchida
+                        if last_non_empty >= 0:
+                            cleaned_data.append(row[:last_non_empty + 1])
                     
                     result[sheet_name] = cleaned_data
                     time.sleep(2.5) # Pausa maior (2.5s) pois o limite é estrito de 60 req/minuto
