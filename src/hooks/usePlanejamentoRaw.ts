@@ -64,95 +64,14 @@ export const useSyncPlanejamento = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (selectedUnidadesIds: string[]) => {
-      if (!selectedUnidadesIds || selectedUnidadesIds.length === 0) return [];
-
-      const results = [];
-      const BATCH_SIZE = 3;
-
-      for (let i = 0; i < selectedUnidadesIds.length; i += BATCH_SIZE) {
-        const batch = selectedUnidadesIds.slice(i, i + BATCH_SIZE);
-        
-        const batchPromises = batch.map(async (unidadeId) => {
-          try {
-            const url = `${API_URL}?token=${SECRET_TOKEN}&id=${unidadeId}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout per req
-            
-            let res;
-            try {
-              res = await fetch(url, { signal: controller.signal });
-            } catch (fetchErr) {
-               clearTimeout(timeoutId);
-               console.error(`Fetch timeout ou falha na unidade ${unidadeId}:`, fetchErr);
-               return null;
-            }
-            clearTimeout(timeoutId);
-
-            let data;
-            try {
-              data = await res.json();
-            } catch (e) {
-              console.error(`Falha JSON da unidade ${unidadeId}.`, e);
-              return null;
-            }
-            
-            if (!data || !data.success) {
-              console.error(`Falha ao baixar abas da unidade ${unidadeId}`, data?.error);
-              return null;
-            }
-
-            return { unidadeId, data };
-          } catch (err) {
-            console.error(`Erro ao processar unidade ${unidadeId}`, err);
-            return null;
-          }
-        });
-
-        // Espera o lote atual terminar antes de puxar o próximo
-        const batchResults = await Promise.all(batchPromises);
-          
-        for (const item of batchResults) {
-          if (!item) continue;
-          
-          const payload = {
-            unidade_id: item.unidadeId,
-            carteira: item.data.data.Carteira_Planejador || [],
-            principal: item.data.data.Plan_Principal || [],
-            bd_metas: {
-              bd_metas: item.data.data.BD_Metas || [],
-              base_curva: item.data.data.Base_Curva || [],
-              bd_config: item.data.data.BD_Config || []
-            },
-            reprogramadas: item.data.data.Reprogramadas || [],
-            updated_at: new Date().toISOString()
-          };
-
-          const { error } = await supabase
-            .from('planejamento_cache')
-            .upsert(payload);
-
-          if (error) {
-            console.error(`Falha ao gravar no Supabase para ${item.unidadeId}`, error);
-          } else {
-            results.push(payload);
-          }
-        }
-      }
-
-      if (results.length === 0) {
-        throw new Error('Falha na comunicação com o Google Sheets. Demorou muito para responder.');
-      }
-
-      return results;
+    mutationFn: async () => {
+      // O bot Python (sync_bot.py) é responsável por atualizar o Supabase.
+      // Este botão apenas força o React Query a buscar os dados mais recentes do Supabase.
+      return true;
     },
-    onSuccess: (data) => {
-      toast.success(`Dados sincronizados com sucesso (${data.length} unidade(s))!`);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planejamento_raw_v3'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Erro ao sincronizar dados com o Google Sheets.');
-      console.error(error);
+      toast.success('Painel atualizado com os dados mais recentes do banco!');
     }
   });
 };

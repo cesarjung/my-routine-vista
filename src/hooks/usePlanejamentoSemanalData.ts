@@ -122,6 +122,7 @@ export const usePlanejamentoSemanalData = (selectedUnidadesIds: string[], startD
   return {
     ...rawQuery,
     data: parsedData,
-    lastUpdated: rawQuery.data?.[0]?.lastUpdated || null,
+    lastBotUpdate: rawQuery.data?.[0]?.lastUpdated || null,
+    lastSystemUpdate: rawQuery.dataUpdatedAt ? new Date(rawQuery.dataUpdatedAt).toISOString() : null,
   };
 };
