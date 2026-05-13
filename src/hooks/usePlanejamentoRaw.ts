@@ -68,45 +68,63 @@ export const useSyncPlanejamento = () => {
       if (!selectedUnidadesIds || selectedUnidadesIds.length === 0) return [];
 
       const results = [];
-      for (const unidadeId of selectedUnidadesIds) {
-        try {
-          const url = `${API_URL}?token=${SECRET_TOKEN}&id=${unidadeId}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config`;
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
-          
-          let res;
-          try {
-            res = await fetch(url, { signal: controller.signal });
-          } catch (fetchErr) {
-             clearTimeout(timeoutId);
-             console.error(`Fetch demorou muito ou falhou na unidade ${unidadeId}:`, fetchErr);
-             continue; // Pula para a próxima unidade se demorar muito
-          }
-          clearTimeout(timeoutId);
+      const BATCH_SIZE = 3;
 
-          let data;
+      for (let i = 0; i < selectedUnidadesIds.length; i += BATCH_SIZE) {
+        const batch = selectedUnidadesIds.slice(i, i + BATCH_SIZE);
+        
+        const batchPromises = batch.map(async (unidadeId) => {
           try {
-            data = await res.json();
-          } catch (e) {
-            console.error(`Falha ao parsear JSON da unidade ${unidadeId}. O Google Apps Script pode estar limitando as requisições.`, e);
-            continue;
-          }
-          
-          if (!data || !data.success) {
-            console.error(`Falha ao baixar abas da unidade ${unidadeId}`, data?.error);
-            continue;
-          }
+            const url = `${API_URL}?token=${SECRET_TOKEN}&id=${unidadeId}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout per req
+            
+            let res;
+            try {
+              res = await fetch(url, { signal: controller.signal });
+            } catch (fetchErr) {
+               clearTimeout(timeoutId);
+               console.error(`Fetch timeout ou falha na unidade ${unidadeId}:`, fetchErr);
+               return null;
+            }
+            clearTimeout(timeoutId);
 
+            let data;
+            try {
+              data = await res.json();
+            } catch (e) {
+              console.error(`Falha JSON da unidade ${unidadeId}.`, e);
+              return null;
+            }
+            
+            if (!data || !data.success) {
+              console.error(`Falha ao baixar abas da unidade ${unidadeId}`, data?.error);
+              return null;
+            }
+
+            return { unidadeId, data };
+          } catch (err) {
+            console.error(`Erro ao processar unidade ${unidadeId}`, err);
+            return null;
+          }
+        });
+
+        // Espera o lote atual terminar antes de puxar o próximo
+        const batchResults = await Promise.all(batchPromises);
+          
+        for (const item of batchResults) {
+          if (!item) continue;
+          
           const payload = {
-            unidade_id: unidadeId,
-            carteira: data.data.Carteira_Planejador || [],
-            principal: data.data.Plan_Principal || [],
+            unidade_id: item.unidadeId,
+            carteira: item.data.data.Carteira_Planejador || [],
+            principal: item.data.data.Plan_Principal || [],
             bd_metas: {
-              bd_metas: data.data.BD_Metas || [],
-              base_curva: data.data.Base_Curva || [],
-              bd_config: data.data.BD_Config || []
+              bd_metas: item.data.data.BD_Metas || [],
+              base_curva: item.data.data.Base_Curva || [],
+              bd_config: item.data.data.BD_Config || []
             },
-            reprogramadas: data.data.Reprogramadas || [],
+            reprogramadas: item.data.data.Reprogramadas || [],
             updated_at: new Date().toISOString()
           };
 
@@ -115,14 +133,10 @@ export const useSyncPlanejamento = () => {
             .upsert(payload);
 
           if (error) {
-            console.error(`Falha ao gravar no Supabase para ${unidadeId}`, error);
-            throw error;
+            console.error(`Falha ao gravar no Supabase para ${item.unidadeId}`, error);
+          } else {
+            results.push(payload);
           }
-          
-          results.push(payload);
-        } catch (err) {
-          console.error(`Erro ao processar unidade ${unidadeId}`, err);
-          // Continua para a próxima unidade mesmo se esta falhar
         }
       }
 
