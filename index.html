@@ -18,8 +18,21 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Lovable" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <script>
+      window.addEventListener('error', function(event) {
+        fetch('http://localhost:9999', {
+          method: 'POST',
+          body: JSON.stringify({ message: event.message, filename: event.filename, lineno: event.lineno, colno: event.colno, error: event.error?.stack })
+        }).catch(e => console.error(e));
+      });
+      window.addEventListener('unhandledrejection', function(event) {
+        fetch('http://localhost:9999', {
+          method: 'POST',
+          body: JSON.stringify({ message: event.reason?.message, stack: event.reason?.stack })
+        }).catch(e => console.error(e));
+      });
+    </script>
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

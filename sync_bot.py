@@ -116,11 +116,19 @@ if __name__ == "__main__":
     logging.info("Sync Bot iniciado. Pressione Ctrl+C para parar.")
     while True:
         try:
+            current_hour = datetime.now().hour
+            
+            # Pausa as atualizações entre 22h e 05h59
+            if current_hour >= 22 or current_hour < 6:
+                logging.info(f"Horário de descanso ({current_hour}h). O bot voltará a sincronizar às 06h da manhã.")
+                time.sleep(60 * 60) # Dorme por 1 hora e verifica novamente
+                continue
+
             run_sync_cycle()
             
-            # Aguarda 15 minutos para o próximo ciclo
-            WAIT_TIME = 15 * 60
-            logging.info(f"Aguardando {WAIT_TIME/60} minutos ate a proxima execucao...")
+            # Aguarda 10 minutos para o próximo ciclo
+            WAIT_TIME = 10 * 60
+            logging.info(f"Aguardando 10 minutos ate a proxima execucao...")
             time.sleep(WAIT_TIME)
             
         except KeyboardInterrupt:

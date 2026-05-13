@@ -54,9 +54,11 @@ export const usePlanejamentoRaw = (selectedUnidadesIds: string[]) => {
         } as RawUnidadeData;
       });
     },
-    // Cache de 5 minutos ainda é útil para evitar chamadas seguidas ao Supabase
+    // Cache de 5 minutos ainda é útil para evitar chamadas seguidas manuais ao Supabase
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    // Recarrega do Supabase a cada 2 minutos automaticamente para manter as telas abertas atualizadas
+    refetchInterval: 2 * 60 * 1000,
   });
 };
 

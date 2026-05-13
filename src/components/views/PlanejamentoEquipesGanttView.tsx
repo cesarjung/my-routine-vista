@@ -3,6 +3,7 @@ import { usePlanejamentoEquipesData, PlanejamentoEquipeRow } from '@/hooks/usePl
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { getEtapaColorClass } from '@/hooks/usePlanejamentoData';
 import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
+import { useSessionState } from '@/hooks/useSessionState';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight, Filter, Calendar, RefreshCw } from 'lucide-react';
 import { format, differenceInDays, startOfDay, addDays, subDays, parseISO, parse, isValid, startOfMonth, getDaysInMonth } from 'date-fns';
@@ -10,20 +11,21 @@ import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { SyncIndicator } from '@/components/SyncIndicator';
 
 export const PlanejamentoEquipesGanttView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
-  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>([]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
+  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
   const { data, isLoading, isError, error, lastUpdated } = usePlanejamentoEquipesData(selectedUnidadesIds);
-  const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
-  const [filterStart, setFilterStart] = useState<string>('');
-  const [filterEnd, setFilterEnd] = useState<string>('');
-  const [selectedSupervisores, setSelectedSupervisores] = useState<string[]>([]);
-  const [selectedEquipes, setSelectedEquipes] = useState<string[]>([]);
-  const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
+  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores', []);
+  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
   
   const [viewStartManual, setViewStartManual] = useState(() => startOfMonth(new Date()));
   
@@ -547,26 +549,8 @@ export const PlanejamentoEquipesGanttView = () => {
           </div>
           
           <div className="flex items-center gap-1">
-            {lastUpdated && (
-              <div className="text-right mr-2 flex flex-col justify-center ">
-                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
-                <span className="text-[10px] text-foreground font-medium">
-                  {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            )}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
-              disabled={isSyncing}
-              title="Sincronizar Dados (Google Sheets -> Nuvem)"
-              className="h-8 text-xs mr-1"
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", isSyncing && "animate-spin")} />
-              Atualizar
-            </Button>
-            <div className="w-px h-5 bg-border mr-1"></div>
+            <SyncIndicator />
+            <div className="w-px h-5 bg-border mr-1 ml-2"></div>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setViewStartManual(subDays(viewStartManual, 7))}>
               <ChevronLeft className="w-4 h-4" />
             </Button>

@@ -20,6 +20,7 @@ import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
 import { SectorUsersManagement } from '@/components/SectorUsersManagement';
 import { AdminUsersManagement } from '@/components/AdminUsersManagement';
 import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
+import { UserPermissionsTab } from '@/components/UserPermissionsTab';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -556,6 +557,12 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
             </TabsTrigger>
           )}
           {isAdmin && (
+            <TabsTrigger value="permissions" className="flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Permissões
+            </TabsTrigger>
+          )}
+          {isAdmin && (
             <TabsTrigger value="passwords" className="flex items-center gap-2">
               <Key className="w-4 h-4" />
               Senhas
@@ -815,6 +822,12 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
         {isAdmin && (
           <TabsContent value="passwords">
             <AdminUsersManagement />
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="permissions">
+            <UserPermissionsTab />
           </TabsContent>
         )}
 

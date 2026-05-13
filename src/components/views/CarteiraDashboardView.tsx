@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
+import { useSessionState } from '@/hooks/useSessionState';
+import { SyncIndicator } from '@/components/SyncIndicator';
 import { cn } from '@/lib/utils';
 
 const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: number, colorClass: string, size?: number }) => {
@@ -53,28 +55,24 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
 };
 
 export const CarteiraDashboardView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>(
-    UNIDADES_PLANEJAMENTO.map(u => u.id)
-  );
-  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(
-    UNIDADES_PLANEJAMENTO.map(u => u.id)
-  );
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', UNIDADES_PLANEJAMENTO.map(u => u.id));
+  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
   const { data, isLoading } = useCarteiraDashboardData(selectedUnidadesIds);
 
   // Estados dos filtros
-  const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
-  const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
-  const [selectedMunicipios, setSelectedMunicipios] = useState<string[]>([]);
-  const [selectedPrioridades, setSelectedPrioridades] = useState<string[]>([]);
-  const [selectedVistorias, setSelectedVistorias] = useState<string[]>([]); // 'SIM', 'NÃO', 'VENCIDAS'
-  const [selectedAVNPs, setSelectedAVNPs] = useState<number[]>([]);
-  const [filterStart, setFilterStart] = useState<string>('');
-  const [filterEnd, setFilterEnd] = useState<string>('');
-  const [considerarInaptas, setConsiderarInaptas] = useState(false);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
+  const [selectedStatus, setSelectedStatus] = useSessionState<string[]>('filter_status', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
+  const [selectedMunicipios, setSelectedMunicipios] = useSessionState<string[]>('filter_municipios', []);
+  const [selectedPrioridades, setSelectedPrioridades] = useSessionState<string[]>('filter_prioridades', []);
+  const [selectedVistorias, setSelectedVistorias] = useSessionState<string[]>('filter_vistorias', []); // 'SIM', 'NÃO', 'VENCIDAS'
+  const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps', []);
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
+  const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas', false);
 
   // Listas de opções para os filtros
   const options = useMemo(() => {
@@ -484,24 +482,7 @@ export const CarteiraDashboardView = () => {
 
              {/* Botão Sincronizar (Estilo PlanejadoMetaView) */}
              <div className="flex items-center ml-2">
-               {data.lastUpdated && (
-                 <div className="text-right mr-2 flex flex-col justify-center">
-                   <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
-                   <span className="text-xs text-foreground font-medium">
-                     {format(data.lastUpdated, "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                   </span>
-                 </div>
-               )}
-               <Button 
-                 variant="outline" 
-                 size="sm" 
-                 onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
-                 disabled={isSyncing}
-                 title="Sincronizar Dados (Google Sheets -> Nuvem)"
-                 className="h-8 w-8 p-0 shrink-0"
-               >
-                 <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin text-primary")} />
-               </Button>
+               <SyncIndicator />
              </div>
              
           </div>

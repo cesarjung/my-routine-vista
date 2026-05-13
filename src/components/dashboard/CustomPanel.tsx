@@ -88,9 +88,6 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, sector_id');
       
       const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : filters.sector_id;
-      if (effectiveSectorId) {
-        tasksQuery = tasksQuery.eq('sector_id', effectiveSectorId);
-      }
 
       if (filters.unit_id) {
         if (Array.isArray(filters.unit_id)) {
@@ -100,44 +97,41 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           tasksQuery = tasksQuery.eq('unit_id', filters.unit_id);
         }
       }
+
       if (filters.status && filters.status.length > 0) {
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
-      // Period dates will be applied properly with timezone offset later.
 
-      // 2. Process Frequency Filter
+      // Instead of relying on task.sector_id which could be null for old tasks,
+      // we filter the routines by sector_id AND frequency together.
+      let queryRoutines = supabase.from('routines').select('id').eq('is_active', true);
+      let needsRoutineFilter = false;
+
+      if (effectiveSectorId) {
+        queryRoutines = queryRoutines.eq('sector_id', effectiveSectorId);
+        needsRoutineFilter = true;
+      }
+      
       if (filters.task_frequency && filters.task_frequency.length > 0) {
-        const { data: freqRoutines } = await supabase
-          .from('routines')
-          .select('id')
-          .in('frequency', filters.task_frequency)
-          .eq('is_active', true);
+        queryRoutines = queryRoutines.in('frequency', filters.task_frequency);
+        needsRoutineFilter = true;
+      }
 
-        if (freqRoutines && freqRoutines.length > 0) {
-          const freqIds = freqRoutines.map((r: any) => r.id);
-          if (allowedRoutineIds !== null) {
-            // Intersect arrays
-            allowedRoutineIds = allowedRoutineIds.filter(id => freqIds.includes(id));
-          } else {
-            allowedRoutineIds = freqIds;
-          }
+      let allowedRoutineIds: string[] | null = null;
+
+      if (needsRoutineFilter) {
+        const { data: matchedRoutines } = await queryRoutines;
+        if (matchedRoutines && matchedRoutines.length > 0) {
+          allowedRoutineIds = matchedRoutines.map((r: any) => r.id);
         } else {
-          // Zero routines match this frequency
-          if (allowedRoutineIds !== null) {
-            allowedRoutineIds = []; // force 0 intersection
-          } else {
-            allowedRoutineIds = [];
-          }
+          allowedRoutineIds = []; // No routines match the filters
         }
       }
 
-      // 3. Apply the assembled routine filters
       if (allowedRoutineIds !== null) {
         if (allowedRoutineIds.length === 0) {
-          // Impossible intersection, force 0 results
           tasksQuery = tasksQuery.eq('routine_id', '00000000-0000-0000-0000-000000000000');
         } else {
-          // A plain .in() is extremely fast in PostgREST, even up to 1000 IDs, unlike .or()
           tasksQuery = tasksQuery.in('routine_id', allowedRoutineIds);
         }
       } else {
@@ -152,20 +146,19 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         // Precisamos converter os limites de start/end locais para a janela UTC de GMT-3 correta
         // Para que o Supabase filtre exatamente o "Hoje" (de 03:00 de hoje até 02:59 de amanhã UTC)
 
-        const formatBound = (date: Date, isEnd: boolean) => {
+        const formatDateString = (date: Date) => {
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, '0');
           const day = String(date.getDate()).padStart(2, '0');
-          const time = isEnd ? '23:59:59.999' : '00:00:00.000';
-          return `${year}-${month}-${day}T${time}-03:00`;
+          return `${year}-${month}-${day}`;
         };
 
-        const startUtcOffset = formatBound(periodDates.start, false);
-        const endUtcOffset = formatBound(periodDates.end, true);
+        const startStr = formatDateString(periodDates.start);
+        const endStr = `${formatDateString(periodDates.end)}T23:59:59.999Z`;
 
         tasksQuery = tasksQuery
-          .gte('due_date', startUtcOffset)
-          .lte('due_date', endUtcOffset);
+          .gte('due_date', startStr)
+          .lte('due_date', endStr);
       }
 
       // Fetch all task rows bypassing the 1000 row Supabase API default:

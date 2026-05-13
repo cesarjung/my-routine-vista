@@ -11,8 +11,10 @@ import {
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { useEtapasData } from '@/hooks/useEtapasData';
 import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
-import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differenceInDays, isValid } from 'date-fns';
+import { useSessionState } from '@/hooks/useSessionState';
+import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differenceInDays, isValid, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { SyncIndicator } from '@/components/SyncIndicator';
 import { cn } from '@/lib/utils';
 import {
   BarChart,
@@ -27,27 +29,27 @@ import {
 } from 'recharts';
 
 export const EtapasView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
   const { data, isLoading, isError, lastUpdated } = useEtapasData(selectedUnidadesIds);
 
-  // Filtros locais
-  const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
+  // Filtros locais (persistidos em sessão)
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
   const [mesesDropdownOpen, setMesesDropdownOpen] = useState(false);
   
-  const [filterStart, setFilterStart] = useState<string>('');
-  const [filterEnd, setFilterEnd] = useState<string>('');
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
 
-  const [selectedSupervisores, setSelectedSupervisores] = useState<string[]>([]);
+  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores', []);
   const [supervisoresDropdownOpen, setSupervisoresDropdownOpen] = useState(false);
 
-  const [selectedEquipes, setSelectedEquipes] = useState<string[]>([]);
+  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes', []);
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
 
-  const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
   const [projetosDropdownOpen, setProjetosDropdownOpen] = useState(false);
 
   // Regra vital
@@ -241,10 +243,10 @@ export const EtapasView = () => {
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-background overflow-auto custom-scrollbar relative">
       
       {/* HEADER COMPACTO */}
-      <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border">
+      <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border sticky top-0 z-10 bg-background">
         <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto no-scrollbar-custom">
           <div className="shrink-0 mb-1">
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Percentual Etapas</h1>
@@ -421,31 +423,14 @@ export const EtapasView = () => {
             </div>
 
             <div className="flex items-center ml-2">
-              {lastUpdated && (
-                <div className="text-right mr-2 flex flex-col justify-center ">
-                  <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
-                  <span className="text-xs text-foreground font-medium">
-                    {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              )}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
-                disabled={isSyncing}
-                title="Sincronizar Dados (Google Sheets -> Nuvem)"
-                className="h-10 w-10 p-0 shrink-0"
-              >
-                <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-              </Button>
+              <SyncIndicator />
             </div>
           </div>
         </div>
       </div>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <div className="flex-1 overflow-auto flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-6 p-4 pb-8">
         
         {/* Grid de Evolução (Small Multiples) */}
         <div className="w-full shrink-0 flex flex-col gap-4 mb-4">

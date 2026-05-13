@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { usePlanejamentoData, PlanejamentoRow, getEtapaColorClass } from '@/hooks/usePlanejamentoData';
 import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
+import { useSessionState } from '@/hooks/useSessionState';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronLeft, ChevronRight, Filter, Calendar, RefreshCw } from 'lucide-react';
@@ -9,6 +10,7 @@ import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { SyncIndicator } from '@/components/SyncIndicator';
 
 const statusColors: Record<string, string> = {
   'Cancelada': 'bg-red-500 text-white',
@@ -32,17 +34,17 @@ const getStatusColorClass = (status: string) => {
 };
 
 export const PlanejamentoGanttView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
-  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>([]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
+  const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
   const { data, isLoading, isError, error, lastUpdated } = usePlanejamentoData(selectedUnidadesIds);
-  const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
-  const [filterStart, setFilterStart] = useState<string>('');
-  const [filterEnd, setFilterEnd] = useState<string>('');
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
+  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('filter_status', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
   
   const [viewStartManual, setViewStartManual] = useState(() => startOfMonth(new Date()));
   
@@ -369,26 +371,8 @@ export const PlanejamentoGanttView = () => {
           </div>
           
           <div className="flex items-center gap-2 ml-auto">
-            {lastUpdated && (
-              <div className="text-right mr-2 flex flex-col justify-center ">
-                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
-                <span className="text-[10px] text-foreground font-medium">
-                  {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            )}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
-              disabled={isSyncing}
-              title="Sincronizar Dados (Google Sheets -> Nuvem)"
-              className="h-9 mr-1"
-            >
-              <RefreshCw className={cn("w-4 h-4 mr-1.5", isSyncing && "animate-spin")} />
-              Atualizar
-            </Button>
-            <div className="w-px h-6 bg-border mr-1"></div>
+            <SyncIndicator />
+            <div className="w-px h-6 bg-border mr-1 ml-2"></div>
             <Button variant="outline" size="sm" onClick={() => setViewStartManual(subDays(viewStartManual, 7))}>
               <ChevronLeft className="w-4 h-4" />
             </Button>

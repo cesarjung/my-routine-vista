@@ -12,9 +12,11 @@ import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { usePlanejadoMetaData } from '@/hooks/usePlanejadoMetaData';
 import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { useBdMetasData } from '@/hooks/useBdMetasData';
+import { useSessionState } from '@/hooks/useSessionState';
 import { useReprogramadasData } from '@/hooks/useReprogramadasData';
 import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { SyncIndicator } from '@/components/SyncIndicator';
 import { cn } from '@/lib/utils';
 import {
   BarChart,
@@ -27,11 +29,14 @@ import {
   ResponsiveContainer,
   LabelList,
   ComposedChart,
-  Line
+  Line,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 
 export const PlanejadoMetaView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useState<string[]>([]);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
@@ -40,20 +45,20 @@ export const PlanejadoMetaView = () => {
   const { data: bdMetasData = [], isLoading: isBdMetasLoading } = useBdMetasData(selectedUnidadesIds);
   const { data: reprogData = [], isLoading: isReprogLoading } = useReprogramadasData(selectedUnidadesIds);
 
-  // Filtros locais
-  const [selectedMeses, setSelectedMeses] = useState<string[]>([]);
+  // Filtros locais (persistidos em sessão)
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
   const [mesesDropdownOpen, setMesesDropdownOpen] = useState(false);
   
-  const [filterStart, setFilterStart] = useState<string>('');
-  const [filterEnd, setFilterEnd] = useState<string>('');
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
   
-  const [selectedSupervisores, setSelectedSupervisores] = useState<string[]>([]);
+  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores', []);
   const [supervisoresDropdownOpen, setSupervisoresDropdownOpen] = useState(false);
   
-  const [selectedEquipes, setSelectedEquipes] = useState<string[]>([]);
+  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes', []);
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
   
-  const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
   const [projetosDropdownOpen, setProjetosDropdownOpen] = useState(false);
 
   // Toggle "Somente Disponíveis" (Coluna BB == 1)
@@ -331,7 +336,9 @@ export const PlanejadoMetaView = () => {
       metaPorUnidadeBdMetas.forEach(val => totalMeta += val.total);
     }
 
-    return { totalMeta, totalPlanejado, totalProduzido, desvio: totalPlanejado - totalMeta };
+    const percPlanejadoMeta = totalMeta > 0 ? (totalPlanejado / totalMeta) * 100 : 0;
+
+    return { totalMeta, totalPlanejado, totalProduzido, desvio: totalPlanejado - totalMeta, percPlanejadoMeta };
   }, [filteredData, somenteDiasComMeta, somenteDisponiveis, isBaseMetas, metaPorUnidadeBdMetas]);
 
   // Cálculos do Gráfico de Pareto de Reprogramadas
@@ -490,9 +497,9 @@ export const PlanejadoMetaView = () => {
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-background overflow-auto custom-scrollbar relative">
       
-      <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border">
+      <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border sticky top-0 z-10 bg-background">
         <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto no-scrollbar-custom">
           <div className="shrink-0 mb-1">
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Percentual Planejado x Meta</h1>
@@ -723,30 +730,13 @@ export const PlanejadoMetaView = () => {
             </div>
 
             <div className="flex items-center ml-2">
-              {lastUpdated && (
-                <div className="text-right mr-2 flex flex-col justify-center ">
-                  <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none">Atualizado em</span>
-                  <span className="text-xs text-foreground font-medium">
-                    {new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              )}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => syncPlanejamento(selectedUnidadesIds.length > 0 ? selectedUnidadesIds : UNIDADES_PLANEJAMENTO.map(u => u.id))}
-                disabled={isSyncing}
-                title="Sincronizar Dados (Google Sheets -> Nuvem)"
-                className="h-8 w-8 p-0 shrink-0"
-              >
-                <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-              </Button>
+              <SyncIndicator />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-6 p-4 pb-8">
         
         <div className="w-full h-[320px] shrink-0 border border-border rounded-xl bg-card p-4 shadow-sm flex flex-col">
           <div className="mb-4">
@@ -973,19 +963,54 @@ export const PlanejadoMetaView = () => {
 
           {/* KPI Dashboard */}
           <div className="w-full md:w-[280px] shrink-0 bg-[#dc2626] rounded-xl shadow-sm flex flex-col p-6 text-white justify-center">
-            <div className="mb-8">
-              <h3 className="text-2xl font-black">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalMeta)}</h3>
-              <p className="text-sm font-semibold opacity-90">VlrMeta</p>
-            </div>
             
-            <div className="mb-8">
-              <h3 className="text-xl font-bold opacity-80">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.desvio)}</h3>
-              <p className="text-sm font-semibold opacity-70">Desvio</p>
+            {/* Velocímetro (Gauge) */}
+            <div className="mb-6 flex flex-col items-center">
+              <div className="h-[100px] w-[200px] relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { value: Math.min(totals.percPlanejadoMeta, 100) },
+                        { value: Math.max(100 - totals.percPlanejadoMeta, 0) }
+                      ]}
+                      cx="50%"
+                      cy="100%"
+                      startAngle={180}
+                      endAngle={0}
+                      innerRadius={65}
+                      outerRadius={90}
+                      dataKey="value"
+                      stroke="none"
+                      isAnimationActive={true}
+                    >
+                      <Cell fill="#ffffff" />
+                      <Cell fill="rgba(255,255,255,0.2)" />
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-end pb-1">
+                  <span className="text-3xl font-black drop-shadow-md">{totals.percPlanejadoMeta.toFixed(1)}%</span>
+                </div>
+              </div>
+              <p className="text-xs font-bold opacity-90 mt-2 uppercase tracking-widest text-center">Plan. / Meta</p>
             </div>
-            
-            <div>
-              <h3 className="text-2xl font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalPlanejado)}</h3>
-              <p className="text-sm font-semibold opacity-90">VlrPlanejado</p>
+
+            <div className="w-full border-t border-white/20 pt-5 space-y-4">
+              <div>
+                <h3 className="text-xl font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalMeta)}</h3>
+                <p className="text-xs font-semibold opacity-80 uppercase tracking-wider">Vlr Meta</p>
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-bold opacity-90">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalPlanejado)}</h3>
+                <p className="text-xs font-semibold opacity-70 uppercase tracking-wider">Vlr Planejado</p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold opacity-90">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.desvio)}</h3>
+                <p className="text-xs font-semibold opacity-70 uppercase tracking-wider">Desvio</p>
+              </div>
             </div>
           </div>
 

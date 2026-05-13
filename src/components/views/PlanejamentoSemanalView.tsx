@@ -5,6 +5,7 @@ import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RefreshCw, Filter, Calendar, Settings, AlertTriangle, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SyncIndicator } from '@/components/SyncIndicator';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { Input } from '@/components/ui/input';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
@@ -360,26 +361,8 @@ export const PlanejamentoSemanalView = () => {
           
           <div className="flex-1"></div>
           
-          <div className="flex items-center ml-2 mb-1 gap-4">
-            {lastBotUpdate && (
-              <div className="text-right flex flex-col justify-center border-r border-border pr-3">
-                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none" title="Última vez que o robô do servidor baixou do Google">Planilha (Robô)</span>
-                <span className="text-xs text-foreground font-medium">
-                  {format(new Date(lastBotUpdate), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                </span>
-              </div>
-            )}
-            {lastSystemUpdate && (
-              <div className="text-right flex flex-col justify-center">
-                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider leading-none" title="Última vez que sua tela puxou do banco de dados">Seu Painel</span>
-                <span className="text-xs text-foreground font-medium">
-                  {format(new Date(lastSystemUpdate), "HH:mm:ss", { locale: ptBR })}
-                </span>
-              </div>
-            )}
-            <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefetching || isLoading || isSyncing} className="h-8 w-8 shrink-0 ml-1">
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching || isSyncing ? 'animate-spin text-primary' : ''}`} />
-            </Button>
+          <div className="flex items-center ml-2 mb-1">
+            <SyncIndicator />
           </div>
         </div>
       </div>
