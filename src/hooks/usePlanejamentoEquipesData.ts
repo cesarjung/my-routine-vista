@@ -49,7 +49,7 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || row.length < 44) continue; // Precisa ir até a coluna AR
+          if (!row || !Array.isArray(row)) continue; // Precisa ir até a coluna AR
 
           const dataStringFull = row[1]; // Coluna B
           const supervisor = row[4];     // Coluna E

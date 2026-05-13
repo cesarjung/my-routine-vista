@@ -83,7 +83,7 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
 
         for (let i = 7; i < principalRows.length; i++) {
           const row = principalRows[i];
-          if (!row || row.length < 13) continue;
+          if (!row || !Array.isArray(row)) continue;
 
           const dataStringFull = row[1]; // Coluna B
           const projeto = row[7];        // Coluna H
@@ -115,7 +115,7 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
         // 2. Parse Carteira_Planejador
         for (let i = 6; i < carteiraRows.length; i++) {
           const row = carteiraRows[i];
-          if (!row || row.length < 13) continue;
+          if (!row || !Array.isArray(row)) continue;
           
           const projeto = row[12];
           if (!projeto || projeto.trim() === '') continue;

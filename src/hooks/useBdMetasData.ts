@@ -46,7 +46,7 @@ export const useBdMetasData = (selectedUnidadesIds: string[]) => {
       // Pula cabeçalho
       for (let i = 1; i < bdMetasArray.length; i++) {
         const row = bdMetasArray[i];
-        if (!row || row.length < 4) continue; // Pelo menos até Col D
+        if (!row || !Array.isArray(row)) continue; // Pelo menos até Col D
 
         const equipe = row[1];     // Coluna B
         const dataVal = row[2];    // Coluna C

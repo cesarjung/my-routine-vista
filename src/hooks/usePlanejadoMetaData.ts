@@ -54,7 +54,7 @@ export const usePlanejadoMetaData = (selectedUnidadesIds: string[]) => {
         const reprogRows = unidadeData.reprogramadas || [];
         for (let i = 7; i < reprogRows.length; i++) {
           const rRow = reprogRows[i];
-          if (!rRow || rRow.length < 38) continue; // Precisa até AL (37)
+          if (!rRow || !Array.isArray(rRow)) continue;
           
           const rData = rRow[1]; // Coluna B
           const rEquipe = rRow[6]; // Coluna G
@@ -74,7 +74,7 @@ export const usePlanejadoMetaData = (selectedUnidadesIds: string[]) => {
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || row.length < 43) continue; // Precisa ir até AQ (42)
+          if (!row || !Array.isArray(row)) continue;
 
           const dataStringFull = row[1]; // Coluna B
           const supervisor = row[4];     // Coluna E
@@ -141,7 +141,7 @@ export const usePlanejadoMetaData = (selectedUnidadesIds: string[]) => {
         // Adicionar as linhas EXCLUSIVAS da Reprogramadas (que não existiam na Plan_Principal)
         for (let i = 7; i < reprogRows.length; i++) {
           const rRow = reprogRows[i];
-          if (!rRow || rRow.length < 38) continue; // Precisa até AL (37)
+          if (!rRow || !Array.isArray(rRow)) continue;
           
           const rDataFull = rRow[1]; // Coluna B
           const rEquipe = rRow[6]; // Coluna G

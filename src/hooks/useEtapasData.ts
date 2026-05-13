@@ -62,7 +62,7 @@ export const useEtapasData = (selectedUnidadesIds: string[]) => {
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || row.length < 43) continue;
+          if (!row || !Array.isArray(row)) continue;
 
           const dataStringFull = row[1];
           const supervisor = row[4];

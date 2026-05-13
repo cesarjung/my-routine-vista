@@ -53,7 +53,7 @@ export const useCumprimentoData = (selectedUnidadesIds: string[]) => {
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || row.length < 43) continue; // Precisa ir até AQ (42)
+          if (!row || !Array.isArray(row)) continue; // Precisa ir até AQ (42)
 
           const dataStringFull = row[1]; // Coluna B
           const supervisor = row[4];     // Coluna E

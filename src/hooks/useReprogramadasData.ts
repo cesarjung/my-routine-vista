@@ -44,7 +44,7 @@ export const useReprogramadasData = (selectedUnidadesIds: string[]) => {
 
         for (let i = 7; i < reprogRows.length; i++) {
           const row = reprogRows[i];
-          if (!row || row.length < 47) continue; // Precisa ir até AU (46)
+          if (!row || !Array.isArray(row)) continue; // Precisa ir até AU (46)
 
           const dataStringFull = row[1]; // Coluna B
           const equipe = row[6];         // Coluna G

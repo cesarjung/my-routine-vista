@@ -89,7 +89,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       // --- PROCESSAR CARTEIRA ---
       for (let i = 1; i < carteiraRows.length; i++) {
         const row = carteiraRows[i];
-        if (!row || row.length < 50) continue; 
+        if (!row || !Array.isArray(row)) continue; 
 
         // Ler AVNP (F) e Mês (G)
         const avnpStr = row[5] ? String(row[5]).trim() : '';
@@ -161,7 +161,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       
       for (let i = 1; i < baseCurvaRows.length; i++) {
         const row = baseCurvaRows[i];
-        if (!row || row.length < 6) continue;
+        if (!row || !Array.isArray(row)) continue;
         
         const unidadeRow = String(row[1] || '').trim().toUpperCase();
         if (unidadeRow !== unidadeNome.toUpperCase() && unidadeRow !== unidadeNome.replace(' ', '').toUpperCase()) {
@@ -187,7 +187,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
 
       for (let i = 2; i < bdConfigRows.length; i++) {
         const row = bdConfigRows[i];
-        if (!row || row.length < 94) continue;
+        if (!row || !Array.isArray(row)) continue;
 
         const unidadeRow = String(row[81] || '').trim().toUpperCase();
         if (unidadeRow === unidadeNome.toUpperCase() || unidadeRow === unidadeNome.replace(' ', '').toUpperCase()) {
