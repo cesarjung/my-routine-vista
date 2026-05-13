@@ -81,7 +81,9 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                     
             return result
         except Exception as e:
-            logging.error(f"Falha ao conectar no Google para {unidade_id}: {e}")
+            import traceback
+            error_details = traceback.format_exc()
+            logging.error(f"Falha ao conectar no Google para {unidade_id}: {e}\nDetalhes técnicos:\n{error_details}")
             
         if attempt < retries - 1:
             logging.info(f"Aguardando 5 segundos antes de tentar novamente a unidade {unidade_id}...")
