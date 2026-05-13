@@ -78,6 +78,7 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                 try:
                     worksheet = spreadsheet.worksheet(sheet_name)
                     result[sheet_name] = worksheet.get_all_values()
+                    time.sleep(1.5) # Pausa crucial para não estourar o limite de 60 requisições/minuto do Google Cloud
                 except gspread.exceptions.WorksheetNotFound:
                     logging.warning(f"Aba '{sheet_name}' não encontrada na planilha {unidade_id}.")
                     result[sheet_name] = []
