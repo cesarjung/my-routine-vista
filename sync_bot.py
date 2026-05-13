@@ -7,6 +7,12 @@ import requests
 import gspread
 from google.oauth2.service_account import Credentials
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    force=True
+)
+
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
