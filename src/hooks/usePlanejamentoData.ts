@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { parse, isValid } from 'date-fns';
+import { parse, isValid, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { usePlanejamentoRaw } from './usePlanejamentoRaw';
 
 const SECRET_TOKEN = 'sirtec_vista_2026_seguro';
@@ -120,7 +121,15 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
           const projeto = row[12];
           if (!projeto || projeto.trim() === '') continue;
 
-          const mesFiltro = row[8] || '';
+          let mesFiltro = row[8] || '';
+          if (mesFiltro && mesFiltro !== '-') {
+            const match = mesFiltro.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (match) {
+              const date = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+              mesFiltro = `${format(date, "MMM", { locale: ptBR })}./${format(date, "yy")}`.toLowerCase(); 
+            }
+          }
+          
           const dataInicio = row[9] || '';
           const dataFim = row[10] || '';
           const statusExecucao = row[11] || '';
