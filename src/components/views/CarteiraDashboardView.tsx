@@ -445,7 +445,7 @@ export const CarteiraDashboardView = () => {
              </div>
 
              {/* Outros filtros combinados na mesma linha, unidade ao lado de prioridade */}
-             {renderMultiSelect("Projeto", options.projetos.map(m => ({ value: m, label: m })), selectedProjetos, setSelectedProjetos)}
+             {renderMultiSelect("Projeto", options.projetos.slice(0, 100).map(m => ({ value: m, label: m })), selectedProjetos, setSelectedProjetos)}
              {renderMultiSelect("Prioridade", options.prioridades.map(m => ({ value: m, label: m })), selectedPrioridades, setSelectedPrioridades)}
              {renderMultiSelect("Mês", options.meses.map(m => ({ value: m, label: m })), selectedMeses, setSelectedMeses)}
              {renderMultiSelect("Vistoria", [

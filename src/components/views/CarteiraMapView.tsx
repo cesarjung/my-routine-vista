@@ -73,7 +73,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {obrasComCoords.map((obra) => (
+        {obrasComCoords.slice(0, 300).map((obra) => (
           <Marker key={obra.id} position={[obra.latitude!, obra.longitude!]} icon={createMarkerIcon(obra.statusExecucao, obra.postesDisponiveis)}>
             <Tooltip direction="top" offset={[0, -10]} opacity={0.95} className="custom-tooltip">
               <div className="flex flex-col gap-1 p-1 min-w-[200px]">
