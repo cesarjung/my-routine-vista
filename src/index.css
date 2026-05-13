@@ -198,6 +198,26 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Leaflet Map Tooltips Fix for Dark Mode */
+  .custom-tooltip {
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    box-shadow: var(--shadow-elevated) !important;
+  }
+  .custom-tooltip.leaflet-tooltip-top:before {
+    border-top-color: hsl(var(--border)) !important;
+  }
+  .custom-tooltip.leaflet-tooltip-bottom:before {
+    border-bottom-color: hsl(var(--border)) !important;
+  }
+  .custom-tooltip.leaflet-tooltip-left:before {
+    border-left-color: hsl(var(--border)) !important;
+  }
+  .custom-tooltip.leaflet-tooltip-right:before {
+    border-right-color: hsl(var(--border)) !important;
+  }
 }
 
 @layer utilities {
