@@ -711,7 +711,7 @@ export const CarteiraDashboardView = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').map(obra => (
+                {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').slice(0, 100).map(obra => (
                   <tr key={obra.id} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="px-4 py-2 font-medium">{obra.projeto}</td>
                     <td className="px-4 py-2 text-muted-foreground truncate max-w-[300px]" title={obra.titulo}>{obra.titulo}</td>
@@ -799,7 +799,7 @@ export const CarteiraDashboardView = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).map(obra => (
+              {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).slice(0, 100).map(obra => (
                 <tr key={`deficit-${obra.id}`} className="border-b border-border/50 hover:bg-muted/20">
                   <td className="px-4 py-2 font-medium">{obra.projeto}</td>
                   <td className="px-4 py-2 text-muted-foreground truncate max-w-[300px]" title={obra.titulo}>{obra.titulo}</td>

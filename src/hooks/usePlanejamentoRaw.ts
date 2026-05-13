@@ -16,20 +16,21 @@ export interface RawUnidadeData {
 
 export const usePlanejamentoRaw = (selectedUnidadesIds: string[]) => {
   return useQuery({
-    queryKey: ['planejamento_raw_v3', selectedUnidadesIds],
+    queryKey: ['planejamento_raw_v3'], // Cache unico global
     queryFn: async () => {
-      if (!selectedUnidadesIds || selectedUnidadesIds.length === 0) return [];
-
       const { data, error } = await supabase
         .from('planejamento_cache')
-        .select('*')
-        .in('unidade_id', selectedUnidadesIds);
+        .select('*');
 
       if (error) {
         console.error('Erro ao ler cache do Supabase:', error);
         throw error;
       }
-
+      return data;
+    },
+    select: (data) => {
+      if (!selectedUnidadesIds || selectedUnidadesIds.length === 0) return [];
+      
       return selectedUnidadesIds.map(unidadeId => {
         const row = data?.find(d => d.unidade_id === unidadeId);
         if (!row) {
