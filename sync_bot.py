@@ -78,10 +78,13 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                 try:
                     worksheet = spreadsheet.worksheet(sheet_name)
                     result[sheet_name] = worksheet.get_all_values()
-                    time.sleep(1.5) # Pausa crucial para não estourar o limite de 60 requisições/minuto do Google Cloud
+                    time.sleep(2.5) # Pausa maior (2.5s) pois o limite é estrito de 60 req/minuto
                 except gspread.exceptions.WorksheetNotFound:
                     logging.warning(f"Aba '{sheet_name}' não encontrada na planilha {unidade_id}.")
                     result[sheet_name] = []
+                except Exception as sheet_e:
+                    logging.error(f"Erro ao ler aba {sheet_name}: {sheet_e}")
+                    raise sheet_e
                     
             return result
         except Exception as e:
@@ -90,8 +93,8 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             logging.error(f"Falha ao conectar no Google para {unidade_id}: {e}\nDetalhes técnicos:\n{error_details}")
             
         if attempt < retries - 1:
-            logging.info(f"Aguardando 5 segundos antes de tentar novamente a unidade {unidade_id}...")
-            time.sleep(5)
+            logging.info(f"Aguardando 25 segundos antes de tentar novamente a unidade {unidade_id} (permitindo reset de cotas)...")
+            time.sleep(25)
             
     logging.error(f"Todas as {retries} tentativas falharam para a unidade {unidade_id}.")
     return None
