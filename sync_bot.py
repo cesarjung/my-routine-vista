@@ -93,6 +93,7 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             result = {}
             for sheet_name in sheets_to_fetch:
                 try:
+                    logging.info(f"  [>] Lendo aba '{sheet_name}'...")
                     worksheet = spreadsheet.worksheet(sheet_name)
                     raw_data = worksheet.get_all_values()
                     
@@ -122,13 +123,14 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                         if last_non_empty >= 0:
                             cleaned_data.append(row[:last_non_empty + 1])
                     
+                    logging.info(f"  [OK] Aba '{sheet_name}' concluída: {len(raw_data)} linhas lidas, {len(cleaned_data)} linhas úteis mantidas.")
                     result[sheet_name] = cleaned_data
                     time.sleep(2.5) # Pausa maior (2.5s) pois o limite é estrito de 60 req/minuto
                 except gspread.exceptions.WorksheetNotFound:
-                    logging.warning(f"Aba '{sheet_name}' não encontrada na planilha {unidade_id}.")
+                    logging.warning(f"  [!] Aba '{sheet_name}' não encontrada na planilha {unidade_id}.")
                     result[sheet_name] = []
                 except Exception as sheet_e:
-                    logging.error(f"Erro ao ler aba {sheet_name}: {sheet_e}")
+                    logging.error(f"  [X] Erro ao ler aba {sheet_name}: {sheet_e}")
                     raise sheet_e
                     
             return result
@@ -170,27 +172,31 @@ def upsert_supabase(env_vars, payload):
         # 1. Deleta a linha atual
         delete_url = f"{url}?unidade_id=eq.{unidade_id}"
         try:
+            logging.info(f"  [>] Limpando cache antigo no Supabase (DELETE)...")
             requests.delete(delete_url, headers=headers, timeout=60)
+            logging.info(f"  [OK] Cache antigo removido.")
         except Exception as delete_e:
-            logging.warning(f"Aviso no DELETE da unidade {unidade_id}: {delete_e}")
+            logging.warning(f"  [!] Aviso no DELETE da unidade {unidade_id}: {delete_e}")
             
         # 2. Insere a nova linha completa (muito mais rapido que update)
+        logging.info(f"  [>] Compactando pacotes e calculando tamanho do Payload...")
         total_size = len(json.dumps(payload))
-        logging.info(f"Tamanho total do payload para a unidade {unidade_id}: {total_size / 1024 / 1024:.2f} MB")
+        logging.info(f"  [OK] Tamanho total compactado para envio: {total_size / 1024 / 1024:.3f} MB")
         
         # Volta o cabeçalho merge-duplicates para garantir que o POST funcione caso o DELETE tenha falhado
         headers["Prefer"] = "resolution=merge-duplicates"
         
+        logging.info(f"  [>] Enviando novo pacote (POST) para Supabase...")
         res = requests.post(url, headers=headers, json=payload, timeout=90)
         if res.status_code in [200, 201, 204]:
-            logging.info(f"Unidade {unidade_id} salva no Supabase via UPSERT/INSERT com sucesso.")
+            logging.info(f"  [SUCESSO] Unidade {unidade_id} sincronizada no Supabase!")
             return True
         else:
-            logging.error(f"Falha Supabase ao inserir unidade {res.status_code}: {res.text}")
+            logging.error(f"  [X] Falha Supabase ao inserir unidade {res.status_code}: {res.text}")
             return False
             
     except Exception as e:
-        logging.error(f"Falha de conexão com Supabase: {e}")
+        logging.error(f"  [X] Falha de conexão com Supabase: {e}")
     return False
 
 def run_sync_cycle():
