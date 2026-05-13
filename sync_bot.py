@@ -4,17 +4,13 @@ import json
 import logging
 from datetime import datetime
 import requests
+import gspread
+from google.oauth2.service_account import Credentials
 
-# Configurar logs
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-# Constantes do Google Apps Script
-API_URL = 'https://script.google.com/macros/s/AKfycbxn-YpuZZsNsdGT_FxQdhUwLE5KUIuXvo7Ffad03x80LByig3qneNe7-hy9PUZYS8-bDg/exec'
-SECRET_TOKEN = 'sirtec_vista_2026_seguro'
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
 
 UNIDADES_PLANEJAMENTO = [
     '1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E',
@@ -47,31 +43,49 @@ def load_env():
             
     return env_vars
 
-def fetch_google_sheets(unidade_id, retries=3):
-    url = f"{API_URL}?token={SECRET_TOKEN}&id={unidade_id}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config"
+def get_gspread_client():
+    creds_json_str = os.environ.get("GOOGLE_CREDENTIALS")
+    if creds_json_str:
+        try:
+            creds_dict = json.loads(creds_json_str)
+            credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+            return gspread.authorize(credentials)
+        except Exception as e:
+            logging.error(f"Erro ao carregar credenciais da variavel GOOGLE_CREDENTIALS: {e}")
+            return None
+    else:
+        # Fallback para arquivo local se a pessoa quiser testar
+        if os.path.exists("google_credentials.json"):
+            credentials = Credentials.from_service_account_file("google_credentials.json", scopes=SCOPES)
+            return gspread.authorize(credentials)
+        else:
+            logging.error("Nenhuma credencial do Google encontrada (variavel GOOGLE_CREDENTIALS ou arquivo google_credentials.json).")
+            return None
+
+def fetch_google_sheets(unidade_id, gc, retries=3):
+    sheets_to_fetch = ['Carteira_Planejador', 'Plan_Principal', 'BD_Metas', 'Reprogramadas', 'Base_Curva', 'BD_Config']
     
     for attempt in range(retries):
         try:
-            logging.info(f"Baixando dados do Google para a unidade {unidade_id} (Tentativa {attempt + 1}/{retries})...")
-            # Aumentando timeout para 300s (5min) porque os dados sao muitos e o Apps Script pode demorar
-            res = requests.get(url, timeout=300)
-            if res.status_code == 200:
-                data = res.json()
-                if data.get('success'):
-                    return data.get('data')
-                else:
-                    logging.error(f"Erro no retorno do script para {unidade_id}: {data.get('error')}")
-                    return None # Erro do script não se resolve com retry
-            else:
-                logging.error(f"Erro HTTP {res.status_code} na unidade {unidade_id}")
-        except requests.exceptions.ReadTimeout:
-            logging.warning(f"Timeout de leitura na unidade {unidade_id}. O Google demorou mais de 5 minutos para responder.")
+            logging.info(f"Baixando dados do Google (via gspread) para a unidade {unidade_id} (Tentativa {attempt + 1}/{retries})...")
+            spreadsheet = gc.open_by_key(unidade_id)
+            
+            result = {}
+            for sheet_name in sheets_to_fetch:
+                try:
+                    worksheet = spreadsheet.worksheet(sheet_name)
+                    result[sheet_name] = worksheet.get_all_values()
+                except gspread.exceptions.WorksheetNotFound:
+                    logging.warning(f"Aba '{sheet_name}' não encontrada na planilha {unidade_id}.")
+                    result[sheet_name] = []
+                    
+            return result
         except Exception as e:
             logging.error(f"Falha ao conectar no Google para {unidade_id}: {e}")
             
         if attempt < retries - 1:
-            logging.info(f"Aguardando 10 segundos antes de tentar novamente a unidade {unidade_id}...")
-            time.sleep(10)
+            logging.info(f"Aguardando 5 segundos antes de tentar novamente a unidade {unidade_id}...")
+            time.sleep(5)
             
     logging.error(f"Todas as {retries} tentativas falharam para a unidade {unidade_id}.")
     return None
@@ -107,8 +121,13 @@ def run_sync_cycle():
     logging.info("--- Iniciando ciclo de sincronizacao ---")
     env_vars = load_env()
     
+    gc = get_gspread_client()
+    if not gc:
+        logging.error("Abortando ciclo por falta de credenciais do Google Cloud.")
+        return
+        
     for unidade_id in UNIDADES_PLANEJAMENTO:
-        sheets_data = fetch_google_sheets(unidade_id)
+        sheets_data = fetch_google_sheets(unidade_id, gc)
         
         if sheets_data:
             payload = {
@@ -125,9 +144,9 @@ def run_sync_cycle():
             }
             upsert_supabase(env_vars, payload)
         
-        # Pausa intencional para NUNCA dar "Too Many Requests" no Google Apps Script
-        logging.info("Pausando 5 segundos antes da proxima unidade...")
-        time.sleep(5)
+        # Pausa intencional para NUNCA dar cota excedida na Google Sheets API (100 requisicoes por 100 segundos)
+        logging.info("Pausando 2 segundos antes da proxima unidade...")
+        time.sleep(2)
         
     logging.info("--- Ciclo concluido ---")
 
