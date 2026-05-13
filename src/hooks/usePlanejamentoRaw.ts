@@ -71,8 +71,19 @@ export const useSyncPlanejamento = () => {
       for (const unidadeId of selectedUnidadesIds) {
         try {
           const url = `${API_URL}?token=${SECRET_TOKEN}&id=${unidadeId}&sheets=Carteira_Planejador,Plan_Principal,BD_Metas,Reprogramadas,Base_Curva,BD_Config`;
-          const res = await fetch(url);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
           
+          let res;
+          try {
+            res = await fetch(url, { signal: controller.signal });
+          } catch (fetchErr) {
+             clearTimeout(timeoutId);
+             console.error(`Fetch demorou muito ou falhou na unidade ${unidadeId}:`, fetchErr);
+             continue; // Pula para a próxima unidade se demorar muito
+          }
+          clearTimeout(timeoutId);
+
           let data;
           try {
             data = await res.json();
@@ -115,14 +126,18 @@ export const useSyncPlanejamento = () => {
         }
       }
 
-      return selectedUnidadesIds;
+      if (results.length === 0) {
+        throw new Error('Falha na comunicação com o Google Sheets. Demorou muito para responder.');
+      }
+
+      return results;
     },
-    onSuccess: () => {
-      toast.success('Dados sincronizados com o Google Sheets!');
+    onSuccess: (data) => {
+      toast.success(`Dados sincronizados com sucesso (${data.length} unidade(s))!`);
       queryClient.invalidateQueries({ queryKey: ['planejamento_raw_v3'] });
     },
-    onError: (error) => {
-      toast.error('Erro ao sincronizar dados com o Google Sheets.');
+    onError: (error: any) => {
+      toast.error(error.message || 'Erro ao sincronizar dados com o Google Sheets.');
       console.error(error);
     }
   });
