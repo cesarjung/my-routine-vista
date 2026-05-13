@@ -83,6 +83,13 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                 "BD_Metas": 20
             }
             
+            # Colunas (índices 0-based) que o frontend de fato consome. O resto é lixo que incha o payload.
+            USED_COLS = {
+                "Carteira_Planejador": {1, 3, 5, 6, 9, 10, 11, 12, 13, 14, 15, 22, 23, 24, 38, 44, 45, 46, 47},
+                "Plan_Principal": {1, 4, 6, 7, 37, 38, 42, 53},
+                "Reprogramadas": {1, 4, 6, 7, 37, 38, 42, 53}
+            }
+            
             result = {}
             for sheet_name in sheets_to_fetch:
                 try:
@@ -90,12 +97,19 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                     raw_data = worksheet.get_all_values()
                     
                     max_col = MAX_COLS.get(sheet_name, 100)
+                    whitelist = USED_COLS.get(sheet_name)
                     
                     # O gspread as vezes traz milhares de linhas e colunas vazias
                     cleaned_data = []
-                    for row in raw_data:
-                        # Corta a linha no tamanho maximo permitido pela aba ANTES de verificar vazios
+                    for row_idx, row in enumerate(raw_data):
+                        # Corta a linha no tamanho maximo permitido pela aba
                         row = row[:max_col]
+                        
+                        # Zera qualquer coluna que o Dashboard não precise (exceto cabeçalho linha 0)
+                        if whitelist and row_idx > 0:
+                            for i in range(len(row)):
+                                if i not in whitelist:
+                                    row[i] = ""
                         
                         # Encontra o ultimo indice nao vazio
                         last_non_empty = -1
@@ -103,6 +117,7 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                             if str(row[i]).strip():
                                 last_non_empty = i
                                 break
+                                
                         # Se a linha nao for totalmente vazia, adiciona apenas ate a ultima coluna preenchida
                         if last_non_empty >= 0:
                             cleaned_data.append(row[:last_non_empty + 1])
