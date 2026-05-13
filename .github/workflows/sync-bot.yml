@@ -2,8 +2,10 @@ name: Sincronização Base Central
 
 on:
   schedule:
-    # Roda a cada 10 minutos (entre 06:00 e 21:59 BRT, que é 09:00 e 00:59 UTC)
-    - cron: '*/10 0,9-23 * * *'
+    # Roda a cada 10 minutos apenas de Seg a Sex, entre 06:00 e 21:59 BRT. 
+    # (Dividido em duas regras devido à diferença de fuso horário UTC para BRT no fim da noite)
+    - cron: '*/10 9-23 * * 1-5' # 06:00 às 20:59 BRT (Seg-Sex)
+    - cron: '*/10 0 * * 2-6'    # 21:00 às 21:59 BRT (Noite de Seg-Sex equivale à madrugada de Ter-Sáb no UTC)
   workflow_dispatch: # Permite rodar o workflow manualmente pelo painel do GitHub
 
 jobs:
