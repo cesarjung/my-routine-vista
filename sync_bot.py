@@ -91,8 +91,8 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             
             # Colunas (índices 0-based) que o frontend de fato consome. O resto é lixo que incha o payload.
             USED_COLS = {
-                "Carteira_Planejador": {1, 3, 5, 6, 9, 10, 11, 12, 13, 14, 15, 22, 23, 24, 38, 44, 45, 46, 47},
-                "Plan_Principal": {1, 4, 6, 7, 37, 38, 42, 53},
+                "Carteira_Planejador": {1, 3, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 22, 23, 24, 32, 38, 44, 45, 46, 47},
+                "Plan_Principal": {1, 4, 6, 7, 12, 37, 38, 42, 53},
                 "Reprogramadas": {1, 4, 6, 7, 37, 38, 42, 53}
             }
             
