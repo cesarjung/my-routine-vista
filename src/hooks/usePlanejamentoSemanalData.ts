@@ -25,6 +25,7 @@ export const usePlanejamentoSemanalData = (selectedUnidadesIds: string[], startD
     
     try {
       const data: PlanejamentoSemanalRow[] = [];
+      let maxRowLength = 0;
 
       const parseNumber = (val: any) => {
         if (!val) return 0;
@@ -64,6 +65,8 @@ export const usePlanejamentoSemanalData = (selectedUnidadesIds: string[], startD
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];
           if (!row || !Array.isArray(row)) continue; // Precisa ir até BP (67)
+          
+          if (row.length > maxRowLength) maxRowLength = row.length;
 
           const dataStringFull = row[1]; // Coluna B
           const supervisor = row[4];     // Coluna E
@@ -111,6 +114,9 @@ export const usePlanejamentoSemanalData = (selectedUnidadesIds: string[], startD
 
       // Ordenar por data crescente
       data.sort((a, b) => a.dataParsed.getTime() - b.dataParsed.getTime());
+      
+      // Store in window for debug
+      (window as any)._debugPlanejamentoSemanal = { maxRowLength, totalRows: data.length };
       
       return data;
     } catch (err) {

@@ -58,6 +58,7 @@ export const PlanejamentoSemanalView = () => {
   );
 
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
+  const debugInfo = (window as any)._debugPlanejamentoSemanal || { maxRowLength: 0, totalRows: 0 };
 
   // Processamento de Dados (Agrupamento por Dia/Equipe e Semana/Equipe)
   const { dailyStats, weeklyStats, equipesUnicas, supervisoresUnicos } = useMemo(() => {
@@ -320,7 +321,12 @@ export const PlanejamentoSemanalView = () => {
         <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto custom-scrollbar w-full pb-2">
           {/* Header Title */}
           <div className="shrink-0 mb-1">
-            <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Planejamento Semanal</h1>
+            <h1 className="text-[17px] font-bold text-foreground tracking-tight flex items-center gap-2">
+              Planejamento Semanal
+              <span className="text-xs text-muted-foreground font-normal">
+                ({(window as any)._debugPlanejamentoSemanal?.maxRowLength ?? 0} cols)
+              </span>
+            </h1>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Monitoramento de Aderência</p>
           </div>
           
