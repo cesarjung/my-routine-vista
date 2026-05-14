@@ -6,7 +6,7 @@ import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Filter, Plus } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
