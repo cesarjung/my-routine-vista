@@ -1,27 +1,35 @@
 import { useState, useEffect } from 'react';
 
+// In-memory store that resets on page reload but persists across navigation
+const globalState: Record<string, any> = {};
+const listeners: Record<string, Set<(value: any) => void>> = {};
+
 export function useSessionState<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [state, setState] = useState<T>(() => {
-    try {
-      const item = window.sessionStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.warn(`Error reading sessionStorage for key "${key}":`, error);
-      return initialValue;
+  // Initialize global state for this key if not present
+  if (!(key in globalState)) {
+    globalState[key] = initialValue;
+  }
+
+  const [state, setState] = useState<T>(globalState[key]);
+
+  useEffect(() => {
+    if (!listeners[key]) {
+      listeners[key] = new Set();
     }
-  });
+    listeners[key].add(setState);
+
+    return () => {
+      listeners[key].delete(setState);
+    };
+  }, [key]);
 
   const setValue: React.Dispatch<React.SetStateAction<T>> = (value) => {
-    try {
-      // Allow value to be a function so we have same API as useState
-      const valueToStore =
-        value instanceof Function ? (value as (val: T) => T)(state) : value;
-      setState(valueToStore);
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
-      }
-    } catch (error) {
-      console.warn(`Error setting sessionStorage for key "${key}":`, error);
+    const valueToStore = value instanceof Function ? (value as (val: T) => T)(globalState[key]) : value;
+    globalState[key] = valueToStore;
+    
+    // Notify all listeners
+    if (listeners[key]) {
+      listeners[key].forEach(listener => listener(valueToStore));
     }
   };
 

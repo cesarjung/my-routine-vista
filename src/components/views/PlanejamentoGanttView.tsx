@@ -287,7 +287,7 @@ export const PlanejamentoGanttView = () => {
                 <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
                   <span className="truncate">
                     {selectedMeses.length === 0 
-                      ? 'Todos os Meses' 
+                      ? 'Meses' 
                       : `${selectedMeses.length} mês(es)`}
                   </span>
                   <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />

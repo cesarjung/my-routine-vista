@@ -303,7 +303,7 @@ export const DeslocamentoView = () => {
                       {draftUnidadesIds.length === 0 
                         ? 'Unidades' 
                         : draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
-                          ? 'Todas as Unidades'
+                          ? 'Unidades'
                           : draftUnidadesIds.length === 1 
                             ? UNIDADES_PLANEJAMENTO.find(u => u.id === draftUnidadesIds[0])?.nome 
                             : `${draftUnidadesIds.length} unid.`}
