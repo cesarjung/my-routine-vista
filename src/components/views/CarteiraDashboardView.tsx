@@ -423,7 +423,7 @@ export const CarteiraDashboardView = () => {
                        {draftUnidadesIds.length === 0 
                          ? 'Unidades' 
                          : draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
-                           ? 'Todas Unidades'
+                           ? 'Unidades'
                            : `${draftUnidadesIds.length} selec.`}
                      </span>
                      <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />

@@ -46,6 +46,7 @@ export const usePlanejadoMetaData = (selectedUnidadesIds: string[]) => {
 
       rawQuery.data.forEach(unidadeData => {
         const rows = unidadeData.principal;
+        if (!rows || !Array.isArray(rows)) return;
         const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
         const unidadeNome = unidadeInfo?.nome || unidadeData.unidadeId;
 

@@ -433,7 +433,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-8">
                   <span className="truncate">
                     {selectedEquipes.length === 0 
-                      ? 'Todas as Equipes' 
+                      ? 'Equipes' 
                       : `${selectedEquipes.length} equipe(s)`}
                   </span>
                   <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
@@ -464,7 +464,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-8">
                   <span className="truncate">
                     {selectedProjetos.length === 0 
-                      ? 'Todos Projetos' 
+                      ? 'Projetos' 
                       : `${selectedProjetos.length} projeto(s)`}
                   </span>
                   <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
@@ -496,7 +496,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-8">
                   <span className="truncate">
                     {selectedMeses.length === 0 
-                      ? 'Todos Meses' 
+                      ? 'Meses' 
                       : `${selectedMeses.length} mês`}
                   </span>
                   <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />

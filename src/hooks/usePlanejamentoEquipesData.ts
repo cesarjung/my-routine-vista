@@ -46,6 +46,7 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
 
       rawQuery.data.forEach(unidadeData => {
         const rows = unidadeData.principal;
+        if (!rows || !Array.isArray(rows)) return;
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];

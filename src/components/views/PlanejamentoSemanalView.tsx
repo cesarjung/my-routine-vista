@@ -491,7 +491,7 @@ export const PlanejamentoSemanalView = () => {
             </div>
           </div>
 
-          {/* Tabela 1B: Todas as Equipes */}
+          {/* Tabela 1B: Equipes */}
           <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[200px] min-h-[150px] max-h-[800px] resize-y">
             <div className="p-3 border-b border-border bg-muted/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
