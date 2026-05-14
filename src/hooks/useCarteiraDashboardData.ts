@@ -93,8 +93,19 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
 
         // Ler AVNP (F) e Mês (G)
         const avnpStr = row[5] ? String(row[5]).trim() : '';
-        const mesStr = row[6] ? String(row[6]).trim() : '';
+        let mesStr = row[6] ? String(row[6]).trim() : '';
         
+        // Fallback robusto para mês se estiver vazio usando Data Inicio (coluna J)
+        if (!mesStr || mesStr === '-') {
+            const dataInicioRaw = row[9] ? String(row[9]).trim() : '';
+            if (dataInicioRaw && dataInicioRaw !== '-') {
+              const matchDI = dataInicioRaw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+              if (matchDI) {
+                mesStr = `01/${matchDI[2]}/${matchDI[3]}`;
+              }
+            }
+        }
+
         const normalizeMes = (m: string) => {
           if (!m) return '';
           // Ex: "01/05/2026"
