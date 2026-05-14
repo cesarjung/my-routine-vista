@@ -123,6 +123,18 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
 
           let mesFiltroStr = row[8] ? String(row[8]).trim() : '';
           
+          // Fallback robusto: se a coluna Mês (I) estiver vazia na planilha, extrair o mês da Data Início (J)
+          if (!mesFiltroStr || mesFiltroStr === '-') {
+            const dataInicioRaw = row[9] ? String(row[9]).trim() : '';
+            if (dataInicioRaw && dataInicioRaw !== '-') {
+              const matchDI = dataInicioRaw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+              if (matchDI) {
+                // Passa para o formato que o normalizeMes entende (01/MM/YYYY)
+                mesFiltroStr = `01/${matchDI[2]}/${matchDI[3]}`;
+              }
+            }
+          }
+          
           const normalizeMes = (m: string) => {
             if (!m || m === '-') return '';
             const match = m.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
