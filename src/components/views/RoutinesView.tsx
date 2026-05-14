@@ -201,6 +201,16 @@ export const RoutinesView = ({
   });
 
   const renderContent = () => {
+    if (viewMode === 'kanban') {
+      return <KanbanView sectorId={sectorId} type="routines" hideHeader />;
+    }
+    if (viewMode === 'gantt') {
+      return <GanttView sectorId={sectorId} type="routines" />;
+    }
+    if (viewMode === 'calendar') {
+      return <CalendarView sectorId={sectorId} type="routines" />;
+    }
+
     if (isLoading) {
       return (
         <div className="flex items-center justify-center h-48">

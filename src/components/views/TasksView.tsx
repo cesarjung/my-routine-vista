@@ -37,6 +37,10 @@ import type { Enums } from '@/integrations/supabase/types';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
+import { KanbanView } from './KanbanView';
+import { GanttView } from './GanttView';
+import { CalendarView } from './CalendarView';
+
 // --- CONFIGURATION ARRAYS ---
 
 const statusFilters: {
@@ -174,12 +178,21 @@ export const TasksView = ({
         </div>
       </div>
 
-      {/* Task List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : filteredTasks && filteredTasks.length > 0 ? (
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 mt-4 overflow-hidden flex flex-col">
+        {viewMode === 'kanban' ? (
+          <KanbanView sectorId={sectorId} type="tasks" hideHeader />
+        ) : viewMode === 'gantt' ? (
+          <GanttView sectorId={sectorId} type="tasks" />
+        ) : viewMode === 'calendar' ? (
+          <CalendarView sectorId={sectorId} type="tasks" />
+        ) : isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : filteredTasks && filteredTasks.length > 0 ? (
         <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-card">
           {filteredTasks?.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
@@ -204,6 +217,7 @@ export const TasksView = ({
           </p>
         </div>
       )}
+      </div>
     </div>
     </div>
   );
