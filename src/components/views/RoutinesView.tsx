@@ -230,7 +230,7 @@ export const RoutinesView = ({
               setEditingRoutine(routine);
             }}
             canEdit={isGestorOrAdmin}
-            periodDates={periodsByRoutine?.get(routine.id) || null}
+            periodDates={periodsByRoutine?.[routine.id] || null}
           />
         ))}
       </div>

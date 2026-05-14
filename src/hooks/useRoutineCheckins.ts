@@ -113,13 +113,13 @@ export const useAllActiveRoutinePeriods = () => {
       if (error) throw error;
 
       // Create a map of routine_id to its active period
-      const periodsByRoutine = new Map<string, { period_start: string; period_end: string }>();
+      const periodsByRoutine: Record<string, { period_start: string; period_end: string }> = {};
       data?.forEach(period => {
-        if (!periodsByRoutine.has(period.routine_id)) {
-          periodsByRoutine.set(period.routine_id, {
+        if (!periodsByRoutine[period.routine_id]) {
+          periodsByRoutine[period.routine_id] = {
             period_start: period.period_start,
             period_end: period.period_end,
-          });
+          };
         }
       });
 
