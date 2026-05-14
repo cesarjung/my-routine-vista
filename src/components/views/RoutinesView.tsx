@@ -28,6 +28,7 @@ import { ViewMode } from '@/types/navigation';
 import { KanbanView } from './KanbanView';
 import { GanttView } from './GanttView';
 import { CalendarView } from './CalendarView';
+import { cn } from '@/lib/utils';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
 import { BulkRoutineCompletionDialog } from '@/components/BulkRoutineCompletionDialog';
 import { useUserRole } from '@/hooks/useUserRole';
