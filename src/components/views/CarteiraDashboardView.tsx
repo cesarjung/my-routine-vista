@@ -3,7 +3,7 @@ import { useCarteiraDashboardData } from '@/hooks/useCarteiraDashboardData';
 import { CarteiraMapView } from './CarteiraMapView';
 import { format, differenceInMonths, parse, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Filter, Calendar } from 'lucide-react';
+import { RefreshCw, Filter, Calendar, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import {
@@ -73,6 +73,7 @@ export const CarteiraDashboardView = () => {
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
   const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas', false);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   // Listas de opções para os filtros
   const options = useMemo(() => {
@@ -693,7 +694,7 @@ export const CarteiraDashboardView = () => {
 
       {/* NOVO: RELAÇÃO DE OBRAS CONSIDERADAS NO FILTRO */}
       <div className="px-6 pb-6">
-        <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[400px] min-h-[250px] max-h-[1000px] resize-y pb-1">
+        <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px] min-h-[300px] max-h-[1200px] resize-y pb-1">
           <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
             <h3 className="font-bold text-sm">Relação de Obras Filtradas ({considerarInaptas ? 'Aptas + Inaptas' : 'Aptas'}) ({indicators.totalObras})</h3>
           </div>
@@ -740,8 +741,19 @@ export const CarteiraDashboardView = () => {
       </div>
 
       {/* MAPA */}
-      <div className="w-full h-[80vh] min-h-[700px] mb-8 relative z-0">
-        <CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} />
+      <div className={cn("w-full transition-all duration-300 relative z-10", isMapFullscreen ? "fixed inset-0 z-50 bg-background p-4" : "h-[80vh] min-h-[700px] mb-8 px-6")}>
+        <div className="w-full h-full relative border border-border rounded-xl overflow-hidden shadow-sm">
+          <Button 
+            variant="secondary" 
+            size="icon" 
+            className="absolute top-4 right-4 z-[400] shadow-md hover:scale-105 transition-transform opacity-90 hover:opacity-100"
+            onClick={() => setIsMapFullscreen(!isMapFullscreen)}
+            title={isMapFullscreen ? "Sair da Tela Cheia" : "Expandir Mapa em Tela Cheia"}
+          >
+            {isMapFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          </Button>
+          <CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} />
+        </div>
       </div>
 
       {/* 10. Localização das Obras (Tabela) */}
