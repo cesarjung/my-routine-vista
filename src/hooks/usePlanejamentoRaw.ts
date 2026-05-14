@@ -29,9 +29,13 @@ export const usePlanejamentoRaw = (selectedUnidadesIds: string[]) => {
       return data;
     },
     select: (data) => {
-      if (!selectedUnidadesIds || selectedUnidadesIds.length === 0) return [];
+      // Se não tem unidades selecionadas (array vazio), significa "todas as unidades"
+      // Então extraímos todos os IDs disponíveis no cache
+      const idsToFetch = (!selectedUnidadesIds || selectedUnidadesIds.length === 0) 
+        ? (data?.map(d => d.unidade_id) || [])
+        : selectedUnidadesIds;
       
-      return selectedUnidadesIds.map(unidadeId => {
+      return idsToFetch.map(unidadeId => {
         const row = data?.find(d => d.unidade_id === unidadeId);
         if (!row) {
           // Retorna vazio caso a unidade ainda não tenha sido sincronizada
