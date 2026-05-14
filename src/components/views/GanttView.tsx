@@ -89,7 +89,7 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
 
   const tasksWithDates = useMemo(() => {
     return tasks?.filter(t => {
-      const matchesSector = !sectorId || (t as any).sector_id === sectorId;
+      const matchesSector = !sectorId || (t as any).sector_id === sectorId || t.routine?.sector_id === sectorId || t.unit?.sector_id === sectorId;
       const matchesUser = !isMyTasks || t.assigned_to === user?.id;
       return t.due_date && matchesSector && matchesUser;
     }) || [];
