@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { usePlanejamentoSemanalData } from '@/hooks/usePlanejamentoSemanalData';
+import { useSessionState } from '@/hooks/useSessionState';
 import { useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -38,9 +39,7 @@ type WeeklyStats = {
 
 export const PlanejamentoSemanalView = () => {
   // Estado de Filtros
-  const [selectedUnidades, setSelectedUnidades] = useState<string[]>(
-    UNIDADES_PLANEJAMENTO.map(u => u.id)
-  );
+  const [selectedUnidades, setSelectedUnidades] = useSessionState<string[]>('filter_unidades', []);
 
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
     from: startOfWeek(new Date(), { weekStartsOn: 1 }), // Segunda-feira
