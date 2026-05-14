@@ -107,6 +107,9 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [routineDialogOpen, setRoutineDialogOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState('all');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
+  const [selectedDateContext, setSelectedDateContext] = useState<Date | null>(null);
 
   // Fetch active routine periods
   const { data: routinePeriods } = useQuery({
