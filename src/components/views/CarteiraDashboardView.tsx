@@ -1,4 +1,4 @@
-import React, { useState, useMemo, Fragment } from 'react';
+import React, { useState, useMemo, Fragment, useEffect } from 'react';
 import { useCarteiraDashboardData } from '@/hooks/useCarteiraDashboardData';
 import { CarteiraMapView } from './CarteiraMapView';
 import { format, differenceInMonths, parse, startOfDay, endOfDay } from 'date-fns';
@@ -74,6 +74,17 @@ export const CarteiraDashboardView = () => {
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
   const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas', false);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMapFullscreen) {
+        setIsMapFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMapFullscreen]);
+
 
   // Listas de opções para os filtros
   const options = useMemo(() => {
