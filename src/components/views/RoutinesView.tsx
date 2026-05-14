@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useTasks } from '@/hooks/useTasks';
+import { useRoutines, useAllActiveRoutinePeriods } from '@/hooks/useRoutines';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 
