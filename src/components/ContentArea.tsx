@@ -237,22 +237,24 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         </header>
 
         <div className="w-full h-full">
-          {folder === 'units' ? (
-            <SectorUnitsView sectorId={sectorId} />
-          ) : folder === 'routines' ? (
-            <RoutinesView
-              sectorId={sectorId}
-              frequency={frequency}
-              viewMode={viewMode}
-            />
-          ) : (
-            <TasksView
-              sectorId={sectorId}
-              sectionId={folder}
-              isDefaultTasksSection={currentSection?.type === 'tasks' || folder === 'tasks'}
-              viewMode={viewMode}
-            />
-          )}
+          <ErrorBoundary>
+            {folder === 'units' ? (
+              <SectorUnitsView sectorId={sectorId} />
+            ) : folder === 'routines' ? (
+              <RoutinesView
+                sectorId={sectorId}
+                frequency={frequency}
+                viewMode={viewMode}
+              />
+            ) : (
+              <TasksView
+                sectorId={sectorId}
+                sectionId={folder}
+                isDefaultTasksSection={currentSection?.type === 'tasks' || folder === 'tasks'}
+                viewMode={viewMode}
+              />
+            )}
+          </ErrorBoundary>
         </div>
       </div>
     );
