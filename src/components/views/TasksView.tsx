@@ -219,6 +219,5 @@ export const TasksView = ({
       )}
       </div>
     </div>
-    </div>
   );
 };
