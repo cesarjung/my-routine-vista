@@ -55,7 +55,7 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
 };
 
 export const CarteiraDashboardView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', UNIDADES_PLANEJAMENTO.map(u => u.id));
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
