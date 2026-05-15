@@ -13,6 +13,62 @@ export interface TaskWithDetails extends Task {
   assignees?: any[]; // Array of profiles
 }
 
+// Helper function to fetch and merge assignees for a list of tasks
+const fetchAndMergeAssignees = async (tasks: TaskWithDetails[]) => {
+  if (!tasks || tasks.length === 0) return [];
+
+  const taskIds = tasks.map(t => t.id);
+
+  // 1. Fetch from task_assignees table
+  const { data: multipleAssignees } = await supabase
+    .from('task_assignees')
+    .select('task_id, user_id')
+    .in('task_id', taskIds);
+
+  // Collect all unique user IDs involved
+  const allUserIds = new Set<string>();
+  tasks.forEach(t => {
+    if (t.assigned_to) allUserIds.add(t.assigned_to);
+  });
+  multipleAssignees?.forEach(ma => allUserIds.add(ma.user_id));
+
+  const uniqueUserIds = Array.from(allUserIds);
+  let profileMap: Record<string, any> = {};
+
+  if (uniqueUserIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', uniqueUserIds);
+
+    if (profiles) {
+      profiles.forEach(p => {
+        profileMap[p.id] = p;
+      });
+    }
+  }
+
+  // Merge profiles into tasks
+  return tasks.map(t => {
+    const taskUserIds = new Set<string>();
+    if (t.assigned_to) taskUserIds.add(t.assigned_to);
+
+    multipleAssignees
+      ?.filter(ma => ma.task_id === t.id)
+      .forEach(ma => taskUserIds.add(ma.user_id));
+
+    const assignees = Array.from(taskUserIds)
+      .map(uid => profileMap[uid])
+      .filter(Boolean);
+
+    return {
+      ...t,
+      assignee: t.assigned_to ? profileMap[t.assigned_to] : null,
+      assignees: assignees
+    };
+  });
+};
+
 export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
   const { user } = useAuth();
   const { data: role } = useUserRole();
