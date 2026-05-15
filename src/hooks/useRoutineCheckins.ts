@@ -243,11 +243,24 @@ export const useCreatePeriodWithCheckins = () => {
       // Get routine info
       const { data: routine, error: routineError } = await supabase
         .from('routines')
-        .select('title, description, unit_id, sector_id, unit_ids')
+        .select('title, description, unit_id, sector_id')
         .eq('id', routineId)
         .single();
 
       if (routineError) throw routineError;
+
+      // Find all units that were previously associated with this routine
+      const { data: existingRoutineTasks } = await supabase
+        .from('tasks')
+        .select('unit_id')
+        .eq('routine_id', routineId)
+        .not('parent_task_id', 'is', null);
+
+      const routineUnitIdsSet = new Set<string>();
+      if (routine.unit_id) routineUnitIdsSet.add(routine.unit_id);
+      existingRoutineTasks?.forEach(t => t.unit_id && routineUnitIdsSet.add(t.unit_id));
+      
+      const routineUnitIds = Array.from(routineUnitIdsSet);
 
       // Get routine assignees (users assigned to this routine)
       const { data: assignees, error: assigneesError } = await supabase
@@ -351,8 +364,6 @@ export const useCreatePeriodWithCheckins = () => {
 
         existingTasks?.forEach(t => t.unit_id && existingTasksByUnit.add(t.unit_id));
       }
-
-      const routineUnitIds = routine.unit_ids || [];
 
       // 1. Process Assignees (if any)
       if (assignees && assignees.length > 0) {
