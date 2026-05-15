@@ -193,65 +193,66 @@ export const RoutinesView = ({
   return (
     <div className="flex h-full flex-col">
       {/* Headers or Bulk Actions */}
-      {!hideHeader && selectedRoutineIds.length > 0 ? (
-          <div className="flex items-center gap-2 p-2 bg-primary/5 border-b border-primary/20 shadow-sm overflow-x-auto shrink-0 min-h-[50px] mb-4 rounded-lg animate-in fade-in slide-in-from-top-1">
-            <span className="text-sm font-medium text-primary ml-2 whitespace-nowrap">
-              {selectedRoutineIds.length} selecionada{selectedRoutineIds.length !== 1 ? 's' : ''}
-            </span>
+      {!hideHeader && (
+        <div className="w-full flex-col flex gap-4">
+          {selectedRoutineIds.length > 0 ? (
+            <div className="flex items-center gap-2 p-2 bg-primary/5 border-b border-primary/20 shadow-sm overflow-x-auto shrink-0 min-h-[50px] mb-4 rounded-lg animate-in fade-in slide-in-from-top-1">
+              <span className="text-sm font-medium text-primary ml-2 whitespace-nowrap">
+                {selectedRoutineIds.length} selecionada{selectedRoutineIds.length !== 1 ? 's' : ''}
+              </span>
 
-            <div className="h-5 w-px bg-primary/20 shrink-0 mx-2" />
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleSelectAll}
-              className="h-8 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10"
-            >
-              {allFilteredSelected ? "Deselecionar Tudo" : "Selecionar Tudo"}
-            </Button>
-
-            <div className="flex items-center gap-1 ml-auto">
-              {isGestorOrAdmin && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
-                  onClick={() => setIsBulkCompleteDialogOpen(true)}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Concluir
-                </Button>
-              )}
-
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8 text-xs gap-1.5 bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
-                onClick={async () => {
-                  try {
-                    await deleteRoutines.mutateAsync(selectedRoutineIds);
-                    setSelectedRoutineIds([]);
-                  } catch (e) {
-                    console.error("Bulk delete failed", e);
-                  }
-                }}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Excluir
-              </Button>
+              <div className="h-5 w-px bg-primary/20 shrink-0 mx-2" />
 
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-8 w-8 ml-1 text-muted-foreground hover:text-foreground"
-                onClick={() => setSelectedRoutineIds([])}
+                size="sm"
+                onClick={toggleSelectAll}
+                className="h-8 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10"
               >
-                <X className="w-4 h-4" />
+                {allFilteredSelected ? "Deselecionar Tudo" : "Selecionar Tudo"}
               </Button>
+
+              <div className="flex items-center gap-1 ml-auto">
+                {isGestorOrAdmin && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
+                    onClick={() => setIsBulkCompleteDialogOpen(true)}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Concluir
+                  </Button>
+                )}
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
+                  onClick={async () => {
+                    try {
+                      await deleteRoutines.mutateAsync(selectedRoutineIds);
+                      setSelectedRoutineIds([]);
+                    } catch (e) {
+                      console.error("Bulk delete failed", e);
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Excluir
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 ml-1 text-muted-foreground hover:text-foreground"
+                  onClick={() => setSelectedRoutineIds([])}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-          </div>
-      ) : !hideHeader && (
-        <div className="w-full flex-col flex h-full gap-4">
+          ) : (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-wrap gap-2">
               {frequencies.map((freq) => (
@@ -284,19 +285,14 @@ export const RoutinesView = ({
               </div>
             </div>
           </div>
-          
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {renderContent()}
-          </div>
+        )}
         </div>
       )}
 
-      {/* When hideHeader is true, we still need to render content */}
-      {hideHeader && (
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {renderContent()}
-        </div>
-      )}
+      {/* Content Area */}
+      <div className="flex-1 overflow-hidden flex flex-col mt-4">
+        {renderContent()}
+      </div>
 
       {/* Detail Panel via Sheet */}
       <Sheet open={!!selectedRoutine} onOpenChange={(open) => {
