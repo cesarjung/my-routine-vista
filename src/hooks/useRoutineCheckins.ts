@@ -327,34 +327,35 @@ export const useCreatePeriodWithCheckins = () => {
         parentTask = newParentTask;
       }
 
-      // Create checkins and child tasks for each assignee
+      // Create checkins and child tasks
+      const checkins: any[] = [];
+      const childTasks: any[] = [];
+      const processedUnits = new Set<string>();
+
+      // FETCH EXISTENTES PARA DEDUPLICAÇÃO SE O PERIODO JÁ EXISTIA
+      if (existingPeriod) {
+        const { data: existingCheckins } = await supabase
+          .from('routine_checkins')
+          .select('unit_id')
+          .eq('routine_period_id', period.id);
+
+        existingCheckins?.forEach(c => c.unit_id && processedUnits.add(c.unit_id));
+      }
+
+      const existingTasksByUnit = new Set<string>();
+      if (existingParentTask) {
+        const { data: existingTasks } = await supabase
+          .from('tasks')
+          .select('unit_id')
+          .eq('parent_task_id', parentTask.id);
+
+        existingTasks?.forEach(t => t.unit_id && existingTasksByUnit.add(t.unit_id));
+      }
+
+      const routineUnitIds = routine.unit_ids || [];
+
+      // 1. Process Assignees (if any)
       if (assignees && assignees.length > 0) {
-        const checkins: any[] = [];
-        const childTasks: any[] = [];
-        const processedUnits = new Set<string>();
-
-        // FETCH EXISTENTES PARA DEDUPLICAÇÃO SE O PERIODO JÁ EXISTIA
-        if (existingPeriod) {
-          const { data: existingCheckins } = await supabase
-            .from('routine_checkins')
-            .select('unit_id')
-            .eq('routine_period_id', period.id);
-
-          existingCheckins?.forEach(c => c.unit_id && processedUnits.add(c.unit_id));
-        }
-
-        const existingTasksByUnit = new Set<string>();
-        if (existingParentTask) {
-          const { data: existingTasks } = await supabase
-            .from('tasks')
-            .select('unit_id')
-            .eq('parent_task_id', parentTask.id);
-
-          existingTasks?.forEach(t => t.unit_id && existingTasksByUnit.add(t.unit_id));
-        }
-
-        const routineUnitIds = routine.unit_ids || [];
-
         for (const assignee of assignees) {
           const assigneeProfile = assignee.profiles as any;
           // Coletar todas as unidades possíveis deste usuário
@@ -376,8 +377,8 @@ export const useCreatePeriodWithCheckins = () => {
             validUnits = validUnits.filter(u => routineUnitIds.includes(u));
           }
 
-          if (validUnits.length === 0) {
-            validUnits = [routine.unit_id]; // Pode ser null
+          if (validUnits.length === 0 && routine.unit_id) {
+            validUnits = [routine.unit_id];
           }
 
           for (const assigneeUnitId of validUnits) {
@@ -407,42 +408,72 @@ export const useCreatePeriodWithCheckins = () => {
                 start_date: periodStart.toISOString(),
                 status: 'pendente',
               });
-              existingTasksByUnit.add(assigneeUnitId); // proteje contra duplo push se dois gerentes dividem
+              existingTasksByUnit.add(assigneeUnitId);
             }
           }
         }
+      }
 
-        // Insert checkins ONLY if we have new ones
-        if (checkins.length > 0) {
-          const { error: checkinsError } = await supabase
-            .from('routine_checkins')
-            .insert(checkins);
-          if (checkinsError) throw checkinsError;
+      // 2. Process remaining units that didn't have any specific assignee
+      for (const unitId of routineUnitIds) {
+        if (!processedUnits.has(unitId)) {
+          checkins.push({
+            routine_period_id: period.id,
+            unit_id: unitId,
+            assignee_user_id: null,
+            status: 'pending',
+          });
+          processedUnits.add(unitId);
         }
 
-        // Insert child tasks ONLY if we have new ones
-        let createdChildTasks: any[] = [];
-        if (childTasks.length > 0) {
-          const { data, error: childTasksError } = await supabase
-            .from('tasks')
-            .insert(childTasks)
-            .select();
-          if (childTasksError) throw childTasksError;
-          createdChildTasks = data || [];
+        if (!existingTasksByUnit.has(unitId)) {
+          childTasks.push({
+            title: `[Rotina] ${routine.title}`,
+            description: routine.description,
+            routine_id: routineId,
+            parent_task_id: parentTask.id,
+            unit_id: unitId,
+            sector_id: routine.sector_id,
+            assigned_to: null, // No specific user assigned
+            created_by: user.id,
+            due_date: periodEnd.toISOString(),
+            start_date: periodStart.toISOString(),
+            status: 'pendente',
+          });
+          existingTasksByUnit.add(unitId);
         }
+      }
 
-        // Add task assignees for each child task
-        if (createdChildTasks && createdChildTasks.length > 0) {
-          const taskAssignees = createdChildTasks
-            .filter(task => task.assigned_to)
-            .map(task => ({
-              task_id: task.id,
-              user_id: task.assigned_to,
-            }));
+      // Insert checkins ONLY if we have new ones
+      if (checkins.length > 0) {
+        const { error: checkinsError } = await supabase
+          .from('routine_checkins')
+          .insert(checkins);
+        if (checkinsError) throw checkinsError;
+      }
 
-          if (taskAssignees.length > 0) {
-            await supabase.from('task_assignees').insert(taskAssignees);
-          }
+      // Insert child tasks ONLY if we have new ones
+      let createdChildTasks: any[] = [];
+      if (childTasks.length > 0) {
+        const { data, error: childTasksError } = await supabase
+          .from('tasks')
+          .insert(childTasks)
+          .select();
+        if (childTasksError) throw childTasksError;
+        createdChildTasks = data || [];
+      }
+
+      // Add task assignees for each child task
+      if (createdChildTasks && createdChildTasks.length > 0) {
+        const taskAssignees = createdChildTasks
+          .filter(task => task.assigned_to)
+          .map(task => ({
+            task_id: task.id,
+            user_id: task.assigned_to,
+          }));
+
+        if (taskAssignees.length > 0) {
+          await supabase.from('task_assignees').insert(taskAssignees);
         }
       }
 
