@@ -6,7 +6,7 @@ import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight, Filter, Plus } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 import { TaskEditDialog } from '@/components/TaskEditDialog';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
@@ -107,9 +107,6 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [routineDialogOpen, setRoutineDialogOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState('all');
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
-  const [selectedDateContext, setSelectedDateContext] = useState<Date | null>(null);
 
   // Fetch active routine periods
   const { data: routinePeriods } = useQuery({
@@ -235,7 +232,7 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
     // For parent tasks, only show if they have no children or if viewing all (isMyTasks mode shows only assigned)
     tasks?.forEach(task => {
       if (!task.due_date) return;
-      const matchesSector = !sectorId || (task as any).sector_id === sectorId || task.routine?.sector_id === sectorId || task.unit?.sector_id === sectorId;
+      const matchesSector = !sectorId || (task as any).sector_id === sectorId;
       // Update MatchesUser to include assignees
       const matchesUser = !isMyTasks ||
         task.assigned_to === user?.id ||
@@ -319,35 +316,12 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
             }
           }
 
-          let startDate = new Date(periodEnd);
-          let endDate = new Date(periodEnd.getTime() + 60 * 60 * 1000);
-          
-          if (period.routine.time_start) {
-            const [hours, minutes] = period.routine.time_start.split(':');
-            startDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-          } else {
-            startDate.setHours(8, 0, 0, 0);
-          }
-          
-          if (period.routine.time_end) {
-            const [hours, minutes] = period.routine.time_end.split(':');
-            endDate = new Date(startDate);
-            endDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-            
-            if (endDate < startDate) {
-              endDate.setDate(endDate.getDate() + 1);
-            }
-          }
-
-          const isAllDay = startDate.getHours() === 0 && startDate.getMinutes() === 0 &&
-            (endDate.getHours() === 0 || endDate.getHours() === 23);
-
           items.push({
             id: period.id,
             title: `🔄 ${period.routine.title}`,
-            startDate: startDate,
-            endDate: endDate,
-            isAllDay,
+            startDate: periodEnd, // Keeps the date reference
+            endDate: new Date(periodEnd.getTime() + 60 * 60 * 1000), // Dummy duration
+            isAllDay: true, // Forces it to the top
             type: 'routine',
             routineId: period.routine_id,
             status: computedStatus

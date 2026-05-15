@@ -28,7 +28,6 @@ import { ViewMode } from '@/types/navigation';
 import { KanbanView } from './KanbanView';
 import { GanttView } from './GanttView';
 import { CalendarView } from './CalendarView';
-import { cn } from '@/lib/utils';
 import { RoutineEditDialog } from '@/components/RoutineEditDialog';
 import { BulkRoutineCompletionDialog } from '@/components/BulkRoutineCompletionDialog';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -193,12 +192,7 @@ export const RoutinesView = ({
 
   const filteredRoutines = routines?.filter(r => {
     const matchesFrequency = activeFrequency === 'all' || r.frequency === activeFrequency;
-    
-    const routineTasks = allTasks?.filter(t => t.routine_id === r.id) || [];
-    const hasTaskInSector = routineTasks.some(t => t.sector_id === sectorId || t.unit?.sector_id === sectorId);
-    
-    const matchesSector = !sectorId || (r as any).sector_id === sectorId || hasTaskInSector;
-    
+    const matchesSector = !sectorId || (r as any).sector_id === sectorId;
     const isCompleted = isRoutineCompleted(r.id);
     const matchesHideCompleted = hideCompleted ? !isCompleted : true;
     
@@ -206,16 +200,6 @@ export const RoutinesView = ({
   });
 
   const renderContent = () => {
-    if (viewMode === 'kanban') {
-      return <KanbanView sectorId={sectorId} type="routines" hideHeader />;
-    }
-    if (viewMode === 'gantt') {
-      return <GanttView sectorId={sectorId} type="routines" />;
-    }
-    if (viewMode === 'calendar') {
-      return <CalendarView sectorId={sectorId} type="routines" />;
-    }
-
     if (isLoading) {
       return (
         <div className="flex items-center justify-center h-48">
@@ -246,7 +230,7 @@ export const RoutinesView = ({
               setEditingRoutine(routine);
             }}
             canEdit={isGestorOrAdmin}
-            periodDates={periodsByRoutine?.[routine.id] || null}
+            periodDates={periodsByRoutine?.get(routine.id) || null}
           />
         ))}
       </div>
