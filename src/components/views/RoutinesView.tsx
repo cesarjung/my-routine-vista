@@ -23,6 +23,7 @@ import { useRoutines } from '@/hooks/useRoutines';
 import { useAllActiveRoutinePeriods } from '@/hooks/useRoutineCheckins';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
+import { cn } from '@/lib/utils';
 
 import { ViewMode } from '@/types/navigation';
 import { KanbanView } from './KanbanView';
