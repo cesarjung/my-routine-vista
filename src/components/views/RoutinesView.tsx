@@ -36,6 +36,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NotesList } from '@/components/NotesList';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { RoutineForm } from '@/components/RoutineForm';
 
 type TaskFrequency = Enums<'task_frequency'>;
 
@@ -276,15 +277,18 @@ export const RoutinesView = ({
               ))}
             </div>
 
-            <div className="flex items-center space-x-2 border rounded-md px-3 py-1.5 border-input bg-background w-fit">
-              <Switch
-                id="hide-completed-routines"
-                checked={hideCompleted}
-                onCheckedChange={setHideCompleted}
-              />
-              <Label htmlFor="hide-completed-routines" className="text-sm cursor-pointer whitespace-nowrap">
-                Ocultar Concluídas
-              </Label>
+            <div className="flex items-center gap-2">
+              <RoutineForm sectorId={sectorId} />
+              <div className="flex items-center space-x-2 border rounded-md px-3 py-1.5 border-input bg-background w-fit">
+                <Switch
+                  id="hide-completed-routines"
+                  checked={hideCompleted}
+                  onCheckedChange={setHideCompleted}
+                />
+                <Label htmlFor="hide-completed-routines" className="text-sm cursor-pointer whitespace-nowrap">
+                  Ocultar Concluídas
+                </Label>
+              </div>
             </div>
           </div>
           
