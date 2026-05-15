@@ -49,6 +49,7 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string>(type === 'routines' ? 'routines_only' : 'all');
 
   // Detail Panel State
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -91,9 +92,12 @@ export const GanttView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = fa
     return tasks?.filter(t => {
       const matchesSector = !sectorId || (t as any).sector_id === sectorId || t.routine?.sector_id === sectorId || t.unit?.sector_id === sectorId;
       const matchesUser = !isMyTasks || t.assigned_to === user?.id;
-      return t.due_date && matchesSector && matchesUser;
+      const matchesType = typeFilter === 'all' 
+        || (typeFilter === 'tasks_only' && !t.routine_id) 
+        || (typeFilter === 'routines_only' && !!t.routine_id);
+      return t.due_date && matchesSector && matchesUser && matchesType;
     }) || [];
-  }, [tasks, sectorId, isMyTasks, user?.id]);
+  }, [tasks, sectorId, isMyTasks, user?.id, typeFilter]);
 
   // Helper to parse date string as local time to avoid timezone offset
   const parseLocal = (dateStr: string) => {

@@ -193,7 +193,12 @@ export const RoutinesView = ({
 
   const filteredRoutines = routines?.filter(r => {
     const matchesFrequency = activeFrequency === 'all' || r.frequency === activeFrequency;
-    const matchesSector = !sectorId || (r as any).sector_id === sectorId;
+    
+    const routineTasks = allTasks?.filter(t => t.routine_id === r.id) || [];
+    const hasTaskInSector = routineTasks.some(t => t.sector_id === sectorId || t.unit?.sector_id === sectorId);
+    
+    const matchesSector = !sectorId || (r as any).sector_id === sectorId || hasTaskInSector;
+    
     const isCompleted = isRoutineCompleted(r.id);
     const matchesHideCompleted = hideCompleted ? !isCompleted : true;
     

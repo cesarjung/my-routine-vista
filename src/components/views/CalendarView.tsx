@@ -339,12 +339,15 @@ export const CalendarView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader }
             }
           }
 
+          const isAllDay = startDate.getHours() === 0 && startDate.getMinutes() === 0 &&
+            (endDate.getHours() === 0 || endDate.getHours() === 23);
+
           items.push({
             id: period.id,
             title: `🔄 ${period.routine.title}`,
             startDate: startDate,
             endDate: endDate,
-            isAllDay: false, // Now shows in the time grid!
+            isAllDay,
             type: 'routine',
             routineId: period.routine_id,
             status: computedStatus
