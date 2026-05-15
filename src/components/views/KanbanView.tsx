@@ -103,7 +103,7 @@ export const KanbanView = ({ sectorId, isMyTasks, type = 'tasks', hideHeader = f
 
   const getTasksByStatus = (status: TaskStatus) => {
     return tasks?.filter(t => {
-      const matchesSector = !sectorId || (t as any).sector_id === sectorId;
+      const matchesSector = !sectorId || (t as any).sector_id === sectorId || t.routine?.sector_id === sectorId || t.unit?.sector_id === sectorId;
       const matchesUser = !isMyTasks || t.assigned_to === user?.id;
       const matchesType = typeFilter === 'all' 
         || (typeFilter === 'tasks_only' && !t.routine_id) 
