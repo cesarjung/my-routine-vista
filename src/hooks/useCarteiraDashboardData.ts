@@ -121,7 +121,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         const headers = carteiraRows[0];
         const found = headers.findIndex(h => {
           const s = String(h).toLowerCase();
-          return s.includes('validado') && (s.includes('orç') || s.includes('orc'));
+          return (s.includes('orç') || s.includes('orc')) && !s.includes('obras sem') && !s.includes('sem orç');
         });
         if (found !== -1) indexOrcamento = found;
       }
