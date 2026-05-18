@@ -339,7 +339,7 @@ export const PlanejamentoGanttView = () => {
             </div>
           </div>
           
-          <FilterSelect label="Projeto" options={projetosUnicos.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
+          <FilterSelect label="Projeto" options={projetosDisponiveis.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
           
           <div className="flex items-center gap-2 ml-auto">
             <SyncIndicator />
