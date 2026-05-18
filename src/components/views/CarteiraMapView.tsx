@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, Polyline, GeoJSON, CircleMarker, LayerGroup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMapEvents, Polyline, GeoJSON, CircleMarker, LayerGroup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L, { LatLng } from 'leaflet';
 import { CarteiraRow } from '@/hooks/useCarteiraDashboardData';
@@ -246,7 +246,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
                 }
               }}
             >
-              <Tooltip direction="top" offset={[0, -10]} opacity={0.95} className="custom-tooltip">
+              <Popup offset={[0, -10]} className="custom-popup">
                 <div className="flex flex-col gap-1 p-1 min-w-[150px]">
                   <h4 className="font-bold text-sm text-primary mb-1 border-b pb-1">{aloj.nome}</h4>
                   <div className="flex justify-between text-xs">
@@ -258,7 +258,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
                     <span className="font-medium text-foreground">{aloj.capacidade} pessoas</span>
                   </div>
                 </div>
-              </Tooltip>
+              </Popup>
             </Marker>
           );
         })}
@@ -276,7 +276,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
               }
             }}
           >
-            <Tooltip direction="top" offset={[0, -10]} opacity={0.95} className="custom-tooltip">
+            <Popup offset={[0, -10]} className="custom-popup">
               <div className="flex flex-col gap-1 p-1 min-w-[200px]">
                 <h4 className="font-bold text-sm text-primary mb-1 border-b pb-1 truncate max-w-[250px]" title={`${obra.projeto} - ${obra.titulo}`}>{obra.projeto} - {obra.titulo}</h4>
                 <div className="flex justify-between text-xs">
@@ -294,7 +294,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
                   </span>
                 </div>
               </div>
-            </Tooltip>
+            </Popup>
           </Marker>
         ))}
         </LayerGroup>
