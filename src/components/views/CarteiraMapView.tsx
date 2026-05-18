@@ -230,7 +230,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
           <GeoJSON key={JSON.stringify(routeData.geometry.coordinates)} data={routeData.geometry} style={{ color: '#3b82f6', weight: 5, opacity: 0.8 }} />
         )}
 
-        <LayerGroup key={`${obrasComCoords.length}-${alojamentosAtivos.length}`}>
+        <LayerGroup>
         {alojamentosAtivos.map((aloj) => {
           const isBase = aloj.nome.toLowerCase().includes('base');
           return (
