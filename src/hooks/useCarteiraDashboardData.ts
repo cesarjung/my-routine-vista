@@ -113,6 +113,16 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         }
       }
 
+      let indexOrcamento = 35; // Fallback AJ
+      if (carteiraRows.length > 0 && Array.isArray(carteiraRows[0])) {
+        const headers = carteiraRows[0];
+        const found = headers.findIndex(h => {
+          const s = String(h).toLowerCase();
+          return s.includes('orçamento') || s.includes('orcamento') || s.includes('orç');
+        });
+        if (found !== -1) indexOrcamento = found;
+      }
+
       // --- PROCESSAR CARTEIRA ---
       for (let i = 1; i < carteiraRows.length; i++) {
         const row = carteiraRows[i];
@@ -190,7 +200,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
 
           qtdGpm: parseNumber(row[22]), // W
           qtdNeoex: parseNumber(row[23]), // X
-          orcamentoValidado: parseNumber(row[35]), // AJ
+          orcamentoValidado: parseNumber(row[indexOrcamento]), // Dinâmico (Fallback AJ)
           recursosAplicados: recursosAplicadosPorObra[String(row[12] || '').trim()] || 0, // Obra ID na coluna M
         });
       }
