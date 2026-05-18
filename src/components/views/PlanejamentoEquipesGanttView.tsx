@@ -14,18 +14,18 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { SyncIndicator } from '@/components/SyncIndicator';
 
 export const PlanejamentoEquipesGanttView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_planejamentoequipesgantt', []);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
   const { data, isLoading, isError, error, lastUpdated } = usePlanejamentoEquipesData(selectedUnidadesIds);
-  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
-  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
-  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
-  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores', []);
-  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes', []);
-  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_planejamentoequipesgantt', []);
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start_planejamentoequipesgantt', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_planejamentoequipesgantt', '');
+  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores_planejamentoequipesgantt', []);
+  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes_planejamentoequipesgantt', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_planejamentoequipesgantt', []);
   
   const [viewStartManual, setViewStartManual] = useState(() => startOfMonth(new Date()));
   

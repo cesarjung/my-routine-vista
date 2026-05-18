@@ -36,7 +36,7 @@ import {
 } from 'recharts';
 
 export const PlanejadoMetaView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_planejadometa', []);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
@@ -46,19 +46,19 @@ export const PlanejadoMetaView = () => {
   const { data: reprogData = [], isLoading: isReprogLoading } = useReprogramadasData(selectedUnidadesIds);
 
   // Filtros locais (persistidos em sessão)
-  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_planejadometa', []);
   const [mesesDropdownOpen, setMesesDropdownOpen] = useState(false);
   
-  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
-  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start_planejadometa', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_planejadometa', '');
   
-  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores', []);
+  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores_planejadometa', []);
   const [supervisoresDropdownOpen, setSupervisoresDropdownOpen] = useState(false);
   
-  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes', []);
+  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes_planejadometa', []);
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
   
-  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_planejadometa', []);
   const [projetosDropdownOpen, setProjetosDropdownOpen] = useState(false);
 
   // Toggle "Somente Disponíveis" (Coluna BB == 1)

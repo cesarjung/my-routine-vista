@@ -34,17 +34,17 @@ const getStatusColorClass = (status: string) => {
 };
 
 export const PlanejamentoGanttView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_planejamentogantt', []);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
   const { data, isLoading, isError, error, lastUpdated } = usePlanejamentoData(selectedUnidadesIds);
-  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
-  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
-  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
-  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('filter_status', []);
-  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_planejamentogantt', []);
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start_planejamentogantt', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_planejamentogantt', '');
+  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('filter_status_planejamentogantt', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_planejamentogantt', []);
   
   const [viewStartManual, setViewStartManual] = useState(() => startOfMonth(new Date()));
   

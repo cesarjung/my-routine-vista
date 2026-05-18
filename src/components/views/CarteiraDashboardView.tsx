@@ -55,7 +55,7 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
 };
 
 export const CarteiraDashboardView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_carteiradashboard', []);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
@@ -63,16 +63,16 @@ export const CarteiraDashboardView = () => {
   const { data, isLoading } = useCarteiraDashboardData(selectedUnidadesIds);
 
   // Estados dos filtros
-  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
-  const [selectedStatus, setSelectedStatus] = useSessionState<string[]>('filter_status', []);
-  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
-  const [selectedMunicipios, setSelectedMunicipios] = useSessionState<string[]>('filter_municipios', []);
-  const [selectedPrioridades, setSelectedPrioridades] = useSessionState<string[]>('filter_prioridades', []);
-  const [selectedVistorias, setSelectedVistorias] = useSessionState<string[]>('filter_vistorias', []); // 'SIM', 'NÃO', 'VENCIDAS'
-  const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps', []);
-  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
-  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
-  const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas', false);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_carteiradashboard', []);
+  const [selectedStatus, setSelectedStatus] = useSessionState<string[]>('filter_status_carteiradashboard', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_carteiradashboard', []);
+  const [selectedMunicipios, setSelectedMunicipios] = useSessionState<string[]>('filter_municipios_carteiradashboard', []);
+  const [selectedPrioridades, setSelectedPrioridades] = useSessionState<string[]>('filter_prioridades_carteiradashboard', []);
+  const [selectedVistorias, setSelectedVistorias] = useSessionState<string[]>('filter_vistorias_carteiradashboard', []); // 'SIM', 'NÃO', 'VENCIDAS'
+  const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps_carteiradashboard', []);
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start_carteiradashboard', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_carteiradashboard', '');
+  const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas_carteiradashboard', false);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   useEffect(() => {

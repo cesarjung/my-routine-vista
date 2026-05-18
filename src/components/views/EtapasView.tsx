@@ -29,7 +29,7 @@ import {
 } from 'recharts';
 
 export const EtapasView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades', []);
+  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_etapas', []);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
@@ -37,19 +37,19 @@ export const EtapasView = () => {
   const { data, isLoading, isError, lastUpdated } = useEtapasData(selectedUnidadesIds);
 
   // Filtros locais (persistidos em sessão)
-  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses', []);
+  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_etapas', []);
   const [mesesDropdownOpen, setMesesDropdownOpen] = useState(false);
   
-  const [filterStart, setFilterStart] = useSessionState<string>('filter_start', '');
-  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end', '');
+  const [filterStart, setFilterStart] = useSessionState<string>('filter_start_etapas', '');
+  const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_etapas', '');
 
-  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores', []);
+  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores_etapas', []);
   const [supervisoresDropdownOpen, setSupervisoresDropdownOpen] = useState(false);
 
-  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes', []);
+  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes_etapas', []);
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
 
-  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos', []);
+  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_etapas', []);
   const [projetosDropdownOpen, setProjetosDropdownOpen] = useState(false);
 
   // Regra vital

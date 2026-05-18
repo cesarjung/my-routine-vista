@@ -39,7 +39,7 @@ type WeeklyStats = {
 
 export const PlanejamentoSemanalView = () => {
   // Estado de Filtros
-  const [selectedUnidades, setSelectedUnidades] = useSessionState<string[]>('filter_unidades', []);
+  const [selectedUnidades, setSelectedUnidades] = useSessionState<string[]>('filter_unidades_planejamentosemanal', []);
 
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
     from: startOfWeek(new Date(), { weekStartsOn: 1 }), // Segunda-feira
