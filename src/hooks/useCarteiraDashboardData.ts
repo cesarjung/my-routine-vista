@@ -85,6 +85,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
     const baseCurva: BaseCurvaRow[] = [];
     const metasFaturamento: MetaFaturamentoRow[] = [];
     let lastUpdated: Date | null = null;
+    const recursosAplicadosPorObra: Record<string, number> = {};
 
     rawData.forEach(unidadeData => {
       if (unidadeData.lastUpdated) {
@@ -96,7 +97,6 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
       const unidadeNome = unidadeInfo ? unidadeInfo.nome : `UNIDADE ${unidadeData.unidadeId}`;
 
-      const recursosAplicadosPorObra: Record<string, number> = {};
       const principalRows = unidadeData.principal;
       if (principalRows && Array.isArray(principalRows)) {
         for (let j = 1; j < principalRows.length; j++) {
