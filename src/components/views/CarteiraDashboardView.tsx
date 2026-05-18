@@ -18,6 +18,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { FilterSelect } from '@/components/ui/filter-select';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { cn } from '@/lib/utils';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: number, colorClass: string, size?: number }) => {
   const strokeWidth = size * 0.12;
@@ -669,7 +670,8 @@ export const CarteiraDashboardView = () => {
             <h3 className="font-bold text-sm">Relação de Obras Filtradas ({considerarInaptas ? 'Aptas + Inaptas' : 'Aptas'}) ({indicators.totalObras})</h3>
           </div>
           <div className="flex-1 overflow-auto custom-scrollbar p-0">
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <ErrorBoundary>
+<table className="w-full text-sm text-left whitespace-nowrap">
               <thead className="bg-muted sticky top-0 z-10 shadow-sm">
                 <tr>
                   <th className="px-4 py-2 font-semibold">Obra</th>
@@ -714,6 +716,7 @@ export const CarteiraDashboardView = () => {
                 )}
               </tbody>
             </table>
+</ErrorBoundary>
           </div>
         </div>
       </div>
@@ -730,7 +733,7 @@ export const CarteiraDashboardView = () => {
           >
             {isMapFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
           </Button>
-          <CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} />
+          <ErrorBoundary><CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} /></ErrorBoundary>
         </div>
       </div>
 
@@ -740,7 +743,8 @@ export const CarteiraDashboardView = () => {
           <h3 className="font-bold text-sm">Localização (Municípios)</h3>
         </div>
         <div className="flex-1 overflow-auto custom-scrollbar p-0">
-          <table className="w-full text-sm text-left">
+          <ErrorBoundary>
+<table className="w-full text-sm text-left">
             <thead className="bg-muted sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="px-4 py-2 font-semibold">Município</th>
@@ -769,6 +773,7 @@ export const CarteiraDashboardView = () => {
               )}
             </tbody>
           </table>
+</ErrorBoundary>
         </div>
       </div>
 
@@ -778,7 +783,8 @@ export const CarteiraDashboardView = () => {
           <h3 className="font-bold text-sm text-red-500">Obras com Divergência de Lançamento (GPM x NEOEX)</h3>
         </div>
         <div className="flex-1 overflow-auto custom-scrollbar p-0">
-          <table className="w-full text-sm text-left whitespace-nowrap">
+          <ErrorBoundary>
+<table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="bg-muted sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="px-4 py-2 font-semibold">Obra</th>
@@ -805,6 +811,7 @@ export const CarteiraDashboardView = () => {
               )}
             </tbody>
           </table>
+</ErrorBoundary>
         </div>
       </div>
 

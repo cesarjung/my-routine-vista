@@ -206,33 +206,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
         />
         
         <MapMeasureEvents mode={measureMode} points={measurePoints} setPoints={setMeasurePoints} />
-        
-        {measurePoints.map((pt, idx) => (
-          <CircleMarker 
-            key={idx} 
-            center={pt} 
-            radius={6} 
-            pathOptions={{ color: measureMode === 'route' ? '#3b82f6' : '#f59e0b', fillColor: 'white', fillOpacity: 1, weight: 2 }} 
-            eventHandlers={{
-              contextmenu: (e) => {
-                // Remove esse ponto em específico
-                setMeasurePoints(prev => prev.filter((_, i) => i !== idx));
-              }
-            }}
-          >
-            <Tooltip permanent direction="right" className="custom-tooltip-measure" opacity={0.9}>
-               Ponto {idx + 1}
-            </Tooltip>
-          </CircleMarker>
-        ))}
-
-        {measureMode === 'straight' && measurePoints.length > 1 && (
-          <Polyline positions={measurePoints} pathOptions={{ color: '#f59e0b', weight: 4, dashArray: '5, 10' }} />
-        )}
-
-        {measureMode === 'route' && routeData && (
-          <GeoJSON key={JSON.stringify(routeData.geometry.coordinates)} data={routeData.geometry} style={{ color: '#3b82f6', weight: 5, opacity: 0.8 }} />
-        )}
+        {/* React-Leaflet elements removed to prevent strict mode unmount crashes */}
 
         <NativeMarkers 
           obras={obrasComCoords}
