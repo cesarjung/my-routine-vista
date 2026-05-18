@@ -1,8 +1,11 @@
-import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, Polyline, GeoJSON, CircleMarker } from 'react-leaflet';
+import os
+
+filepath = 'src/components/views/CarteiraMapView.tsx'
+
+new_code = """import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, Polyline, GeoJSON, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L, { LatLng } from 'leaflet';
 import { CarteiraRow } from '@/hooks/useCarteiraDashboardData';
-import { useAlojamentos } from '@/hooks/useAlojamentos';
 import { useState, useEffect } from 'react';
 import { Ruler, Navigation, Trash2, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -60,21 +63,6 @@ const createMarkerIcon = (status: string, postes: number) => {
   });
 };
 
-
-const createAlojamentoIcon = (isBase: boolean) => {
-  const bgColor = isBase ? 'bg-blue-600' : 'bg-green-600';
-  const svgIcon = isBase 
-    ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-building-2 text-white"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>`
-    : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-home text-white"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`;
-  
-  return L.divIcon({
-    className: 'custom-alojamento-icon',
-    html: `<div class="${bgColor} w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center">${svgIcon}</div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16]
-  });
-};
-
 type MeasureMode = 'none' | 'straight' | 'route';
 
 interface RouteData {
@@ -97,11 +85,6 @@ const MapMeasureEvents = ({
       if (mode !== 'none') {
         setPoints(prev => [...prev, e.latlng]);
       }
-    },
-    contextmenu(e) {
-      if (mode !== 'none') {
-        setPoints(prev => prev.slice(0, -1));
-      }
     }
   });
   return null;
@@ -117,18 +100,10 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
     ? [obrasComCoords[0].latitude!, obrasComCoords[0].longitude!] as [number, number]
     : defaultCenter;
 
-  const { alojamentos } = useAlojamentos();
   const [measureMode, setMeasureMode] = useState<MeasureMode>('none');
   const [measurePoints, setMeasurePoints] = useState<LatLng[]>([]);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [isRouting, setIsRouting] = useState(false);
-
-  
-  // Extract unique Unidade Nomes from current filtered obras
-  const unidadesNoMapa = Array.from(new Set(obras.map(o => o.unidadeNome))).filter(Boolean);
-  
-  // Only show alojamentos that belong to the filtered units
-  const alojamentosAtivos = alojamentos.filter(a => unidadesNoMapa.includes(a.unidadeNome));
 
   const straightDistance = measurePoints.reduce((acc, pt, idx, arr) => {
     if (idx === 0) return acc;
@@ -209,12 +184,6 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
             center={pt} 
             radius={6} 
             pathOptions={{ color: measureMode === 'route' ? '#3b82f6' : '#f59e0b', fillColor: 'white', fillOpacity: 1, weight: 2 }} 
-            eventHandlers={{
-              contextmenu: (e) => {
-                // Remove esse ponto em específico
-                setMeasurePoints(prev => prev.filter((_, i) => i !== idx));
-              }
-            }}
           >
             <Tooltip permanent direction="right" className="custom-tooltip-measure" opacity={0.9}>
                Ponto {idx + 1}
@@ -230,52 +199,8 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
           <GeoJSON key={Date.now()} data={routeData.geometry} style={{ color: '#3b82f6', weight: 5, opacity: 0.8 }} />
         )}
 
-        
-        {alojamentosAtivos.map((aloj) => {
-          const isBase = aloj.nome.toLowerCase().includes('base');
-          return (
-            <Marker 
-              key={aloj.id} 
-              position={[aloj.latitude, aloj.longitude]} 
-              icon={createAlojamentoIcon(isBase)}
-              eventHandlers={{
-                click: (e) => {
-                  if (measureMode !== 'none') {
-                    setMeasurePoints(prev => [...prev, L.latLng(aloj.latitude, aloj.longitude)]);
-                  }
-                }
-              }}
-            >
-              <Tooltip direction="top" offset={[0, -10]} opacity={0.95} className="custom-tooltip">
-                <div className="flex flex-col gap-1 p-1 min-w-[150px]">
-                  <h4 className="font-bold text-sm text-primary mb-1 border-b pb-1">{aloj.nome}</h4>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-semibold text-muted-foreground">Unidade:</span>
-                    <span className="font-medium text-foreground">{aloj.unidadeNome}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-semibold text-muted-foreground">Capacidade:</span>
-                    <span className="font-medium text-foreground">{aloj.capacidade} pessoas</span>
-                  </div>
-                </div>
-              </Tooltip>
-            </Marker>
-          );
-        })}
-
         {obrasComCoords.slice(0, 300).map((obra) => (
-          <Marker 
-            key={obra.id} 
-            position={[obra.latitude!, obra.longitude!]} 
-            icon={createMarkerIcon(obra.statusExecucao, obra.postesDisponiveis)}
-            eventHandlers={{
-              click: (e) => {
-                if (measureMode !== 'none') {
-                  setMeasurePoints(prev => [...prev, L.latLng(obra.latitude!, obra.longitude!)]);
-                }
-              }
-            }}
-          >
+          <Marker key={obra.id} position={[obra.latitude!, obra.longitude!]} icon={createMarkerIcon(obra.statusExecucao, obra.postesDisponiveis)}>
             <Tooltip direction="top" offset={[0, -10]} opacity={0.95} className="custom-tooltip">
               <div className="flex flex-col gap-1 p-1 min-w-[200px]">
                 <h4 className="font-bold text-sm text-primary mb-1 border-b pb-1 truncate max-w-[250px]" title={`${obra.projeto} - ${obra.titulo}`}>{obra.projeto} - {obra.titulo}</h4>
@@ -397,21 +322,11 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
             <div className="flex items-center gap-2"><span style={{ color: '#fca5a5', textShadow: '1px 1px 2px #000' }}>Acima de 100</span></div>
           </div>
         </div>
-
-          <div className="mt-3 pt-3 border-t border-border">
-            <h4 className="font-bold mb-2">Locais e Bases</h4>
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-green-600 border border-white flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
-                Alojamentos
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-blue-600 border border-white flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></div>
-                Bases / Indústria
-              </div>
-            </div>
-          </div>
       </div>
     </div>
   );
 };
+"""
+
+with open(filepath, 'w', encoding='utf-8') as f:
+    f.write(new_code)

@@ -21,6 +21,7 @@ import { CumprimentoView } from '@/components/views/CumprimentoView';
 import { EtapasView } from '@/components/views/EtapasView';
 import { CarteiraDashboardView } from '@/components/views/CarteiraDashboardView';
 import { PlanejamentoSemanalView } from '@/components/views/PlanejamentoSemanalView';
+import { AlojamentosView } from '@/components/views/AlojamentosView';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -47,6 +48,8 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         if (context.section === 'carteira_dashboard') return 'Carteira';
         if (context.section === 'carteira') return 'Carteira Planejada';
         return 'Planejamento';
+      case 'alojamentos':
+        return 'Alojamentos e Bases';
       case 'planejamento_equipes':
         return 'Equipes de Planejamento';
       case 'poste_turno':
@@ -146,12 +149,14 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     if (context.type === 'planejamento') {
       if (context.section === 'carteira_dashboard') return <CarteiraDashboardView />;
       if (context.section === 'carteira') return <PlanejamentoGanttView />;
+      if (context.section === 'alojamentos') return <AlojamentosView />;
       return (
         <div className="flex h-full items-center justify-center text-muted-foreground">
           Módulo de Planejamento - Selecione uma seção no menu lateral
         </div>
       );
     }
+    if (context.type === 'alojamentos') return <AlojamentosView />;
     if (context.type === 'planejamento_equipes') return <PlanejamentoEquipesGanttView />;
     if (context.type === 'poste_turno') return <PostesTurnoView />;
     if (context.type === 'deslocamento') return <DeslocamentoView />;
@@ -163,7 +168,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     return null;
   };
 
-  const isPlanejamento = context.type === 'planejamento' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal';
+  const isPlanejamento = context.type === 'planejamento' || context.type === 'alojamentos' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal';
   const isGanttView = (context.type === 'planejamento' && context.section === 'carteira') || context.type === 'planejamento_equipes';
 
   // Sector specific view

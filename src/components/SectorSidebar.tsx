@@ -20,7 +20,8 @@ import {
   CheckCircle,
   Layers,
   Trash2,
-  StickyNote
+  StickyNote,
+  Home
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -619,6 +620,20 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               >
                 <Map className="w-4 h-4 shrink-0" />
                 {!collapsed && <span className="text-sm whitespace-nowrap">Carteira Planejada</span>}
+              </button>
+            )}
+
+            {/* Alojamentos */}
+            {hasPlanejamentoAccess('carteira') && (
+              <button
+                onClick={() => onNavigate({ type: 'alojamentos', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'alojamentos' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Home className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Alojamentos e Bases</span>}
               </button>
             )}
 
