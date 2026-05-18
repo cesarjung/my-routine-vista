@@ -60,6 +60,11 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       return isPercent ? num / 100 : num;
     };
 
+    const normalizeString = (str: string) => {
+      if (!str) return '';
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+    };
+
     const parseDate = (val: any): Date | null => {
       if (!val) return null;
       let str = String(val).trim();
@@ -165,17 +170,18 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         });
       }
 
-      // --- PROCESSAR BASE_CURVA ---
       const bdMetasObj = unidadeData.bdMetas as any;
       const baseCurvaRows = bdMetasObj?.base_curva || [];
       const bdConfigRows = bdMetasObj?.bd_config || [];
       
+      const unidadeNomeNorm = normalizeString(unidadeNome);
+
       for (let i = 1; i < baseCurvaRows.length; i++) {
         const row = baseCurvaRows[i];
         if (!row || !Array.isArray(row)) continue;
         
-        const unidadeRow = String(row[1] || '').trim().toUpperCase();
-        if (unidadeRow !== unidadeNome.toUpperCase() && unidadeRow !== unidadeNome.replace(' ', '').toUpperCase()) {
+        const unidadeRow = normalizeString(String(row[1] || ''));
+        if (unidadeRow !== unidadeNomeNorm && unidadeRow !== unidadeNomeNorm.replace(/\s+/g, '')) {
           continue;
         }
 
@@ -200,8 +206,8 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         const row = bdConfigRows[i];
         if (!row || !Array.isArray(row)) continue;
 
-        const unidadeRow = String(row[81] || '').trim().toUpperCase();
-        if (unidadeRow === unidadeNome.toUpperCase() || unidadeRow === unidadeNome.replace(' ', '').toUpperCase()) {
+        const unidadeRow = normalizeString(String(row[81] || ''));
+        if (unidadeRow === unidadeNomeNorm || unidadeRow === unidadeNomeNorm.replace(/\s+/g, '')) {
           const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
           for (let m = 0; m < 12; m++) {
             metasFaturamento.push({
