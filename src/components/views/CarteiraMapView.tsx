@@ -196,7 +196,18 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
         )}
 
         {obrasComCoords.slice(0, 300).map((obra) => (
-          <Marker key={obra.id} position={[obra.latitude!, obra.longitude!]} icon={createMarkerIcon(obra.statusExecucao, obra.postesDisponiveis)}>
+          <Marker 
+            key={obra.id} 
+            position={[obra.latitude!, obra.longitude!]} 
+            icon={createMarkerIcon(obra.statusExecucao, obra.postesDisponiveis)}
+            eventHandlers={{
+              click: (e) => {
+                if (measureMode !== 'none') {
+                  setMeasurePoints(prev => [...prev, L.latLng(obra.latitude!, obra.longitude!)]);
+                }
+              }
+            }}
+          >
             <Tooltip direction="top" offset={[0, -10]} opacity={0.95} className="custom-tooltip">
               <div className="flex flex-col gap-1 p-1 min-w-[200px]">
                 <h4 className="font-bold text-sm text-primary mb-1 border-b pb-1 truncate max-w-[250px]" title={`${obra.projeto} - ${obra.titulo}`}>{obra.projeto} - {obra.titulo}</h4>
