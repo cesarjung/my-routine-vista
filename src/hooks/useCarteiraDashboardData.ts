@@ -53,7 +53,9 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
     if (!rawData || rawData.length === 0) return { carteira: [], baseCurva: [], metasFaturamento: [] };
 
     const parseNumber = (val: any) => {
+      if (val === 0 || val === '0') return 0;
       if (!val) return 0;
+      if (typeof val === 'number') return val;
       let str = String(val).trim();
       const isPercent = str.includes('%');
       const clean = str.replace(/[R$%\s\.]/g, '').replace(',', '.');
@@ -118,7 +120,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         const headers = carteiraRows[0];
         const found = headers.findIndex(h => {
           const s = String(h).toLowerCase();
-          return s.includes('orçamento') || s.includes('orcamento') || s.includes('orç');
+          return s.includes('validado') && (s.includes('orç') || s.includes('orc'));
         });
         if (found !== -1) indexOrcamento = found;
       }
