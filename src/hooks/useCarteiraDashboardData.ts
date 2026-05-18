@@ -28,6 +28,8 @@ export interface CarteiraRow {
   longitude: number | null;
   qtdGpm: number;
   qtdNeoex: number;
+  orcamentoValidado: number;
+  recursosAplicados: number;
 }
 
 export interface BaseCurvaRow {
@@ -165,8 +167,11 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
           avnpMaisRecente,
           latitude: lat !== 0 ? lat : null,
           longitude: lng !== 0 ? lng : null,
+
           qtdGpm: parseNumber(row[22]), // W
           qtdNeoex: parseNumber(row[23]), // X
+          orcamentoValidado: parseNumber(row[35]), // AJ
+          recursosAplicados: recursosAplicadosPorObra[String(row[12] || '').trim()] || 0, // Obra ID na coluna M
         });
       }
 

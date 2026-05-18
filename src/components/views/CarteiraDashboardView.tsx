@@ -679,6 +679,8 @@ export const CarteiraDashboardView = () => {
                   <th className="px-4 py-2 font-semibold">Status Execução</th>
                   <th className="px-4 py-2 font-semibold text-right">Postes Disp.</th>
                   <th className="px-4 py-2 font-semibold text-right">Valor Considerado</th>
+                  <th className="px-4 py-2 font-semibold text-right">Orçamento Val.</th>
+                  <th className="px-4 py-2 font-semibold text-right">Recursos Aplic.</th>
                 </tr>
               </thead>
               <tbody>
@@ -697,11 +699,17 @@ export const CarteiraDashboardView = () => {
                     <td className="px-4 py-2 text-right text-green-600 font-medium">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
                     </td>
+                    <td className="px-4 py-2 text-right font-medium">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
+                    </td>
+                    <td className="px-4 py-2 text-right font-medium text-blue-600">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
+                    </td>
                   </tr>
                 ))}
                 {filteredData.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
                   </tr>
                 )}
               </tbody>
