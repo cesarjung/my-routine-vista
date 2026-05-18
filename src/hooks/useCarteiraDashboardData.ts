@@ -59,6 +59,12 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       if (typeof val === 'number') return val;
       let str = String(val).trim();
       const isPercent = str.includes('%');
+      // Se a string já é um número decimal válido (ex: "227288.33"), converte direto
+      if (/^-?\d+\.\d+$/.test(str)) {
+         const num = Number(str);
+         return isPercent ? num / 100 : num;
+      }
+      // Caso contrário, limpa a formatação R$ 227.288,33
       const clean = str.replace(/[R$%\s\.]/g, '').replace(',', '.');
       let num = Number(clean);
       if (isNaN(num)) return 0;
@@ -104,8 +110,17 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
           if (!pRow || !Array.isArray(pRow)) continue;
           
           const obraId = String(pRow[7] || '').trim(); // Coluna H
-          const metaVal = parseNumber(pRow[38]); // Coluna AM
-          const paramAO = parseNumber(pRow[40]); // Coluna AO
+          
+          // Fallback +2 colunas (caso a planilha tenha sofrido shift na base de dados)
+          let metaVal = parseNumber(pRow[38]); // Coluna AM
+          let paramAO = parseNumber(pRow[40]); // Coluna AO
+          
+          // Se a coluna original estiver vazia e a deslocada tiver dado, assume o shift
+          const raw38 = pRow[38];
+          if ((raw38 === undefined || raw38 === null || raw38 === '') && pRow[40] !== undefined) {
+             metaVal = parseNumber(pRow[40]); // Fallback para AO
+             paramAO = parseNumber(pRow[42]); // Fallback para AQ
+          }
           
           if (obraId && paramAO > 0) {
             if (!recursosAplicadosPorObra[obraId]) {
@@ -116,9 +131,32 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         }
       }
 
-      // Fallback para lidar com o cache antigo que possui +2 colunas de shift
-      let indexOrcamento = 35; // AJ
-      let indexOrcamentoShifted = 37; // AL (se estiver shifted)
+      // O usuário solicitou expressamente que:
+      // Valor Considerado = AM = 38 (capacidadeFaturamento)
+      // Orçamento Validado = AJ = 35 (orcamentoValidado) OU "R$ MO Validado" na linha 5 (index 4)
+      
+      let indexOrcamento = 35; // AJ fallback
+      
+      // Procura exatamente na linha 5 (index 4) o cabeçalho correto, ou nas primeiras linhas
+      let foundOrcamentoIdx = -1;
+      for (let hr = 0; hr < Math.min(10, carteiraRows.length); hr++) {
+        const headerRow = carteiraRows[hr];
+        if (Array.isArray(headerRow)) {
+          const idx = headerRow.findIndex(h => {
+            const s = String(h).toLowerCase();
+            return s.includes('mo validado') || s.includes('orçamento val') || s.includes('orcamento val');
+          });
+          if (idx !== -1) {
+            foundOrcamentoIdx = idx;
+            break;
+          }
+        }
+      }
+      if (foundOrcamentoIdx !== -1) {
+        indexOrcamento = foundOrcamentoIdx;
+      }
+
+      // --- PROCESSAR CARTEIRA ---
       for (let i = 1; i < carteiraRows.length; i++) {
         const row = carteiraRows[i];
         if (!row || !Array.isArray(row)) continue; 
@@ -170,6 +208,11 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         if (isNaN(lat)) lat = 0;
         if (isNaN(lng)) lng = 0;
 
+        const obraId = String(row[12] || '').trim();
+        if (obraId === 'B-1160331') {
+          console.log('CARTEIRA HEADERS GUANAMBI:', unidadeData.carteira[0]);
+        }
+
         carteira.push({
           id: `${unidadeData.unidadeId}-${i}`,
           unidadeId: unidadeData.unidadeId,
@@ -177,7 +220,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
           obrasInaptasVal: row[1] ? String(row[1]).trim() : '', // B
           obrasSemOrcamentoVal: row[3] ? String(row[3]).trim() : '', // D
           statusExecucao: row[11] ? String(row[11]).trim() : '', // L
-          projeto: row[12] ? String(row[12]).trim() : '', // M
+          projeto: obraId, // M
           titulo: row[13] ? String(row[13]).trim() : '', // N
           municipio: row[14] ? String(row[14]).trim() : '', // O
           prioridade: row[15] ? String(row[15]).trim() : '', // P
@@ -195,8 +238,8 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
 
           qtdGpm: parseNumber(row[22]), // W
           qtdNeoex: parseNumber(row[23]), // X
-          orcamentoValidado: parseNumber(row[indexOrcamento]) || parseNumber(row[indexOrcamentoShifted]), // AJ fallback AL
-          orcamentoRaw: String(row[indexOrcamento] !== undefined && row[indexOrcamento] !== null && row[indexOrcamento] !== '' ? row[indexOrcamento] : (row[indexOrcamentoShifted] !== undefined ? row[indexOrcamentoShifted] : 'VAZIO')),
+          orcamentoValidado: parseNumber(row[indexOrcamento]), // Dinâmico (Fallback 37)
+          orcamentoRaw: String(row[indexOrcamento] !== undefined && row[indexOrcamento] !== null && row[indexOrcamento] !== '' ? row[indexOrcamento] : 'VAZIO'),
           recursosAplicados: recursosAplicadosPorObra[String(row[12] || '').trim()] || 0, // Obra ID na coluna M
         });
       }

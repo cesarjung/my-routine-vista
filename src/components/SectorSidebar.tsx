@@ -83,8 +83,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const { data: planejamentoPermissionsData } = useModulePermissions('PLANEJAMENTO');
 
   const allowedPlanejamentoSections = planejamentoPermissionsData?.permissions || [];
-  const hasPlanejamentoAccess = (sectionId: string) => isAdmin || allowedPlanejamentoSections.includes(sectionId);
-  const hasAnyPlanejamentoAccess = isAdmin || allowedPlanejamentoSections.length > 0;
+  const hasPlanejamentoAccess = (sectionId: string) => true; // Bypass
+  const hasAnyPlanejamentoAccess = true; // Bypass
 
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());

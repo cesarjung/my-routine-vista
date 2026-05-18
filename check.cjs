@@ -1,38 +1,55 @@
-const { createClient } = require('@supabase/supabase-js');
-const dotenv = require('dotenv');
-const path = require('path');
+const fs = require('fs');
+const env = fs.readFileSync('.env', 'utf-8');
+const urlMatch = env.match(/VITE_SUPABASE_URL=([^\n\r]+)/);
+const keyMatch = env.match(/VITE_SUPABASE_PUBLISHABLE_KEY=([^\n\r]+)/);
+const url = urlMatch[1].replace(/\"/g, '');
+const key = keyMatch[1].replace(/\"/g, '');
 
-dotenv.config({ path: path.resolve(__dirname, '.env') });
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-async function checkData() {
-    const { data, error } = await supabase
-        .from('routines')
-        .select('id, title, routine_periods(id, period_start, period_end, is_active)')
-        .ilike('title', '%Check%Disponibilidade%')
-        .limit(1);
-
-    if (error) {
-        console.error(error);
-        return;
-    }
-
-    const routine = data[0];
-    if (!routine) {
-        console.log("Routine not found");
-        return;
-    }
-
-    console.log("Routine:", routine.title);
-    const periods = routine.routine_periods.sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime());
-
-    console.log("\nTop 5 Most Recent Periods (DB RAW):");
-    periods.slice(0, 5).forEach(p => {
-        console.log(`- ${p.period_start} (Active: ${p.is_active}) ID: ${p.id}`);
-    });
-}
-
-checkData();
+fetch(url + '/rest/v1/planejamento_cache?select=*&limit=1', {
+  headers: {
+    'apikey': key,
+    'Authorization': 'Bearer ' + key
+  }
+}).then(res => res.json()).then(res => {
+  if (!res || !res.length) { console.log('NO ROWS IN DB'); return; }
+  const data = res[0];
+  let carteira = data.carteira;
+  if (!carteira) return console.log('NO CARTEIRA');
+  if (typeof carteira === 'string') carteira = JSON.parse(carteira);
+  
+  console.log('Total rows:', carteira.length);
+  
+  // Look for header in first 10 rows
+  let headerRowIndex = -1;
+  let targetColIndex = -1;
+  
+  for (let i = 0; i < Math.min(10, carteira.length); i++) {
+     const row = carteira[i];
+     if (!Array.isArray(row)) continue;
+     const idx = row.findIndex(c => String(c).toLowerCase().includes('mo validado'));
+     if (idx !== -1) {
+         headerRowIndex = i;
+         targetColIndex = idx;
+         console.log(`FOUND HEADER at Row ${i + 1}, Col ${idx} (Spreadsheet Letter: ${String.fromCharCode(65 + Math.floor(idx/26) - 1)}${String.fromCharCode(65 + (idx%26))} or similar)`);
+         console.log(`Column content: "${row[idx]}"`);
+         break;
+     }
+  }
+  
+  if (targetColIndex !== -1) {
+      // Print first 5 data rows for that column
+      console.log('Sample data for that column:');
+      for (let i = headerRowIndex + 1; i < Math.min(headerRowIndex + 6, carteira.length); i++) {
+          console.log(`Row ${i+1}:`, carteira[i][targetColIndex]);
+      }
+      console.log('Sample data for column 35 (AJ):');
+      for (let i = headerRowIndex + 1; i < Math.min(headerRowIndex + 6, carteira.length); i++) {
+          console.log(`Row ${i+1}:`, carteira[i][35]);
+      }
+  } else {
+      console.log('HEADER NOT FOUND. Printing row 4 (line 5):');
+      console.log(carteira[4]);
+      console.log('Printing row 5 (line 6):');
+      console.log(carteira[5]);
+  }
+}).catch(console.error);
