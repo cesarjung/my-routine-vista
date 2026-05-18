@@ -41,10 +41,7 @@ export const PlanejamentoSemanalView = () => {
   // Estado de Filtros
   const [selectedUnidades, setSelectedUnidades] = useSessionState<string[]>('filter_unidades_planejamentosemanal', []);
 
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
-    from: startOfWeek(new Date(), { weekStartsOn: 1 }), // Segunda-feira
-    to: endOfWeek(new Date(), { weekStartsOn: 1 }) // Domingo
-  });
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
 
   const [limiteDeslocamento, setLimiteDeslocamento] = useState<number>(2.0);
 
