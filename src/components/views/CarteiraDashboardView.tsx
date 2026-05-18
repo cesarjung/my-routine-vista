@@ -54,6 +54,77 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
   );
 };
 
+const FilterSelect = ({
+  label,
+  options,
+  selectedValues,
+  onChange,
+  searchable = false
+}: {
+  label: string;
+  options: { value: string | number; label: string }[];
+  selectedValues: any[];
+  onChange: (val: any[]) => void;
+  searchable?: boolean;
+}) => {
+  const [search, setSearch] = useState("");
+  
+  const filteredOptions = searchable && search 
+    ? options.filter(o => String(o.label).toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  return (
+    <div className="flex flex-col justify-center min-w-[90px]">
+      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">
+            <span className="truncate">{selectedValues.length === 0 ? 'Todos' : `${selectedValues.length} selec.`}</span>
+            <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
+          <div className="p-2 border-b border-border flex flex-col gap-2 sticky top-0 bg-popover z-10">
+            {searchable && (
+              <input 
+                type="text" 
+                placeholder="Pesquisar..." 
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => e.stopPropagation()}
+                className="w-full h-8 px-2 text-xs border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            )}
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => { onChange([]); setSearch(""); }}>Limpar</Button>
+            </div>
+          </div>
+          {filteredOptions.map((opt) => (
+            <DropdownMenuCheckboxItem
+              key={opt.value}
+              checked={selectedValues.includes(opt.value)}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  onChange([...selectedValues, opt.value]);
+                } else {
+                  onChange(selectedValues.filter((v) => v !== opt.value));
+                }
+              }}
+              onSelect={(e) => e.preventDefault()}
+            >
+              {opt.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+          {filteredOptions.length === 0 && (
+             <div className="px-2 py-2 text-sm text-muted-foreground text-center">Nenhuma opção</div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+};
+
 export const CarteiraDashboardView = () => {
   const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_carteiradashboard', []);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
@@ -358,53 +429,6 @@ export const CarteiraDashboardView = () => {
     </span>
   );
 
-  // Helper para renderizar os filtros multi-select (estilo novo, linear com Select All)
-  const renderMultiSelect = (
-    label: string, 
-    options: { value: string | number; label: string }[], 
-    selectedValues: any[], 
-    onChange: (val: any[]) => void
-  ) => {
-    return (
-      <div className="flex flex-col justify-center min-w-[90px]">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">
-              <span className="truncate">{selectedValues.length === 0 ? 'Todos' : `${selectedValues.length} selec.`}</span>
-              <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => onChange([])}>Limpar</Button>
-            </div>
-            {options.map((opt) => (
-              <DropdownMenuCheckboxItem
-                key={opt.value}
-                checked={selectedValues.includes(opt.value)}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    onChange([...selectedValues, opt.value]);
-                  } else {
-                    onChange(selectedValues.filter((v) => v !== opt.value));
-                  }
-                }}
-                onSelect={(e) => e.preventDefault()}
-              >
-                {opt.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-            {options.length === 0 && (
-               <div className="px-2 py-2 text-sm text-muted-foreground text-center">Nenhuma opção</div>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    );
-  };
-
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-y-auto overflow-x-hidden custom-scrollbar relative">
       
@@ -462,16 +486,16 @@ export const CarteiraDashboardView = () => {
              </div>
 
              {/* Outros filtros combinados na mesma linha, unidade ao lado de prioridade */}
-             {renderMultiSelect("Projeto", options.projetos.map(m => ({ value: m, label: m })), selectedProjetos, setSelectedProjetos)}
-             {renderMultiSelect("Prioridade", options.prioridades.map(m => ({ value: m, label: m })), selectedPrioridades, setSelectedPrioridades)}
-             {renderMultiSelect("Mês", options.meses.map(m => ({ value: m, label: m })), selectedMeses, setSelectedMeses)}
-             {renderMultiSelect("Vistoria", [
+             <FilterSelect label="Projeto" options={options.projetos.map(m => ({ value: m, label: m }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
+             <FilterSelect label="Prioridade" options={options.prioridades.map(m => ({ value: m, label: m }))} selectedValues={selectedPrioridades} onChange={setSelectedPrioridades} />
+             <FilterSelect label="Mês" options={options.meses.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} />
+             <FilterSelect label="Vistoria" options={[
                { value: "SIM", label: "SIM (Válidas)" },
                { value: "VENCIDAS", label: "VENCIDAS (+6 meses)" },
                { value: "NÃO", label: "NÃO (Sem Data)" }
-             ], selectedVistorias, setSelectedVistorias)}
-             {renderMultiSelect("Status", options.status.map(m => ({ value: m, label: m })), selectedStatus, setSelectedStatus)}
-             {renderMultiSelect("AVNP", options.avnps.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` })), selectedAVNPs, setSelectedAVNPs)}
+             ]} selectedValues={selectedVistorias} onChange={setSelectedVistorias} />
+             <FilterSelect label="Status" options={options.status.map(m => ({ value: m, label: m }))} selectedValues={selectedStatus} onChange={setSelectedStatus} />
+             <FilterSelect label="AVNP" options={options.avnps.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` }))} selectedValues={selectedAVNPs} onChange={setSelectedAVNPs} />
 
              <Toggle 
                pressed={considerarInaptas} 
