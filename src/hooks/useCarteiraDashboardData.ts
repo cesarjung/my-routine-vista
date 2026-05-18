@@ -93,6 +93,26 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
       const unidadeNome = unidadeInfo ? unidadeInfo.nome : `UNIDADE ${unidadeData.unidadeId}`;
 
+      const recursosAplicadosPorObra: Record<string, number> = {};
+      const principalRows = unidadeData.principal;
+      if (principalRows && Array.isArray(principalRows)) {
+        for (let j = 1; j < principalRows.length; j++) {
+          const pRow = principalRows[j];
+          if (!pRow || !Array.isArray(pRow)) continue;
+          
+          const obraId = String(pRow[7] || '').trim(); // Coluna H
+          const metaVal = parseNumber(pRow[38]); // Coluna AM
+          const paramAO = parseNumber(pRow[40]); // Coluna AO
+          
+          if (obraId && paramAO > 0) {
+            if (!recursosAplicadosPorObra[obraId]) {
+              recursosAplicadosPorObra[obraId] = 0;
+            }
+            recursosAplicadosPorObra[obraId] += metaVal;
+          }
+        }
+      }
+
       // --- PROCESSAR CARTEIRA ---
       for (let i = 1; i < carteiraRows.length; i++) {
         const row = carteiraRows[i];
