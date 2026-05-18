@@ -730,7 +730,7 @@ export const CarteiraDashboardView = () => {
           >
             {isMapFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
           </Button>
-          <CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} />
+          <CarteiraMapView key={`${selectedUnidadesIds.join('-')}-${filteredData.length}`} obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} />
         </div>
       </div>
 
