@@ -116,17 +116,9 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         }
       }
 
-      let indexOrcamento = 35; // Fallback AJ
-      if (carteiraRows.length > 0 && Array.isArray(carteiraRows[0])) {
-        const headers = carteiraRows[0];
-        const found = headers.findIndex(h => {
-          const s = String(h).toLowerCase();
-          return s.includes('mo validado') || s.includes('orçamento validado') || s.includes('orcamento validado');
-        });
-        if (found !== -1) indexOrcamento = found;
-      }
-
-      // --- PROCESSAR CARTEIRA ---
+      // Fallback para lidar com o cache antigo que possui +2 colunas de shift
+      let indexOrcamento = 35; // AJ
+      let indexOrcamentoShifted = 37; // AL (se estiver shifted)
       for (let i = 1; i < carteiraRows.length; i++) {
         const row = carteiraRows[i];
         if (!row || !Array.isArray(row)) continue; 
@@ -203,8 +195,8 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
 
           qtdGpm: parseNumber(row[22]), // W
           qtdNeoex: parseNumber(row[23]), // X
-          orcamentoValidado: parseNumber(row[indexOrcamento]), // Dinâmico (Fallback AJ)
-          orcamentoRaw: String(row[indexOrcamento] !== undefined && row[indexOrcamento] !== null ? row[indexOrcamento] : 'VAZIO'),
+          orcamentoValidado: parseNumber(row[indexOrcamento]) || parseNumber(row[indexOrcamentoShifted]), // AJ fallback AL
+          orcamentoRaw: String(row[indexOrcamento] !== undefined && row[indexOrcamento] !== null && row[indexOrcamento] !== '' ? row[indexOrcamento] : (row[indexOrcamentoShifted] !== undefined ? row[indexOrcamentoShifted] : 'VAZIO')),
           recursosAplicados: recursosAplicadosPorObra[String(row[12] || '').trim()] || 0, // Obra ID na coluna M
         });
       }
