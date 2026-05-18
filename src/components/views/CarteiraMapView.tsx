@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, Polyline, GeoJSON, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, Polyline, GeoJSON, CircleMarker, LayerGroup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L, { LatLng } from 'leaflet';
 import { CarteiraRow } from '@/hooks/useCarteiraDashboardData';
@@ -227,10 +227,10 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
         )}
 
         {measureMode === 'route' && routeData && (
-          <GeoJSON key={Date.now()} data={routeData.geometry} style={{ color: '#3b82f6', weight: 5, opacity: 0.8 }} />
+          <GeoJSON key={JSON.stringify(routeData.geometry.coordinates)} data={routeData.geometry} style={{ color: '#3b82f6', weight: 5, opacity: 0.8 }} />
         )}
 
-        
+        <LayerGroup key={`${obrasComCoords.length}-${alojamentosAtivos.length}`}>
         {alojamentosAtivos.map((aloj) => {
           const isBase = aloj.nome.toLowerCase().includes('base');
           return (
@@ -297,6 +297,7 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
             </Tooltip>
           </Marker>
         ))}
+        </LayerGroup>
       </MapContainer>
       
       {/* Control Panel (Top Right) */}
