@@ -701,8 +701,9 @@ export const CarteiraDashboardView = () => {
                     <td className="px-4 py-2 text-right text-green-600 font-medium">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
                     </td>
-                    <td className="px-4 py-2 text-right font-medium">
+                    <td className="px-4 py-2 text-right font-medium relative group">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
+                      <span className="block text-[9px] text-red-500/80 leading-none mt-0.5" title="Valor original recebido da API para depuração">raw: {obra.orcamentoRaw}</span>
                     </td>
                     <td className="px-4 py-2 text-right font-medium text-blue-600">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}

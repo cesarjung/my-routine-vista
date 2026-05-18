@@ -29,6 +29,7 @@ export interface CarteiraRow {
   qtdGpm: number;
   qtdNeoex: number;
   orcamentoValidado: number;
+  orcamentoRaw: string;
   recursosAplicados: number;
 }
 
@@ -203,6 +204,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
           qtdGpm: parseNumber(row[22]), // W
           qtdNeoex: parseNumber(row[23]), // X
           orcamentoValidado: parseNumber(row[indexOrcamento]), // Dinâmico (Fallback AJ)
+          orcamentoRaw: String(row[indexOrcamento] !== undefined && row[indexOrcamento] !== null ? row[indexOrcamento] : 'VAZIO'),
           recursosAplicados: recursosAplicadosPorObra[String(row[12] || '').trim()] || 0, // Obra ID na coluna M
         });
       }
