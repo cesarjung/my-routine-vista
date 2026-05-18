@@ -81,6 +81,11 @@ const MapMeasureEvents = ({
       if (mode !== 'none') {
         setPoints(prev => [...prev, e.latlng]);
       }
+    },
+    contextmenu(e) {
+      if (mode !== 'none') {
+        setPoints(prev => prev.slice(0, -1));
+      }
     }
   });
   return null;
@@ -180,6 +185,12 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
             center={pt} 
             radius={6} 
             pathOptions={{ color: measureMode === 'route' ? '#3b82f6' : '#f59e0b', fillColor: 'white', fillOpacity: 1, weight: 2 }} 
+            eventHandlers={{
+              contextmenu: (e) => {
+                // Remove esse ponto em específico
+                setMeasurePoints(prev => prev.filter((_, i) => i !== idx));
+              }
+            }}
           >
             <Tooltip permanent direction="right" className="custom-tooltip-measure" opacity={0.9}>
                Ponto {idx + 1}
