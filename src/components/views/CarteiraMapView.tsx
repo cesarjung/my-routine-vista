@@ -2,6 +2,8 @@ import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMapEvents, Polyline
 import 'leaflet/dist/leaflet.css';
 import L, { LatLng } from 'leaflet';
 import { CarteiraRow } from '@/hooks/useCarteiraDashboardData';
+import { NativeMarkers } from './NativeMarkers';
+
 import { useAlojamentos } from '@/hooks/useAlojamentos';
 import { useState, useEffect } from 'react';
 import { Ruler, Navigation, Trash2, Move } from 'lucide-react';
@@ -232,41 +234,24 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
           <GeoJSON key={JSON.stringify(routeData.geometry.coordinates)} data={routeData.geometry} style={{ color: '#3b82f6', weight: 5, opacity: 0.8 }} />
         )}
 
-        <LayerGroup>
-        {alojamentosAtivos.map((aloj) => {
-          const isBase = aloj.nome.toLowerCase().includes('base');
-          return (
-            <Marker 
-              key={aloj.id} 
-              position={[aloj.latitude, aloj.longitude]} 
-              icon={createAlojamentoIcon(isBase)}
-              eventHandlers={{
-                click: (e) => {
-                  setActivePopupAloj(aloj);
-                  if (measureMode !== 'none') {
-                    setMeasurePoints(prev => [...prev, L.latLng(aloj.latitude, aloj.longitude)]);
-                  }
-                }
-              }}
-            />
-          );
-        })}
-
-        {obrasComCoords.slice(0, 300).map((obra) => (
-          <Marker 
-            key={obra.id} 
-            position={[obra.latitude!, obra.longitude!]} 
-            icon={createMarkerIcon(obra.statusExecucao, obra.postesDisponiveis)}
-            eventHandlers={{
-              click: (e) => {
-                setActivePopupObra(obra);
-                if (measureMode !== 'none') {
-                  setMeasurePoints(prev => [...prev, L.latLng(obra.latitude!, obra.longitude!)]);
-                }
-              }
-            }}
-          />
-        ))}
+        <NativeMarkers 
+          obras={obrasComCoords}
+          alojamentos={alojamentosAtivos}
+          createMarkerIcon={createMarkerIcon}
+          createAlojamentoIcon={createAlojamentoIcon}
+          onObraClick={(obra) => {
+            setActivePopupObra(obra);
+            if (measureMode !== 'none') {
+              setMeasurePoints(prev => [...prev, L.latLng(obra.latitude!, obra.longitude!)]);
+            }
+          }}
+          onAlojClick={(aloj) => {
+            setActivePopupAloj(aloj);
+            if (measureMode !== 'none') {
+              setMeasurePoints(prev => [...prev, L.latLng(aloj.latitude, aloj.longitude)]);
+            }
+          }}
+        />
         
         {activePopupAloj && (
           <Popup position={[activePopupAloj.latitude, activePopupAloj.longitude]} onClose={() => setActivePopupAloj(null)} offset={[0, -10]} className="custom-popup">
@@ -305,8 +290,6 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
             </div>
           </Popup>
         )}
-        </LayerGroup>
-
       </MapContainer>
       
       {/* Control Panel (Top Right) */}
