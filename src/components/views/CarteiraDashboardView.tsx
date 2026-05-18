@@ -122,7 +122,7 @@ export const CarteiraDashboardView = () => {
     };
 
     return {
-      meses: Array.from(meses).sort((a, b) => parseMesToDate(a) - parseMesToDate(b)),
+      meses: Array.from(meses).sort((a, b) => parseMesToDate(b) - parseMesToDate(a)),
       status: Array.from(status).sort(),
       projetos: Array.from(projetos).sort(),
       municipios: Array.from(municipios).sort(),

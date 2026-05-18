@@ -48,8 +48,7 @@ export const PlanejadoMetaView = () => {
 
   // Filtros locais (persistidos em sessão)
   const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_planejadometa', []);
-  const [mesesDropdownOpen, setMesesDropdownOpen] = useState(false);
-  
+    
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_planejadometa', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_planejadometa', '');
   
@@ -112,7 +111,7 @@ export const PlanejadoMetaView = () => {
         let iB = ORDER.indexOf(b);
         if (iA === -1) iA = 99;
         if (iB === -1) iB = 99;
-        return iA - iB;
+        return iB - iA;
       }),
       supervisoresUnicos: Array.from(supervisores).sort(),
       equipesUnicas: Array.from(equipes).sort(),
@@ -167,7 +166,7 @@ export const PlanejadoMetaView = () => {
         let iB = ORDER.indexOf(b);
         if (iA === -1) iA = 99;
         if (iB === -1) iB = 99;
-        return iA - iB;
+        return iB - iA;
       });
     } else {
       const meses = new Set<string>();
@@ -179,7 +178,7 @@ export const PlanejadoMetaView = () => {
         let iB = ORDER.indexOf(b);
         if (iA === -1) iA = 99;
         if (iB === -1) iB = 99;
-        return iA - iB;
+        return iB - iA;
       });
     }
   }, [selectedMeses, filteredData]);
@@ -621,29 +620,7 @@ export const PlanejadoMetaView = () => {
               </DropdownMenu>
             </div>
 
-            <div className="flex flex-col justify-center min-w-[90px]">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Mês</span>
-              <DropdownMenu open={mesesDropdownOpen} onOpenChange={setMesesDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
-                    <span className="truncate">{selectedMeses.length === 0 ? 'Todos' : selectedMeses.join(', ')}</span>
-                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-48" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedMeses(mesesUnicos)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedMeses([])}>Limpar</Button>
-            </div>
-                  {mesesUnicos.map(m => (
-                    <DropdownMenuCheckboxItem key={m} checked={selectedMeses.includes(m)} onCheckedChange={(checked) => {
-                      if (checked) setSelectedMeses([...selectedMeses.filter(x => x !== m), m]);
-                      else setSelectedMeses(selectedMeses.filter(x => x !== m));
-                    }}>{m}</DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <FilterSelect label="Mês" options={mesesUnicos.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} searchable={true} />
 
             <div className="flex flex-col justify-center min-w-[130px]">
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 flex justify-between">Período
