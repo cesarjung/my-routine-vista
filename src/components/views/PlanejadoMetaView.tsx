@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Filter, Calendar, RefreshCw, BarChart2, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FilterSelect } from '@/components/ui/filter-select';
 import { Toggle } from '@/components/ui/toggle';
 import {
   DropdownMenu,
@@ -59,8 +60,7 @@ export const PlanejadoMetaView = () => {
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
   
   const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_planejadometa', []);
-  const [projetosDropdownOpen, setProjetosDropdownOpen] = useState(false);
-
+  
   // Toggle "Somente Disponíveis" (Coluna BB == 1)
   const [somenteDisponiveis, setSomenteDisponiveis] = useState(false);
 
@@ -705,29 +705,7 @@ export const PlanejadoMetaView = () => {
               </DropdownMenu>
             </div>
 
-            <div className="flex flex-col justify-center min-w-[100px]">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Projeto</span>
-              <DropdownMenu open={projetosDropdownOpen} onOpenChange={setProjetosDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8">
-                    <span className="truncate">{selectedProjetos.length === 0 ? 'Todos' : `${selectedProjetos.length} selec.`}</span>
-                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos(projetosUnicos)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos([])}>Limpar</Button>
-            </div>
-                  {projetosUnicos.map(p => (
-                    <DropdownMenuCheckboxItem key={p} checked={selectedProjetos.includes(p)} onCheckedChange={(checked) => {
-                      if (checked) setSelectedProjetos([...selectedProjetos.filter(x => x !== p), p]);
-                      else setSelectedProjetos(selectedProjetos.filter(x => x !== p));
-                    }}>{p}</DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <FilterSelect label="Projeto" options={projetosUnicos.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
 
             <div className="flex items-center ml-2">
               <SyncIndicator />

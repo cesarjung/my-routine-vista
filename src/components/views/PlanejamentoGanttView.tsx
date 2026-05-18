@@ -8,6 +8,7 @@ import { Loader2, ChevronLeft, ChevronRight, Filter, Calendar, RefreshCw } from 
 import { format, differenceInDays, startOfDay, addDays, subDays, parseISO, parse, isValid, startOfMonth, getDaysInMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
+import { FilterSelect } from '@/components/ui/filter-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SyncIndicator } from '@/components/SyncIndicator';
@@ -338,37 +339,7 @@ export const PlanejamentoGanttView = () => {
             </div>
           </div>
           
-          <div className="flex flex-col justify-center min-w-[100px]">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Projeto</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
-                  <span className="truncate">
-                    {selectedProjetos.length === 0 
-                      ? 'Projetos' 
-                      : `${selectedProjetos.length} projeto(s)`}
-                  </span>
-                  <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-64 max-h-72 overflow-y-auto">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos(projetosDisponiveis)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos([])}>Limpar</Button>
-            </div>
-                {projetosDisponiveis.map(proj => (
-                  <DropdownMenuCheckboxItem
-                    key={proj}
-                    checked={selectedProjetos.includes(proj)}
-                    onSelect={(e) => e.preventDefault()}
-                    onCheckedChange={() => toggleProjeto(proj)}
-                  >
-                    {proj}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <FilterSelect label="Projeto" options={projetosUnicos.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
           
           <div className="flex items-center gap-2 ml-auto">
             <SyncIndicator />
