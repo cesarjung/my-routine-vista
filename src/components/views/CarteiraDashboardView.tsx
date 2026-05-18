@@ -96,7 +96,12 @@ export const CarteiraDashboardView = () => {
     const avnps = new Set<number>();
 
     data.carteira.forEach(row => {
+      // Meses sempre adicionados independentemente do filtro
       row.meses.forEach(m => meses.add(m));
+
+      // Se há filtro de mês ativo, só mostra opções de projetos/status/municipios etc do mês filtrado
+      if (selectedMeses.length > 0 && !selectedMeses.some(m => row.meses.includes(m))) return;
+
       if (row.statusExecucao) status.add(row.statusExecucao);
       if (row.projeto) projetos.add(row.projeto);
       if (row.municipio) municipios.add(row.municipio);
@@ -123,7 +128,7 @@ export const CarteiraDashboardView = () => {
       prioridades: Array.from(prioridades).sort(),
       avnps: Array.from(avnps).sort((a, b) => b - a),
     };
-  }, [data.carteira]);
+  }, [data.carteira, selectedMeses]);
 
   // Aplicação dos filtros
   const filteredData = useMemo(() => {
@@ -457,7 +462,7 @@ export const CarteiraDashboardView = () => {
              </div>
 
              {/* Outros filtros combinados na mesma linha, unidade ao lado de prioridade */}
-             {renderMultiSelect("Projeto", options.projetos.slice(0, 100).map(m => ({ value: m, label: m })), selectedProjetos, setSelectedProjetos)}
+             {renderMultiSelect("Projeto", options.projetos.map(m => ({ value: m, label: m })), selectedProjetos, setSelectedProjetos)}
              {renderMultiSelect("Prioridade", options.prioridades.map(m => ({ value: m, label: m })), selectedPrioridades, setSelectedPrioridades)}
              {renderMultiSelect("Mês", options.meses.map(m => ({ value: m, label: m })), selectedMeses, setSelectedMeses)}
              {renderMultiSelect("Vistoria", [

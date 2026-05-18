@@ -421,10 +421,10 @@ export const DeslocamentoView = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
             <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos(projetosUnicos.slice(0, 100))}>Selecionar todos</Button>
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos(projetosUnicos)}>Selecionar todos</Button>
               <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedProjetos([])}>Limpar</Button>
             </div>
-                  {projetosUnicos.slice(0, 100).map(p => (
+                  {projetosUnicos.map(p => (
                     <DropdownMenuCheckboxItem key={p} checked={selectedProjetos.includes(p)} onCheckedChange={(checked) => {
                       if (checked) setSelectedProjetos([...selectedProjetos.filter(x => x !== p), p]);
                       else setSelectedProjetos(selectedProjetos.filter(x => x !== p));
