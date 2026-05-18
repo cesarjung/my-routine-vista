@@ -50,8 +50,8 @@ export const FilterSelect = ({
               />
             )}
             <div className="flex gap-2">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => onChange(options.map(o => o.value))}>Todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => { onChange([]); setSearch(""); }}>Limpar</Button>
+              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setTimeout(() => onChange(options.map(o => o.value)), 10)}>Todos</Button>
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => { setTimeout(() => onChange([]), 10); setSearch(""); }}>Limpar</Button>
             </div>
           </div>
           {filteredOptions.map((opt) => (
@@ -59,11 +59,12 @@ export const FilterSelect = ({
               key={opt.value}
               checked={selectedValues.includes(opt.value)}
               onCheckedChange={(checked) => {
-                if (checked) {
-                  onChange([...selectedValues, opt.value]);
-                } else {
-                  onChange(selectedValues.filter((v) => v !== opt.value));
-                }
+                const newValues = checked 
+                  ? [...selectedValues, opt.value]
+                  : selectedValues.filter((v) => v !== opt.value);
+                
+                // DEFER parent state update to prevent Radix UI unmount collision during heavy renders
+                setTimeout(() => onChange(newValues), 10);
               }}
               onSelect={(e) => e.preventDefault()}
             >
