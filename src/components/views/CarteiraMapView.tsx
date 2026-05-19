@@ -361,6 +361,10 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
             <div className="flex flex-col gap-1 p-1 min-w-[200px]">
               <h4 className="font-bold text-sm text-orange-600 mb-1 border-b pb-1 truncate max-w-[250px]" title={`${activePopupObra.projeto} - ${activePopupObra.titulo}`}>{activePopupObra.projeto} - {activePopupObra.titulo}</h4>
               <div className="flex justify-between text-xs">
+                <span className="font-semibold text-slate-500">Unidade:</span>
+                <span className="font-medium text-slate-900">{activePopupObra.unidadeNome}</span>
+              </div>
+              <div className="flex justify-between text-xs">
                 <span className="font-semibold text-slate-500">Status:</span>
                 <span className="font-medium text-slate-900">{activePopupObra.statusExecucao || 'Não informado'}</span>
               </div>
