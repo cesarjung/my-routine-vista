@@ -71,6 +71,7 @@ export const CarteiraDashboardView = () => {
   const [selectedMunicipios, setSelectedMunicipios] = useSessionState<string[]>('filter_municipios_carteiradashboard', []);
   const [selectedPrioridades, setSelectedPrioridades] = useSessionState<string[]>('filter_prioridades_carteiradashboard', []);
   const [selectedVistorias, setSelectedVistorias] = useSessionState<string[]>('filter_vistorias_carteiradashboard', []); // 'SIM', 'NÃO', 'VENCIDAS'
+  const [selectedPostes, setSelectedPostes] = useSessionState<number[]>('filter_postes_carteiradashboard', []);
   const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps_carteiradashboard', []);
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_carteiradashboard', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_carteiradashboard', '');
@@ -95,6 +96,7 @@ export const CarteiraDashboardView = () => {
     const projetos = new Set<string>();
     const municipios = new Set<string>();
     const prioridades = new Set<string>();
+    const postes = new Set<number>();
     const avnps = new Set<number>();
 
     data.carteira.forEach(row => {
@@ -108,6 +110,7 @@ export const CarteiraDashboardView = () => {
       if (row.projeto) projetos.add(row.projeto);
       if (row.municipio) municipios.add(row.municipio);
       if (row.prioridade) prioridades.add(row.prioridade);
+      if (row.postesDisponiveis !== undefined && row.postesDisponiveis !== null) postes.add(row.postesDisponiveis);
       avnps.add(row.avnpMaisRecente);
       Object.values(row.avnpMap).forEach(v => avnps.add(v));
     });
@@ -128,6 +131,7 @@ export const CarteiraDashboardView = () => {
       projetos: Array.from(projetos).sort(),
       municipios: Array.from(municipios).sort(),
       prioridades: Array.from(prioridades).sort(),
+      postes: Array.from(postes).sort((a, b) => a - b),
       avnps: Array.from(avnps).sort((a, b) => b - a),
     };
   }, [data.carteira, selectedMeses]);
@@ -154,6 +158,9 @@ export const CarteiraDashboardView = () => {
 
       // Filtro Prioridade
       if (selectedPrioridades.length > 0 && !selectedPrioridades.includes(row.prioridade)) return false;
+
+      // Filtro Postes
+      if (selectedPostes.length > 0 && !selectedPostes.includes(row.postesDisponiveis)) return false;
 
       // Filtro Vistoria
       if (selectedVistorias.length > 0) {
@@ -198,7 +205,7 @@ export const CarteiraDashboardView = () => {
 
       return true;
     });
-  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedVistorias, selectedAVNPs, filterStart, filterEnd]);
+  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedPostes, selectedVistorias, selectedAVNPs, filterStart, filterEnd]);
 
   // Indicadores
   const indicators = useMemo(() => {
@@ -420,6 +427,7 @@ export const CarteiraDashboardView = () => {
             <FilterSelect label="Projeto" options={options.projetos.map(m => ({ value: m, label: m }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
             <FilterSelect label="Prioridade" options={options.prioridades.map(m => ({ value: m, label: m }))} selectedValues={selectedPrioridades} onChange={setSelectedPrioridades} />
             <FilterSelect label="Mês" options={options.meses.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} />
+            <FilterSelect label="Postes" options={options.postes.map(p => ({ value: p, label: String(p) }))} selectedValues={selectedPostes} onChange={setSelectedPostes} />
             <FilterSelect label="Vistoria" options={[
               { value: "SIM", label: "SIM (Válidas)" },
               { value: "VENCIDAS", label: "VENCIDAS (+6 meses)" },
