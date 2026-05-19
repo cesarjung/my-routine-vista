@@ -153,25 +153,33 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       // Orçamento Validado = AJ = 35 (orcamentoValidado) OU "R$ MO Validado" na linha 5 (index 4)
       
       let indexOrcamento = 35; // AJ fallback
+      let indexPostes = 24; // Y fallback
       
       // Procura exatamente na linha 5 (index 4) o cabeçalho correto, ou nas primeiras linhas
       let foundOrcamentoIdx = -1;
+      let foundPostesIdx = -1;
+      
       for (let hr = 0; hr < Math.min(10, carteiraRows.length); hr++) {
         const headerRow = carteiraRows[hr];
         if (Array.isArray(headerRow)) {
-          const idx = headerRow.findIndex(h => {
+          // Busca cabeçalho do Orçamento Validado
+          const idxOrc = headerRow.findIndex(h => {
             const s = String(h).toLowerCase();
             return s.includes('mo validado') || s.includes('orçamento val') || s.includes('orcamento val');
           });
-          if (idx !== -1) {
-            foundOrcamentoIdx = idx;
-            break;
-          }
+          if (idxOrc !== -1) foundOrcamentoIdx = idxOrc;
+
+          // Busca cabeçalho de Postes Disponíveis (PT DISP)
+          const idxPostes = headerRow.findIndex(h => {
+            const s = String(h).toLowerCase().trim();
+            return s === 'pt disp' || s === 'pt. disp' || s === 'postes disp' || s.includes('pt disp');
+          });
+          if (idxPostes !== -1) foundPostesIdx = idxPostes;
         }
       }
-      if (foundOrcamentoIdx !== -1) {
-        indexOrcamento = foundOrcamentoIdx;
-      }
+      
+      if (foundOrcamentoIdx !== -1) indexOrcamento = foundOrcamentoIdx;
+      if (foundPostesIdx !== -1) indexPostes = foundPostesIdx;
 
       // --- PROCESSAR CARTEIRA ---
       for (let i = 1; i < carteiraRows.length; i++) {
@@ -241,7 +249,7 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
           titulo: row[13] ? String(row[13]).trim() : '', // N
           municipio: row[14] ? String(row[14]).trim() : '', // O
           prioridade: row[15] ? String(row[15]).trim() : '', // P
-          postesDisponiveis: parseNumber(row[24]), // Y
+          postesDisponiveis: parseNumber(row[indexPostes]), // Dinâmico (Y fallback)
           capacidadeFaturamento: parseNumber(row[38]), // AM
           dataInicio: parseDate(row[9]), // J
           dataFim: parseDate(row[10]), // K
