@@ -17,10 +17,12 @@ export const SyncIndicator: React.FC = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planejamento_cache')
-        .select('updated_at');
+        .select('unidade_id, updated_at');
       
       if (error) throw error;
-      return data || [];
+      
+      // Filtra apenas as unidades reais (ignorando GLOBAL_ALOJAMENTOS ou outros caches internos)
+      return (data || []).filter(d => d.unidade_id !== 'GLOBAL_ALOJAMENTOS');
     },
     // Recarrega do Supabase a cada 2 minutos automaticamente para manter as telas abertas atualizadas
     refetchInterval: 2 * 60 * 1000,
