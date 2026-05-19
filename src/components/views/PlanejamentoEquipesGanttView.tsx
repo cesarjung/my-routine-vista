@@ -532,7 +532,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 {filteredData.map((row, i) => (
                   <div
                     key={i}
-                    className="h-16 border-b border-border px-3 flex flex-col justify-center group hover:bg-secondary/30 transition-colors"
+                    className="h-[72px] border-b border-border px-3 flex flex-col justify-center group hover:bg-secondary/30 transition-colors"
                   >
                     <p className="text-xs font-semibold text-foreground truncate" title={row.equipe}>
                       {row.equipe}
@@ -606,7 +606,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 {filteredData.map((row, i) => (
                   <div
                     key={i}
-                    className="h-16 border-b border-border/40 relative flex items-center"
+                    className="h-[72px] border-b border-border/40 relative flex items-center"
                   >
                     {row.atividadesDiarias?.map((ativ, idx) => {
                       const daysDiff = differenceInDays(ativ.dataParsed, viewStartEfetivo);
@@ -620,10 +620,12 @@ export const PlanejamentoEquipesGanttView = () => {
                       const nextAtiv = row.atividadesDiarias[idx + 1];
                       let distanceKm = null;
                       let bracketWidth = 0;
+                      let nextTempoDesloc = 0;
                       
                       if (nextAtiv) {
                          const nextMun = Array.from(new Set(nextAtiv.atividades.map(a => a.municipio).filter(e => e))).join(' | ');
                          if (combinedMun && nextMun && combinedMun !== nextMun) {
+                            nextTempoDesloc = nextAtiv.atividades[0]?.tempoDeslocamento || 0;
                             const lat1 = ativ.atividades[0]?.lat;
                             const lon1 = ativ.atividades[0]?.lng;
                             const lat2 = nextAtiv.atividades[0]?.lat;
@@ -654,7 +656,7 @@ export const PlanejamentoEquipesGanttView = () => {
                         : getEtapaColorClass(combinedEtapas);
 
                       return (
-                        <div key={idx} className="absolute h-16 w-full" style={{ left: daysDiff * dayWidth, width: dayWidth }}>
+                        <div key={idx} className="absolute h-[72px] w-full" style={{ left: daysDiff * dayWidth, width: dayWidth }}>
                           {/* Etapa Block (Top) */}
                           <div
                             className={cn(
@@ -711,10 +713,15 @@ export const PlanejamentoEquipesGanttView = () => {
                                   height: 6
                                }}
                             >
-                               <div className="absolute -bottom-2 w-full text-center flex justify-center pointer-events-none">
-                                 <span className="text-[9px] text-primary/80 font-bold bg-background px-1">
+                               <div className="absolute top-[2px] w-full flex flex-col items-center pointer-events-none gap-[1px]">
+                                 <span className="text-[8px] text-primary/80 font-bold bg-background px-0.5 leading-none z-10 relative">
                                    {distanceKm.toFixed(0)}km
                                  </span>
+                                 {nextTempoDesloc > 0 && (
+                                   <span className="text-[7px] text-orange-500 font-bold bg-background px-0.5 leading-none rounded-[2px] z-10 relative" title="Tempo previsto de deslocamento (Plan_Principal)">
+                                     {nextTempoDesloc.toFixed(1)}h
+                                   </span>
+                                 )}
                                </div>
                             </div>
                           )}

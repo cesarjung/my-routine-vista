@@ -8,6 +8,7 @@ export interface AtividadeProjeto {
   municipio: string;
   lat: number | null;
   lng: number | null;
+  tempoDeslocamento: number;
   valorPlanejado: number;
   valorMeta: number;
   realizadoPlanejado: number;
@@ -45,6 +46,25 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
         const clean = val.replace(/[R$\s\.]/g, '').replace(',', '.');
         const num = Number(clean);
         return isNaN(num) ? 0 : num;
+      };
+
+      const parseTimeInHours = (val: any) => {
+        if (!val) return 0;
+        const str = String(val).trim();
+        
+        if (str.includes(':')) {
+           const parts = str.split(':');
+           const h = parseInt(parts[0], 10) || 0;
+           const m = parseInt(parts[1], 10) || 0;
+           const s = parts.length > 2 ? parseInt(parts[2], 10) || 0 : 0;
+           return h + (m / 60) + (s / 3600);
+        }
+
+        const clean = str.replace(/[R$\s]/g, '').replace(',', '.');
+        const num = Number(clean);
+        if (isNaN(num)) return 0;
+        
+        return num * 24;
       };
 
       rawQuery.data.forEach(unidadeData => {
@@ -85,6 +105,7 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
           const projeto = row[7];        // Coluna H
           const etapa = row[12];         // Coluna M
           const municipioRaw = row[28];  // Coluna AC (fallback)
+          const tempoDeslocamento = parseTimeInHours(row[64]); // BM
 
           // Valores financeiros
           const valorPlanejado = parseCurrency(row[37]); // AL
@@ -127,6 +148,7 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
               municipio,
               lat,
               lng,
+              tempoDeslocamento,
               valorPlanejado,
               valorMeta,
               realizadoPlanejado,
