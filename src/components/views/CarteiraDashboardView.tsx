@@ -683,6 +683,7 @@ export const CarteiraDashboardView = () => {
                   <th className="px-4 py-2 font-semibold text-right">Valor Considerado</th>
                   <th className="px-4 py-2 font-semibold text-right">Orçamento Val.</th>
                   <th className="px-4 py-2 font-semibold text-right">Recursos Aplic.</th>
+                  <th className="px-4 py-2 font-semibold text-right">Recurso Disp.</th>
                 </tr>
               </thead>
               <tbody>
@@ -698,21 +699,67 @@ export const CarteiraDashboardView = () => {
                     </td>
                     <td className="px-4 py-2">{obra.statusExecucao || '-'}</td>
                     <td className="px-4 py-2 text-right">{obra.postesDisponiveis}</td>
-                    <td className="px-4 py-2 text-right text-green-600 font-medium">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="text-green-600 font-medium">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-4 py-2 text-right font-medium relative group">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
-                      <span className="block text-[9px] text-red-500/80 leading-none mt-0.5" title="Valor original recebido da API para depuração">raw: {obra.orcamentoRaw}</span>
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex flex-col items-end w-full min-w-[120px]">
+                        <span className="font-medium">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
+                        </span>
+                        {obra.orcamentoValidado > 0 && (
+                          <div className="w-full mt-1">
+                            <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                              <span>{((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
+                              <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(obra.orcamentoValidado - obra.capacidadeFaturamento)}</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-primary" 
+                                style={{ width: `${Math.min(Math.max(((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-2 text-right font-medium text-blue-600">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex flex-col items-end w-full min-w-[120px]">
+                        <span className="font-medium text-blue-600">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
+                        </span>
+                        {obra.orcamentoValidado > 0 && (
+                          <div className="w-full mt-1">
+                            <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                              <span>{((obra.orcamentoValidado - obra.recursosAplicados) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
+                              <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(obra.orcamentoValidado - obra.recursosAplicados)}</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-blue-500" 
+                                style={{ width: `${Math.min(Math.max(((obra.orcamentoValidado - obra.recursosAplicados) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex flex-col items-end">
+                        <span className={`font-medium ${(obra.orcamentoValidado - obra.recursosAplicados) >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {filteredData.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
+                    <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
                   </tr>
                 )}
               </tbody>
