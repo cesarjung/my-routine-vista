@@ -674,9 +674,9 @@ export const CarteiraDashboardView = () => {
                 <table className="w-full table-fixed text-sm text-left whitespace-nowrap">
                   <thead className="bg-muted sticky top-0 z-10 shadow-sm">
                     <tr>
-                      <th className="px-4 py-2 font-semibold w-[7%]">Obra</th>
-                      <th className="px-4 py-2 font-semibold w-[23%]">Título</th>
-                      <th className="px-4 py-2 font-semibold w-[10%]">Município</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[7%]">Obra</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[23%]">Título</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Município</th>
                       <th className="px-4 py-2 font-semibold w-[8%] text-center">Prioridade</th>
                       <th className="px-4 py-2 font-semibold w-[9%] text-center">Status Execução</th>
                       <th className="px-4 py-2 font-semibold text-center w-[5%]">Postes Disp.</th>
@@ -689,9 +689,9 @@ export const CarteiraDashboardView = () => {
                   <tbody>
                     {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').sort((a, b) => (b.postesDisponiveis || 0) - (a.postesDisponiveis || 0)).slice(0, 100).map(obra => (
                       <tr key={obra.id} className="border-b border-border/50 hover:bg-muted/20">
-                        <td className="px-4 py-2 font-medium truncate" title={obra.projeto}>{obra.projeto}</td>
+                        <td className="px-4 py-2 font-medium text-center truncate" title={obra.projeto}>{obra.projeto}</td>
                         <td className="px-4 py-2 text-muted-foreground truncate" title={obra.titulo}>{obra.titulo}</td>
-                        <td className="px-4 py-2 truncate" title={obra.municipio}>{obra.municipio}</td>
+                        <td className="px-4 py-2 text-center truncate" title={obra.municipio}>{obra.municipio}</td>
                         <td className="px-4 py-2 text-center">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground truncate max-w-full">
                             {obra.prioridade || '-'}
