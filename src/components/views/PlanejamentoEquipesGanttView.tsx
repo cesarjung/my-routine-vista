@@ -205,6 +205,7 @@ export const PlanejamentoEquipesGanttView = () => {
     let valorMetaTotal = 0;
     let realizadoPlanejadoTotal = 0;
     let totalProduzidoTotal = 0;
+    let tempoDeslocamentoTotal = 0;
 
     filteredData.forEach(row => {
       row.atividadesDiarias.forEach(ativ => {
@@ -231,6 +232,7 @@ export const PlanejamentoEquipesGanttView = () => {
             valorMetaTotal += a.valorMeta || 0;
             realizadoPlanejadoTotal += a.realizadoPlanejado || 0;
             totalProduzidoTotal += a.totalProduzido || 0;
+            tempoDeslocamentoTotal += a.tempoDeslocamento || 0;
           });
         }
       });
@@ -246,6 +248,7 @@ export const PlanejamentoEquipesGanttView = () => {
       valorMetaTotal,
       realizadoPlanejadoTotal,
       totalProduzidoTotal,
+      tempoDeslocamentoTotal,
       percPlanejadoMeta,
       percProducaoMeta,
       percCumprimentoPlan,
@@ -351,6 +354,16 @@ export const PlanejamentoEquipesGanttView = () => {
             </div>
             <span className="text-base font-bold text-foreground tracking-tight truncate" title={formatCurrency(dashboardStats.valorMetaTotal)}>
                {formatCurrency(dashboardStats.valorMetaTotal)}
+            </span>
+          </div>
+
+          {/* Tempo de Deslocamento */}
+          <div className="flex flex-col justify-center border border-border bg-orange-500/10 p-2 rounded-lg shadow-sm min-w-[100px]">
+            <div className="flex items-center gap-2 mb-0.5 justify-between">
+              <span className="text-[9px] font-bold text-orange-600 uppercase tracking-wider">Deslocamento</span>
+            </div>
+            <span className="text-base font-bold text-orange-700 tracking-tight truncate">
+               {dashboardStats.tempoDeslocamentoTotal.toFixed(1)}h
             </span>
           </div>
           {/* Divider */}
@@ -616,6 +629,7 @@ export const PlanejamentoEquipesGanttView = () => {
 
                       const combinedEtapas = Array.from(new Set(ativ.atividades.map(a => a.etapa).filter(e => e))).join(' | ');
                       const combinedMun = Array.from(new Set(ativ.atividades.map(a => a.municipio).filter(e => e))).join(' | ');
+                      const tempoDeslocDia = ativ.atividades.reduce((sum, a) => sum + (a.tempoDeslocamento || 0), 0);
                       
                       const nextAtiv = row.atividadesDiarias[idx + 1];
                       let distanceKm = null;
@@ -723,6 +737,18 @@ export const PlanejamentoEquipesGanttView = () => {
                                    </span>
                                  )}
                                </div>
+                            </div>
+                          )}
+
+                          {/* Tempo Deslocamento Block (Cell Bottom Left) */}
+                          {tempoDeslocDia > 0 && (
+                            <div 
+                              className="absolute bottom-[2px] left-[1px] h-[10px] rounded-[2px] bg-orange-500 border border-orange-600 shadow-sm flex items-center justify-center z-30 px-[3px] pointer-events-none"
+                              title="Tempo de Deslocamento do Dia"
+                            >
+                              <span className="text-[6px] text-white font-bold tracking-tighter">
+                                {tempoDeslocDia.toFixed(1)}h
+                              </span>
                             </div>
                           )}
                         </div>
