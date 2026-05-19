@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMapEvents, Polyline, GeoJSON, CircleMarker, LayerGroup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMapEvents, Polyline, GeoJSON, CircleMarker, LayerGroup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L, { LatLng } from 'leaflet';
 import { CarteiraRow } from '@/hooks/useCarteiraDashboardData';
