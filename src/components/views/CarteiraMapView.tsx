@@ -225,13 +225,27 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
   const [activePopupObra, setActivePopupObra] = useState<CarteiraRow | null>(null);
   const [activePopupAloj, setActivePopupAloj] = useState<any | null>(null);
   const [isRouting, setIsRouting] = useState(false);
-
   
   // Extract unique Unidade Nomes from current filtered obras
   const unidadesNoMapa = Array.from(new Set(obras.map(o => o.unidadeNome))).filter(Boolean);
   
   // Only show alojamentos that belong to the filtered units
   const alojamentosAtivos = alojamentos.filter(a => unidadesNoMapa.includes(a.unidadeNome));
+
+  // Limpa os popups ativos (e seus círculos de destaque) caso o item seja ocultado pelos filtros
+  useEffect(() => {
+    if (activePopupObra) {
+      const stillExists = obras.some(o => o.id === activePopupObra.id);
+      if (!stillExists) setActivePopupObra(null);
+    }
+  }, [obras, activePopupObra]);
+
+  useEffect(() => {
+    if (activePopupAloj) {
+      const stillExists = alojamentosAtivos.some(a => a.id === activePopupAloj.id);
+      if (!stillExists) setActivePopupAloj(null);
+    }
+  }, [alojamentosAtivos, activePopupAloj]);
 
   const straightDistance = measurePoints.reduce((acc, pt, idx, arr) => {
     if (idx === 0) return acc;
