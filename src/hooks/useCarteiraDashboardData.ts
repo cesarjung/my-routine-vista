@@ -103,30 +103,47 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
       const unidadeNome = unidadeInfo ? unidadeInfo.nome : `UNIDADE ${unidadeData.unidadeId}`;
 
-      const principalRows = unidadeData.principal;
-      if (principalRows && Array.isArray(principalRows)) {
-        for (let j = 1; j < principalRows.length; j++) {
-          const pRow = principalRows[j];
-          if (!pRow || !Array.isArray(pRow)) continue;
-          
-          const obraId = String(pRow[7] || '').trim(); // Coluna H
-          
-          // Fallback +2 colunas (caso a planilha tenha sofrido shift na base de dados)
-          let metaVal = parseNumber(pRow[38]); // Coluna AM
-          let paramAO = parseNumber(pRow[40]); // Coluna AO
-          
-          // Se a coluna original estiver vazia e a deslocada tiver dado, assume o shift
-          const raw38 = pRow[38];
-          if ((raw38 === undefined || raw38 === null || raw38 === '') && pRow[40] !== undefined) {
-             metaVal = parseNumber(pRow[40]); // Fallback para AO
-             paramAO = parseNumber(pRow[42]); // Fallback para AQ
-          }
-          
-          if (obraId && paramAO > 0) {
-            if (!recursosAplicadosPorObra[obraId]) {
-              recursosAplicadosPorObra[obraId] = 0;
+      // Nova lógica de Recursos Aplicados via base Global
+      let usouBaseGlobal = false;
+      if (unidadeData.bdMetas && typeof unidadeData.bdMetas === 'object' && 'recursos_aplicados' in unidadeData.bdMetas) {
+        const ra = unidadeData.bdMetas.recursos_aplicados as Record<string, number>;
+        if (ra && Object.keys(ra).length > 0) {
+          usouBaseGlobal = true;
+          Object.entries(ra).forEach(([obraId, metaSoma]) => {
+            // Como o dicionário global já tem a soma total e ele vem igual em todas as unidades,
+            // nós não usamos += para evitar duplicidade caso mais de uma unidade seja carregada.
+            recursosAplicadosPorObra[obraId] = metaSoma;
+          });
+        }
+      }
+
+      // Fallback para a lógica antiga usando Plan_Principal caso a base global falhe
+      if (!usouBaseGlobal) {
+        const principalRows = unidadeData.principal;
+        if (principalRows && Array.isArray(principalRows)) {
+          for (let j = 1; j < principalRows.length; j++) {
+            const pRow = principalRows[j];
+            if (!pRow || !Array.isArray(pRow)) continue;
+            
+            const obraId = String(pRow[7] || '').trim(); // Coluna H
+            
+            // Fallback +2 colunas (caso a planilha tenha sofrido shift na base de dados)
+            let metaVal = parseNumber(pRow[38]); // Coluna AM
+            let paramAO = parseNumber(pRow[40]); // Coluna AO
+            
+            // Se a coluna original estiver vazia e a deslocada tiver dado, assume o shift
+            const raw38 = pRow[38];
+            if ((raw38 === undefined || raw38 === null || raw38 === '') && pRow[40] !== undefined) {
+               metaVal = parseNumber(pRow[40]); // Fallback para AO
+               paramAO = parseNumber(pRow[42]); // Fallback para AQ
             }
-            recursosAplicadosPorObra[obraId] += metaVal;
+            
+            if (obraId && paramAO > 0) {
+              if (!recursosAplicadosPorObra[obraId]) {
+                recursosAplicadosPorObra[obraId] = 0;
+              }
+              recursosAplicadosPorObra[obraId] += metaVal;
+            }
           }
         }
       }

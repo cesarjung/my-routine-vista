@@ -71,6 +71,59 @@ def get_gspread_client():
             logging.error("Nenhuma credencial do Google encontrada (variavel GOOGLE_CREDENTIALS ou arquivo google_credentials.json).")
             return None
 
+def parse_number(val):
+    if not val:
+        return 0.0
+    val_str = str(val).strip().replace('R$', '').strip()
+    if not val_str or val_str == '-' or val_str.upper() == 'VAZIO':
+        return 0.0
+    try:
+        # Se tem vírgula, e ponto, retira o ponto e troca vírgula por ponto.
+        if ',' in val_str and '.' in val_str:
+            val_str = val_str.replace('.', '').replace(',', '.')
+        elif ',' in val_str:
+            val_str = val_str.replace(',', '.')
+        return float(val_str)
+    except Exception:
+        return 0.0
+
+def fetch_global_recursos(gc, retries=3):
+    sheet_id = '1lUNIeWCddfmvJEjWJpQMtuR4oRuMsI3VImDY0xBp3Bs'
+    for attempt in range(retries):
+        try:
+            logging.info(f"Baixando base global de Planejamento (Tentativa {attempt + 1}/{retries})...")
+            spreadsheet = gc.open_by_key(sheet_id)
+            worksheet = spreadsheet.worksheet("Planejamento")
+            raw_data = worksheet.get_all_values()
+            
+            # Precisamos mapear: Projeto (G=6), Meta (AL=37), Realizado (AN=39)
+            recursos_globais = {}
+            
+            for i, row in enumerate(raw_data):
+                if i == 0 or len(row) <= 6:
+                    continue
+                
+                projeto = str(row[6]).strip()
+                if not projeto:
+                    continue
+                    
+                meta = parse_number(row[37]) if len(row) > 37 else 0.0
+                realizado = parse_number(row[39]) if len(row) > 39 else 0.0
+                
+                if realizado > 0:
+                    if projeto not in recursos_globais:
+                        recursos_globais[projeto] = 0.0
+                        
+                    recursos_globais[projeto] += meta
+            
+            logging.info(f"  [OK] Base global carregada. Total de Projetos mapeados: {len(recursos_globais)}")
+            return recursos_globais
+        except Exception as e:
+            logging.error(f"Erro ao ler base global: {e}")
+            if attempt < retries - 1:
+                time.sleep(10)
+    return {}
+
 def fetch_google_sheets(unidade_id, gc, retries=3):
     sheets_to_fetch = ['Carteira_Planejador', 'Plan_Principal', 'BD_Metas', 'Reprogramadas', 'Base_Curva', 'BD_Config']
     
@@ -214,11 +267,19 @@ def run_sync_cycle():
         logging.error("Abortando ciclo por falta de credenciais do Google Cloud.")
         return
         
+    global_recursos = fetch_global_recursos(gc)
+    
+    # Em vez de tentar advinhar a unidade com base no nome (o que gera erros e falhas de string match),
+    # enviamos o dicionário completo de Projetos -> Recursos Aplicados para TODAS as unidades.
+    # Como os IDs de projeto (ex: B-1160331) são únicos e o dicionário é pequeno (alguns KB),
+    # o frontend apenas busca o ID da obra e encontra seu respectivo recurso aplicado de imediato!
+        
     for unidade_id in UNIDADES_PLANEJAMENTO:
         sheets_data = fetch_google_sheets(unidade_id, gc)
         
         if sheets_data:
             import json
+            
             payload = {
                 "unidade_id": unidade_id,
                 "carteira": json.dumps(sheets_data.get("Carteira_Planejador", [])),
@@ -226,7 +287,8 @@ def run_sync_cycle():
                 "bd_metas": json.dumps({
                     "bd_metas": sheets_data.get("BD_Metas", []),
                     "base_curva": sheets_data.get("Base_Curva", []),
-                    "bd_config": sheets_data.get("BD_Config", [])
+                    "bd_config": sheets_data.get("BD_Config", []),
+                    "recursos_aplicados": global_recursos
                 }),
                 "reprogramadas": json.dumps(sheets_data.get("Reprogramadas", [])),
                 "updated_at": datetime.utcnow().isoformat() + "Z"
