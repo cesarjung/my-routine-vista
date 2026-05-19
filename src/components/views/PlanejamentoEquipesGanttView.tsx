@@ -545,7 +545,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 {filteredData.map((row, i) => (
                   <div
                     key={i}
-                    className="h-[72px] border-b border-border px-3 flex flex-col justify-center group hover:bg-secondary/30 transition-colors"
+                    className="h-[88px] border-b border-border px-3 flex flex-col justify-center group hover:bg-secondary/30 transition-colors"
                   >
                     <p className="text-xs font-semibold text-foreground truncate" title={row.equipe}>
                       {row.equipe}
@@ -619,7 +619,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 {filteredData.map((row, i) => (
                   <div
                     key={i}
-                    className="h-[72px] border-b border-border/40 relative flex items-center"
+                    className="h-[88px] border-b border-border/40 relative flex items-center"
                   >
                     {row.atividadesDiarias?.map((ativ, idx) => {
                       const daysDiff = differenceInDays(ativ.dataParsed, viewStartEfetivo);
@@ -670,11 +670,11 @@ export const PlanejamentoEquipesGanttView = () => {
                         : getEtapaColorClass(combinedEtapas);
 
                       return (
-                        <div key={idx} className="absolute h-[72px] w-full" style={{ left: daysDiff * dayWidth, width: dayWidth }}>
+                        <div key={idx} className="absolute h-[88px] w-full" style={{ left: daysDiff * dayWidth, width: dayWidth }}>
                           {/* Etapa Block (Top) */}
                           <div
                             className={cn(
-                              "absolute top-[3px] h-3.5 rounded-[2px] border shadow-sm flex items-center justify-center z-10 cursor-pointer transition-colors",
+                              "absolute top-[2px] h-3.5 rounded-[2px] border shadow-sm flex items-center justify-center z-10 cursor-pointer transition-colors",
                               etapaColorClass
                             )}
                             style={{ left: 1, width: dayWidth - 2 }}
@@ -685,10 +685,10 @@ export const PlanejamentoEquipesGanttView = () => {
                             </span>
                           </div>
 
-                          {/* Projeto Block (Bottom) */}
+                          {/* Projeto Block (Middle) */}
                           <div
                             className={cn(
-                              "absolute top-[18px] h-5 rounded-[3px] shadow-sm flex flex-col items-center justify-center z-10 cursor-pointer transition-all hover:scale-105 border px-0.5 overflow-hidden",
+                              "absolute top-[17px] h-5 rounded-[3px] shadow-sm flex flex-col items-center justify-center z-10 cursor-pointer transition-all hover:scale-105 border px-0.5 overflow-hidden",
                               isFolgaSemProjeto 
                                 ? "bg-slate-500 border-slate-600 hover:bg-slate-400" 
                                 : (hasMultiple ? "bg-orange-500 border-orange-600 hover:bg-orange-400" : "bg-blue-500 border-blue-600 hover:bg-blue-400")
@@ -706,9 +706,22 @@ export const PlanejamentoEquipesGanttView = () => {
                             ))}
                           </div>
                           
+                          {/* Tempo Deslocamento Block (Full width) */}
+                          {tempoDeslocDia > 0 && (
+                            <div 
+                              className="absolute top-[38px] h-[12px] rounded-[2px] bg-orange-500 border-orange-600 shadow-sm flex items-center justify-center z-10 px-[1px] pointer-events-none"
+                              style={{ left: 1, width: dayWidth - 2 }}
+                              title="Tempo de Deslocamento do Dia"
+                            >
+                              <span className="text-[7px] text-white font-bold tracking-tighter truncate">
+                                {tempoDeslocDia.toFixed(1)}h
+                              </span>
+                            </div>
+                          )}
+
                           {/* Municipio Block */}
                           <div
-                            className="absolute top-[40px] h-3 w-full flex items-center justify-center pointer-events-none"
+                            className="absolute top-[51px] h-3 w-full flex items-center justify-center pointer-events-none"
                             style={{ left: 0 }}
                           >
                              <span className="text-[7px] text-muted-foreground font-medium uppercase tracking-tighter truncate px-0.5" title={combinedMun}>
@@ -721,7 +734,7 @@ export const PlanejamentoEquipesGanttView = () => {
                             <div 
                                className="absolute z-20 border-b border-l border-r border-primary/40"
                                style={{
-                                  top: 52,
+                                  top: 64,
                                   left: dayWidth / 2,
                                   width: bracketWidth,
                                   height: 6
@@ -737,18 +750,6 @@ export const PlanejamentoEquipesGanttView = () => {
                                    </span>
                                  )}
                                </div>
-                            </div>
-                          )}
-
-                          {/* Tempo Deslocamento Block (Cell Bottom Left) */}
-                          {tempoDeslocDia > 0 && (
-                            <div 
-                              className="absolute bottom-[2px] left-[1px] h-[10px] rounded-[2px] bg-orange-500 border border-orange-600 shadow-sm flex items-center justify-center z-30 px-[3px] pointer-events-none"
-                              title="Tempo de Deslocamento do Dia"
-                            >
-                              <span className="text-[6px] text-white font-bold tracking-tighter">
-                                {tempoDeslocDia.toFixed(1)}h
-                              </span>
                             </div>
                           )}
                         </div>
