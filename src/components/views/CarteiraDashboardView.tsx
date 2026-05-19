@@ -675,15 +675,15 @@ export const CarteiraDashboardView = () => {
               <thead className="bg-muted sticky top-0 z-10 shadow-sm">
                 <tr>
                   <th className="px-4 py-2 font-semibold w-[80px]">Obra</th>
-                  <th className="px-4 py-2 font-semibold w-[200px] max-w-[250px]">Título</th>
+                  <th className="px-4 py-2 font-semibold w-full min-w-[200px]">Título</th>
                   <th className="px-4 py-2 font-semibold w-[120px]">Município</th>
                   <th className="px-4 py-2 font-semibold w-[100px]">Prioridade</th>
                   <th className="px-4 py-2 font-semibold w-[120px]">Status Execução</th>
-                  <th className="px-4 py-2 font-semibold text-right w-[80px]">Postes Disp.</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[130px]">Valor Considerado</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[150px]">Orçamento Val.</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[150px]">Recursos Aplic.</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[130px]">Recurso Disp.</th>
+                  <th className="px-4 py-2 font-semibold text-center w-[80px]">Postes Disp.</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[130px] w-[130px]">Valor Considerado</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[150px] w-[150px]">Orçamento Val.</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[150px] w-[150px]">Recursos Aplic.</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[130px] w-[130px]">Recurso Disp.</th>
                 </tr>
               </thead>
               <tbody>
@@ -698,7 +698,7 @@ export const CarteiraDashboardView = () => {
                       </span>
                     </td>
                     <td className="px-4 py-2">{obra.statusExecucao || '-'}</td>
-                    <td className="px-4 py-2 text-right">{obra.postesDisponiveis}</td>
+                    <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
                     <td className="px-4 py-2 text-right">
                       <span className="text-green-600 font-medium">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
