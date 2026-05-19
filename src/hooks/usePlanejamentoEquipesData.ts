@@ -5,6 +5,9 @@ import { usePlanejamentoRaw } from './usePlanejamentoRaw';
 export interface AtividadeProjeto {
   projeto: string;
   etapa: string;
+  municipio: string;
+  lat: number | null;
+  lng: number | null;
   valorPlanejado: number;
   valorMeta: number;
   realizadoPlanejado: number;
@@ -46,6 +49,30 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
 
       rawQuery.data.forEach(unidadeData => {
         const rows = unidadeData.principal;
+        const carteiraRows = unidadeData.carteira;
+        
+        const infoPorProjeto: Record<string, { mun: string, lat: number | null, lng: number | null }> = {};
+        if (carteiraRows && Array.isArray(carteiraRows)) {
+            for (let i = 1; i < carteiraRows.length; i++) {
+                const cRow = carteiraRows[i];
+                if (!cRow || !Array.isArray(cRow)) continue;
+                const proj = cRow[12] ? String(cRow[12]).trim() : '';
+                const mun = cRow[14] ? String(cRow[14]).trim() : '';
+                let lat = Number(String(cRow[46] || '').replace(',', '.'));
+                let lng = Number(String(cRow[47] || '').replace(',', '.'));
+                if (isNaN(lat)) lat = 0;
+                if (isNaN(lng)) lng = 0;
+                
+                if (proj) {
+                  infoPorProjeto[proj] = {
+                    mun,
+                    lat: lat !== 0 ? lat : null,
+                    lng: lng !== 0 ? lng : null
+                  };
+                }
+            }
+        }
+
         if (!rows || !Array.isArray(rows)) return;
 
         for (let i = 7; i < rows.length; i++) {
@@ -57,6 +84,7 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
           const equipe = row[6];         // Coluna G
           const projeto = row[7];        // Coluna H
           const etapa = row[12];         // Coluna M
+          const municipioRaw = row[28];  // Coluna AC (fallback)
 
           // Valores financeiros
           const valorPlanejado = parseCurrency(row[37]); // AL
@@ -84,6 +112,11 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
 
           if (dataParsed) {
             const projetoNome = projeto?.trim() || 'Sem Projeto';
+            const projInfo = infoPorProjeto[projetoNome];
+            const municipio = projInfo?.mun || (municipioRaw ? String(municipioRaw).trim() : '');
+            const lat = projInfo?.lat || null;
+            const lng = projInfo?.lng || null;
+
             const timeKey = dataParsed.getTime();
             if (!equipesMap[equipe].atividades.has(timeKey)) {
               equipesMap[equipe].atividades.set(timeKey, new Set());
@@ -91,6 +124,9 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
             equipesMap[equipe].atividades.get(timeKey)!.add(JSON.stringify({ 
               projeto: projetoNome, 
               etapa: (etapa || '').trim(),
+              municipio,
+              lat,
+              lng,
               valorPlanejado,
               valorMeta,
               realizadoPlanejado,

@@ -247,15 +247,17 @@ export const PlanejamentoSemanalView = () => {
     return filteredDailyStats
       .filter(d => d.tempoPlanejado > 0)
       .sort((a, b) => {
-        const aBad = a.tempoPlanejado < 8.0;
-        const bBad = b.tempoPlanejado < 8.0;
+        const aBad = a.tempoPlanejado < 8.0 || a.tempoPlanejado > 10.0;
+        const bBad = b.tempoPlanejado < 8.0 || b.tempoPlanejado > 10.0;
         if (aBad && !bBad) return -1;
         if (!aBad && bBad) return 1;
         return b.tempoPlanejado - a.tempoPlanejado;
       });
   }, [filteredDailyStats]);
 
-  const hasSubutilizadas = tempoPlanejadoEquipes.some(d => d.tempoPlanejado < 8.0);
+  const subutilizadasCount = tempoPlanejadoEquipes.filter(d => d.tempoPlanejado < 8.0).length;
+  const sobrecarregadasCount = tempoPlanejadoEquipes.filter(d => d.tempoPlanejado > 10.0).length;
+  const hasEscalacaoTempoPlanejado = subutilizadasCount > 0 || sobrecarregadasCount > 0;
 
 
   // Handlers
@@ -420,13 +422,21 @@ export const PlanejamentoSemanalView = () => {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <p className={`text-4xl font-bold ${totals.avgTempoServico < 8 ? 'text-red-500' : 'text-green-500'}`}>
+              <p className={`text-4xl font-bold ${(totals.avgTempoServico < 8 || totals.avgTempoServico > 10) ? 'text-red-500' : 'text-green-500'}`}>
                 {totals.avgTempoServico.toFixed(1)}h
               </p>
               <p className="text-xs font-semibold mt-1 text-muted-foreground">média por dia/equipe</p>
+              <div className="flex gap-3 mt-2">
+                <span className="text-[10px] font-semibold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded" title="Equipes/Dias planejados com menos de 8h">
+                  {subutilizadasCount} &lt; 8h
+                </span>
+                <span className="text-[10px] font-semibold text-orange-500 bg-orange-500/10 px-1.5 py-0.5 rounded" title="Equipes/Dias planejados com mais de 10h">
+                  {sobrecarregadasCount} &gt; 10h
+                </span>
+              </div>
             </div>
-            {hasSubutilizadas && (
-              <div className="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-md animate-pulse">
+            {hasEscalacaoTempoPlanejado && (
+              <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md animate-pulse">
                 DISPARA ESCALAÇÃO
               </div>
             )}
@@ -608,8 +618,8 @@ export const PlanejamentoSemanalView = () => {
         {/* Tabela 3: Tempo Planejado */}
         <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px] min-h-[150px] max-h-[1200px] resize-y">
           <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-green-600" />
-            <h3 className="font-bold text-sm text-foreground">Planejadas (Meta &ge; 8.0h)</h3>
+            <AlertTriangle className="w-4 h-4 text-red-500" />
+            <h3 className="font-bold text-sm text-foreground">Plan. Fora do Ideal (&lt; 8h ou &gt; 10h)</h3>
           </div>
           <div className="flex-1 overflow-auto custom-scrollbar p-0">
             <table className="w-full text-xs text-left">
@@ -621,7 +631,7 @@ export const PlanejamentoSemanalView = () => {
               </thead>
               <tbody>
                 {tempoPlanejadoEquipes.map((d, i) => {
-                  const isBad = d.tempoPlanejado < 8.0;
+                  const isBad = d.tempoPlanejado < 8.0 || d.tempoPlanejado > 10.0;
                   const colorClass = isBad ? "text-red-500" : "text-green-500";
                   return (
                     <tr key={i} className="border-b border-border/50 hover:bg-muted/20">

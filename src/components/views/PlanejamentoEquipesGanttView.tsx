@@ -532,7 +532,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 {filteredData.map((row, i) => (
                   <div
                     key={i}
-                    className="h-10 border-b border-border px-3 flex flex-col justify-center group hover:bg-secondary/30 transition-colors"
+                    className="h-16 border-b border-border px-3 flex flex-col justify-center group hover:bg-secondary/30 transition-colors"
                   >
                     <p className="text-xs font-semibold text-foreground truncate" title={row.equipe}>
                       {row.equipe}
@@ -606,7 +606,7 @@ export const PlanejamentoEquipesGanttView = () => {
                 {filteredData.map((row, i) => (
                   <div
                     key={i}
-                    className="h-10 border-b border-border/40 relative flex items-center"
+                    className="h-16 border-b border-border/40 relative flex items-center"
                   >
                     {row.atividadesDiarias?.map((ativ, idx) => {
                       const daysDiff = differenceInDays(ativ.dataParsed, viewStartEfetivo);
@@ -615,7 +615,36 @@ export const PlanejamentoEquipesGanttView = () => {
                       const hasMultiple = ativ.atividades.length > 1;
 
                       const combinedEtapas = Array.from(new Set(ativ.atividades.map(a => a.etapa).filter(e => e))).join(' | ');
+                      const combinedMun = Array.from(new Set(ativ.atividades.map(a => a.municipio).filter(e => e))).join(' | ');
                       
+                      const nextAtiv = row.atividadesDiarias[idx + 1];
+                      let distanceKm = null;
+                      let bracketWidth = 0;
+                      
+                      if (nextAtiv) {
+                         const nextMun = Array.from(new Set(nextAtiv.atividades.map(a => a.municipio).filter(e => e))).join(' | ');
+                         if (combinedMun && nextMun && combinedMun !== nextMun) {
+                            const lat1 = ativ.atividades[0]?.lat;
+                            const lon1 = ativ.atividades[0]?.lng;
+                            const lat2 = nextAtiv.atividades[0]?.lat;
+                            const lon2 = nextAtiv.atividades[0]?.lng;
+                            
+                            if (lat1 && lon1 && lat2 && lon2) {
+                               const R = 6371;
+                               const dLat = (lat2 - lat1) * Math.PI / 180;
+                               const dLon = (lon2 - lon1) * Math.PI / 180;
+                               const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                                 Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                                 Math.sin(dLon/2) * Math.sin(dLon/2);
+                               const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                               distanceKm = R * c;
+                               
+                               const daysDiffNext = differenceInDays(nextAtiv.dataParsed, viewStartEfetivo);
+                               bracketWidth = (daysDiffNext - daysDiff) * dayWidth;
+                            }
+                         }
+                      }
+
                       const isFolga = combinedEtapas.toLowerCase().includes('folga');
                       const isSemProjeto = ativ.atividades.every(a => a.projeto === 'Sem Projeto');
                       const isFolgaSemProjeto = isFolga && isSemProjeto;
@@ -625,7 +654,7 @@ export const PlanejamentoEquipesGanttView = () => {
                         : getEtapaColorClass(combinedEtapas);
 
                       return (
-                        <div key={idx} className="absolute h-10 w-full" style={{ left: daysDiff * dayWidth, width: dayWidth }}>
+                        <div key={idx} className="absolute h-16 w-full" style={{ left: daysDiff * dayWidth, width: dayWidth }}>
                           {/* Etapa Block (Top) */}
                           <div
                             className={cn(
@@ -660,6 +689,35 @@ export const PlanejamentoEquipesGanttView = () => {
                                </span>
                             ))}
                           </div>
+                          
+                          {/* Municipio Block */}
+                          <div
+                            className="absolute top-[40px] h-3 w-full flex items-center justify-center pointer-events-none"
+                            style={{ left: 0 }}
+                          >
+                             <span className="text-[7px] text-muted-foreground font-medium uppercase tracking-tighter truncate px-0.5" title={combinedMun}>
+                               {combinedMun.split('-').shift()?.trim() || combinedMun || '-'}
+                             </span>
+                          </div>
+
+                          {/* Distance Bracket */}
+                          {distanceKm !== null && bracketWidth > 0 && (
+                            <div 
+                               className="absolute z-20 border-b border-l border-r border-primary/40"
+                               style={{
+                                  top: 52,
+                                  left: dayWidth / 2,
+                                  width: bracketWidth,
+                                  height: 6
+                               }}
+                            >
+                               <div className="absolute -bottom-2 w-full text-center flex justify-center pointer-events-none">
+                                 <span className="text-[9px] text-primary/80 font-bold bg-background px-1">
+                                   {distanceKm.toFixed(0)}km
+                                 </span>
+                               </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
