@@ -329,14 +329,14 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
         {activePopupAloj && (
           <Popup position={[activePopupAloj.latitude, activePopupAloj.longitude]} onClose={() => setActivePopupAloj(null)} offset={[0, -10]} className="custom-popup">
             <div className="flex flex-col gap-1 p-1 min-w-[150px]">
-              <h4 className="font-bold text-sm text-primary mb-1 border-b pb-1">{activePopupAloj.nome}</h4>
+              <h4 className="font-bold text-sm text-slate-800 mb-1 border-b pb-1">{activePopupAloj.nome}</h4>
               <div className="flex justify-between text-xs">
-                <span className="font-semibold text-muted-foreground">Unidade:</span>
-                <span className="font-medium text-foreground">{activePopupAloj.unidadeNome}</span>
+                <span className="font-semibold text-slate-500">Unidade:</span>
+                <span className="font-medium text-slate-900">{activePopupAloj.unidadeNome}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="font-semibold text-muted-foreground">Capacidade:</span>
-                <span className="font-medium text-foreground">{activePopupAloj.capacidade} pessoas</span>
+                <span className="font-semibold text-slate-500">Capacidade:</span>
+                <span className="font-medium text-slate-900">{activePopupAloj.capacidade} pessoas</span>
               </div>
             </div>
           </Popup>
@@ -345,18 +345,18 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
         {activePopupObra && (
           <Popup position={[activePopupObra.latitude!, activePopupObra.longitude!]} onClose={() => setActivePopupObra(null)} offset={[0, -10]} className="custom-popup">
             <div className="flex flex-col gap-1 p-1 min-w-[200px]">
-              <h4 className="font-bold text-sm text-primary mb-1 border-b pb-1 truncate max-w-[250px]" title={`${activePopupObra.projeto} - ${activePopupObra.titulo}`}>{activePopupObra.projeto} - {activePopupObra.titulo}</h4>
+              <h4 className="font-bold text-sm text-orange-600 mb-1 border-b pb-1 truncate max-w-[250px]" title={`${activePopupObra.projeto} - ${activePopupObra.titulo}`}>{activePopupObra.projeto} - {activePopupObra.titulo}</h4>
               <div className="flex justify-between text-xs">
-                <span className="font-semibold text-muted-foreground">Status:</span>
-                <span className="font-medium text-foreground">{activePopupObra.statusExecucao || 'Não informado'}</span>
+                <span className="font-semibold text-slate-500">Status:</span>
+                <span className="font-medium text-slate-900">{activePopupObra.statusExecucao || 'Não informado'}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="font-semibold text-muted-foreground">Postes:</span>
-                <span className="font-medium text-foreground">{activePopupObra.postesDisponiveis}</span>
+                <span className="font-semibold text-slate-500">Postes:</span>
+                <span className="font-medium text-slate-900">{activePopupObra.postesDisponiveis}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="font-semibold text-muted-foreground">Valor:</span>
-                <span className="font-medium text-foreground">
+                <span className="font-semibold text-slate-500">Valor:</span>
+                <span className="font-medium text-slate-900">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activePopupObra.capacidadeFaturamento)}
                 </span>
               </div>
