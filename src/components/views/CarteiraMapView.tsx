@@ -109,6 +109,105 @@ const MapMeasureEvents = ({
   return null;
 };
 
+const NativeRoutes = ({ 
+  measureMode, 
+  measurePoints, 
+  routeData
+}: { 
+  measureMode: MeasureMode; 
+  measurePoints: LatLng[]; 
+  routeData: RouteData | null;
+}) => {
+  const map = useMap();
+
+  useEffect(() => {
+    const layerGroup = L.layerGroup().addTo(map);
+
+    if (measureMode !== 'none') {
+      measurePoints.forEach((pt, idx) => {
+        const marker = L.circleMarker(pt, {
+          radius: 4,
+          color: '#3b82f6',
+          fillColor: '#ffffff',
+          fillOpacity: 1,
+          weight: 2
+        }).bindTooltip(`Ponto ${idx + 1}`);
+        layerGroup.addLayer(marker);
+      });
+    }
+
+    if (measureMode === 'straight' && measurePoints.length > 1) {
+      const polyline = L.polyline(measurePoints, {
+        color: '#f59e0b',
+        weight: 3,
+        dashArray: '5, 10'
+      });
+      layerGroup.addLayer(polyline);
+    }
+
+    if (measureMode === 'route' && routeData && routeData.geometry) {
+      const geoJsonLayer = L.geoJSON(routeData.geometry, {
+        style: {
+          color: '#3b82f6',
+          weight: 4,
+          opacity: 0.8
+        }
+      });
+      layerGroup.addLayer(geoJsonLayer);
+    }
+
+    return () => {
+      layerGroup.clearLayers();
+      if (map.hasLayer(layerGroup)) {
+        map.removeLayer(layerGroup);
+      }
+    };
+  }, [map, measureMode, measurePoints, routeData]);
+
+  return null;
+};
+
+const HighlightMarker = ({ activePopupObra, activePopupAloj }: { activePopupObra: any, activePopupAloj: any }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    const layerGroup = L.layerGroup().addTo(map);
+    
+    if (activePopupObra && activePopupObra.latitude) {
+      const circle = L.circleMarker([activePopupObra.latitude, activePopupObra.longitude], {
+        radius: 22,
+        color: '#ef4444', // red-500
+        fillColor: '#ef4444',
+        fillOpacity: 0.25,
+        weight: 3,
+        dashArray: '5, 5'
+      });
+      layerGroup.addLayer(circle);
+    }
+    
+    if (activePopupAloj && activePopupAloj.latitude) {
+      const circle = L.circleMarker([activePopupAloj.latitude, activePopupAloj.longitude], {
+        radius: 22,
+        color: '#ef4444',
+        fillColor: '#ef4444',
+        fillOpacity: 0.25,
+        weight: 3,
+        dashArray: '5, 5'
+      });
+      layerGroup.addLayer(circle);
+    }
+    
+    return () => {
+      layerGroup.clearLayers();
+      if (map.hasLayer(layerGroup)) {
+        map.removeLayer(layerGroup);
+      }
+    };
+  }, [map, activePopupObra, activePopupAloj]);
+  
+  return null;
+};
+
 export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
   // Posição padrão (Bahia) se nenhuma obra tiver coordenadas
   const defaultCenter: [number, number] = [-12.9714, -38.5014];
@@ -206,8 +305,8 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
         />
         
         <MapMeasureEvents mode={measureMode} points={measurePoints} setPoints={setMeasurePoints} />
-        {/* React-Leaflet elements removed to prevent strict mode unmount crashes */}
-
+        <NativeRoutes measureMode={measureMode} measurePoints={measurePoints} routeData={routeData} />
+        <HighlightMarker activePopupObra={activePopupObra} activePopupAloj={activePopupAloj} />
         <NativeMarkers 
           obras={obrasComCoords}
           alojamentos={alojamentosAtivos}
