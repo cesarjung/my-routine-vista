@@ -674,16 +674,16 @@ export const CarteiraDashboardView = () => {
 <table className="w-full text-sm text-left whitespace-nowrap">
               <thead className="bg-muted sticky top-0 z-10 shadow-sm">
                 <tr>
-                  <th className="px-4 py-2 font-semibold">Obra</th>
-                  <th className="px-4 py-2 font-semibold min-w-[200px]">Título</th>
-                  <th className="px-4 py-2 font-semibold">Município</th>
-                  <th className="px-4 py-2 font-semibold">Prioridade</th>
-                  <th className="px-4 py-2 font-semibold">Status Execução</th>
-                  <th className="px-4 py-2 font-semibold text-right">Postes Disp.</th>
-                  <th className="px-4 py-2 font-semibold text-right">Valor Considerado</th>
-                  <th className="px-4 py-2 font-semibold text-right">Orçamento Val.</th>
-                  <th className="px-4 py-2 font-semibold text-right">Recursos Aplic.</th>
-                  <th className="px-4 py-2 font-semibold text-right">Recurso Disp.</th>
+                  <th className="px-4 py-2 font-semibold w-[80px]">Obra</th>
+                  <th className="px-4 py-2 font-semibold w-[200px] max-w-[250px]">Título</th>
+                  <th className="px-4 py-2 font-semibold w-[120px]">Município</th>
+                  <th className="px-4 py-2 font-semibold w-[100px]">Prioridade</th>
+                  <th className="px-4 py-2 font-semibold w-[120px]">Status Execução</th>
+                  <th className="px-4 py-2 font-semibold text-right w-[80px]">Postes Disp.</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[130px]">Valor Considerado</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[150px]">Orçamento Val.</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[150px]">Recursos Aplic.</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[130px]">Recurso Disp.</th>
                 </tr>
               </thead>
               <tbody>
@@ -704,7 +704,7 @@ export const CarteiraDashboardView = () => {
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-right w-[150px]">
+                    <td className="px-4 py-2 text-right">
                       <div className="flex flex-col items-end w-full">
                         <span className="font-medium text-[13px]">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
@@ -725,7 +725,7 @@ export const CarteiraDashboardView = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-right w-[150px]">
+                    <td className="px-4 py-2 text-right">
                       <div className="flex flex-col items-end w-full">
                         <span className="font-medium text-[13px] text-blue-600">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
