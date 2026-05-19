@@ -700,26 +700,24 @@ export const CarteiraDashboardView = () => {
                     <td className="px-4 py-2">{obra.statusExecucao || '-'}</td>
                     <td className="px-4 py-2 text-right">{obra.postesDisponiveis}</td>
                     <td className="px-4 py-2 text-right">
-                      <div className="flex flex-col items-end">
-                        <span className="text-green-600 font-medium">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
-                        </span>
-                      </div>
+                      <span className="text-green-600 font-medium">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
+                      </span>
                     </td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="flex flex-col items-end w-full min-w-[120px]">
-                        <span className="font-medium">
+                    <td className="px-4 py-2 text-right w-[150px]">
+                      <div className="flex flex-col items-end w-full">
+                        <span className="font-medium text-[13px]">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
                         </span>
                         {obra.orcamentoValidado > 0 && (
-                          <div className="w-full mt-1">
+                          <div className="w-full mt-0.5">
                             <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
                               <span>{((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
-                              <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(obra.orcamentoValidado - obra.capacidadeFaturamento)}</span>
+                              <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.capacidadeFaturamento)}</span>
                             </div>
                             <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-primary" 
+                                className={`h-full ${(((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado) * 100) > 100 ? 'bg-red-500' : 'bg-green-500'}`}
                                 style={{ width: `${Math.min(Math.max(((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
                               />
                             </div>
@@ -727,21 +725,23 @@ export const CarteiraDashboardView = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="flex flex-col items-end w-full min-w-[120px]">
-                        <span className="font-medium text-blue-600">
+                    <td className="px-4 py-2 text-right w-[150px]">
+                      <div className="flex flex-col items-end w-full">
+                        <span className="font-medium text-[13px] text-blue-600">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
                         </span>
                         {obra.orcamentoValidado > 0 && (
-                          <div className="w-full mt-1">
+                          <div className="w-full mt-0.5">
                             <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
-                              <span>{((obra.orcamentoValidado - obra.recursosAplicados) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
-                              <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(obra.orcamentoValidado - obra.recursosAplicados)}</span>
+                              <span>{((obra.recursosAplicados) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
+                              <span className={(obra.orcamentoValidado - obra.recursosAplicados) < 0 ? 'text-red-500' : ''}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
+                              </span>
                             </div>
                             <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-blue-500" 
-                                style={{ width: `${Math.min(Math.max(((obra.orcamentoValidado - obra.recursosAplicados) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
+                                className={`h-full ${((obra.recursosAplicados) / obra.orcamentoValidado) * 100 > 100 ? 'bg-red-500' : 'bg-blue-500'}`}
+                                style={{ width: `${Math.min(Math.max(((obra.recursosAplicados) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
                               />
                             </div>
                           </div>
@@ -749,11 +749,9 @@ export const CarteiraDashboardView = () => {
                       </div>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <div className="flex flex-col items-end">
-                        <span className={`font-medium ${(obra.orcamentoValidado - obra.recursosAplicados) >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
-                        </span>
-                      </div>
+                      <span className={`font-medium ${(obra.orcamentoValidado - obra.recursosAplicados) >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
+                      </span>
                     </td>
                   </tr>
                 ))}
