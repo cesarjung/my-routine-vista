@@ -31,7 +31,7 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
     <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size / 2 + strokeWidth }}>
       <svg width={size} height={size / 2 + strokeWidth} className="overflow-visible">
         <path
-          d={`M ${strokeWidth} ${size/2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth} ${size/2}`}
+          d={`M ${strokeWidth} ${size / 2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth} ${size / 2}`}
           fill="none"
           stroke="currentColor"
           strokeWidth={strokeWidth}
@@ -39,7 +39,7 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
           className="text-muted/30"
         />
         <path
-          d={`M ${strokeWidth} ${size/2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth} ${size/2}`}
+          d={`M ${strokeWidth} ${size / 2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth} ${size / 2}`}
           fill="none"
           stroke="currentColor"
           strokeWidth={strokeWidth}
@@ -135,7 +135,7 @@ export const CarteiraDashboardView = () => {
   // Aplicação dos filtros
   const filteredData = useMemo(() => {
     const now = new Date();
-    
+
     return data.carteira.filter(row => {
       // Filtro Mês
       if (selectedMeses.length > 0) {
@@ -145,13 +145,13 @@ export const CarteiraDashboardView = () => {
 
       // Filtro Status
       if (selectedStatus.length > 0 && !selectedStatus.includes(row.statusExecucao)) return false;
-      
+
       // Filtro Projeto
       if (selectedProjetos.length > 0 && !selectedProjetos.includes(row.projeto)) return false;
-      
+
       // Filtro Municipio
       if (selectedMunicipios.length > 0 && !selectedMunicipios.includes(row.municipio)) return false;
-      
+
       // Filtro Prioridade
       if (selectedPrioridades.length > 0 && !selectedPrioridades.includes(row.prioridade)) return false;
 
@@ -178,7 +178,7 @@ export const CarteiraDashboardView = () => {
           });
           if (!matchAVNP) return false;
         } else {
-           if (!selectedAVNPs.includes(avnpAplicavel)) return false;
+          if (!selectedAVNPs.includes(avnpAplicavel)) return false;
         }
       }
 
@@ -234,7 +234,7 @@ export const CarteiraDashboardView = () => {
         totalObrasAptas++;
         sumPostes += row.postesDisponiveis;
         sumFaturamento += row.capacidadeFaturamento;
-        
+
         if (row.dataVistoria) countVistoriadas++;
         if (row.obrasSemOrcamentoVal === '0') countSemOrcamento++;
         if (row.dataEnergizacao) countEnergizadas++;
@@ -260,14 +260,14 @@ export const CarteiraDashboardView = () => {
         if (avnpAplicavel === 1) {
           countAvnp100++;
           if (row.dataFim) {
-             const mStr = `${format(row.dataFim, 'MMM', { locale: ptBR })}./${format(row.dataFim, 'yy')}`.toLowerCase();
-             if (selectedMeses.length > 0) {
-               if (selectedMeses.includes(mStr)) {
-                 countAvnp100Eficaz++;
-               }
-             } else {
-               countAvnp100Eficaz++;
-             }
+            const mStr = `${format(row.dataFim, 'MMM', { locale: ptBR })}./${format(row.dataFim, 'yy')}`.toLowerCase();
+            if (selectedMeses.length > 0) {
+              if (selectedMeses.includes(mStr)) {
+                countAvnp100Eficaz++;
+              }
+            } else {
+              countAvnp100Eficaz++;
+            }
           }
         }
       }
@@ -294,7 +294,7 @@ export const CarteiraDashboardView = () => {
     let sumMetaFaturamento = 0;
     let sumMetaPostesEquipe = 0;
     let countMetaEquipe = 0;
-    
+
     data.baseCurva.forEach(bc => {
       if (selectedMeses.length > 0 && !selectedMeses.includes(bc.mesMeta)) return;
       sumMetaPostes += bc.totalPostes;
@@ -336,7 +336,7 @@ export const CarteiraDashboardView = () => {
       metaPostesEquipeAvg,
       sumMetaFaturamento,
       eficaciaPrevista,
-      
+
       sumPostesInaptas,
       sumFaturamentoInaptas,
       geralTotalObras,
@@ -362,101 +362,101 @@ export const CarteiraDashboardView = () => {
 
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-y-auto overflow-x-hidden custom-scrollbar relative">
-      
+
       {/* HEADER / FILTROS BÁSICOS (Sticky) */}
       <div className="sticky top-0 z-[100] bg-background border-b border-border space-y-3 pt-4 px-6 pb-4">
-        
+
         <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto custom-scrollbar pb-2">
           {/* Header Title */}
           <div className="shrink-0 mb-1">
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Dashboard da Carteira</h1>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Gestão à Vista</p>
           </div>
-          
+
           <div className="w-px h-10 bg-border shrink-0"></div>
 
           {/* Filters Row */}
           <div className="flex flex-nowrap items-end gap-2 shrink-0 pb-1">
-             
-             {/* Filtro Unidade */}
-             <div className="flex flex-col justify-center min-w-[100px]">
-               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Unidade</span>
-               <DropdownMenu 
-                 open={unidadesDropdownOpen} 
-                 onOpenChange={(open) => {
-                   setUnidadesDropdownOpen(open);
-                   if (!open) setSelectedUnidadesIds(draftUnidadesIds);
-                   else setDraftUnidadesIds(selectedUnidadesIds);
-                 }}
-               >
-                 <DropdownMenuTrigger asChild>
-                   <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">
-                     <span className="truncate">
-                       {draftUnidadesIds.length === 0 
-                         ? 'Unidades' 
-                         : draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
-                           ? 'Unidades'
-                           : `${draftUnidadesIds.length} selec.`}
-                     </span>
-                     <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                   </Button>
-                 </DropdownMenuTrigger>
-                 <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
-                   <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-                     <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Todas</Button>
-                     <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
-                   </div>
-                   {UNIDADES_PLANEJAMENTO.map(u => (
-                     <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
-                       if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
-                       else setDraftUnidadesIds(draftUnidadesIds.filter(id => id !== u.id));
-                     }} onSelect={(e) => e.preventDefault()}>{u.nome}</DropdownMenuCheckboxItem>
-                   ))}
-                 </DropdownMenuContent>
-               </DropdownMenu>
-             </div>
 
-             {/* Outros filtros combinados na mesma linha, unidade ao lado de prioridade */}
-             <FilterSelect label="Projeto" options={options.projetos.map(m => ({ value: m, label: m }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
-             <FilterSelect label="Prioridade" options={options.prioridades.map(m => ({ value: m, label: m }))} selectedValues={selectedPrioridades} onChange={setSelectedPrioridades} />
-             <FilterSelect label="Mês" options={options.meses.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} />
-             <FilterSelect label="Vistoria" options={[
-               { value: "SIM", label: "SIM (Válidas)" },
-               { value: "VENCIDAS", label: "VENCIDAS (+6 meses)" },
-               { value: "NÃO", label: "NÃO (Sem Data)" }
-             ]} selectedValues={selectedVistorias} onChange={setSelectedVistorias} />
-             <FilterSelect label="Status" options={options.status.map(m => ({ value: m, label: m }))} selectedValues={selectedStatus} onChange={setSelectedStatus} />
-             <FilterSelect label="AVNP" options={options.avnps.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` }))} selectedValues={selectedAVNPs} onChange={setSelectedAVNPs} />
+            {/* Filtro Unidade */}
+            <div className="flex flex-col justify-center min-w-[100px]">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Unidade</span>
+              <DropdownMenu
+                open={unidadesDropdownOpen}
+                onOpenChange={(open) => {
+                  setUnidadesDropdownOpen(open);
+                  if (!open) setSelectedUnidadesIds(draftUnidadesIds);
+                  else setDraftUnidadesIds(selectedUnidadesIds);
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">
+                    <span className="truncate">
+                      {draftUnidadesIds.length === 0
+                        ? 'Unidades'
+                        : draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
+                          ? 'Unidades'
+                          : `${draftUnidadesIds.length} selec.`}
+                    </span>
+                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 max-h-[500px] overflow-y-auto z-[9999]" align="start">
+                  <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                    <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Todas</Button>
+                    <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
+                  </div>
+                  {UNIDADES_PLANEJAMENTO.map(u => (
+                    <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
+                      if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
+                      else setDraftUnidadesIds(draftUnidadesIds.filter(id => id !== u.id));
+                    }} onSelect={(e) => e.preventDefault()}>{u.nome}</DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
-             <Toggle 
-               pressed={considerarInaptas} 
-               onPressedChange={setConsiderarInaptas} 
-               variant="outline" 
-               size="sm" 
-               className="h-8 mb-0.5 text-[10px] uppercase font-bold tracking-wider data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground shrink-0"
-               title="Considerar obras inaptas nos totais e cálculos"
-             >
-               + INAPTAS
-             </Toggle>
+            {/* Outros filtros combinados na mesma linha, unidade ao lado de prioridade */}
+            <FilterSelect label="Projeto" options={options.projetos.map(m => ({ value: m, label: m }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
+            <FilterSelect label="Prioridade" options={options.prioridades.map(m => ({ value: m, label: m }))} selectedValues={selectedPrioridades} onChange={setSelectedPrioridades} />
+            <FilterSelect label="Mês" options={options.meses.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} />
+            <FilterSelect label="Vistoria" options={[
+              { value: "SIM", label: "SIM (Válidas)" },
+              { value: "VENCIDAS", label: "VENCIDAS (+6 meses)" },
+              { value: "NÃO", label: "NÃO (Sem Data)" }
+            ]} selectedValues={selectedVistorias} onChange={setSelectedVistorias} />
+            <FilterSelect label="Status" options={options.status.map(m => ({ value: m, label: m }))} selectedValues={selectedStatus} onChange={setSelectedStatus} />
+            <FilterSelect label="AVNP" options={options.avnps.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` }))} selectedValues={selectedAVNPs} onChange={setSelectedAVNPs} />
 
-             {/* DateRangePicker para Conclusões */}
-             <div className="flex flex-col justify-center min-w-[130px]">
-               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 flex justify-between">Conclusões
-                 {(filterStart || filterEnd) && <button onClick={() => { setFilterStart(''); setFilterEnd(''); }} className="text-foreground hover:underline ml-1">Limpar</button>}
-               </span>
-               <div className="flex items-center gap-1 border border-input bg-background rounded-md h-8 px-2 focus-within:ring-1 focus-within:ring-ring">
-                 <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                 <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Inicial" />
-                 <span className="text-muted-foreground text-[11px] shrink-0">-</span>
-                 <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Final" />
-               </div>
-             </div>
+            <Toggle
+              pressed={considerarInaptas}
+              onPressedChange={setConsiderarInaptas}
+              variant="outline"
+              size="sm"
+              className="h-8 mb-0.5 text-[10px] uppercase font-bold tracking-wider data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground shrink-0"
+              title="Considerar obras inaptas nos totais e cálculos"
+            >
+              + INAPTAS
+            </Toggle>
 
-             {/* Botão Sincronizar (Estilo PlanejadoMetaView) */}
-             <div className="flex items-center ml-2">
-               <SyncIndicator />
-             </div>
-             
+            {/* DateRangePicker para Conclusões */}
+            <div className="flex flex-col justify-center min-w-[130px]">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 flex justify-between">Conclusões
+                {(filterStart || filterEnd) && <button onClick={() => { setFilterStart(''); setFilterEnd(''); }} className="text-foreground hover:underline ml-1">Limpar</button>}
+              </span>
+              <div className="flex items-center gap-1 border border-input bg-background rounded-md h-8 px-2 focus-within:ring-1 focus-within:ring-ring">
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Inicial" />
+                <span className="text-muted-foreground text-[11px] shrink-0">-</span>
+                <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-[11px] outline-none w-[90px] text-foreground" title="Data Final" />
+              </div>
+            </div>
+
+            {/* Botão Sincronizar (Estilo PlanejadoMetaView) */}
+            <div className="flex items-center ml-2">
+              <SyncIndicator />
+            </div>
+
           </div>
         </div>
 
@@ -466,7 +466,7 @@ export const CarteiraDashboardView = () => {
             {selectedMeses.map(m => <FilterBadge key={m} label={`Mês: ${m}`} onRemove={() => setSelectedMeses(selectedMeses.filter(x => x !== m))} />)}
             {selectedVistorias.map(m => <FilterBadge key={m} label={`Vistoria: ${m}`} onRemove={() => setSelectedVistorias(selectedVistorias.filter(x => x !== m))} />)}
             {selectedStatus.map(m => <FilterBadge key={m} label={`Status: ${m}`} onRemove={() => setSelectedStatus(selectedStatus.filter(x => x !== m))} />)}
-            {selectedAVNPs.map(m => <FilterBadge key={m} label={`AVNP: ${(m*100).toFixed(0)}%`} onRemove={() => setSelectedAVNPs(selectedAVNPs.filter(x => x !== m))} />)}
+            {selectedAVNPs.map(m => <FilterBadge key={m} label={`AVNP: ${(m * 100).toFixed(0)}%`} onRemove={() => setSelectedAVNPs(selectedAVNPs.filter(x => x !== m))} />)}
             {selectedPrioridades.map(m => <FilterBadge key={m} label={`Prioridade: ${m}`} onRemove={() => setSelectedPrioridades(selectedPrioridades.filter(x => x !== m))} />)}
           </div>
         )}
@@ -475,391 +475,391 @@ export const CarteiraDashboardView = () => {
       <div className="px-6 pb-6 pt-6">
         {/* DASHBOARD GRID (11 Indicadores - 4 por linha) */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 mb-8">
-        
-        {/* LINHA 1 */}
-        {/* 1. Total de obras */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Total de Obras</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-primary">{indicators.totalObras}</p>
-              <p className="text-xs text-muted-foreground mb-1">Geral: {indicators.geralTotalObras}</p>
-            </div>
-          </div>
-          <Gauge value={indicators.totalObras} max={indicators.geralTotalObras || 1} colorClass="text-primary" />
-        </div>
 
-        {/* 2. Total de Postes Disponíveis */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
-          <div className="flex flex-col justify-center min-w-0 flex-1">
-            <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Postes Disponíveis">Postes Disponíveis</p>
-            <div className="flex flex-col sm:flex-row sm:items-end gap-1 min-w-0">
-              <p className="text-xl sm:text-3xl font-bold text-foreground leading-none">{indicators.sumPostes.toLocaleString('pt-BR')}</p>
-              <div className="flex flex-col text-[9px] sm:text-[10px] text-muted-foreground sm:ml-1 mb-1 min-w-0">
-                <span className="truncate" title={`Geral: ${indicators.geralSumPostes.toLocaleString('pt-BR')}`}>Geral: {indicators.geralSumPostes.toLocaleString('pt-BR')}</span>
-                <span className="font-semibold text-primary truncate" title={`Meta: ${indicators.sumMetaPostes.toLocaleString('pt-BR')}`}>Meta: {indicators.sumMetaPostes.toLocaleString('pt-BR')}</span>
+          {/* LINHA 1 */}
+          {/* 1. Total de obras */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Total de Obras</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-primary">{indicators.totalObras}</p>
+                <p className="text-xs text-muted-foreground mb-1">Geral: {indicators.geralTotalObras}</p>
               </div>
             </div>
+            <Gauge value={indicators.totalObras} max={indicators.geralTotalObras || 1} colorClass="text-primary" />
           </div>
-          <div className="flex justify-center items-center px-1 sm:px-2 shrink-0">
-            <span className="text-lg sm:text-2xl font-black text-primary">{indicators.percentMeta.toFixed(1)}%</span>
-          </div>
-          <div className="shrink-0">
-            <Gauge value={indicators.sumPostes} max={indicators.sumMetaPostes || indicators.geralSumPostes || 1} colorClass="text-foreground" />
-          </div>
-        </div>
 
-        {/* 3. Obras Sem Orçamento */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Sem Orçamento</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-orange-500">{indicators.countSemOrcamento}</p>
-              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
-                <span>Total: {indicators.totalObras}</span>
+          {/* 2. Total de Postes Disponíveis */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Postes Disponíveis">Postes Disponíveis</p>
+              <div className="flex flex-col sm:flex-row sm:items-end gap-1 min-w-0">
+                <p className="text-xl sm:text-3xl font-bold text-foreground leading-none">{indicators.sumPostes.toLocaleString('pt-BR')}</p>
+                <div className="flex flex-col text-[9px] sm:text-[10px] text-muted-foreground sm:ml-1 mb-1 min-w-0">
+                  <span className="truncate" title={`Geral: ${indicators.geralSumPostes.toLocaleString('pt-BR')}`}>Geral: {indicators.geralSumPostes.toLocaleString('pt-BR')}</span>
+                  <span className="font-semibold text-primary truncate" title={`Meta: ${indicators.sumMetaPostes.toLocaleString('pt-BR')}`}>Meta: {indicators.sumMetaPostes.toLocaleString('pt-BR')}</span>
+                </div>
               </div>
             </div>
+            <div className="flex justify-center items-center px-1 sm:px-2 shrink-0">
+              <span className="text-lg sm:text-2xl font-black text-primary">{indicators.percentMeta.toFixed(1)}%</span>
+            </div>
+            <div className="shrink-0">
+              <Gauge value={indicators.sumPostes} max={indicators.sumMetaPostes || indicators.geralSumPostes || 1} colorClass="text-foreground" />
+            </div>
           </div>
-          <Gauge value={indicators.countSemOrcamento} max={indicators.totalObras || 1} colorClass="text-orange-500" />
-        </div>
 
-        {/* 4. Obras Vistoriadas */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Vistoriadas</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-blue-500">{indicators.countVistoriadas}</p>
-              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
-                <span>Total: {indicators.totalObras}</span>
+          {/* 3. Obras Sem Orçamento */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Sem Orçamento</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-orange-500">{indicators.countSemOrcamento}</p>
+                <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                  <span>Total: {indicators.totalObras}</span>
+                </div>
               </div>
             </div>
+            <Gauge value={indicators.countSemOrcamento} max={indicators.totalObras || 1} colorClass="text-orange-500" />
           </div>
-          <Gauge value={indicators.countVistoriadas} max={indicators.totalObras || 1} colorClass="text-blue-500" />
-        </div>
 
-        {/* LINHA 2 */}
-        {/* 5. Obras Concluídas */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Concluídas</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-green-600">{indicators.countConcluidas}</p>
-              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
-                <span>Total: {indicators.totalObras}</span>
+          {/* 4. Obras Vistoriadas */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Vistoriadas</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-blue-500">{indicators.countVistoriadas}</p>
+                <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                  <span>Total: {indicators.totalObras}</span>
+                </div>
               </div>
             </div>
+            <Gauge value={indicators.countVistoriadas} max={indicators.totalObras || 1} colorClass="text-blue-500" />
           </div>
-          <Gauge value={indicators.countConcluidas} max={indicators.totalObras || 1} colorClass="text-green-600" />
-        </div>
 
-        {/* 6. Obras Energizadas */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Energizadas</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-yellow-500">{indicators.countEnergizadas}</p>
-              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
-                <span>Total: {indicators.totalObras}</span>
+          {/* LINHA 2 */}
+          {/* 5. Obras Concluídas */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Concluídas</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-green-600">{indicators.countConcluidas}</p>
+                <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                  <span>Total: {indicators.totalObras}</span>
+                </div>
               </div>
             </div>
+            <Gauge value={indicators.countConcluidas} max={indicators.totalObras || 1} colorClass="text-green-600" />
           </div>
-          <Gauge value={indicators.countEnergizadas} max={indicators.totalObras || 1} colorClass="text-yellow-500" />
-        </div>
 
-        {/* 7. Obras Inaptas */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Inaptas</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-destructive">{indicators.countInaptas}</p>
-              <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
-                <span>Postes: {indicators.sumPostesInaptas}</span>
-                <span>Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(indicators.sumFaturamentoInaptas)}</span>
+          {/* 6. Obras Energizadas */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Energizadas</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-yellow-500">{indicators.countEnergizadas}</p>
+                <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                  <span>Total: {indicators.totalObras}</span>
+                </div>
               </div>
             </div>
+            <Gauge value={indicators.countEnergizadas} max={indicators.totalObras || 1} colorClass="text-yellow-500" />
           </div>
-          <Gauge value={indicators.countInaptas} max={indicators.totalObras + indicators.countInaptas || 1} colorClass="text-destructive" />
-        </div>
 
-        {/* 8. Postes / Equipes */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
-          <div className="flex flex-col justify-center min-w-0 flex-1">
-            <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Postes / Equipes">Postes / Equipes</p>
-            <div className="flex flex-col sm:flex-row sm:items-end gap-1 min-w-0">
-              <p className="text-xl sm:text-3xl font-bold text-foreground leading-none">{indicators.ratioEquipes.toFixed(2)}</p>
-              <div className="flex flex-col text-[9px] sm:text-[10px] text-muted-foreground sm:ml-1 mb-1 min-w-0">
-                <span className="truncate">Ut: {indicators.sumPostes} / Eq: {indicators.sumEquipes}</span>
-                <span className="font-semibold text-primary truncate">Meta: {indicators.metaPostesEquipeAvg.toFixed(1)}</span>
+          {/* 7. Obras Inaptas */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Inaptas</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-destructive">{indicators.countInaptas}</p>
+                <div className="flex flex-col text-[10px] text-muted-foreground ml-2">
+                  <span>Postes: {indicators.sumPostesInaptas}</span>
+                  <span>Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(indicators.sumFaturamentoInaptas)}</span>
+                </div>
               </div>
             </div>
+            <Gauge value={indicators.countInaptas} max={indicators.totalObras + indicators.countInaptas || 1} colorClass="text-destructive" />
           </div>
-          <div className="shrink-0">
-            <Gauge value={indicators.ratioEquipes} max={indicators.metaPostesEquipeAvg || 1} colorClass="text-foreground" />
-          </div>
-        </div>
 
-        {/* LINHA 3 */}
-        {/* 9. GPM x NEOEX */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1" title="Déficit de lançamentos (GPM - NEOEX)">Déficit NEOEX</p>
-            <div className="flex items-end gap-2">
-              <p className={`text-3xl font-bold ${(indicators.sumGpm - indicators.sumNeoex) < 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {(indicators.sumGpm - indicators.sumNeoex).toLocaleString('pt-BR')}
-              </p>
-              <div className="flex flex-col text-[10px] text-muted-foreground ml-2 mb-1">
-                <span>GPM: {indicators.sumGpm.toLocaleString('pt-BR')}</span>
-                <span>NEX: {indicators.sumNeoex.toLocaleString('pt-BR')}</span>
+          {/* 8. Postes / Equipes */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Postes / Equipes">Postes / Equipes</p>
+              <div className="flex flex-col sm:flex-row sm:items-end gap-1 min-w-0">
+                <p className="text-xl sm:text-3xl font-bold text-foreground leading-none">{indicators.ratioEquipes.toFixed(2)}</p>
+                <div className="flex flex-col text-[9px] sm:text-[10px] text-muted-foreground sm:ml-1 mb-1 min-w-0">
+                  <span className="truncate">Ut: {indicators.sumPostes} / Eq: {indicators.sumEquipes}</span>
+                  <span className="font-semibold text-primary truncate">Meta: {indicators.metaPostesEquipeAvg.toFixed(1)}</span>
+                </div>
               </div>
             </div>
-          </div>
-          <Gauge value={Math.abs(indicators.sumGpm - indicators.sumNeoex)} max={indicators.sumGpm || 1} colorClass={(indicators.sumGpm - indicators.sumNeoex) < 0 ? 'text-green-500' : 'text-red-500'} />
-        </div>
-
-        {/* 10. Média de Postes por Obra */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Média Postes/Obra</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-foreground">{indicators.mediaPostes.toFixed(1)}</p>
-              <p className="text-[10px] text-muted-foreground mb-1">Geral: {indicators.geralTotalObras > 0 ? (indicators.geralSumPostes / indicators.geralTotalObras).toFixed(1) : 0}</p>
+            <div className="shrink-0">
+              <Gauge value={indicators.ratioEquipes} max={indicators.metaPostesEquipeAvg || 1} colorClass="text-foreground" />
             </div>
           </div>
-          <Gauge value={indicators.mediaPostes} max={indicators.geralTotalObras > 0 ? (indicators.geralSumPostes / indicators.geralTotalObras) * 1.5 : 1} colorClass="text-foreground" />
-        </div>
 
-        {/* 10. Capacidade Faturamento */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
-          <div className="flex flex-col justify-center min-w-0 flex-1">
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Capacidade Faturamento">Capacidade Faturamento</p>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <p className="text-xl sm:text-2xl font-bold text-green-500 truncate" title={indicators.sumFaturamento.toString()}>
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(indicators.sumFaturamento)}
-              </p>
-              <div className="text-[10px] text-muted-foreground overflow-hidden">
-                <span className="font-semibold text-primary truncate block" title={`Meta: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(indicators.sumMetaFaturamento)}`}>
-                  Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(indicators.sumMetaFaturamento)}
-                </span>
+          {/* LINHA 3 */}
+          {/* 9. GPM x NEOEX */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1" title="Déficit de lançamentos (GPM - NEOEX)">Déficit NEOEX</p>
+              <div className="flex items-end gap-2">
+                <p className={`text-3xl font-bold ${(indicators.sumGpm - indicators.sumNeoex) < 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {(indicators.sumGpm - indicators.sumNeoex).toLocaleString('pt-BR')}
+                </p>
+                <div className="flex flex-col text-[10px] text-muted-foreground ml-2 mb-1">
+                  <span>GPM: {indicators.sumGpm.toLocaleString('pt-BR')}</span>
+                  <span>NEX: {indicators.sumNeoex.toLocaleString('pt-BR')}</span>
+                </div>
               </div>
             </div>
+            <Gauge value={Math.abs(indicators.sumGpm - indicators.sumNeoex)} max={indicators.sumGpm || 1} colorClass={(indicators.sumGpm - indicators.sumNeoex) < 0 ? 'text-green-500' : 'text-red-500'} />
           </div>
-          <div className="flex-shrink-0">
-            <Gauge value={indicators.sumFaturamento} max={indicators.sumMetaFaturamento || indicators.sumFaturamento || 1} colorClass="text-green-500" />
-          </div>
-        </div>
 
-        {/* 11. Eficácia Prevista */}
-        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div className="flex flex-col justify-center">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Eficácia Prevista</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-bold text-indigo-500">{indicators.eficaciaPrevista.toFixed(1)}%</p>
+          {/* 10. Média de Postes por Obra */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Média Postes/Obra</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-foreground">{indicators.mediaPostes.toFixed(1)}</p>
+                <p className="text-[10px] text-muted-foreground mb-1">Geral: {indicators.geralTotalObras > 0 ? (indicators.geralSumPostes / indicators.geralTotalObras).toFixed(1) : 0}</p>
+              </div>
+            </div>
+            <Gauge value={indicators.mediaPostes} max={indicators.geralTotalObras > 0 ? (indicators.geralSumPostes / indicators.geralTotalObras) * 1.5 : 1} colorClass="text-foreground" />
+          </div>
+
+          {/* 10. Capacidade Faturamento */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Capacidade Faturamento">Capacidade Faturamento</p>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <p className="text-xl sm:text-2xl font-bold text-green-500 truncate" title={indicators.sumFaturamento.toString()}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(indicators.sumFaturamento)}
+                </p>
+                <div className="text-[10px] text-muted-foreground overflow-hidden">
+                  <span className="font-semibold text-primary truncate block" title={`Meta: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(indicators.sumMetaFaturamento)}`}>
+                    Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(indicators.sumMetaFaturamento)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex-shrink-0">
+              <Gauge value={indicators.sumFaturamento} max={indicators.sumMetaFaturamento || indicators.sumFaturamento || 1} colorClass="text-green-500" />
             </div>
           </div>
-          <Gauge value={indicators.eficaciaPrevista} max={100} colorClass="text-indigo-500" />
+
+          {/* 11. Eficácia Prevista */}
+          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Eficácia Prevista</p>
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-bold text-indigo-500">{indicators.eficaciaPrevista.toFixed(1)}%</p>
+              </div>
+            </div>
+            <Gauge value={indicators.eficaciaPrevista} max={100} colorClass="text-indigo-500" />
+          </div>
+
         </div>
 
-      </div>
 
 
+        {/* NOVO: RELAÇÃO DE OBRAS CONSIDERADAS NO FILTRO */}
+        <div className="px-6 pb-6">
+          <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px] min-h-[300px] max-h-[1200px] resize-y pb-1">
+            <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
+              <h3 className="font-bold text-sm">Relação de Obras Filtradas ({considerarInaptas ? 'Aptas + Inaptas' : 'Aptas'}) ({indicators.totalObras})</h3>
+            </div>
+            <div className="flex-1 overflow-auto custom-scrollbar p-0">
+              <ErrorBoundary>
+                <table className="w-full table-fixed text-sm text-left whitespace-nowrap">
+                  <thead className="bg-muted sticky top-0 z-10 shadow-sm">
+                    <tr>
+                      <th className="px-4 py-2 font-semibold w-[7%]">Obra</th>
+                      <th className="px-4 py-2 font-semibold w-[23%]">Título</th>
+                      <th className="px-4 py-2 font-semibold w-[10%]">Município</th>
+                      <th className="px-4 py-2 font-semibold w-[8%] text-center">Prioridade</th>
+                      <th className="px-4 py-2 font-semibold w-[9%] text-center">Status Execução</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[5%]">Postes Disp.</th>
+                      <th className="px-4 py-2 font-semibold text-right w-[9%]">Valor Considerado</th>
+                      <th className="px-4 py-2 font-semibold text-right w-[10%]">Orçamento Val.</th>
+                      <th className="px-4 py-2 font-semibold text-right w-[10%]">Recursos Aplic.</th>
+                      <th className="px-4 py-2 font-semibold text-right w-[9%]">Recurso Disp.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').sort((a, b) => (b.postesDisponiveis || 0) - (a.postesDisponiveis || 0)).slice(0, 100).map(obra => (
+                      <tr key={obra.id} className="border-b border-border/50 hover:bg-muted/20">
+                        <td className="px-4 py-2 font-medium truncate" title={obra.projeto}>{obra.projeto}</td>
+                        <td className="px-4 py-2 text-muted-foreground truncate" title={obra.titulo}>{obra.titulo}</td>
+                        <td className="px-4 py-2 truncate" title={obra.municipio}>{obra.municipio}</td>
+                        <td className="px-4 py-2 text-center">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground truncate max-w-full">
+                            {obra.prioridade || '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-center truncate" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</td>
+                        <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
+                        <td className="px-4 py-2 text-right">
+                          <span className="text-green-600 font-medium">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <div className="flex flex-col items-end w-full">
+                            <span className="font-medium text-[13px]">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
+                            </span>
+                            {obra.orcamentoValidado > 0 && (
+                              <div className="w-full mt-0.5">
+                                <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                                  <span>{((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
+                                  <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.capacidadeFaturamento)}</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full ${(((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado) * 100) > 100 ? 'bg-red-500' : 'bg-green-500'}`}
+                                    style={{ width: `${Math.min(Math.max(((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <div className="flex flex-col items-end w-full">
+                            <span className="font-medium text-[13px] text-blue-600">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
+                            </span>
+                            {obra.orcamentoValidado > 0 && (
+                              <div className="w-full mt-0.5">
+                                <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                                  <span>{((obra.recursosAplicados) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
+                                  <span className={(obra.orcamentoValidado - obra.recursosAplicados) < 0 ? 'text-red-500' : ''}>
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
+                                  </span>
+                                </div>
+                                <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full ${((obra.recursosAplicados) / obra.orcamentoValidado) * 100 > 100 ? 'bg-red-500' : 'bg-blue-500'}`}
+                                    style={{ width: `${Math.min(Math.max(((obra.recursosAplicados) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <span className={`font-medium ${(obra.orcamentoValidado - obra.recursosAplicados) >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredData.length === 0 && (
+                      <tr>
+                        <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </ErrorBoundary>
+            </div>
+          </div>
+        </div>
 
-      {/* NOVO: RELAÇÃO DE OBRAS CONSIDERADAS NO FILTRO */}
-      <div className="px-6 pb-6">
-        <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px] min-h-[300px] max-h-[1200px] resize-y pb-1">
-          <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
-            <h3 className="font-bold text-sm">Relação de Obras Filtradas ({considerarInaptas ? 'Aptas + Inaptas' : 'Aptas'}) ({indicators.totalObras})</h3>
+        {/* MAPA */}
+        <div className={cn("w-full transition-all duration-300 relative z-10", isMapFullscreen ? "fixed inset-0 z-50 bg-background p-4" : "h-[80vh] min-h-[700px] mb-8 px-6")}>
+          <div className="w-full h-full relative border border-border rounded-xl overflow-hidden shadow-sm">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="absolute top-4 right-4 z-[400] shadow-md hover:scale-105 transition-transform opacity-90 hover:opacity-100"
+              onClick={() => setIsMapFullscreen(!isMapFullscreen)}
+              title={isMapFullscreen ? "Sair da Tela Cheia" : "Expandir Mapa em Tela Cheia"}
+            >
+              {isMapFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+            </Button>
+            <ErrorBoundary><CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} /></ErrorBoundary>
+          </div>
+        </div>
+
+        {/* 10. Localização das Obras (Tabela) */}
+        <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden mb-6 h-[400px]">
+          <div className="p-4 border-b border-border bg-muted/20">
+            <h3 className="font-bold text-sm">Localização (Municípios)</h3>
           </div>
           <div className="flex-1 overflow-auto custom-scrollbar p-0">
             <ErrorBoundary>
-<table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="bg-muted sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <th className="px-4 py-2 font-semibold w-[80px]">Obra</th>
-                  <th className="px-4 py-2 font-semibold w-full min-w-[200px]">Título</th>
-                  <th className="px-4 py-2 font-semibold w-[120px]">Município</th>
-                  <th className="px-4 py-2 font-semibold w-[100px]">Prioridade</th>
-                  <th className="px-4 py-2 font-semibold w-[120px]">Status Execução</th>
-                  <th className="px-4 py-2 font-semibold text-center w-[80px]">Postes Disp.</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[130px] w-[130px]">Valor Considerado</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[150px] w-[150px]">Orçamento Val.</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[150px] w-[150px]">Recursos Aplic.</th>
-                  <th className="px-4 py-2 font-semibold text-right min-w-[130px] w-[130px]">Recurso Disp.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').sort((a, b) => (b.postesDisponiveis || 0) - (a.postesDisponiveis || 0)).slice(0, 100).map(obra => (
-                  <tr key={obra.id} className="border-b border-border/50 hover:bg-muted/20">
-                    <td className="px-4 py-2 font-medium">{obra.projeto}</td>
-                    <td className="px-4 py-2 text-muted-foreground truncate max-w-[300px]" title={obra.titulo}>{obra.titulo}</td>
-                    <td className="px-4 py-2">{obra.municipio}</td>
-                    <td className="px-4 py-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground">
-                        {obra.prioridade || '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2">{obra.statusExecucao || '-'}</td>
-                    <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
-                    <td className="px-4 py-2 text-right">
-                      <span className="text-green-600 font-medium">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="flex flex-col items-end w-full">
-                        <span className="font-medium text-[13px]">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
-                        </span>
-                        {obra.orcamentoValidado > 0 && (
-                          <div className="w-full mt-0.5">
-                            <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
-                              <span>{((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
-                              <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.capacidadeFaturamento)}</span>
-                            </div>
-                            <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full ${(((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado) * 100) > 100 ? 'bg-red-500' : 'bg-green-500'}`}
-                                style={{ width: `${Math.min(Math.max(((obra.orcamentoValidado - obra.capacidadeFaturamento) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="flex flex-col items-end w-full">
-                        <span className="font-medium text-[13px] text-blue-600">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
-                        </span>
-                        {obra.orcamentoValidado > 0 && (
-                          <div className="w-full mt-0.5">
-                            <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
-                              <span>{((obra.recursosAplicados) / obra.orcamentoValidado * 100).toFixed(1)}%</span>
-                              <span className={(obra.orcamentoValidado - obra.recursosAplicados) < 0 ? 'text-red-500' : ''}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
-                              </span>
-                            </div>
-                            <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full ${((obra.recursosAplicados) / obra.orcamentoValidado) * 100 > 100 ? 'bg-red-500' : 'bg-blue-500'}`}
-                                style={{ width: `${Math.min(Math.max(((obra.recursosAplicados) / obra.orcamentoValidado) * 100, 0), 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <span className={`font-medium ${(obra.orcamentoValidado - obra.recursosAplicados) >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {filteredData.length === 0 && (
+              <table className="w-full text-sm text-left">
+                <thead className="bg-muted sticky top-0 z-10 shadow-sm">
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
+                    <th className="px-4 py-2 font-semibold">Município</th>
+                    <th className="px-4 py-2 font-semibold text-right">Qtd Obras</th>
+                    <th className="px-4 py-2 font-semibold text-right">%</th>
+                    <th className="px-4 py-2 font-semibold text-right">Postes Disp.</th>
+                    <th className="px-4 py-2 font-semibold text-right">Valor Considerado</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-</ErrorBoundary>
+                </thead>
+                <tbody>
+                  {indicators.municipiosRanking.map(m => (
+                    <tr key={m.nome} className="border-b border-border/50 hover:bg-muted/20">
+                      <td className="px-4 py-2 font-medium truncate max-w-[150px]" title={m.nome}>{m.nome}</td>
+                      <td className="px-4 py-2 text-right">{m.count}</td>
+                      <td className="px-4 py-2 text-right text-muted-foreground">{m.percent.toFixed(1)}%</td>
+                      <td className="px-4 py-2 text-right font-medium">{m.postes}</td>
+                      <td className="px-4 py-2 text-right text-green-600 font-medium">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.valor)}
+                      </td>
+                    </tr>
+                  ))}
+                  {indicators.municipiosRanking.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhum dado</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </ErrorBoundary>
           </div>
         </div>
-      </div>
 
-      {/* MAPA */}
-      <div className={cn("w-full transition-all duration-300 relative z-10", isMapFullscreen ? "fixed inset-0 z-50 bg-background p-4" : "h-[80vh] min-h-[700px] mb-8 px-6")}>
-        <div className="w-full h-full relative border border-border rounded-xl overflow-hidden shadow-sm">
-          <Button 
-            variant="secondary" 
-            size="icon" 
-            className="absolute top-4 right-4 z-[400] shadow-md hover:scale-105 transition-transform opacity-90 hover:opacity-100"
-            onClick={() => setIsMapFullscreen(!isMapFullscreen)}
-            title={isMapFullscreen ? "Sair da Tela Cheia" : "Expandir Mapa em Tela Cheia"}
-          >
-            {isMapFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
-          </Button>
-          <ErrorBoundary><CarteiraMapView obras={filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0')} /></ErrorBoundary>
+        {/* OBRAS COM DÉFICIT NEOEX */}
+        <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[400px] min-h-[250px] max-h-[1000px] resize-y mb-6">
+          <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
+            <h3 className="font-bold text-sm text-red-500">Obras com Divergência de Lançamento (GPM x NEOEX)</h3>
+          </div>
+          <div className="flex-1 overflow-auto custom-scrollbar p-0">
+            <ErrorBoundary>
+              <table className="w-full text-sm text-left whitespace-nowrap">
+                <thead className="bg-muted sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-4 py-2 font-semibold">Obra</th>
+                    <th className="px-4 py-2 font-semibold min-w-[200px]">Título</th>
+                    <th className="px-4 py-2 font-semibold text-right">GPM</th>
+                    <th className="px-4 py-2 font-semibold text-right">NEOEX</th>
+                    <th className="px-4 py-2 font-semibold text-right">Diferença</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).slice(0, 100).map(obra => (
+                    <tr key={`deficit-${obra.id}`} className="border-b border-border/50 hover:bg-muted/20">
+                      <td className="px-4 py-2 font-medium">{obra.projeto}</td>
+                      <td className="px-4 py-2 text-muted-foreground truncate max-w-[300px]" title={obra.titulo}>{obra.titulo}</td>
+                      <td className="px-4 py-2 text-right">{obra.qtdGpm}</td>
+                      <td className="px-4 py-2 text-right">{obra.qtdNeoex}</td>
+                      <td className={`px-4 py-2 text-right font-bold ${(obra.qtdGpm - obra.qtdNeoex) < 0 ? 'text-green-500' : 'text-red-500'}`}>{obra.qtdGpm - obra.qtdNeoex}</td>
+                    </tr>
+                  ))}
+                  {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra com divergência encontrada.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </ErrorBoundary>
+          </div>
         </div>
-      </div>
-
-      {/* 10. Localização das Obras (Tabela) */}
-      <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden mb-6 h-[400px]">
-        <div className="p-4 border-b border-border bg-muted/20">
-          <h3 className="font-bold text-sm">Localização (Municípios)</h3>
-        </div>
-        <div className="flex-1 overflow-auto custom-scrollbar p-0">
-          <ErrorBoundary>
-<table className="w-full text-sm text-left">
-            <thead className="bg-muted sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Município</th>
-                <th className="px-4 py-2 font-semibold text-right">Qtd Obras</th>
-                <th className="px-4 py-2 font-semibold text-right">%</th>
-                <th className="px-4 py-2 font-semibold text-right">Postes Disp.</th>
-                <th className="px-4 py-2 font-semibold text-right">Valor Considerado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {indicators.municipiosRanking.map(m => (
-                <tr key={m.nome} className="border-b border-border/50 hover:bg-muted/20">
-                  <td className="px-4 py-2 font-medium truncate max-w-[150px]" title={m.nome}>{m.nome}</td>
-                  <td className="px-4 py-2 text-right">{m.count}</td>
-                  <td className="px-4 py-2 text-right text-muted-foreground">{m.percent.toFixed(1)}%</td>
-                  <td className="px-4 py-2 text-right font-medium">{m.postes}</td>
-                  <td className="px-4 py-2 text-right text-green-600 font-medium">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.valor)}
-                  </td>
-                </tr>
-              ))}
-              {indicators.municipiosRanking.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhum dado</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-</ErrorBoundary>
-        </div>
-      </div>
-
-      {/* OBRAS COM DÉFICIT NEOEX */}
-      <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[400px] min-h-[250px] max-h-[1000px] resize-y mb-6">
-        <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
-          <h3 className="font-bold text-sm text-red-500">Obras com Divergência de Lançamento (GPM x NEOEX)</h3>
-        </div>
-        <div className="flex-1 overflow-auto custom-scrollbar p-0">
-          <ErrorBoundary>
-<table className="w-full text-sm text-left whitespace-nowrap">
-            <thead className="bg-muted sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Obra</th>
-                <th className="px-4 py-2 font-semibold min-w-[200px]">Título</th>
-                <th className="px-4 py-2 font-semibold text-right">GPM</th>
-                <th className="px-4 py-2 font-semibold text-right">NEOEX</th>
-                <th className="px-4 py-2 font-semibold text-right">Diferença</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).slice(0, 100).map(obra => (
-                <tr key={`deficit-${obra.id}`} className="border-b border-border/50 hover:bg-muted/20">
-                  <td className="px-4 py-2 font-medium">{obra.projeto}</td>
-                  <td className="px-4 py-2 text-muted-foreground truncate max-w-[300px]" title={obra.titulo}>{obra.titulo}</td>
-                  <td className="px-4 py-2 text-right">{obra.qtdGpm}</td>
-                  <td className="px-4 py-2 text-right">{obra.qtdNeoex}</td>
-                  <td className={`px-4 py-2 text-right font-bold ${(obra.qtdGpm - obra.qtdNeoex) < 0 ? 'text-green-500' : 'text-red-500'}`}>{obra.qtdGpm - obra.qtdNeoex}</td>
-                </tr>
-              ))}
-              {filteredData.filter(r => (considerarInaptas || r.obrasInaptasVal !== '0') && (r.qtdGpm !== r.qtdNeoex)).length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra com divergência encontrada.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-</ErrorBoundary>
-        </div>
-      </div>
 
       </div>
     </div>
