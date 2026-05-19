@@ -680,10 +680,10 @@ export const CarteiraDashboardView = () => {
                       <th className="px-4 py-2 font-semibold w-[8%] text-center">Prioridade</th>
                       <th className="px-4 py-2 font-semibold w-[9%] text-center">Status Execução</th>
                       <th className="px-4 py-2 font-semibold text-center w-[5%]">Postes Disp.</th>
-                      <th className="px-4 py-2 font-semibold text-right w-[9%]">Valor Considerado</th>
-                      <th className="px-4 py-2 font-semibold text-right w-[10%]">Orçamento Val.</th>
-                      <th className="px-4 py-2 font-semibold text-right w-[10%]">Recursos Aplic.</th>
-                      <th className="px-4 py-2 font-semibold text-right w-[9%]">Recurso Disp.</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[9%]">Valor Considerado</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Orçamento Val.</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Recursos Aplic.</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[9%]">Recurso Disp.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -699,13 +699,13 @@ export const CarteiraDashboardView = () => {
                         </td>
                         <td className="px-4 py-2 text-center truncate" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</td>
                         <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 text-center">
                           <span className="text-green-600 font-medium">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-right">
-                          <div className="flex flex-col items-end w-full">
+                        <td className="px-4 py-2 text-center">
+                          <div className="flex flex-col items-center w-full">
                             <span className="font-medium text-[13px]">
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
                             </span>
@@ -725,8 +725,8 @@ export const CarteiraDashboardView = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-right">
-                          <div className="flex flex-col items-end w-full">
+                        <td className="px-4 py-2 text-center">
+                          <div className="flex flex-col items-center w-full">
                             <span className="font-medium text-[13px] text-blue-600">
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
                             </span>
@@ -748,7 +748,7 @@ export const CarteiraDashboardView = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 text-center">
                           <span className={`font-medium ${(obra.orcamentoValidado - obra.recursosAplicados) >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
                           </span>
