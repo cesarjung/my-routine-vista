@@ -73,6 +73,7 @@ export const CarteiraDashboardView = () => {
   const [selectedVistorias, setSelectedVistorias] = useSessionState<string[]>('filter_vistorias_carteiradashboard', []); // 'SIM', 'NÃO', 'VENCIDAS'
   const [selectedPostes, setSelectedPostes] = useSessionState<number[]>('filter_postes_carteiradashboard', []);
   const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps_carteiradashboard', []);
+  const [selectedRecursoDisp, setSelectedRecursoDisp] = useSessionState<string[]>('filter_recurso_disp_carteiradashboard', []);
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_carteiradashboard', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_carteiradashboard', '');
   const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas_carteiradashboard', false);
@@ -203,9 +204,15 @@ export const CarteiraDashboardView = () => {
         if (!isWithin) return false;
       }
 
+      // Filtro Recurso Disponível
+      if (selectedRecursoDisp.length > 0) {
+        const recursoStatus = ((row.orcamentoValidado || 0) - (row.recursosAplicados || 0)) >= 0 ? 'SIM' : 'NÃO';
+        if (!selectedRecursoDisp.includes(recursoStatus)) return false;
+      }
+
       return true;
     });
-  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedPostes, selectedVistorias, selectedAVNPs, filterStart, filterEnd]);
+  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedPostes, selectedVistorias, selectedAVNPs, selectedRecursoDisp, filterStart, filterEnd]);
 
   // Indicadores
   const indicators = useMemo(() => {
@@ -435,6 +442,10 @@ export const CarteiraDashboardView = () => {
             ]} selectedValues={selectedVistorias} onChange={setSelectedVistorias} />
             <FilterSelect label="Status" options={options.status.map(m => ({ value: m, label: m }))} selectedValues={selectedStatus} onChange={setSelectedStatus} />
             <FilterSelect label="AVNP" options={options.avnps.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` }))} selectedValues={selectedAVNPs} onChange={setSelectedAVNPs} />
+            <FilterSelect label="Recurso Disp." options={[
+              { value: 'SIM', label: 'SIM (Positivos)' },
+              { value: 'NÃO', label: 'NÃO (Negativos)' }
+            ]} selectedValues={selectedRecursoDisp} onChange={setSelectedRecursoDisp} />
 
             <Toggle
               pressed={considerarInaptas}
@@ -688,6 +699,7 @@ export const CarteiraDashboardView = () => {
                       <th className="px-4 py-2 font-semibold w-[8%] text-center">Prioridade</th>
                       <th className="px-4 py-2 font-semibold w-[9%] text-center">Status Execução</th>
                       <th className="px-4 py-2 font-semibold text-center w-[5%]">Postes Disp.</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[5%]">AVNP</th>
                       <th className="px-4 py-2 font-semibold text-center w-[9%]">Valor Considerado</th>
                       <th className="px-4 py-2 font-semibold text-center w-[10%]">Orçamento Val.</th>
                       <th className="px-4 py-2 font-semibold text-center w-[10%]">Recursos Aplic.</th>
@@ -707,6 +719,15 @@ export const CarteiraDashboardView = () => {
                         </td>
                         <td className="px-4 py-2 text-center truncate" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</td>
                         <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
+                        <td className="px-4 py-2 text-center font-bold text-[11px] text-indigo-600">
+                          {(() => {
+                            let avnp = obra.avnpMaisRecente;
+                            if (selectedMeses.length === 1) {
+                              avnp = obra.avnpMap[selectedMeses[0]] !== undefined ? obra.avnpMap[selectedMeses[0]] : obra.avnpMaisRecente;
+                            }
+                            return `${(avnp * 100).toFixed(0)}%`;
+                          })()}
+                        </td>
                         <td className="px-4 py-2 text-center">
                           <span className="text-green-600 font-medium">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
