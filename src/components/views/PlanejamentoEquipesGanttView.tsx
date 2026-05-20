@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FilterSelect } from '@/components/ui/filter-select';
 import { SyncIndicator } from '@/components/SyncIndicator';
+import { PlanejamentoEquipesMap } from './PlanejamentoEquipesMap';
 
 export const PlanejamentoEquipesGanttView = () => {
   const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_planejamentoequipesgantt', []);
@@ -772,6 +773,118 @@ export const PlanejamentoEquipesGanttView = () => {
                 ))}
               </div>
             </div>
+
+            {/* NOVO CONTEINER: Totais do Período */}
+            <div className="w-[360px] flex-shrink-0 flex flex-col relative bg-card border-l border-border shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+              <div className="h-12 bg-secondary/95 backdrop-blur border-b border-border flex flex-col sticky top-0 z-20">
+                <div className="h-5 flex items-center justify-center border-b border-border bg-muted/50 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Totais do Período
+                </div>
+                <div className="flex-1 flex text-[9px] font-bold tracking-tighter divide-x divide-border">
+                  <div className="flex-1 flex items-center justify-center">Planejado R$</div>
+                  <div className="flex-1 flex items-center justify-center">Meta R$</div>
+                  <div className="w-[45px] flex items-center justify-center">% Plan</div>
+                  <div className="w-[55px] flex items-center justify-center text-center leading-none">Média<br/>Desloc.</div>
+                  <div className="w-[85px] flex items-center justify-center text-center leading-none">Média<br/>Serviço</div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col bg-background/50">
+                {filteredData.map((row, i) => {
+                  let planejado = 0;
+                  let meta = 0;
+                  let sumDesloc = 0;
+                  let sumServico = 0;
+                  let countDias = 0;
+                  let countAbaixo8 = 0;
+                  let countAcima10 = 0;
+                  
+                  if (dates.length > 0) {
+                    const startD = dates[0];
+                    const endD = dates[dates.length - 1];
+                    row.atividadesDiarias.forEach(ativ => {
+                      const ativDate = startOfDay(ativ.dataParsed);
+                      if (ativDate >= startOfDay(startD) && ativDate <= startOfDay(endD)) {
+                        let diaPlanejado = 0;
+                        let diaMeta = 0;
+                        let diaDesloc = 0;
+                        let diaServico = 0;
+
+                        ativ.atividades.forEach(a => {
+                          diaPlanejado += a.valorPlanejado || 0;
+                          diaMeta += a.valorMeta || 0;
+                          diaDesloc = Math.max(diaDesloc, a.tempoDeslocamento || 0);
+                          diaServico = Math.max(diaServico, a.tempoServico || 0);
+                        });
+
+                        planejado += diaPlanejado;
+                        meta += diaMeta;
+                        
+                        // Considera apenas dias que tiveram alguma atividade para as médias
+                        if (ativ.atividades.length > 0) {
+                          sumDesloc += diaDesloc;
+                          sumServico += diaServico;
+                          countDias++;
+
+                          if (diaServico > 0 && diaServico < 8) {
+                            countAbaixo8++;
+                          } else if (diaServico > 10) {
+                            countAcima10++;
+                          }
+                        }
+                      }
+                    });
+                  }
+                  
+                  const percPlanejado = meta > 0 ? (planejado / meta) * 100 : 0;
+                  const mediaDesloc = countDias > 0 ? sumDesloc / countDias : 0;
+                  const percDesloc = (mediaDesloc / 2) * 100;
+                  const mediaServico = countDias > 0 ? sumServico / countDias : 0;
+                  
+                  let percColor = "bg-background text-foreground";
+                  if (percPlanejado === 0) percColor = "bg-red-500/20 text-red-700 dark:text-red-400";
+                  else if (percPlanejado <= 50) percColor = "bg-red-500/20 text-red-700 dark:text-red-400";
+                  else if (percPlanejado <= 80) percColor = "bg-orange-500/20 text-orange-700 dark:text-orange-400";
+                  else if (percPlanejado < 100) percColor = "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400";
+                  else if (percPlanejado === 100) percColor = "bg-green-500/20 text-green-700 dark:text-green-400";
+                  else percColor = "bg-blue-500/20 text-blue-700 dark:text-blue-400";
+
+                  return (
+                    <div key={i} className="h-[88px] border-b border-border flex divide-x divide-border hover:bg-secondary/30 transition-colors">
+                      <div className="flex-1 flex items-center justify-center text-[10px] font-medium" title={formatCurrency(planejado)}>
+                        {formatCurrency(planejado).replace('R$', '').trim()}
+                      </div>
+                      <div className="flex-1 flex items-center justify-center text-[10px] font-medium" title={formatCurrency(meta)}>
+                        {formatCurrency(meta).replace('R$', '').trim()}
+                      </div>
+                      <div className={cn("w-[45px] flex items-center justify-center text-[10px] font-bold", percColor)} title={`% Planejado: ${percPlanejado.toFixed(1)}%`}>
+                        {percPlanejado.toFixed(0)}%
+                      </div>
+                      <div className="w-[55px] flex flex-col items-center justify-center text-[10px] bg-orange-50/50 dark:bg-orange-950/20" title={`Média de Deslocamento\n% baseado no máximo de 2h`}>
+                        <span className="font-bold text-orange-700 dark:text-orange-400">{mediaDesloc.toFixed(1)}h</span>
+                        <span className={cn("text-[8px] font-medium mt-0.5 px-1 rounded-sm", percDesloc > 100 ? "bg-red-500/20 text-red-700" : "text-muted-foreground")}>
+                          {percDesloc.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="w-[85px] flex flex-col items-center justify-center text-[10px] px-1 bg-blue-50/50 dark:bg-blue-950/20">
+                        <span className={cn("font-bold", mediaServico < 8 || mediaServico > 10 ? "text-red-600" : "text-blue-700 dark:text-blue-400")} title="Média de Tempo de Serviço (Mín: 8h, Máx: 10h)">
+                          {mediaServico.toFixed(1)}h
+                        </span>
+                        {(countAbaixo8 > 0 || countAcima10 > 0) && (
+                          <div className="mt-1 flex flex-col items-center w-full" title={`Dias com menos de 8h: ${countAbaixo8}\nDias com mais de 10h: ${countAcima10}`}>
+                            {countAbaixo8 > 0 && <span className="text-[8px] text-red-500 font-medium leading-none text-center truncate w-full">{countAbaixo8} dias &lt; 8h</span>}
+                            {countAcima10 > 0 && <span className="text-[8px] text-orange-500 font-medium leading-none mt-[2px] text-center truncate w-full">{countAcima10} dias &gt; 10h</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <PlanejamentoEquipesMap data={filteredData} dates={dates} />
+
           </div>
         </div>
       </div>

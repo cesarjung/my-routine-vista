@@ -9,6 +9,7 @@ export interface AtividadeProjeto {
   lat: number | null;
   lng: number | null;
   tempoDeslocamento: number;
+  tempoServico: number;
   valorPlanejado: number;
   valorMeta: number;
   realizadoPlanejado: number;
@@ -106,6 +107,7 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
           const etapa = row[12];         // Coluna M
           const municipioRaw = row[28];  // Coluna AC (fallback)
           const tempoDeslocamento = parseTimeInHours(row[64]); // BM
+          const tempoServico = parseTimeInHours(row[67]); // BP
 
           // Valores financeiros
           const valorPlanejado = parseCurrency(row[37]); // AL
@@ -149,6 +151,7 @@ export const usePlanejamentoEquipesData = (selectedUnidadesIds: string[]) => {
               lat,
               lng,
               tempoDeslocamento,
+              tempoServico,
               valorPlanejado,
               valorMeta,
               realizadoPlanejado,
