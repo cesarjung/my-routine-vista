@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Filter, Calendar, RefreshCw, BarChart2, Hash } from 'lucide-react';
+import { Filter, Calendar, RefreshCw, BarChart2, Hash, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FilterSelect } from '@/components/ui/filter-select';
 import { Toggle } from '@/components/ui/toggle';
@@ -34,6 +34,7 @@ import {
 
 export const CumprimentoView = () => {
   const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_cumprimento', []);
+  const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_cumprimento', 1);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
@@ -566,6 +567,16 @@ export const CumprimentoView = () => {
 
             <FilterSelect label="Projeto" options={projetosUnicos.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
 
+            <div className="flex items-center gap-1 bg-secondary/30 rounded-md border border-border px-1 h-10 ml-2 shrink-0">
+               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} title="Diminuir Zoom">
+                 <ZoomOut className="w-4 h-4 text-muted-foreground" />
+               </Button>
+               <span className="text-xs font-bold w-10 text-center text-muted-foreground" title="Nível de Zoom">{(zoomLevel * 100).toFixed(0)}%</span>
+               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} title="Aumentar Zoom">
+                 <ZoomIn className="w-4 h-4 text-muted-foreground" />
+               </Button>
+            </div>
+
             <div className="flex items-center ml-2">
               <SyncIndicator />
             </div>
@@ -574,7 +585,7 @@ export const CumprimentoView = () => {
       </div>
 
       {/* CONTEÚDO PRINCIPAL (Gráfico + Tabela) */}
-      <div className="flex flex-col gap-6 p-4 pb-8">
+      <div style={{ zoom: zoomLevel } as React.CSSProperties} className="flex flex-col gap-6 p-4 pb-8">
         
         {/* Gráfico */}
         <div className="w-full h-[320px] shrink-0 border border-border rounded-xl bg-card p-4 shadow-sm flex flex-col">

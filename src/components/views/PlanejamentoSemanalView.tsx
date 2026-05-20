@@ -4,7 +4,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Filter, Calendar, Settings, AlertTriangle, Target } from 'lucide-react';
+import { RefreshCw, Filter, Calendar, Settings, AlertTriangle, Target, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
@@ -40,6 +40,7 @@ type WeeklyStats = {
 export const PlanejamentoSemanalView = () => {
   // Estado de Filtros
   const [selectedUnidades, setSelectedUnidades] = useSessionState<string[]>('filter_unidades_planejamentosemanal', []);
+  const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_planejamentosemanal', 1);
 
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
 
@@ -361,12 +362,23 @@ export const PlanejamentoSemanalView = () => {
           
           <div className="flex-1"></div>
           
+          <div className="flex items-center gap-1 bg-secondary/30 rounded-md border border-border px-1 h-8 mr-1 shrink-0 mb-1">
+             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} title="Diminuir Zoom">
+               <ZoomOut className="w-3.5 h-3.5 text-muted-foreground" />
+             </Button>
+             <span className="text-[10px] font-bold w-8 text-center text-muted-foreground" title="Nível de Zoom">{(zoomLevel * 100).toFixed(0)}%</span>
+             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} title="Aumentar Zoom">
+               <ZoomIn className="w-3.5 h-3.5 text-muted-foreground" />
+             </Button>
+          </div>
+
           <div className="flex items-center ml-2 mb-1">
             <SyncIndicator />
           </div>
         </div>
       </div>
 
+      <div style={{ zoom: zoomLevel } as React.CSSProperties} className="space-y-6">
       {/* 2. CARDS DE RESUMO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Card 1: Meta vs Planejado (Ativas) */}
@@ -655,6 +667,7 @@ export const PlanejamentoSemanalView = () => {
           </div>
         </div>
 
+      </div>
       </div>
     </div>
   );

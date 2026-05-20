@@ -3,7 +3,7 @@ import { useCarteiraDashboardData } from '@/hooks/useCarteiraDashboardData';
 import { CarteiraMapView } from './CarteiraMapView';
 import { format, differenceInMonths, parse, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Filter, Calendar, Maximize2, Minimize2 } from 'lucide-react';
+import { RefreshCw, Filter, Calendar, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import {
@@ -58,6 +58,7 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
 
 export const CarteiraDashboardView = () => {
   const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_carteiradashboard', []);
+  const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_carteiradashboard', 1);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
@@ -471,6 +472,17 @@ export const CarteiraDashboardView = () => {
               </div>
             </div>
 
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-1 bg-secondary/30 rounded-md border border-border px-1 h-8 ml-2 shrink-0">
+               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} title="Diminuir Zoom">
+                 <ZoomOut className="w-3.5 h-3.5 text-muted-foreground" />
+               </Button>
+               <span className="text-[10px] font-bold w-8 text-center text-muted-foreground" title="Nível de Zoom">{(zoomLevel * 100).toFixed(0)}%</span>
+               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} title="Aumentar Zoom">
+                 <ZoomIn className="w-3.5 h-3.5 text-muted-foreground" />
+               </Button>
+            </div>
+
             {/* Botão Sincronizar (Estilo PlanejadoMetaView) */}
             <div className="flex items-center ml-2">
               <SyncIndicator />
@@ -491,7 +503,8 @@ export const CarteiraDashboardView = () => {
         )}
       </div>
 
-      <div className="px-6 pb-6 pt-6">
+      <div style={{ zoom: zoomLevel } as React.CSSProperties}>
+        <div className="px-6 pb-6 pt-6">
         {/* DASHBOARD GRID (11 Indicadores - 4 por linha) */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 mb-8">
 
@@ -890,6 +903,7 @@ export const CarteiraDashboardView = () => {
           </div>
         </div>
 
+      </div>
       </div>
     </div>
   );
