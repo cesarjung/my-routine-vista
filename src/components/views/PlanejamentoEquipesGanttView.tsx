@@ -5,7 +5,7 @@ import { getEtapaColorClass } from '@/hooks/usePlanejamentoData';
 import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { useSessionState } from '@/hooks/useSessionState';
 import { cn } from '@/lib/utils';
-import { Loader2, ChevronLeft, ChevronRight, Filter, Calendar, RefreshCw } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Filter, Calendar, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { format, differenceInDays, startOfDay, addDays, subDays, parseISO, parse, isValid, startOfMonth, getDaysInMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { SyncIndicator } from '@/components/SyncIndicator';
 
 export const PlanejamentoEquipesGanttView = () => {
   const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_planejamentoequipesgantt', []);
+  const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_planejamentoequipesgantt', 1);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
@@ -517,6 +518,18 @@ export const PlanejamentoEquipesGanttView = () => {
           <div className="flex items-center gap-1">
             <SyncIndicator />
             <div className="w-px h-5 bg-border mr-1 ml-2"></div>
+            
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-1 bg-secondary/30 rounded-md border border-border px-1 h-8 mr-1">
+               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} title="Diminuir Zoom">
+                 <ZoomOut className="w-3.5 h-3.5 text-muted-foreground" />
+               </Button>
+               <span className="text-[10px] font-bold w-8 text-center text-muted-foreground" title="Nível de Zoom">{(zoomLevel * 100).toFixed(0)}%</span>
+               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} title="Aumentar Zoom">
+                 <ZoomIn className="w-3.5 h-3.5 text-muted-foreground" />
+               </Button>
+            </div>
+
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setViewStartManual(subDays(viewStartManual, 7))}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
@@ -533,7 +546,7 @@ export const PlanejamentoEquipesGanttView = () => {
 
       <div className="flex-1 overflow-hidden flex flex-col bg-card relative">
         <div className="flex-1 overflow-auto relative flex custom-scrollbar">
-          <div className="flex min-w-max h-max">
+          <div className="flex min-w-max h-max" style={{ zoom: zoomLevel } as React.CSSProperties}>
             
             <div className="w-[280px] flex-shrink-0 sticky left-0 z-30 bg-card border-r border-border flex flex-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
               <div className="h-12 bg-secondary/95 backdrop-blur border-b border-border p-3 flex flex-col justify-center sticky top-0 z-40">
