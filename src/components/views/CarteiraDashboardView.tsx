@@ -1,7 +1,7 @@
 import React, { useState, useMemo, Fragment, useEffect } from 'react';
 import { useCarteiraDashboardData } from '@/hooks/useCarteiraDashboardData';
 import { CarteiraMapView } from './CarteiraMapView';
-import { format, differenceInMonths, parse, startOfDay, endOfDay } from 'date-fns';
+import { format, differenceInMonths, parse, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RefreshCw, Filter, Calendar, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,7 @@ export const CarteiraDashboardView = () => {
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_carteiradashboard', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_carteiradashboard', '');
   const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas_carteiradashboard', false);
+  const [ocultarConcluidasPassado, setOcultarConcluidasPassado] = useSessionState<boolean>('filter_ocultar_concluidas_passado', true);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   useEffect(() => {
@@ -142,7 +143,7 @@ export const CarteiraDashboardView = () => {
   const filteredData = useMemo(() => {
     const now = new Date();
 
-    return data.carteira.filter(row => {
+    const baseFiltered = data.carteira.filter(row => {
       // Filtro Mês
       if (selectedMeses.length > 0) {
         const hasMes = selectedMeses.some(m => row.meses.includes(m));
@@ -212,8 +213,48 @@ export const CarteiraDashboardView = () => {
       }
 
       return true;
+    }).map(row => {
+      let isConcluidaNoPassado = false;
+      if (row.dataFim) {
+        const fimMesTime = startOfMonth(row.dataFim).getTime();
+        
+        const parseMesToDateLocal = (mesStr: string) => {
+          if (mesStr === 'OBRA RETIRADA') return 0;
+          try {
+            const cleanStr = mesStr.replace('./', ' ');
+            return parse(cleanStr, 'MMM yy', new Date(), { locale: ptBR }).getTime();
+          } catch (e) {
+            return 0;
+          }
+        };
+
+        if (selectedMeses.length > 0) {
+          const mesesMatching = selectedMeses.filter(m => row.meses.includes(m));
+          if (mesesMatching.length > 0) {
+            isConcluidaNoPassado = mesesMatching.every(m => {
+              const mTime = parseMesToDateLocal(m);
+              return mTime > 0 && mTime > fimMesTime;
+            });
+          }
+        } else {
+          if (row.meses.length > 0) {
+            isConcluidaNoPassado = row.meses.every(m => {
+              const mTime = parseMesToDateLocal(m);
+              return mTime > 0 && mTime > fimMesTime;
+            });
+          }
+        }
+      }
+      
+      return { ...row, isConcluidaNoPassado };
     });
-  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedPostes, selectedVistorias, selectedAVNPs, selectedRecursoDisp, filterStart, filterEnd]);
+    
+    if (ocultarConcluidasPassado) {
+      return baseFiltered.filter(row => !row.isConcluidaNoPassado);
+    }
+    
+    return baseFiltered;
+  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedPostes, selectedVistorias, selectedAVNPs, selectedRecursoDisp, filterStart, filterEnd, ocultarConcluidasPassado]);
 
   // Indicadores
   const indicators = useMemo(() => {
@@ -457,6 +498,17 @@ export const CarteiraDashboardView = () => {
               title="Considerar obras inaptas nos totais e cálculos"
             >
               + INAPTAS
+            </Toggle>
+
+            <Toggle
+              pressed={ocultarConcluidasPassado}
+              onPressedChange={setOcultarConcluidasPassado}
+              variant="outline"
+              size="sm"
+              className="h-8 mb-0.5 text-[10px] uppercase font-bold tracking-wider data-[state=on]:bg-primary data-[state=on]:text-primary-foreground shrink-0"
+              title="Ocultar obras que já foram concluídas em meses anteriores à carteira filtrada"
+            >
+              - CONCLUÍDAS
             </Toggle>
 
             {/* DateRangePicker para Conclusões */}
@@ -707,12 +759,13 @@ export const CarteiraDashboardView = () => {
                   <thead className="bg-muted sticky top-0 z-10 shadow-sm">
                     <tr>
                       <th className="px-4 py-2 font-semibold text-center w-[7%]">Obra</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[23%]">Título</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[20%]">Título</th>
                       <th className="px-4 py-2 font-semibold text-center w-[10%]">Município</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Carteira</th>
                       <th className="px-4 py-2 font-semibold w-[8%] text-center">Prioridade</th>
                       <th className="px-4 py-2 font-semibold w-[9%] text-center">Status Execução</th>
                       <th className="px-4 py-2 font-semibold text-center w-[5%]">Postes Disp.</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[5%]">AVNP</th>
+                      <th className="px-4 py-2 font-semibold text-center w-[6%]">AVNP</th>
                       <th className="px-4 py-2 font-semibold text-center w-[9%]">Valor Considerado</th>
                       <th className="px-4 py-2 font-semibold text-center w-[10%]">Orçamento Val.</th>
                       <th className="px-4 py-2 font-semibold text-center w-[10%]">Recursos Aplic.</th>
@@ -721,10 +774,23 @@ export const CarteiraDashboardView = () => {
                   </thead>
                   <tbody>
                     {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').sort((a, b) => (b.postesDisponiveis || 0) - (a.postesDisponiveis || 0)).slice(0, 100).map(obra => (
-                      <tr key={obra.id} className="border-b border-border/50 hover:bg-muted/20">
+                      <tr key={obra.id} className={cn(
+                        "border-b border-border/50",
+                        obra.isConcluidaNoPassado 
+                          ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30" 
+                          : "hover:bg-muted/20"
+                      )}>
                         <td className="px-4 py-2 font-medium truncate" title={obra.projeto}>{obra.projeto}</td>
                         <td className="px-4 py-2 text-muted-foreground truncate" title={obra.titulo}>{obra.titulo}</td>
                         <td className="px-4 py-2 truncate" title={obra.municipio}>{obra.municipio}</td>
+                        <td className="px-4 py-2 text-center text-[10px] text-muted-foreground whitespace-nowrap">
+                          {(() => {
+                            const mesesParaMostrar = selectedMeses.length > 0
+                              ? obra.meses.filter(m => selectedMeses.includes(m))
+                              : obra.meses;
+                            return mesesParaMostrar.join(' | ') || '-';
+                          })()}
+                        </td>
                         <td className="px-4 py-2 text-center">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground truncate max-w-full">
                             {obra.prioridade || '-'}
@@ -732,13 +798,20 @@ export const CarteiraDashboardView = () => {
                         </td>
                         <td className="px-4 py-2 text-center truncate" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</td>
                         <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
-                        <td className="px-4 py-2 text-center font-bold text-[11px] text-indigo-600">
+                        <td className="px-4 py-2 text-center font-bold text-[11px] text-indigo-600 whitespace-nowrap">
                           {(() => {
-                            let avnp = obra.avnpMaisRecente;
-                            if (selectedMeses.length === 1) {
-                              avnp = obra.avnpMap[selectedMeses[0]] !== undefined ? obra.avnpMap[selectedMeses[0]] : obra.avnpMaisRecente;
+                            const mesesParaMostrar = selectedMeses.length > 0
+                              ? obra.meses.filter(m => selectedMeses.includes(m))
+                              : obra.meses;
+                            
+                            if (mesesParaMostrar.length === 0) {
+                              return `${(obra.avnpMaisRecente * 100).toFixed(0)}%`;
                             }
-                            return `${(avnp * 100).toFixed(0)}%`;
+
+                            return mesesParaMostrar.map(m => {
+                              const avnp = obra.avnpMap[m] !== undefined ? obra.avnpMap[m] : obra.avnpMaisRecente;
+                              return `${(avnp * 100).toFixed(0)}%`;
+                            }).join(' | ');
                           })()}
                         </td>
                         <td className="px-4 py-2 text-center">
@@ -799,7 +872,7 @@ export const CarteiraDashboardView = () => {
                     ))}
                     {filteredData.length === 0 && (
                       <tr>
-                        <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
+                        <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">Nenhuma obra encontrada para os filtros atuais.</td>
                       </tr>
                     )}
                   </tbody>
