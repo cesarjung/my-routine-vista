@@ -246,8 +246,8 @@ export const CumprimentoView = () => {
       return item;
     });
 
-    // Ordenar alfabeticamente pela unidade
-    resultadoFinal.sort((a, b) => a.name.localeCompare(b.name));
+    // Ordenar do maior para o menor cumprimento
+    resultadoFinal.sort((a, b) => b._mediaGeral - a._mediaGeral);
 
     return resultadoFinal;
   }, [filteredData, somenteDisponiveis, mesesExibidos]);
@@ -281,8 +281,12 @@ export const CumprimentoView = () => {
     });
 
     const resultadoFinal = Object.values(agrupado).map(u => {
+      let totalAO = 0;
+      let totalAL = 0;
       const evolution = mesesExibidos.map(m => {
         if (u.meses[m]) {
+          totalAO += u.meses[m].sumAO;
+          totalAL += u.meses[m].sumAL;
           return {
             name: m,
             cumprimento: u.meses[m].sumAL > 0 ? Number(((u.meses[m].sumAO / u.meses[m].sumAL) * 100).toFixed(1)) : null,
@@ -291,10 +295,12 @@ export const CumprimentoView = () => {
         }
         return { name: m, cumprimento: null, producao: null };
       });
-      return { name: u.name, evolution };
+      const mediaGeral = totalAL > 0 ? (totalAO / totalAL) * 100 : 0;
+      return { name: u.name, evolution, _mediaGeral: mediaGeral };
     });
 
-    resultadoFinal.sort((a, b) => a.name.localeCompare(b.name));
+    // Ordenar do maior para o menor cumprimento
+    resultadoFinal.sort((a, b) => b._mediaGeral - a._mediaGeral);
     return resultadoFinal;
   }, [data, somenteDisponiveis, mesesExibidos]);
 
