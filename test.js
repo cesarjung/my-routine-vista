@@ -1,7 +1,1 @@
-import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
-const env = fs.readFileSync('.env.local', 'utf8');
-const url = env.match(/VITE_SUPABASE_URL=(.*)/)[1];
-const key = env.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1];
-const s = createClient(url, key);
-s.from('routines').select('*, tasks(*)').then(x => fs.writeFileSync('debug.json', JSON.stringify(x.data, null, 2)));
+const parseNumber = (val) => { if (!val) return 0; let str = String(val).trim(); str = str.replace(/[R$%\s]/g, ''); if (str.includes(',')) { str = str.replace(/\./g, '').replace(',', '.'); } let num = Number(str); if (isNaN(num)) { const match = str.match(/[\d\.]+/); if (match) num = Number(match[0]); } return isNaN(num) ? 0 : num; }; console.log(parseNumber('2.500,00')); console.log(parseNumber('4.5')); console.log(parseNumber('3,5'));
