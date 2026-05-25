@@ -99,6 +99,7 @@ export const usePostesTurnoData = (selectedUnidadesIds: string[]) => {
   return {
     ...rawQuery,
     data: parsedData,
+    rawData: rawQuery.data,
     lastUpdated: rawQuery.data?.[0]?.lastUpdated || null,
   };
 };
