@@ -28,10 +28,18 @@ export const usePostesTurnoData = (selectedUnidadesIds: string[]) => {
     try {
       const data: PosteTurnoRow[] = [];
 
-      const parseNumber = (val: string) => {
+      const parseNumber = (val: any) => {
         if (!val) return 0;
-        const clean = String(val).replace(/[R$\s\.]/g, '').replace(',', '.');
-        const num = Number(clean);
+        let str = String(val).trim();
+        str = str.replace(/[R$%\s]/g, '');
+        if (str.includes(',')) {
+          str = str.replace(/\./g, '').replace(',', '.');
+        }
+        let num = Number(str);
+        if (isNaN(num)) {
+          const match = str.match(/[\d\.]+/);
+          if (match) num = Number(match[0]);
+        }
         return isNaN(num) ? 0 : num;
       };
 
@@ -40,7 +48,7 @@ export const usePostesTurnoData = (selectedUnidadesIds: string[]) => {
         const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
         const unidadeNome = unidadeInfo?.nome || unidadeData.unidadeId;
 
-        for (let i = 7; i < rows.length; i++) {
+        for (let i = 4; i < rows.length; i++) {
           const row = rows[i];
           if (!row || !Array.isArray(row)) continue; // Precisa ir até AQ (42)
 

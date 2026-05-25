@@ -258,14 +258,6 @@ export const PostesTurnoView = () => {
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-y-auto overflow-x-hidden custom-scrollbar relative">
       
-      {/* DEBUG HEADER */}
-      {rawData && rawData.length > 0 && rawData[0]?.principal?.[0] && (
-        <div className="p-4 m-4 bg-black text-green-400 text-[10px] font-mono overflow-auto rounded whitespace-pre-wrap break-all">
-          <p className="font-bold text-white mb-2">DEBUG DATA V3 (Preciso dos Nomes Reais! Tire um print!):</p>
-          <p>CABECALHOS (15 a 45): {JSON.stringify(rawData[0].principal[0].map((h:any, i:number) => `${i}:${h}`).slice(15, 46))}</p>
-        </div>
-      )}
-
       {/* HEADER COMPACTO */}
       <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border sticky top-0 z-10 bg-background w-full min-w-0">
         <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto custom-scrollbar w-full pb-2">
