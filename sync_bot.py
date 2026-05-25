@@ -96,8 +96,9 @@ def fetch_global_recursos(gc, retries=3):
             worksheet = spreadsheet.worksheet("Planejamento")
             raw_data = worksheet.get_all_values()
             
-            # Precisamos mapear: Projeto (G=6), Meta (AL=37), Realizado (AN=39)
+            # Precisamos mapear: Projeto (G=6), Meta (AL=37), Realizado (AN=39), IMPLANT (T=19), Data (A=0), Equipe (F=5)
             recursos_globais = {}
+            global_postes = {}
             
             for i, row in enumerate(raw_data):
                 if i == 0 or len(row) <= 6:
@@ -110,6 +111,17 @@ def fetch_global_recursos(gc, retries=3):
                 meta = parse_number(row[37]) if len(row) > 37 else 0.0
                 realizado = parse_number(row[39]) if len(row) > 39 else 0.0
                 
+                # Extrai IMPLANT. (Poste/Turno) da Coluna T (índice 19) da Planilha Global
+                implant_val = row[19] if len(row) > 19 else ""
+                
+                # Chave única: (Projeto, Data, Equipe Nome)
+                data_val = str(row[0]).strip() if len(row) > 0 else ""
+                equipe_val = str(row[5]).strip() if len(row) > 5 else ""
+                key = f"{projeto}|{data_val}|{equipe_val}"
+                
+                if str(implant_val).strip():
+                    global_postes[key] = implant_val
+
                 if realizado > 0:
                     if projeto not in recursos_globais:
                         recursos_globais[projeto] = 0.0
@@ -117,14 +129,15 @@ def fetch_global_recursos(gc, retries=3):
                     recursos_globais[projeto] += meta
             
             logging.info(f"  [OK] Base global carregada. Total de Projetos mapeados: {len(recursos_globais)}")
-            return recursos_globais
+            logging.info(f"  [OK] Mapeamento Poste/Turno carregado: {len(global_postes)} registros")
+            return recursos_globais, global_postes
         except Exception as e:
             logging.error(f"Erro ao ler base global: {e}")
             if attempt < retries - 1:
                 time.sleep(10)
-    return {}
+    return {}, {}
 
-def fetch_google_sheets(unidade_id, gc, retries=3):
+def fetch_google_sheets(unidade_id, gc, global_recursos, global_postes, retries=3):
     sheets_to_fetch = ['Carteira_Planejador', 'Plan_Principal', 'BD_Metas', 'Reprogramadas', 'Base_Curva', 'BD_Config']
     
     for attempt in range(retries):
@@ -180,7 +193,22 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
                                 
                         # Se a linha nao for totalmente vazia, adiciona apenas ate a ultima coluna preenchida
                         if last_non_empty >= 0:
-                            cleaned_data.append(row[:last_non_empty + 1])
+                            clean_row = row[:last_non_empty + 1]
+                            
+                            # INJEÇÃO DO POSTE/TURNO (IMPLANT.) DA GLOBAL PARA A INDIVIDUAL
+                            if sheet_name == "Plan_Principal" and row_idx > 0:
+                                p_data = str(clean_row[1]).strip() if len(clean_row) > 1 else ""
+                                p_equipe = str(clean_row[6]).strip() if len(clean_row) > 6 else ""
+                                p_projeto = str(clean_row[7]).strip() if len(clean_row) > 7 else ""
+                                key = f"{p_projeto}|{p_data}|{p_equipe}"
+                                
+                                if key in global_postes:
+                                    # Garante que a linha tenha pelo menos 21 colunas para acessar o índice 20 (U)
+                                    while len(clean_row) < 21:
+                                        clean_row.append("")
+                                    clean_row[20] = global_postes[key]
+                                    
+                            cleaned_data.append(clean_row)
                     
                     logging.info(f"  [OK] Aba '{sheet_name}' concluída: {len(raw_data)} linhas lidas, {len(cleaned_data)} linhas úteis mantidas.")
                     result[sheet_name] = cleaned_data
@@ -267,7 +295,7 @@ def run_sync_cycle():
         logging.error("Abortando ciclo por falta de credenciais do Google Cloud.")
         return
         
-    global_recursos = fetch_global_recursos(gc)
+    global_recursos, global_postes = fetch_global_recursos(gc)
     
     # Em vez de tentar advinhar a unidade com base no nome (o que gera erros e falhas de string match),
     # enviamos o dicionário completo de Projetos -> Recursos Aplicados para TODAS as unidades.
@@ -275,7 +303,7 @@ def run_sync_cycle():
     # o frontend apenas busca o ID da obra e encontra seu respectivo recurso aplicado de imediato!
         
     for unidade_id in UNIDADES_PLANEJAMENTO:
-        sheets_data = fetch_google_sheets(unidade_id, gc)
+        sheets_data = fetch_google_sheets(unidade_id, gc, global_recursos, global_postes)
         
         if sheets_data:
             import json
