@@ -259,12 +259,10 @@ export const PostesTurnoView = () => {
     <div className="flex flex-col h-full w-full bg-background overflow-y-auto overflow-x-hidden custom-scrollbar relative">
       
       {/* DEBUG HEADER */}
-      {rawData && rawData.length > 0 && rawData[0]?.principal?.[6] && (
+      {rawData && rawData.length > 0 && rawData[0]?.principal?.[0] && (
         <div className="p-4 m-4 bg-black text-green-400 text-[10px] font-mono overflow-auto rounded whitespace-pre-wrap break-all">
-          <p className="font-bold text-white mb-2">DEBUG DATA (Por favor tire print disso e me mande):</p>
-          <p>Headers (15 a 30): {JSON.stringify(rawData[0].principal[6].slice(15, 31))}</p>
-          <p>Row 7: {JSON.stringify(rawData[0].principal[7].slice(15, 31))}</p>
-          <p>Row 8: {JSON.stringify(rawData[0].principal[8].slice(15, 31))}</p>
+          <p className="font-bold text-white mb-2">DEBUG DATA V2 (Tire um print rápido disso!):</p>
+          <p>CABECALHOS REAIS: {JSON.stringify(rawData[0].principal[0].map((h:any, i:number) => `${i}:${h}`).filter((h:string) => h.toLowerCase().includes('poste') || h.toLowerCase().includes('turno') || h.toLowerCase().includes('previsto')))}</p>
         </div>
       )}
 
