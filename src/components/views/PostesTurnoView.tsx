@@ -265,11 +265,6 @@ export const PostesTurnoView = () => {
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Média de Postes Planejados por Turno</h1>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
               Módulo Poste x Turno 
-              {rawData && rawData.length > 0 && (
-                <span className="text-red-500 ml-2 font-mono">
-                  [RAW U: {JSON.stringify(rawData[0].principal?.slice(5, 15).map((r:any) => r[20]).filter((v:any) => v !== undefined))}]
-                </span>
-              )}
             </p>
           </div>
           
