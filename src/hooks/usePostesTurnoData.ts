@@ -57,9 +57,9 @@ export const usePostesTurnoData = (selectedUnidadesIds: string[]) => {
           const equipe = row[6];         // Coluna G
           const projeto = row[7];        // Coluna H
 
-          const valPlanTurno = parseNumber(row[20]); // Coluna U
-          const valProdTurno = parseNumber(row[38]); // Coluna AM
-          const valProgTurno = parseNumber(row[42]); // Coluna AQ
+          const valPlanTurno = parseNumber(row[38]); // Coluna AM (Prod Turno Planejado)
+          const valProdTurno = parseNumber(row[38]); // Coluna AM (Prod Turno Planejado para o Prod%)
+          const valProgTurno = parseNumber(row[42]); // Coluna AQ (Total Produzido para o Prod%)
 
           const dataApenas = dataStringFull ? String(dataStringFull).split(' - ')[0].trim() : '';
           let dataParsed: Date | null = null;
