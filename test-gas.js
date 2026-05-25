@@ -1,0 +1,1 @@
+const url = 'https://script.google.com/macros/s/AKfycbxn-YpuZZsNsdGT_FxQdhUwLE5KUIuXvo7Ffad03x80LByig3qneNe7-hy9PUZYS8-bDg/exec'; fetch(url + '?action=getUnidadeData&unidadeId=1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E&token=sirtec_vista_2026_seguro').then(r => r.text()).then(d => console.log(d.substring(0, 500))).catch(console.error);

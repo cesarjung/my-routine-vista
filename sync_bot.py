@@ -98,6 +98,21 @@ def fetch_global_recursos(gc, retries=3):
             
             # Precisamos mapear: Projeto (G=6), Meta (AL=37), Realizado (AN=39)
             recursos_globais = {}
+            # Poste/Turno: Data(A=0), Supervisor(D=3), Equipe Cod(E=4), Equipe(F=5), Projeto(G=6), IMPLANT(T=19), Unidade(BD=55)
+            central_postes = {}
+            
+            # Map das unidades normalizado para garantir que os nomes fiquem iguais
+            unidades_map = {
+                'BARREIRAS': '1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E',
+                'BOM JESUS DA LAPA': '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI',
+                'GUANAMBI': '1FO5tyhXygbbzSmmTGdnm45j4DD_rRFQgEheN8T8Wy70',
+                'BRUMADO': '1oS619l3x_D1mXkvDpw8vs91G6ipZmsK83JqEIwPj7Uk',
+                'LIVRAMENTO': '1gN2tR_LCuRnVCQ9tm2UURnVuMlJPVNEjvmo02TwFQCI',
+                'IBOTIRAMA': '1dNwj8qWTl1k92PxI9iXwaNZYITnxuKP-kOF1QnZK3Iw',
+                'JEQUIE': '1sGHf-zWXoxjnO20QBw2KWX39BSCzT8rzHdEz1hL7jyU',
+                'VITORIA DA CONQUISTA': '1XmpY8mqkRou-CRY68j1ljHH8W8zcROy7wnwMMSfbV7o',
+                'ITAPETINGA': '1rzT8o6XZi4v8j7CYLky3BD3sT5IPjv1PRb45ipBfbw4'
+            }
             
             for i, row in enumerate(raw_data):
                 if i == 0 or len(row) <= 6:
@@ -110,19 +125,40 @@ def fetch_global_recursos(gc, retries=3):
                 meta = parse_number(row[37]) if len(row) > 37 else 0.0
                 realizado = parse_number(row[39]) if len(row) > 39 else 0.0
                 
+                # Extrai dados do Poste/Turno da Planilha Central
+                unidade_nome = str(row[55]).strip().upper() if len(row) > 55 else ""
+                implant_val = row[19] if len(row) > 19 else ""
+                
+                if unidade_nome in unidades_map and str(implant_val).strip():
+                    uid = unidades_map[unidade_nome]
+                    if uid not in central_postes:
+                        central_postes[uid] = []
+                        
+                    data_val = str(row[0]).strip() if len(row) > 0 else ""
+                    supervisor = str(row[3]).strip() if len(row) > 3 else ""
+                    equipe = str(row[5]).strip() if len(row) > 5 else ""
+                    
+                    central_postes[uid].append({
+                        "data": data_val,
+                        "supervisor": supervisor,
+                        "equipe": equipe,
+                        "projeto": projeto,
+                        "implant": implant_val
+                    })
+
                 if realizado > 0:
                     if projeto not in recursos_globais:
                         recursos_globais[projeto] = 0.0
                         
                     recursos_globais[projeto] += meta
             
-            logging.info(f"  [OK] Base global carregada. Total de Projetos mapeados: {len(recursos_globais)}")
-            return recursos_globais
+            logging.info(f"  [OK] Base global carregada. Projetos mapeados: {len(recursos_globais)}. Linhas de Poste/Turno: {sum(len(x) for x in central_postes.values())}")
+            return recursos_globais, central_postes
         except Exception as e:
             logging.error(f"Erro ao ler base global: {e}")
             if attempt < retries - 1:
                 time.sleep(10)
-    return {}
+    return {}, {}
 
 def fetch_google_sheets(unidade_id, gc, retries=3):
     sheets_to_fetch = ['Carteira_Planejador', 'Plan_Principal', 'BD_Metas', 'Reprogramadas', 'Base_Curva', 'BD_Config']
@@ -267,7 +303,7 @@ def run_sync_cycle():
         logging.error("Abortando ciclo por falta de credenciais do Google Cloud.")
         return
         
-    global_recursos = fetch_global_recursos(gc)
+    global_recursos, central_postes = fetch_global_recursos(gc)
     
     # Em vez de tentar advinhar a unidade com base no nome (o que gera erros e falhas de string match),
     # enviamos o dicionário completo de Projetos -> Recursos Aplicados para TODAS as unidades.
@@ -288,7 +324,8 @@ def run_sync_cycle():
                     "bd_metas": sheets_data.get("BD_Metas", []),
                     "base_curva": sheets_data.get("Base_Curva", []),
                     "bd_config": sheets_data.get("BD_Config", []),
-                    "recursos_aplicados": global_recursos
+                    "recursos_aplicados": global_recursos,
+                    "central_postes": central_postes.get(unidade_id, [])
                 }),
                 "reprogramadas": json.dumps(sheets_data.get("Reprogramadas", [])),
                 "updated_at": datetime.utcnow().isoformat() + "Z"
