@@ -1,1 +1,15 @@
-const { createClient } = require('@supabase/supabase-js'); require('dotenv').config(); const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_PUBLISHABLE_KEY); supabase.from('planejamento_cache').select('*').eq('unidadeId', '1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E').then(({data}) => console.log(JSON.stringify(data[0].principal.slice(4, 9).map(r => r[20]), null, 2)));
+const fs = require('fs');
+let env = fs.readFileSync('.env', 'utf8');
+
+const urlMatch = env.match(/VITE_SUPABASE_URL=(.*)/);
+const keyMatch = env.match(/VITE_SUPABASE_PUBLISHABLE_KEY=(.*)/) || env.match(/VITE_SUPABASE_ANON_KEY=(.*)/);
+
+const url = urlMatch[1].trim().replace(/['"]/g, '');
+const key = keyMatch[1].trim().replace(/['"]/g, '');
+
+fetch(url + '/rest/v1/planejamento_cache?select=*', {
+  headers: {
+    'apikey': key,
+    'Authorization': 'Bearer ' + key
+  }
+}).then(res => res.json()).then(console.log).catch(console.error);
