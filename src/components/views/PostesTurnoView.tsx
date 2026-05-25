@@ -263,8 +263,13 @@ export const PostesTurnoView = () => {
         <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto custom-scrollbar w-full pb-2">
           <div className="shrink-0 mb-1">
             <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Média de Postes Planejados por Turno</h1>
-            <p className="text-sm font-semibold text-gray-800 flex items-center">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
               Módulo Poste x Turno 
+              {rawData && rawData.length > 0 && (
+                <span className="text-red-500 ml-2 font-mono">
+                  [RAW U: {JSON.stringify(rawData[0].principal?.slice(5, 15).map((r:any) => r[20]).filter((v:any) => v !== undefined))}]
+                </span>
+              )}
             </p>
           </div>
           
