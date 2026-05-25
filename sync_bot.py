@@ -104,13 +104,13 @@ def fetch_global_recursos(gc, retries=3):
             # Map das unidades normalizado para garantir que os nomes fiquem iguais
             unidades_map = {
                 'BARREIRAS': '1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E',
-                'BOM JESUS DA LAPA': '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI',
+                'LAPA': '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI',
                 'GUANAMBI': '1FO5tyhXygbbzSmmTGdnm45j4DD_rRFQgEheN8T8Wy70',
                 'BRUMADO': '1oS619l3x_D1mXkvDpw8vs91G6ipZmsK83JqEIwPj7Uk',
                 'LIVRAMENTO': '1gN2tR_LCuRnVCQ9tm2UURnVuMlJPVNEjvmo02TwFQCI',
                 'IBOTIRAMA': '1dNwj8qWTl1k92PxI9iXwaNZYITnxuKP-kOF1QnZK3Iw',
                 'JEQUIE': '1sGHf-zWXoxjnO20QBw2KWX39BSCzT8rzHdEz1hL7jyU',
-                'VITORIA DA CONQUISTA': '1XmpY8mqkRou-CRY68j1ljHH8W8zcROy7wnwMMSfbV7o',
+                'VITORIA': '1XmpY8mqkRou-CRY68j1ljHH8W8zcROy7wnwMMSfbV7o',
                 'ITAPETINGA': '1rzT8o6XZi4v8j7CYLky3BD3sT5IPjv1PRb45ipBfbw4'
             }
             
@@ -135,10 +135,16 @@ def fetch_global_recursos(gc, retries=3):
                 unidade_nome = normalize_name(unidade_nome_raw)
                 implant_val = row[19] if len(row) > 19 else ""
                 
-                if unidade_nome in unidades_map and str(implant_val).strip():
-                    uid = unidades_map[unidade_nome]
-                    if uid not in central_postes:
-                        central_postes[uid] = []
+                if str(implant_val).strip():
+                    uid = None
+                    for key, val in unidades_map.items():
+                        if key in unidade_nome:
+                            uid = val
+                            break
+                            
+                    if uid:
+                        if uid not in central_postes:
+                            central_postes[uid] = []
                         
                     data_val = str(row[0]).strip() if len(row) > 0 else ""
                     supervisor = str(row[3]).strip() if len(row) > 3 else ""
