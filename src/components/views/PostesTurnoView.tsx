@@ -151,28 +151,31 @@ export const PostesTurnoView = () => {
         agrupado[uNome] = {
           name: uNome,
           // Totais globais da unidade para média geral e prod%
-          sumAQ: 0, countAQ: 0, countAM: 0, sumAMGlob: 0,
-          meses: {} as Record<string, { sumAQ: number, countAQ: number, countAM: number, sumAM: number }>
+          sumU: 0, countU: 0, countAM: 0,
+          sumAQ: 0, sumAMGlob: 0,
+          meses: {} as Record<string, { sumU: number, countU: number, countAM: number, sumAQ: number, sumAM: number }>
         };
       }
 
       const g = agrupado[uNome];
       
       // Global
-      g.sumAQ += row.valProgTurno;
-      if (row.valProgTurno > 0) g.countAQ += 1;
+      g.sumU += row.valPlanTurno;
+      if (row.valPlanTurno > 0) g.countU += 1;
       if (row.valProdTurno > 0) g.countAM += 1;
       
+      g.sumAQ += row.valProgTurno;
       g.sumAMGlob += row.valProdTurno;
 
       // Por Mês
       if (!g.meses[row.mesCurto]) {
-        g.meses[row.mesCurto] = { sumAQ: 0, countAQ: 0, countAM: 0, sumAM: 0 };
+        g.meses[row.mesCurto] = { sumU: 0, countU: 0, countAM: 0, sumAQ: 0, sumAM: 0 };
       }
       const gm = g.meses[row.mesCurto];
-      gm.sumAQ += row.valProgTurno;
-      if (row.valProgTurno > 0) gm.countAQ += 1;
+      gm.sumU += row.valPlanTurno;
+      if (row.valPlanTurno > 0) gm.countU += 1;
       if (row.valProdTurno > 0) gm.countAM += 1;
+      gm.sumAQ += row.valProgTurno;
       gm.sumAM += row.valProdTurno;
     });
 
@@ -182,15 +185,15 @@ export const PostesTurnoView = () => {
         _producaoPerc: u.sumAMGlob > 0 ? (u.sumAQ / u.sumAMGlob) * 100 : 0
       };
 
-      // Média Geral da Unidade (Postes Produzidos / Turnos Trabalhados)
-      const denomGeral = mediaTodosTurnos ? u.countAM : u.countAQ;
-      item._mediaGeral = denomGeral > 0 ? u.sumAQ / denomGeral : null;
+      // Média Geral da Unidade
+      const denomGeral = mediaTodosTurnos ? u.countAM : u.countU;
+      item._mediaGeral = denomGeral > 0 ? u.sumU / denomGeral : null;
 
       // Médias por mês (para o chart e tabela)
       mesesExibidos.forEach(m => {
         if (u.meses[m]) {
-          const denomMes = mediaTodosTurnos ? u.meses[m].countAM : u.meses[m].countAQ;
-          item[m] = denomMes > 0 ? Number((u.meses[m].sumAQ / denomMes).toFixed(1)) : null;
+          const denomMes = mediaTodosTurnos ? u.meses[m].countAM : u.meses[m].countU;
+          item[m] = denomMes > 0 ? Number((u.meses[m].sumU / denomMes).toFixed(1)) : null;
           item[`${m}_prod`] = u.meses[m].sumAM > 0 ? (u.meses[m].sumAQ / u.meses[m].sumAM) * 100 : 0;
         } else {
           item[m] = null;
