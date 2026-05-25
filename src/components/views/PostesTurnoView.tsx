@@ -261,8 +261,8 @@ export const PostesTurnoView = () => {
       {/* DEBUG HEADER */}
       {rawData && rawData.length > 0 && rawData[0]?.principal?.[0] && (
         <div className="p-4 m-4 bg-black text-green-400 text-[10px] font-mono overflow-auto rounded whitespace-pre-wrap break-all">
-          <p className="font-bold text-white mb-2">DEBUG DATA V2 (Tire um print rápido disso!):</p>
-          <p>CABECALHOS REAIS: {JSON.stringify(rawData[0].principal[0].map((h:any, i:number) => `${i}:${h}`).filter((h:string) => h.toLowerCase().includes('poste') || h.toLowerCase().includes('turno') || h.toLowerCase().includes('previsto')))}</p>
+          <p className="font-bold text-white mb-2">DEBUG DATA V3 (Preciso dos Nomes Reais! Tire um print!):</p>
+          <p>CABECALHOS (15 a 45): {JSON.stringify(rawData[0].principal[0].map((h:any, i:number) => `${i}:${h}`).slice(15, 46))}</p>
         </div>
       )}
 
