@@ -114,6 +114,11 @@ def fetch_global_recursos(gc, retries=3):
                 'ITAPETINGA': '1rzT8o6XZi4v8j7CYLky3BD3sT5IPjv1PRb45ipBfbw4'
             }
             
+            import unicodedata
+            def normalize_name(name):
+                # Remove acentos para facilitar o match
+                return ''.join(c for c in unicodedata.normalize('NFD', name) if unicodedata.category(c) != 'Mn').upper()
+            
             for i, row in enumerate(raw_data):
                 if i == 0 or len(row) <= 6:
                     continue
@@ -126,7 +131,8 @@ def fetch_global_recursos(gc, retries=3):
                 realizado = parse_number(row[39]) if len(row) > 39 else 0.0
                 
                 # Extrai dados do Poste/Turno da Planilha Central
-                unidade_nome = str(row[55]).strip().upper() if len(row) > 55 else ""
+                unidade_nome_raw = str(row[55]).strip() if len(row) > 55 else ""
+                unidade_nome = normalize_name(unidade_nome_raw)
                 implant_val = row[19] if len(row) > 19 else ""
                 
                 if unidade_nome in unidades_map and str(implant_val).strip():
