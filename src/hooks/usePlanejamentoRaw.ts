@@ -32,7 +32,7 @@ export const usePlanejamentoRaw = (selectedUnidadesIds: string[]) => {
       // Se não tem unidades selecionadas (array vazio), significa "todas as unidades"
       // Então extraímos todos os IDs disponíveis no cache
       const idsToFetch = (!selectedUnidadesIds || selectedUnidadesIds.length === 0) 
-        ? []
+        ? data?.map(d => d.unidade_id) || []
         : selectedUnidadesIds;
       
       return idsToFetch.map(unidadeId => {
