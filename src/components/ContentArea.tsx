@@ -117,7 +117,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
             </div>
           </div>
         </header>
-        <div className="w-full flex-1 min-h-0">
+        <div className="w-full flex-1 min-h-0 overflow-y-auto pr-1">
           <SettingsView hideHeader={true} />
         </div>
       </div>
@@ -241,7 +241,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
           </div>
         </header>
 
-        <div className="w-full h-full">
+        <div className="w-full h-full overflow-y-auto pr-1">
           <ErrorBoundary>
             {folder === 'units' ? (
               <SectorUnitsView sectorId={sectorId} />

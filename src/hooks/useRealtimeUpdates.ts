@@ -64,6 +64,16 @@ export const useRealtimeUpdates = () => {
                                 if (table === 'subtasks') {
                                     queryClient.invalidateQueries({ queryKey: ['tasks'] });
                                 }
+                                // When user-unit assignments change, refresh all permission-dependent caches
+                                if (table === 'unit_managers' || table === 'profiles') {
+                                    queryClient.invalidateQueries({ queryKey: ['unit-managers'] });
+                                    queryClient.invalidateQueries({ queryKey: ['profiles'] });
+                                    queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
+                                    queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
+                                    queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
+                                    queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+                                    queryClient.invalidateQueries({ queryKey: ['user-tasks'] });
+                                }
                             });
 
                             // Atualização de View de Tarefas e Rotinas

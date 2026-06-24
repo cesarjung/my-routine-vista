@@ -278,7 +278,7 @@ export const TasksView = ({
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : filteredTasks && filteredTasks.length > 0 ? (
-          <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-card">
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-card border border-border rounded-lg">
             {filteredTasks?.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
                 Nenhuma tarefa encontrada.

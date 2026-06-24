@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,7 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
   const { theme, setTheme } = useTheme();
   const { data: units } = useUnits();
   const { data: profiles, refetch: refetchProfiles } = useProfiles();
+  const queryClient = useQueryClient();
 
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
@@ -250,6 +252,15 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
 
       setEditingUser(null);
       refetchProfiles();
+      // Invalidate all caches that depend on user-unit relationships
+      queryClient.invalidateQueries({ queryKey: ['unit-managers'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
+      queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['user-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['all-active-routine-periods'] });
     } catch (error: any) {
       console.error('Error updating user:', error);
       toast({
@@ -360,6 +371,7 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
       setNewUserUnits([]);
       setNewUserRole('usuario');
       refetchProfiles();
+      queryClient.invalidateQueries({ queryKey: ['unit-managers'] });
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast({
