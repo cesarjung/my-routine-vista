@@ -128,10 +128,19 @@ export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
 
         const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
 
+        // Also fetch units this user manages
+        const { data: managedUnits } = await supabase
+          .from('unit_managers')
+          .select('unit_id')
+          .eq('user_id', user.id);
+
+        const managedUnitIds = new Set(managedUnits?.map(m => m.unit_id) || []);
+
         filteredTasks = filteredTasks.filter(task => {
           if (task.assigned_to === user.id) return true;
           if (assignedTaskIds.has(task.id)) return true;
           if (userUnitId && task.unit_id === userUnitId) return true;
+          if (task.unit_id && managedUnitIds.has(task.unit_id)) return true;
           return false;
         });
       }
@@ -232,10 +241,18 @@ export const useTasksByStatus = (status: TaskStatus) => {
 
         const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
 
+        const { data: managedUnits } = await supabase
+          .from('unit_managers')
+          .select('unit_id')
+          .eq('user_id', user.id);
+
+        const managedUnitIds = new Set(managedUnits?.map(m => m.unit_id) || []);
+
         filteredTasks = filteredTasks.filter(task => {
           if (task.assigned_to === user.id) return true;
           if (assignedTaskIds.has(task.id)) return true;
           if (userUnitId && task.unit_id === userUnitId) return true;
+          if (task.unit_id && managedUnitIds.has(task.unit_id)) return true;
           return false;
         });
       }
@@ -279,10 +296,18 @@ export const useTaskStats = () => {
 
         const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
 
+        const { data: managedUnits } = await supabase
+          .from('unit_managers')
+          .select('unit_id')
+          .eq('user_id', user.id);
+
+        const managedUnitIds = new Set(managedUnits?.map(m => m.unit_id) || []);
+
         tasks = allTasks?.filter(task => {
           if (task.assigned_to === user.id) return true;
           if (assignedTaskIds.has(task.id)) return true;
           if (userUnitId && task.unit_id === userUnitId) return true;
+          if (task.unit_id && managedUnitIds.has(task.unit_id)) return true;
           return false;
         }) || [];
       }
