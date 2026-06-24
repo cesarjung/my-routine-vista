@@ -253,9 +253,9 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
         if (orphanedCheckinIds.length > 0) {
           await supabase
             .from('routine_checkins')
-            .update({ unit_id: primaryUnitId })
+            .update({ assignee_user_id: null })
             .in('id', orphanedCheckinIds);
-          console.log(`Migrados ${orphanedCheckinIds.length} checkins órfãos para a nova unidade.`);
+          console.log(`Desatribuídos ${orphanedCheckinIds.length} checkins órfãos da unidade antiga.`);
         }
 
         // 2. Fix orphaned tasks (by assigned_to)
@@ -272,9 +272,9 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
         if (orphanedTaskIds.length > 0) {
           await supabase
             .from('tasks')
-            .update({ unit_id: primaryUnitId })
+            .update({ assigned_to: null })
             .in('id', orphanedTaskIds);
-          console.log(`Migradas ${orphanedTaskIds.length} tarefas órfãs para a nova unidade.`);
+          console.log(`Desatribuídas ${orphanedTaskIds.length} tarefas órfãs da unidade antiga.`);
         }
 
         // 3. Fix orphaned tasks (by task_assignees junction table)
@@ -297,10 +297,11 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
 
           if (orphanedJunctionIds.length > 0) {
             await supabase
-              .from('tasks')
-              .update({ unit_id: primaryUnitId })
-              .in('id', orphanedJunctionIds);
-            console.log(`Migradas ${orphanedJunctionIds.length} tarefas (via assignees) para a nova unidade.`);
+              .from('task_assignees')
+              .delete()
+              .eq('user_id', editingUser.id)
+              .in('task_id', orphanedJunctionIds);
+            console.log(`Removidas ${orphanedJunctionIds.length} atribuições conjuntas órfãs.`);
           }
         }
       }
