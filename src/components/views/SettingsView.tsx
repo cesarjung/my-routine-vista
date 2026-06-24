@@ -220,18 +220,7 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
 
       if (profileError) throw profileError;
 
-      // Update unit_managers - first capture old units, then delete and insert new ones
-      const { data: oldManagerEntries } = await supabase
-        .from('unit_managers')
-        .select('unit_id')
-        .eq('user_id', editingUser.id);
-
-      const oldUnitIds = oldManagerEntries?.map(m => m.unit_id) || [];
-      // Include the old profile unit_id too
-      if (editingUser.unit_id && !oldUnitIds.includes(editingUser.unit_id)) {
-        oldUnitIds.push(editingUser.unit_id);
-      }
-
+      // Update unit_managers - delete all and insert new ones
       await supabase
         .from('unit_managers')
         .delete()
@@ -246,24 +235,74 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
           })));
       }
 
-      // Migrate pending checkins/tasks from removed units to new primary unit
-      const removedUnits = oldUnitIds.filter(u => !editUnits.includes(u));
-      if (removedUnits.length > 0 && primaryUnitId) {
-        // Update routine_checkins: migrate pending checkins from old units to new unit
-        await supabase
+      // Migrate orphaned checkins/tasks: find any pending checkins or tasks
+      // assigned to this user whose unit_id is NOT in their current unit list.
+      // This handles both fresh changes AND retroactive fixes for prior changes.
+      if (primaryUnitId) {
+        // 1. Fix orphaned routine_checkins
+        const { data: userCheckins } = await supabase
           .from('routine_checkins')
-          .update({ unit_id: primaryUnitId })
+          .select('id, unit_id')
           .eq('assignee_user_id', editingUser.id)
-          .eq('status', 'pending')
-          .in('unit_id', removedUnits);
+          .eq('status', 'pending');
 
-        // Update tasks: migrate pending tasks from old units to new unit
-        await supabase
+        const orphanedCheckinIds = userCheckins
+          ?.filter(c => c.unit_id && !editUnits.includes(c.unit_id))
+          .map(c => c.id) || [];
+
+        if (orphanedCheckinIds.length > 0) {
+          await supabase
+            .from('routine_checkins')
+            .update({ unit_id: primaryUnitId })
+            .in('id', orphanedCheckinIds);
+          console.log(`Migrados ${orphanedCheckinIds.length} checkins órfãos para a nova unidade.`);
+        }
+
+        // 2. Fix orphaned tasks (by assigned_to)
+        const { data: userTasks } = await supabase
           .from('tasks')
-          .update({ unit_id: primaryUnitId })
+          .select('id, unit_id')
           .eq('assigned_to', editingUser.id)
-          .in('status', ['pendente', 'em_andamento', 'atrasada'])
-          .in('unit_id', removedUnits);
+          .in('status', ['pendente', 'em_andamento', 'atrasada']);
+
+        const orphanedTaskIds = userTasks
+          ?.filter(t => t.unit_id && !editUnits.includes(t.unit_id))
+          .map(t => t.id) || [];
+
+        if (orphanedTaskIds.length > 0) {
+          await supabase
+            .from('tasks')
+            .update({ unit_id: primaryUnitId })
+            .in('id', orphanedTaskIds);
+          console.log(`Migradas ${orphanedTaskIds.length} tarefas órfãs para a nova unidade.`);
+        }
+
+        // 3. Fix orphaned tasks (by task_assignees junction table)
+        const { data: assigneeEntries } = await supabase
+          .from('task_assignees')
+          .select('task_id')
+          .eq('user_id', editingUser.id);
+
+        if (assigneeEntries && assigneeEntries.length > 0) {
+          const taskIds = assigneeEntries.map(a => a.task_id);
+          const { data: junctionTasks } = await supabase
+            .from('tasks')
+            .select('id, unit_id')
+            .in('id', taskIds)
+            .in('status', ['pendente', 'em_andamento', 'atrasada']);
+
+          const orphanedJunctionIds = junctionTasks
+            ?.filter(t => t.unit_id && !editUnits.includes(t.unit_id))
+            .map(t => t.id) || [];
+
+          if (orphanedJunctionIds.length > 0) {
+            await supabase
+              .from('tasks')
+              .update({ unit_id: primaryUnitId })
+              .in('id', orphanedJunctionIds);
+            console.log(`Migradas ${orphanedJunctionIds.length} tarefas (via assignees) para a nova unidade.`);
+          }
+        }
       }
 
       // Update role (only admins can change roles)
