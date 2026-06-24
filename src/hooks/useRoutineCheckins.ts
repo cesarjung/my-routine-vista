@@ -272,7 +272,20 @@ export const useCreatePeriodWithCheckins = () => {
 
       const { data: allManagers } = await supabase.from('unit_managers').select('unit_id, user_id');
 
-      // Build the strict UTC borders for the targeted day, preserving the exact day the user requested
+      // Also include current assignee units in routineUnitIds so that
+      // when a user moves to a new unit, that unit is automatically valid
+      // for the routine they are assigned to.
+      if (assignees && assignees.length > 0) {
+        for (const assignee of assignees) {
+          const assigneeProfile = assignee.profiles as any;
+          if (assigneeProfile?.unit_id) {
+            routineUnitIdsSet.add(assigneeProfile.unit_id);
+          }
+          const managedUnits = allManagers?.filter(m => m.user_id === assignee.user_id) || [];
+          managedUnits.forEach(m => routineUnitIdsSet.add(m.unit_id));
+        }
+      }
+      const expandedRoutineUnitIds = Array.from(routineUnitIdsSet);
       const year = periodStart.getFullYear();
       const month = String(periodStart.getMonth() + 1).padStart(2, '0');
       const day = String(periodStart.getDate()).padStart(2, '0');
@@ -384,8 +397,8 @@ export const useCreatePeriodWithCheckins = () => {
 
           // Somente unidades que importam pra esta rotina
           let validUnits = Array.from(userUnits);
-          if (routineUnitIds.length > 0) {
-            validUnits = validUnits.filter(u => routineUnitIds.includes(u));
+          if (expandedRoutineUnitIds.length > 0) {
+            validUnits = validUnits.filter(u => expandedRoutineUnitIds.includes(u));
           }
 
           if (validUnits.length === 0 && routine.unit_id) {

@@ -220,7 +220,18 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
 
       if (profileError) throw profileError;
 
-      // Update unit_managers - delete all and insert new ones
+      // Update unit_managers - first capture old units, then delete and insert new ones
+      const { data: oldManagerEntries } = await supabase
+        .from('unit_managers')
+        .select('unit_id')
+        .eq('user_id', editingUser.id);
+
+      const oldUnitIds = oldManagerEntries?.map(m => m.unit_id) || [];
+      // Include the old profile unit_id too
+      if (editingUser.unit_id && !oldUnitIds.includes(editingUser.unit_id)) {
+        oldUnitIds.push(editingUser.unit_id);
+      }
+
       await supabase
         .from('unit_managers')
         .delete()
@@ -233,6 +244,26 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
             user_id: editingUser.id,
             unit_id: unitId
           })));
+      }
+
+      // Migrate pending checkins/tasks from removed units to new primary unit
+      const removedUnits = oldUnitIds.filter(u => !editUnits.includes(u));
+      if (removedUnits.length > 0 && primaryUnitId) {
+        // Update routine_checkins: migrate pending checkins from old units to new unit
+        await supabase
+          .from('routine_checkins')
+          .update({ unit_id: primaryUnitId })
+          .eq('assignee_user_id', editingUser.id)
+          .eq('status', 'pending')
+          .in('unit_id', removedUnits);
+
+        // Update tasks: migrate pending tasks from old units to new unit
+        await supabase
+          .from('tasks')
+          .update({ unit_id: primaryUnitId })
+          .eq('assigned_to', editingUser.id)
+          .in('status', ['pendente', 'em_andamento', 'atrasada'])
+          .in('unit_id', removedUnits);
       }
 
       // Update role (only admins can change roles)
