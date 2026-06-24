@@ -18,8 +18,6 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
 import { TaskHoverCard } from './TaskHoverCard';
-import { useUnitManagers } from '@/hooks/useUnitManagers';
-import { useProfiles } from '@/hooks/useProfiles';
 
 interface TaskTrackerPanelProps {
     sectorIds?: string[];
@@ -50,8 +48,6 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
     const { user } = useAuth();
     const { isGestorOrAdmin } = useIsGestorOrAdmin();
     const updateTaskMutation = useUpdateTask();
-    const { data: unitManagersData } = useUnitManagers();
-    const { data: allProfilesData } = useProfiles();
 
     // Use the first sectorId for settings context if we are matching 1:1, or null for global
     const singleSectorId = sectorIds.length === 1 ? sectorIds[0] : null;
@@ -355,15 +351,12 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
 
     const canUserAccessTask = (task: any) => {
         if (!user) return false;
-        if (isGestorOrAdmin) return true;
-        if (task.created_by === user.id || task.assigned_to === user.id) return true;
-        if (task.assignees && task.assignees.some((a: any) => a.user_id === user.id)) return true;
-        // Check if user's profile unit matches the task's unit
-        const userProfile = allProfilesData?.find(p => p.id === user.id);
-        if (userProfile?.unit_id && task.unit_id === userProfile.unit_id) return true;
-        // Check if user manages the task's unit
-        if (task.unit_id && unitManagersData?.some(m => m.user_id === user.id && m.unit_id === task.unit_id)) return true;
-        return false;
+        // The `useTasks` hook already filters tasks securely on the backend side based on:
+        // - User assignments
+        // - User's primary unit
+        // - Units the user manages
+        // Therefore, if a task was returned and rendered in this panel, the user is authorized.
+        return true;
     };
 
     const handleTaskClick = (task: any, routine: any) => {
