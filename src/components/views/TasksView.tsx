@@ -174,9 +174,11 @@ export const TasksView = ({
                   onClick={async () => {
                     try {
                       await bulkUpdateTasks.mutateAsync({ taskIds: selectedTaskIds, status: 'concluida' });
+                      toast.success(`${selectedTaskIds.length} tarefas concluídas!`);
                       setSelectedTaskIds([]);
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error("Bulk complete failed", e);
+                      toast.error(e.message || "Erro ao concluir tarefas");
                     }
                   }}
                 >
@@ -191,9 +193,11 @@ export const TasksView = ({
                   onClick={async () => {
                     try {
                       await deleteTasks.mutateAsync(selectedTaskIds);
+                      toast.success(`${selectedTaskIds.length} tarefas excluídas!`);
                       setSelectedTaskIds([]);
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error("Bulk delete failed", e);
+                      toast.error(e.message || "Erro ao excluir tarefas");
                     }
                   }}
                 >

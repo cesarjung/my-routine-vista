@@ -232,9 +232,11 @@ export const RoutinesView = ({
                   onClick={async () => {
                     try {
                       await deleteRoutines.mutateAsync(selectedRoutineIds);
+                      toast.success(`${selectedRoutineIds.length} rotinas excluídas!`);
                       setSelectedRoutineIds([]);
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error("Bulk delete failed", e);
+                      toast.error(e.message || "Erro ao excluir rotinas");
                     }
                   }}
                 >

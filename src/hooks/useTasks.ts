@@ -157,12 +157,17 @@ export const useDeleteTasks = () => {
 
   return useMutation({
     mutationFn: async (taskIds: string[]) => {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .in('id', taskIds);
+      // Chunk array into batches of 100 to prevent URI Too Long errors
+      const chunkSize = 100;
+      for (let i = 0; i < taskIds.length; i += chunkSize) {
+        const chunk = taskIds.slice(i, i + chunkSize);
+        const { error } = await supabase
+          .from('tasks')
+          .delete()
+          .in('id', chunk);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -177,12 +182,16 @@ export const useBulkUpdateTasks = () => {
 
   return useMutation({
     mutationFn: async ({ taskIds, status }: { taskIds: string[], status: TaskStatus }) => {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status })
-        .in('id', taskIds);
+      const chunkSize = 100;
+      for (let i = 0; i < taskIds.length; i += chunkSize) {
+        const chunk = taskIds.slice(i, i + chunkSize);
+        const { error } = await supabase
+          .from('tasks')
+          .update({ status })
+          .in('id', chunk);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });

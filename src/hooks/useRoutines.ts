@@ -273,12 +273,41 @@ export const useDeleteRoutines = () => {
 
   return useMutation({
     mutationFn: async (routineIds: string[]) => {
-      const { error } = await supabase
-        .from('routines')
-        .delete()
-        .in('id', routineIds);
+      const chunkSize = 100;
+      for (let i = 0; i < routineIds.length; i += chunkSize) {
+        const chunk = routineIds.slice(i, i + chunkSize);
+        
+        // 1. Soft-delete routines
+        const { error: updateError } = await supabase
+          .from('routines')
+          .update({ is_active: false })
+          .in('id', chunk);
 
-      if (error) throw error;
+        if (updateError) throw updateError;
+        
+        // 2. Cascade delete all pending future tasks for these routines
+        const { error: tasksError } = await supabase
+          .from('tasks')
+          .delete()
+          .in('routine_id', chunk)
+          .eq('status', 'pendente');
+          
+        if (tasksError) {
+           console.error("Erro ao deletar tarefas futuras das rotinas:", tasksError);
+        }
+
+        // 3. Cascade delete all future periods for these routines
+        const today = new Date().toISOString();
+        const { error: periodsError } = await supabase
+          .from('routine_periods')
+          .delete()
+          .in('routine_id', chunk)
+          .gte('start_date', today);
+          
+        if (periodsError) {
+           console.error("Erro ao deletar períodos futuros das rotinas:", periodsError);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routines'] });

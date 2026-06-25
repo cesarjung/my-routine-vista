@@ -527,6 +527,7 @@ export const MyTasksView = ({
 
                         await bulkUpdateTasks.mutateAsync({ taskIds: selectedTaskIds, status: 'concluida' });
                         setSelectedTaskIds([]);
+                        toast.success(`${selectedTaskIds.length} tarefas concluídas!`);
                       } else if (activeTab === 'routines' && isGestorOrAdmin) {
                         // Find Parent Tasks for selected routines
                         const { data: parentTasks } = await supabase
@@ -540,11 +541,15 @@ export const MyTasksView = ({
                             taskIds: parentTasks.map(t => t.id),
                             status: 'concluida'
                           });
+                          toast.success(`${parentTasks.length} rotinas concluídas!`);
+                        } else {
+                          toast.info("Nenhuma tarefa ativa encontrada para as rotinas selecionadas.");
                         }
                         setSelectedRoutineIds([]);
                       }
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error("Bulk action failed", e);
+                      toast.error(e.message || "Erro ao concluir itens selecionados");
                     }
                   }}
                 >
@@ -560,13 +565,16 @@ export const MyTasksView = ({
                     try {
                       if (activeTab === 'tasks') {
                         await deleteTasks.mutateAsync(selectedTaskIds);
+                        toast.success(`${selectedTaskIds.length} tarefas excluídas!`);
                         setSelectedTaskIds([]);
                       } else {
                         await deleteRoutines.mutateAsync(selectedRoutineIds);
+                        toast.success(`${selectedRoutineIds.length} rotinas excluídas!`);
                         setSelectedRoutineIds([]);
                       }
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error("Bulk delete failed", e);
+                      toast.error(e.message || "Erro ao excluir itens selecionados");
                     }
                   }}
                 >
