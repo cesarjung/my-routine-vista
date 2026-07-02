@@ -48,6 +48,8 @@ export const PlanejamentoGanttView = () => {
   const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('filter_status_planejamentogantt', []);
   const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_planejamentogantt', []);
   const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps_planejamentogantt', []);
+  const [selectedMunicipios, setSelectedMunicipios] = useSessionState<string[]>('filter_municipios_planejamentogantt', []);
+  const [selectedRecursoDisp, setSelectedRecursoDisp] = useSessionState<string[]>('filter_recursodisp_planejamentogantt', []);
   
   const [viewStartManual, setViewStartManual] = useState(() => startOfMonth(new Date()));
   
@@ -136,6 +138,15 @@ export const PlanejamentoGanttView = () => {
     return Array.from(avnpSet).sort((a, b) => b - a);
   }, [data]);
 
+  const municipiosDisponiveis = useMemo(() => {
+    if (!data) return [];
+    const mSet = new Set<string>();
+    data.forEach(row => {
+      if (row.municipio) mSet.add(row.municipio);
+    });
+    return Array.from(mSet).sort();
+  }, [data]);
+
   const baseFilteredData = useMemo(() => {
     if (!data) return [];
     return data.filter(row => {
@@ -179,10 +190,29 @@ export const PlanejamentoGanttView = () => {
           passAVNP = selectedAVNPs.includes(avnpAplicavel);
         }
       }
+
+      // Filtro Município
+      const passMunicipio = selectedMunicipios.length === 0 || selectedMunicipios.includes(row.municipio);
+
+      // Filtro Recurso Disponível
+      let passRecursoDisp = true;
+      if (selectedRecursoDisp.length > 0) {
+        const saldo = (row.orcamentoValidado || 0) - (row.recursosAplicados || 0);
+        const temRecurso = saldo > 0;
+        const filterSim = selectedRecursoDisp.includes('SIM');
+        const filterNao = selectedRecursoDisp.includes('NÃO');
+        if (filterSim && filterNao) {
+          passRecursoDisp = true;
+        } else if (filterSim) {
+          passRecursoDisp = temRecurso;
+        } else if (filterNao) {
+          passRecursoDisp = !temRecurso;
+        }
+      }
       
-      return passMes && passStatus && passDateStart && passDateEnd && passAVNP;
+      return passMes && passStatus && passDateStart && passDateEnd && passAVNP && passMunicipio && passRecursoDisp;
     });
-  }, [data, selectedMeses, selectedStatuses, filterStart, filterEnd, selectedAVNPs]);
+  }, [data, selectedMeses, selectedStatuses, filterStart, filterEnd, selectedAVNPs, selectedMunicipios, selectedRecursoDisp]);
 
   const projetosDisponiveis = useMemo(() => {
     const projSet = new Set<string>();
@@ -355,7 +385,16 @@ export const PlanejamentoGanttView = () => {
           
           <FilterSelect label="Projeto" options={projetosDisponiveis.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
           
+          <FilterSelect label="Município" options={municipiosDisponiveis.map(m => ({ value: m, label: m }))} selectedValues={selectedMunicipios} onChange={setSelectedMunicipios} searchable={true} />
+          
           <FilterSelect label="AVNP" options={avnpsDisponiveis.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` }))} selectedValues={selectedAVNPs} onChange={setSelectedAVNPs} />
+          
+          <FilterSelect label="Recurso Disp." options={[
+            { value: 'SIM', label: 'SIM (Positivos)' },
+            { value: 'NÃO', label: 'NÃO (Negativos)' }
+          ]} selectedValues={selectedRecursoDisp} onChange={setSelectedRecursoDisp} />
+
+          <FilterSelect label="Status" options={statusDisponiveis.map(s => ({ value: s, label: s }))} selectedValues={selectedStatuses} onChange={setSelectedStatuses} />
           
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 bg-secondary/30 rounded-md border border-border px-1 h-10 ml-2 shrink-0">

@@ -25,6 +25,10 @@ export interface PlanejamentoRow {
   etapasDiarias: PlanejamentoEtapaDiaria[];
   avnpMap: Record<string, number>;
   avnpMaisRecente: number;
+  municipio: string;
+  obrasInaptasVal: string;
+  orcamentoValidado: number;
+  recursosAplicados: number;
 }
 
 const CARTEIRA_URL = 'https://docs.google.com/spreadsheets/d/1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E/gviz/tq?tqx=out:csv&sheet=Carteira_Planejador';
@@ -91,11 +95,71 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
     
     try {
       const finalData: PlanejamentoRow[] = [];
+      const recursosAplicadosPorObra: Record<string, number> = {};
 
       rawQuery.data.forEach(unidadeData => {
         const principalRows = unidadeData.principal;
         const carteiraRows = unidadeData.carteira;
         const unidadeId = unidadeData.unidadeId;
+
+        // Nova lógica de Recursos Aplicados via base Global
+        let usouBaseGlobal = false;
+        if (unidadeData.bdMetas && typeof unidadeData.bdMetas === 'object' && 'recursos_aplicados' in unidadeData.bdMetas) {
+          const ra = (unidadeData.bdMetas as any).recursos_aplicados as Record<string, number>;
+          if (ra && Object.keys(ra).length > 0) {
+            usouBaseGlobal = true;
+            Object.entries(ra).forEach(([obraId, metaSoma]) => {
+              recursosAplicadosPorObra[obraId] = metaSoma;
+            });
+          }
+        }
+
+        // Fallback para a lógica antiga usando Plan_Principal caso a base global falhe
+        if (!usouBaseGlobal) {
+          if (principalRows && Array.isArray(principalRows)) {
+            for (let j = 1; j < principalRows.length; j++) {
+              const pRow = principalRows[j];
+              if (!pRow || !Array.isArray(pRow)) continue;
+              
+              const obraId = String(pRow[7] || '').trim(); // Coluna H
+              
+              // Fallback +2 colunas (caso a planilha tenha sofrido shift na base de dados)
+              let metaVal = parseNumber(pRow[38]); // Coluna AM
+              let paramAO = parseNumber(pRow[40]); // Coluna AO
+              
+              // Se a coluna original estiver vazia e a deslocada tiver dado, assume o shift
+              const raw38 = pRow[38];
+              if ((raw38 === undefined || raw38 === null || raw38 === '') && pRow[40] !== undefined) {
+                 metaVal = parseNumber(pRow[40]); // Fallback para AO
+                 paramAO = parseNumber(pRow[42]); // Fallback para AQ
+              }
+              
+              if (obraId && paramAO > 0) {
+                if (!recursosAplicadosPorObra[obraId]) {
+                  recursosAplicadosPorObra[obraId] = 0;
+                }
+                recursosAplicadosPorObra[obraId] += metaVal;
+              }
+            }
+          }
+        }
+
+        let indexOrcamento = 35; // AJ fallback
+        let foundOrcamentoIdx = -1;
+        
+        for (let hr = 0; hr < Math.min(10, carteiraRows.length); hr++) {
+          const headerRow = carteiraRows[hr];
+          if (Array.isArray(headerRow)) {
+            // Busca cabeçalho do Orçamento Validado
+            const idxOrc = headerRow.findIndex(h => {
+              const s = String(h).toLowerCase();
+              return s.includes('mo validado') || s.includes('orçamento val') || s.includes('orcamento val');
+            });
+            if (idxOrc !== -1) foundOrcamentoIdx = idxOrc;
+          }
+        }
+        
+        if (foundOrcamentoIdx !== -1) indexOrcamento = foundOrcamentoIdx;
 
         // 1. Parse Plan_Principal
         const etapasPorProjeto: Record<string, PlanejamentoEtapaDiaria[]> = {};
@@ -206,6 +270,11 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
 
           const etapasDoProjeto = etapasPorProjeto[projeto] || [];
 
+          const municipio = row[14] ? String(row[14]).trim() : '';
+          const obrasInaptasVal = row[1] ? String(row[1]).trim() : '';
+          const orcamentoValidado = parseNumber(row[indexOrcamento]);
+          const recursosAplicados = recursosAplicadosPorObra[projeto] || 0;
+
           finalData.push({
             id: `${projeto}-${unidadeId}-${i}`,
             mesFiltro,
@@ -219,7 +288,11 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
             parsedEndDate,
             etapasDiarias: etapasDoProjeto,
             avnpMap,
-            avnpMaisRecente
+            avnpMaisRecente,
+            municipio,
+            obrasInaptasVal,
+            orcamentoValidado,
+            recursosAplicados
           });
         }
       });

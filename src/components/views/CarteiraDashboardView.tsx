@@ -505,12 +505,13 @@ export const CarteiraDashboardView = () => {
               { value: "VENCIDAS", label: "VENCIDAS (+6 meses)" },
               { value: "NÃO", label: "NÃO (Sem Data)" }
             ]} selectedValues={selectedVistorias} onChange={setSelectedVistorias} />
-            <FilterSelect label="Status" options={options.status.map(m => ({ value: m, label: m }))} selectedValues={selectedStatus} onChange={setSelectedStatus} />
+            <FilterSelect label="Município" options={options.municipios.map(m => ({ value: m, label: m }))} selectedValues={selectedMunicipios} onChange={setSelectedMunicipios} searchable={true} />
             <FilterSelect label="AVNP" options={options.avnps.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` }))} selectedValues={selectedAVNPs} onChange={setSelectedAVNPs} />
             <FilterSelect label="Recurso Disp." options={[
               { value: 'SIM', label: 'SIM (Positivos)' },
               { value: 'NÃO', label: 'NÃO (Negativos)' }
             ]} selectedValues={selectedRecursoDisp} onChange={setSelectedRecursoDisp} />
+            <FilterSelect label="Status" options={options.status.map(m => ({ value: m, label: m }))} selectedValues={selectedStatus} onChange={setSelectedStatus} />
 
             <FilterSelect 
               label="Situação" 
@@ -566,13 +567,14 @@ export const CarteiraDashboardView = () => {
         </div>
 
         {/* Filtros Ativos Badge row (Opcional, mas útil) */}
-        {(selectedMeses.length > 0 || selectedVistorias.length > 0 || selectedStatus.length > 0 || selectedAVNPs.length > 0 || selectedPrioridades.length > 0) && (
+        {(selectedMeses.length > 0 || selectedVistorias.length > 0 || selectedStatus.length > 0 || selectedAVNPs.length > 0 || selectedPrioridades.length > 0 || selectedMunicipios.length > 0) && (
           <div className="flex flex-wrap gap-2 pt-2">
             {selectedMeses.map(m => <FilterBadge key={m} label={`Mês: ${m}`} onRemove={() => setSelectedMeses(selectedMeses.filter(x => x !== m))} />)}
             {selectedVistorias.map(m => <FilterBadge key={m} label={`Vistoria: ${m}`} onRemove={() => setSelectedVistorias(selectedVistorias.filter(x => x !== m))} />)}
             {selectedStatus.map(m => <FilterBadge key={m} label={`Status: ${m}`} onRemove={() => setSelectedStatus(selectedStatus.filter(x => x !== m))} />)}
             {selectedAVNPs.map(m => <FilterBadge key={m} label={`AVNP: ${(m * 100).toFixed(0)}%`} onRemove={() => setSelectedAVNPs(selectedAVNPs.filter(x => x !== m))} />)}
             {selectedPrioridades.map(m => <FilterBadge key={m} label={`Prioridade: ${m}`} onRemove={() => setSelectedPrioridades(selectedPrioridades.filter(x => x !== m))} />)}
+            {selectedMunicipios.map(m => <FilterBadge key={m} label={`Município: ${m}`} onRemove={() => setSelectedMunicipios(selectedMunicipios.filter(x => x !== m))} />)}
           </div>
         )}
       </div>
