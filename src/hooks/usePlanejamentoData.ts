@@ -23,10 +23,28 @@ export interface PlanejamentoRow {
   parsedStartDate: Date | null;
   parsedEndDate: Date | null;
   etapasDiarias: PlanejamentoEtapaDiaria[];
+  avnpMap: Record<string, number>;
+  avnpMaisRecente: number;
 }
 
 const CARTEIRA_URL = 'https://docs.google.com/spreadsheets/d/1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E/gviz/tq?tqx=out:csv&sheet=Carteira_Planejador';
 const PLAN_PRINCIPAL_URL = 'https://docs.google.com/spreadsheets/d/1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E/gviz/tq?tqx=out:csv&sheet=Plan_Principal';
+
+const parseNumber = (val: any) => {
+  if (val === 0 || val === '0') return 0;
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  let str = String(val).trim();
+  const isPercent = str.includes('%');
+  if (/^-?\d+\.\d+$/.test(str)) {
+     const num = Number(str);
+     return isPercent ? num / 100 : num;
+  }
+  const clean = str.replace(/[R$%\s\.]/g, '').replace(',', '.');
+  let num = Number(clean);
+  if (isNaN(num)) return 0;
+  return isPercent ? num / 100 : num;
+};
 
 export const getEtapaColorClass = (etapaName: string) => {
   if (!etapaName) return "bg-zinc-900 border-black hover:bg-zinc-700 text-white";
@@ -155,6 +173,25 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
           const nomeProjeto = row[13] || '';
           const supervisor = row[32] || '';
 
+          // Ler AVNP (F) e Mês (G)
+          const avnpStr = row[5] ? String(row[5]).trim() : '';
+          const mesStr = row[6] ? String(row[6]).trim() : '';
+
+          const mesesList = mesStr ? mesStr.split(',').map(m => normalizeMes(m.trim())).filter(Boolean) : [];
+          const avnpsList = avnpStr ? avnpStr.split(',').map(m => m.trim()).filter(Boolean) : [];
+
+          const avnpMap: Record<string, number> = {};
+          let avnpMaisRecente = 0;
+
+          mesesList.forEach((m, idx) => {
+            let val = parseNumber(avnpsList[idx] || '0');
+            avnpMap[m] = val;
+          });
+
+          if (mesesList.length > 0 && avnpsList.length > 0) {
+            avnpMaisRecente = parseNumber(avnpsList[0] || '0');
+          }
+
           let parsedStartDate: Date | null = null;
           if (dataInicio && dataInicio !== '-') {
             const dt = parse(dataInicio, 'dd/MM/yyyy', new Date());
@@ -180,7 +217,9 @@ export const usePlanejamentoData = (selectedUnidadesIds: string[]) => {
             supervisor,
             parsedStartDate,
             parsedEndDate,
-            etapasDiarias: etapasDoProjeto
+            etapasDiarias: etapasDoProjeto,
+            avnpMap,
+            avnpMaisRecente
           });
         }
       });

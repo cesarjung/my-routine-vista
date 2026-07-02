@@ -22,6 +22,7 @@ import { EtapasView } from '@/components/views/EtapasView';
 import { CarteiraDashboardView } from '@/components/views/CarteiraDashboardView';
 import { PlanejamentoSemanalView } from '@/components/views/PlanejamentoSemanalView';
 import { AlojamentosView } from '@/components/views/AlojamentosView';
+import { LancamentosServicosView } from '@/components/views/LancamentosServicosView';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -77,6 +78,8 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         }
         return sectorName;
       }
+      case 'lancamentos_servicos':
+        return 'Lançamentos de Serviços';
       default:
         return '';
     }
@@ -140,6 +143,24 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         </header>
         <div className="w-full flex-1 min-h-0">
           <MyTasksView viewMode={viewMode} />
+        </div>
+      </div>
+    );
+  }
+
+  // Lancamentos Servicos View
+  if (context.type === 'lancamentos_servicos') {
+    return (
+      <div className="h-full flex flex-col p-6 bg-background">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Lançamentos de Serviços</h1>
+            </div>
+          </div>
+        </header>
+        <div className="w-full flex-1 min-h-0">
+          <LancamentosServicosView />
         </div>
       </div>
     );

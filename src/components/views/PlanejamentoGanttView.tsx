@@ -47,6 +47,7 @@ export const PlanejamentoGanttView = () => {
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_planejamentogantt', '');
   const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('filter_status_planejamentogantt', []);
   const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_planejamentogantt', []);
+  const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps_planejamentogantt', []);
   
   const [viewStartManual, setViewStartManual] = useState(() => startOfMonth(new Date()));
   
@@ -121,6 +122,20 @@ export const PlanejamentoGanttView = () => {
     return Array.from(statusSet).sort();
   }, [data]);
 
+  const avnpsDisponiveis = useMemo(() => {
+    if (!data) return [];
+    const avnpSet = new Set<number>();
+    data.forEach(row => {
+      if (row.avnpMaisRecente !== undefined && row.avnpMaisRecente !== null) {
+        avnpSet.add(row.avnpMaisRecente);
+      }
+      if (row.avnpMap) {
+        Object.values(row.avnpMap).forEach(v => avnpSet.add(v));
+      }
+    });
+    return Array.from(avnpSet).sort((a, b) => b - a);
+  }, [data]);
+
   const baseFilteredData = useMemo(() => {
     if (!data) return [];
     return data.filter(row => {
@@ -146,10 +161,28 @@ export const PlanejamentoGanttView = () => {
           if (startOfDay(row.parsedEndDate) > fe) passDateEnd = false;
         }
       }
+
+      // Filtro AVNP
+      let passAVNP = true;
+      if (selectedAVNPs.length > 0) {
+        let avnpAplicavel = row.avnpMaisRecente;
+        if (selectedMeses.length === 1) {
+          const mes = selectedMeses[0];
+          avnpAplicavel = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
+          passAVNP = selectedAVNPs.includes(avnpAplicavel);
+        } else if (selectedMeses.length > 1) {
+          passAVNP = selectedMeses.some(mes => {
+            const val = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
+            return selectedAVNPs.includes(val);
+          });
+        } else {
+          passAVNP = selectedAVNPs.includes(avnpAplicavel);
+        }
+      }
       
-      return passMes && passStatus && passDateStart && passDateEnd;
+      return passMes && passStatus && passDateStart && passDateEnd && passAVNP;
     });
-  }, [data, selectedMeses, selectedStatuses, filterStart, filterEnd]);
+  }, [data, selectedMeses, selectedStatuses, filterStart, filterEnd, selectedAVNPs]);
 
   const projetosDisponiveis = useMemo(() => {
     const projSet = new Set<string>();
@@ -321,6 +354,8 @@ export const PlanejamentoGanttView = () => {
           </div>
           
           <FilterSelect label="Projeto" options={projetosDisponiveis.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
+          
+          <FilterSelect label="AVNP" options={avnpsDisponiveis.map(m => ({ value: m, label: `${(m * 100).toFixed(0)}%` }))} selectedValues={selectedAVNPs} onChange={setSelectedAVNPs} />
           
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 bg-secondary/30 rounded-md border border-border px-1 h-10 ml-2 shrink-0">

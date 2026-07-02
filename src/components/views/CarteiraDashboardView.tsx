@@ -3,7 +3,7 @@ import { useCarteiraDashboardData } from '@/hooks/useCarteiraDashboardData';
 import { CarteiraMapView } from './CarteiraMapView';
 import { format, differenceInMonths, parse, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Filter, Calendar, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { RefreshCw, Filter, Calendar, Maximize2, Minimize2, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import {
@@ -12,6 +12,12 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -77,9 +83,20 @@ export const CarteiraDashboardView = () => {
   const [selectedRecursoDisp, setSelectedRecursoDisp] = useSessionState<string[]>('filter_recurso_disp_carteiradashboard', []);
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_carteiradashboard', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_carteiradashboard', '');
-  const [considerarInaptas, setConsiderarInaptas] = useSessionState<boolean>('filter_considerar_inaptas_carteiradashboard', false);
+  const [selectedSituacao, setSelectedSituacao] = useSessionState<string[]>('filter_situacao_carteiradashboard', ['APTA']);
   const [ocultarConcluidasPassado, setOcultarConcluidasPassado] = useSessionState<boolean>('filter_ocultar_concluidas_passado', true);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+
+  // Filtros computados para manter compatibilidade
+  const considerarInaptas = selectedSituacao.includes('INAPTA') || selectedSituacao.length === 0;
+  const mostrarApenasInaptas = selectedSituacao.length === 1 && selectedSituacao[0] === 'INAPTA';
+
+  // Modal de detalhe por indicador
+  const [activeMetricModal, setActiveMetricModal] = useState<{
+    title: string;
+    filterFn: (row: any) => boolean;
+  } | null>(null);
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -181,6 +198,7 @@ export const CarteiraDashboardView = () => {
         if (selectedMeses.length === 1) {
           const mes = selectedMeses[0];
           avnpAplicavel = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
+          if (!selectedAVNPs.includes(avnpAplicavel)) return false;
         } else if (selectedMeses.length > 1) {
           const matchAVNP = selectedMeses.some(mes => {
             const val = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
@@ -210,6 +228,11 @@ export const CarteiraDashboardView = () => {
       if (selectedRecursoDisp.length > 0) {
         const recursoStatus = ((row.orcamentoValidado || 0) - (row.recursosAplicados || 0)) >= 0 ? 'SIM' : 'NÃO';
         if (!selectedRecursoDisp.includes(recursoStatus)) return false;
+      }
+
+      // Filtro Apenas Inaptas
+      if (mostrarApenasInaptas && (row.obrasInaptasVal === '0' || row.obrasInaptasVal === '')) {
+        return false;
       }
 
       return true;
@@ -278,7 +301,7 @@ export const CarteiraDashboardView = () => {
     const municipioMap: Record<string, { count: number, postes: number, valor: number }> = {};
 
     filteredData.forEach(row => {
-      const isInapta = row.obrasInaptasVal === '0';
+      const isInapta = row.obrasInaptasVal !== '0' && row.obrasInaptasVal !== '';
       const considerarApta = considerarInaptas || !isInapta;
 
       if (isInapta) {
@@ -368,7 +391,7 @@ export const CarteiraDashboardView = () => {
     const ratioEquipes = sumEquipes > 0 ? sumPostes / sumEquipes : 0;
     const metaPostesEquipeAvg = countMetaEquipe > 0 ? sumMetaPostesEquipe / countMetaEquipe : 0;
 
-    const carteiraApta = data.carteira.filter(r => considerarInaptas || r.obrasInaptasVal !== '0');
+    const carteiraApta = data.carteira.filter(r => considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '');
     const geralTotalObras = carteiraApta.length;
     const geralSumPostes = carteiraApta.reduce((acc, r) => acc + r.postesDisponiveis, 0);
 
@@ -489,16 +512,15 @@ export const CarteiraDashboardView = () => {
               { value: 'NÃO', label: 'NÃO (Negativos)' }
             ]} selectedValues={selectedRecursoDisp} onChange={setSelectedRecursoDisp} />
 
-            <Toggle
-              pressed={considerarInaptas}
-              onPressedChange={setConsiderarInaptas}
-              variant="outline"
-              size="sm"
-              className="h-8 mb-0.5 text-[10px] uppercase font-bold tracking-wider data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground shrink-0"
-              title="Considerar obras inaptas nos totais e cálculos"
-            >
-              + INAPTAS
-            </Toggle>
+            <FilterSelect 
+              label="Situação" 
+              options={[
+                { value: 'APTA', label: 'APTA' }, 
+                { value: 'INAPTA', label: 'INAPTA' }
+              ]} 
+              selectedValues={selectedSituacao} 
+              onChange={setSelectedSituacao} 
+            />
 
             <Toggle
               pressed={ocultarConcluidasPassado}
@@ -562,7 +584,13 @@ export const CarteiraDashboardView = () => {
 
           {/* LINHA 1 */}
           {/* 1. Total de obras */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Total de Obras',
+              filterFn: (r) => considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === ''
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Total de Obras</p>
               <div className="flex items-end gap-2">
@@ -574,7 +602,13 @@ export const CarteiraDashboardView = () => {
           </div>
 
           {/* 2. Total de Postes Disponíveis */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras com Postes Disponíveis',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && r.postesDisponiveis > 0
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Postes Disponíveis">Postes Disponíveis</p>
               <div className="flex flex-col sm:flex-row sm:items-end gap-1 min-w-0">
@@ -594,7 +628,13 @@ export const CarteiraDashboardView = () => {
           </div>
 
           {/* 3. Obras Sem Orçamento */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras Sem Orçamento',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && r.obrasSemOrcamentoVal === '0'
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Sem Orçamento</p>
               <div className="flex items-end gap-2">
@@ -608,7 +648,13 @@ export const CarteiraDashboardView = () => {
           </div>
 
           {/* 4. Obras Vistoriadas */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras Vistoriadas',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && !!r.dataVistoria
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Vistoriadas</p>
               <div className="flex items-end gap-2">
@@ -623,7 +669,13 @@ export const CarteiraDashboardView = () => {
 
           {/* LINHA 2 */}
           {/* 5. Obras Concluídas */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras Concluídas',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && r.statusExecucao.toUpperCase().includes('CONCLUÍD')
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Concluídas</p>
               <div className="flex items-end gap-2">
@@ -637,7 +689,13 @@ export const CarteiraDashboardView = () => {
           </div>
 
           {/* 6. Obras Energizadas */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras Energizadas',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && !!r.dataEnergizacao
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Energizadas</p>
               <div className="flex items-end gap-2">
@@ -651,7 +709,13 @@ export const CarteiraDashboardView = () => {
           </div>
 
           {/* 7. Obras Inaptas */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras Inaptas',
+              filterFn: (r) => r.obrasInaptasVal !== '0' && r.obrasInaptasVal !== ''
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Obras Inaptas</p>
               <div className="flex items-end gap-2">
@@ -666,7 +730,13 @@ export const CarteiraDashboardView = () => {
           </div>
 
           {/* 8. Postes / Equipes */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras com Postes por Equipe',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && r.postesDisponiveis > 0
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Postes / Equipes">Postes / Equipes</p>
               <div className="flex flex-col sm:flex-row sm:items-end gap-1 min-w-0">
@@ -684,7 +754,13 @@ export const CarteiraDashboardView = () => {
 
           {/* LINHA 3 */}
           {/* 9. GPM x NEOEX */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras com Divergência (GPM x NEOEX)',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && r.qtdGpm !== r.qtdNeoex
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1" title="Déficit de lançamentos (GPM - NEOEX)">Déficit NEOEX</p>
               <div className="flex items-end gap-2">
@@ -701,7 +777,13 @@ export const CarteiraDashboardView = () => {
           </div>
 
           {/* 10. Média de Postes por Obra */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras com Postes Disponíveis (Média)',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && r.postesDisponiveis > 0
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Média Postes/Obra</p>
               <div className="flex items-end gap-2">
@@ -712,8 +794,14 @@ export const CarteiraDashboardView = () => {
             <Gauge value={indicators.mediaPostes} max={indicators.geralTotalObras > 0 ? (indicators.geralSumPostes / indicators.geralTotalObras) * 1.5 : 1} colorClass="text-foreground" />
           </div>
 
-          {/* 10. Capacidade Faturamento */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2">
+          {/* 11. Capacidade Faturamento */}
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras com Faturamento',
+              filterFn: (r) => (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && r.capacidadeFaturamento > 0
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between overflow-hidden gap-2 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center min-w-0 flex-1">
               <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate" title="Capacidade Faturamento">Capacidade Faturamento</p>
               <div className="flex flex-col gap-0.5 min-w-0">
@@ -732,8 +820,26 @@ export const CarteiraDashboardView = () => {
             </div>
           </div>
 
-          {/* 11. Eficácia Prevista */}
-          <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between">
+          {/* 12. Eficácia Prevista */}
+          <div 
+            onClick={() => setActiveMetricModal({
+              title: 'Obras com Eficácia Prevista (AVNP 100%)',
+              filterFn: (r) => {
+                const isInapta = r.obrasInaptasVal !== '0' && r.obrasInaptasVal !== '';
+                const considerarApta = considerarInaptas || !isInapta;
+                if (!considerarApta) return false;
+                
+                let avnpAplicavel = r.avnpMaisRecente;
+                if (selectedMeses.length === 1) {
+                  avnpAplicavel = r.avnpMap[selectedMeses[0]] !== undefined ? r.avnpMap[selectedMeses[0]] : r.avnpMaisRecente;
+                } else if (selectedMeses.length > 1) {
+                  avnpAplicavel = Math.max(...selectedMeses.map(m => r.avnpMap[m] !== undefined ? r.avnpMap[m] : r.avnpMaisRecente));
+                }
+                return avnpAplicavel === 1;
+              }
+            })}
+            className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+          >
             <div className="flex flex-col justify-center">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Eficácia Prevista</p>
               <div className="flex items-end gap-2">
@@ -751,38 +857,64 @@ export const CarteiraDashboardView = () => {
         <div className="px-6 pb-6">
           <div className="w-full bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden h-[500px] min-h-[300px] max-h-[1200px] resize-y pb-1">
             <div className="p-4 border-b border-border bg-muted/20 flex justify-between items-center">
-              <h3 className="font-bold text-sm">Relação de Obras Filtradas ({considerarInaptas ? 'Aptas + Inaptas' : 'Aptas'}) ({indicators.totalObras})</h3>
+              <h3 className="font-bold text-sm">Relação de Obras Filtradas ({mostrarApenasInaptas ? 'Apenas Inaptas' : considerarInaptas ? 'Aptas + Inaptas' : 'Aptas'}) ({indicators.totalObras})</h3>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => exportToCSV(
+                    filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0'), 
+                    selectedMeses, 
+                    'Obras_Filtradas'
+                  )}
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 text-xs flex items-center gap-1.5 text-foreground shrink-0 bg-background"
+                >
+                  <Download className="w-3.5 h-3.5" /> CSV
+                </Button>
+                <Button 
+                  onClick={() => exportToExcelXML(
+                    filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0'), 
+                    selectedMeses, 
+                    'Obras_Filtradas'
+                  )}
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 text-xs flex items-center gap-1.5 text-foreground shrink-0 bg-background"
+                >
+                  <Download className="w-3.5 h-3.5" /> Excel
+                </Button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto custom-scrollbar p-0">
               <ErrorBoundary>
-                <table className="w-full table-fixed text-sm text-left whitespace-nowrap">
+                <table className="w-full min-w-[1500px] table-auto text-sm text-left whitespace-nowrap">
                   <thead className="bg-muted sticky top-0 z-10 shadow-sm">
                     <tr>
-                      <th className="px-4 py-2 font-semibold text-center w-[7%]">Obra</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[20%]">Título</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Município</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Carteira</th>
-                      <th className="px-4 py-2 font-semibold w-[8%] text-center">Prioridade</th>
-                      <th className="px-4 py-2 font-semibold w-[9%] text-center">Status Execução</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[5%]">Postes Disp.</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[6%]">AVNP</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[9%]">Valor Considerado</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Orçamento Val.</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[10%]">Recursos Aplic.</th>
-                      <th className="px-4 py-2 font-semibold text-center w-[9%]">Recurso Disp.</th>
+                      <th className="px-4 py-2 font-semibold text-center">Obra</th>
+                      <th className="px-4 py-2 font-semibold text-center max-w-[280px]">Título</th>
+                      <th className="px-4 py-2 font-semibold text-center">Município</th>
+                      <th className="px-4 py-2 font-semibold text-center">Carteira</th>
+                      <th className="px-4 py-2 font-semibold text-center">Prioridade</th>
+                      <th className="px-4 py-2 font-semibold text-center">Status Execução</th>
+                      <th className="px-4 py-2 font-semibold text-center">Postes Disp.</th>
+                      <th className="px-4 py-2 font-semibold text-center">AVNP</th>
+                      <th className="px-4 py-2 font-semibold text-center">Valor Considerado</th>
+                      <th className="px-4 py-2 font-semibold text-center">Orçamento Val.</th>
+                      <th className="px-4 py-2 font-semibold text-center">Recursos Aplic.</th>
+                      <th className="px-4 py-2 font-semibold text-center">Recurso Disp.</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal !== '0').sort((a, b) => (b.postesDisponiveis || 0) - (a.postesDisponiveis || 0)).slice(0, 100).map(obra => (
+                    {filteredData.filter(r => considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '').sort((a, b) => (b.postesDisponiveis || 0) - (a.postesDisponiveis || 0)).slice(0, 100).map(obra => (
                       <tr key={obra.id} className={cn(
                         "border-b border-border/50",
                         obra.isConcluidaNoPassado 
                           ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30" 
                           : "hover:bg-muted/20"
                       )}>
-                        <td className="px-4 py-2 font-medium truncate" title={obra.projeto}>{obra.projeto}</td>
-                        <td className="px-4 py-2 text-muted-foreground truncate" title={obra.titulo}>{obra.titulo}</td>
-                        <td className="px-4 py-2 truncate" title={obra.municipio}>{obra.municipio}</td>
+                        <td className="px-4 py-2 font-medium">{obra.projeto}</td>
+                        <td className="px-4 py-2 text-muted-foreground"><div className="max-w-[280px] truncate" title={obra.titulo}>{obra.titulo}</div></td>
+                        <td className="px-4 py-2"><div className="max-w-[150px] truncate" title={obra.municipio}>{obra.municipio}</div></td>
                         <td className="px-4 py-2 text-center text-[10px] text-muted-foreground whitespace-nowrap">
                           {(() => {
                             const mesesParaMostrar = selectedMeses.length > 0
@@ -796,7 +928,7 @@ export const CarteiraDashboardView = () => {
                             {obra.prioridade || '-'}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-center truncate" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</td>
+                        <td className="px-4 py-2 text-center"><div className="max-w-[120px] truncate mx-auto" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</div></td>
                         <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
                         <td className="px-4 py-2 text-center font-bold text-[11px] text-indigo-600 whitespace-nowrap">
                           {(() => {
@@ -978,7 +1110,509 @@ export const CarteiraDashboardView = () => {
 
       </div>
       </div>
+
+      {/* Modal de Detalhes da Métrica */}
+      <Dialog 
+        open={activeMetricModal !== null} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setActiveMetricModal(null);
+            setModalSearchTerm('');
+          }
+        }}
+      >
+        <DialogContent 
+          className="max-w-6xl w-[95vw] min-h-[300px] max-h-[95vh] h-[85vh] fixed top-[5vh] left-1/2 -translate-x-1/2 translate-y-0 flex flex-col p-0 overflow-hidden bg-background border-border shadow-2xl rounded-xl resize-y pb-2"
+        >
+          {activeMetricModal && (() => {
+            const isObrasInaptasMetric = activeMetricModal.title === 'Obras Inaptas';
+            
+            const allModalObras = data.carteira.filter(row => {
+              // 1. Filtro Mês
+              if (selectedMeses.length > 0) {
+                const hasMes = selectedMeses.some(m => row.meses.includes(m));
+                if (!hasMes) return false;
+              }
+
+              // 2. Filtro Status
+              if (selectedStatus.length > 0 && !selectedStatus.includes(row.statusExecucao)) return false;
+
+              // 3. Filtro Projeto
+              if (selectedProjetos.length > 0 && !selectedProjetos.includes(row.projeto)) return false;
+
+              // 4. Filtro Municipio
+              if (selectedMunicipios.length > 0 && !selectedMunicipios.includes(row.municipio)) return false;
+
+              // 5. Filtro Prioridade
+              if (selectedPrioridades.length > 0 && !selectedPrioridades.includes(row.prioridade)) return false;
+
+              // 6. Filtro Postes
+              if (selectedPostes.length > 0 && !selectedPostes.includes(row.postesDisponiveis)) return false;
+
+              // 7. Filtro Vistoria
+              if (selectedVistorias.length > 0) {
+                let vistoriaStatus = 'NÃO';
+                const now = new Date();
+                if (row.dataVistoria) {
+                  const diff = differenceInMonths(now, row.dataVistoria);
+                  vistoriaStatus = diff <= 6 ? 'SIM' : 'VENCIDAS';
+                }
+                if (!selectedVistorias.includes(vistoriaStatus)) return false;
+              }
+
+              // 8. Filtro AVNP
+              if (selectedAVNPs.length > 0) {
+                let avnpAplicavel = row.avnpMaisRecente;
+                if (selectedMeses.length === 1) {
+                  const mes = selectedMeses[0];
+                  avnpAplicavel = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
+                  if (!selectedAVNPs.includes(avnpAplicavel)) return false;
+                } else if (selectedMeses.length > 1) {
+                  const matchAVNP = selectedMeses.some(mes => {
+                    const val = row.avnpMap[mes] !== undefined ? row.avnpMap[mes] : row.avnpMaisRecente;
+                    return selectedAVNPs.includes(val);
+                  });
+                  if (!matchAVNP) return false;
+                } else {
+                  if (!selectedAVNPs.includes(avnpAplicavel)) return false;
+                }
+              }
+
+              // 9. Filtro de Conclusões
+              if (filterStart || filterEnd) {
+                let isWithin = true;
+                if (filterStart) {
+                  const start = startOfDay(parse(filterStart, 'yyyy-MM-dd', new Date()));
+                  if (!row.dataFim || row.dataFim < start) isWithin = false;
+                }
+                if (filterEnd) {
+                  const end = endOfDay(parse(filterEnd, 'yyyy-MM-dd', new Date()));
+                  if (!row.dataFim || row.dataFim > end) isWithin = false;
+                }
+                if (!isWithin) return false;
+              }
+
+              // 10. Filtro Recurso Disponível
+              if (selectedRecursoDisp.length > 0) {
+                const recursoStatus = ((row.orcamentoValidado || 0) - (row.recursosAplicados || 0)) >= 0 ? 'SIM' : 'NÃO';
+                if (!selectedRecursoDisp.includes(recursoStatus)) return false;
+              }
+
+              // 11. Filtro Situação (APTA/INAPTA)
+              if (!isObrasInaptasMetric && selectedSituacao.length > 0) {
+                const isInapta = row.obrasInaptasVal !== '0' && row.obrasInaptasVal !== '';
+                const rowSituacao = isInapta ? 'INAPTA' : 'APTA';
+                if (!selectedSituacao.includes(rowSituacao)) return false;
+              }
+
+              return true;
+            }).map(row => {
+              let isConcluidaNoPassado = false;
+              if (row.dataFim) {
+                const fimMesTime = startOfMonth(row.dataFim).getTime();
+                const parseMesToDateLocal = (mesStr: string) => {
+                  if (mesStr === 'OBRA RETIRADA') return 0;
+                  try {
+                    const cleanStr = mesStr.replace('./', ' ');
+                    return parse(cleanStr, 'MMM yy', new Date(), { locale: ptBR }).getTime();
+                  } catch (e) {
+                    return 0;
+                  }
+                };
+                if (selectedMeses.length > 0) {
+                  const mesesMatching = selectedMeses.filter(m => row.meses.includes(m));
+                  if (mesesMatching.length > 0) {
+                    isConcluidaNoPassado = mesesMatching.every(m => {
+                      const mTime = parseMesToDateLocal(m);
+                      return mTime > 0 && mTime > fimMesTime;
+                    });
+                  }
+                } else {
+                  if (row.meses.length > 0) {
+                    isConcluidaNoPassado = row.meses.every(m => {
+                      const mTime = parseMesToDateLocal(m);
+                      return mTime > 0 && mTime > fimMesTime;
+                    });
+                  }
+                }
+              }
+              return { ...row, isConcluidaNoPassado };
+            });
+
+            const filteredModalObras = allModalObras.filter(activeMetricModal.filterFn).filter(row => {
+              if (ocultarConcluidasPassado && row.isConcluidaNoPassado) return false;
+              return true;
+            });
+
+            const searchedModalObras = filteredModalObras.filter(row => {
+              if (!modalSearchTerm) return true;
+              const term = modalSearchTerm.toLowerCase();
+              return (
+                (row.projeto && row.projeto.toLowerCase().includes(term)) ||
+                (row.titulo && row.titulo.toLowerCase().includes(term)) ||
+                (row.municipio && row.municipio.toLowerCase().includes(term)) ||
+                (row.prioridade && row.prioridade.toLowerCase().includes(term)) ||
+                (row.statusExecucao && row.statusExecucao.toLowerCase().includes(term))
+              );
+            });
+
+            const totalObras = searchedModalObras.length;
+            const totalPostes = searchedModalObras.reduce((sum, o) => sum + (o.postesDisponiveis || 0), 0);
+            const totalValor = searchedModalObras.reduce((sum, o) => sum + (o.capacidadeFaturamento || 0), 0);
+
+            return (
+              <div className="flex flex-col h-full overflow-hidden text-foreground">
+                {/* Modal Header */}
+                <div className="p-6 border-b border-border bg-muted/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground">{activeMetricModal.title}</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Relação de obras correspondentes ao indicador selecionado.
+                    </p>
+                  </div>
+                  
+                  {/* Search and Action Buttons */}
+                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <input
+                      type="text"
+                      placeholder="Pesquisar nesta lista..."
+                      value={modalSearchTerm}
+                      onChange={(e) => setModalSearchTerm(e.target.value)}
+                      className="h-8 px-3 text-xs bg-background border border-input rounded-md outline-none focus:ring-1 focus:ring-ring w-full md:w-48 text-foreground"
+                    />
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => exportToCSV(searchedModalObras, selectedMeses, activeMetricModal.title)}
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 text-xs flex items-center gap-1.5 bg-background text-foreground"
+                      >
+                        <Download className="w-3.5 h-3.5" /> CSV
+                      </Button>
+                      <Button 
+                        onClick={() => exportToExcelXML(searchedModalObras, selectedMeses, activeMetricModal.title)}
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 text-xs flex items-center gap-1.5 bg-background text-foreground"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Excel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summaries strip */}
+                <div className="px-6 py-3 bg-secondary/20 border-b border-border flex flex-wrap gap-6 text-xs font-semibold text-muted-foreground">
+                  <div>Obras: <span className="text-foreground">{totalObras}</span></div>
+                  <div>Total Postes: <span className="text-foreground">{totalPostes.toLocaleString('pt-BR')}</span></div>
+                  <div>Total Valor: <span className="text-green-600 font-bold">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor)}
+                  </span></div>
+                </div>
+
+                {/* Table Container */}
+                <div className="flex-1 overflow-auto custom-scrollbar p-0">
+                  <ErrorBoundary>
+                    <table className="w-full min-w-[1500px] table-auto text-sm text-left whitespace-nowrap">
+                      <thead className="bg-muted sticky top-0 z-10 shadow-sm">
+                        <tr>
+                          <th className="px-4 py-2 font-semibold text-center">Obra</th>
+                          <th className="px-4 py-2 font-semibold text-center max-w-[280px]">Título</th>
+                          <th className="px-4 py-2 font-semibold text-center">Município</th>
+                          <th className="px-4 py-2 font-semibold text-center">Carteira</th>
+                          <th className="px-4 py-2 font-semibold text-center">Prioridade</th>
+                          <th className="px-4 py-2 font-semibold text-center">Status Execução</th>
+                          <th className="px-4 py-2 font-semibold text-center">Postes Disp.</th>
+                          <th className="px-4 py-2 font-semibold text-center">AVNP</th>
+                          <th className="px-4 py-2 font-semibold text-center">Valor Considerado</th>
+                          <th className="px-4 py-2 font-semibold text-center">Orçamento Val.</th>
+                          <th className="px-4 py-2 font-semibold text-center">Recursos Aplic.</th>
+                          <th className="px-4 py-2 font-semibold text-center">Recurso Disp.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {searchedModalObras.sort((a, b) => (b.postesDisponiveis || 0) - (a.postesDisponiveis || 0)).map(obra => (
+                          <tr key={`modal-${obra.id}`} className={cn(
+                            "border-b border-border/50",
+                            obra.isConcluidaNoPassado 
+                              ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30" 
+                              : "hover:bg-muted/20"
+                          )}>
+                            <td className="px-4 py-2 font-medium">{obra.projeto}</td>
+                            <td className="px-4 py-2 text-muted-foreground"><div className="max-w-[280px] truncate" title={obra.titulo}>{obra.titulo}</div></td>
+                            <td className="px-4 py-2"><div className="max-w-[150px] truncate" title={obra.municipio}>{obra.municipio}</div></td>
+                            <td className="px-4 py-2 text-center text-[10px] text-muted-foreground whitespace-nowrap">
+                              {(() => {
+                                const mesesParaMostrar = selectedMeses.length > 0
+                                  ? obra.meses.filter(m => selectedMeses.includes(m))
+                                  : obra.meses;
+                                return mesesParaMostrar.join(' | ') || '-';
+                              })()}
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground truncate max-w-full">
+                                {obra.prioridade || '-'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-center"><div className="max-w-[120px] truncate mx-auto" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</div></td>
+                            <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
+                            <td className="px-4 py-2 text-center font-bold text-[11px] text-indigo-600 whitespace-nowrap">
+                              {(() => {
+                                const mesesParaMostrar = selectedMeses.length > 0
+                                  ? obra.meses.filter(m => selectedMeses.includes(m))
+                                  : obra.meses;
+                                
+                                if (mesesParaMostrar.length === 0) {
+                                  return `${(obra.avnpMaisRecente * 100).toFixed(0)}%`;
+                                }
+
+                                return mesesParaMostrar.map(m => {
+                                  const avnp = obra.avnpMap[m] !== undefined ? obra.avnpMap[m] : obra.avnpMaisRecente;
+                                  return `${(avnp * 100).toFixed(0)}%`;
+                                }).join(' | ');
+                              })()}
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <span className="text-green-600 font-medium">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.capacidadeFaturamento)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <div className="flex flex-col items-center w-full">
+                                <span className="font-medium text-[13px]">
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <div className="flex flex-col items-center w-full">
+                                <span className="font-medium text-[13px] text-blue-600">
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.recursosAplicados)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <span className={`font-medium ${(obra.orcamentoValidado - obra.recursosAplicados) >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(obra.orcamentoValidado - obra.recursosAplicados)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {searchedModalObras.length === 0 && (
+                          <tr>
+                            <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
+                              Nenhuma obra encontrada.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </ErrorBoundary>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
+};
+
+// Utilities for exporting CSV/Excel client-side
+const escapeXml = (unsafe: any) => {
+  if (unsafe === null || unsafe === undefined) return '';
+  return String(unsafe).replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+};
+
+const exportToCSV = (obras: any[], selectedMeses: string[], title: string) => {
+  const headers = [
+    'Obra', 'Título', 'Município', 'Carteira', 'Prioridade', 
+    'Status Execução', 'Postes Disp.', 'AVNP', 'Valor Considerado', 
+    'Orçamento Val.', 'Recursos Aplic.', 'Recurso Disp.'
+  ];
+  
+  const rows = obras.map(obra => {
+    const mesesParaMostrar = selectedMeses.length > 0
+      ? obra.meses.filter((m: string) => selectedMeses.includes(m))
+      : obra.meses;
+    const carteiraStr = mesesParaMostrar.join(' | ') || '-';
+
+    let avnpStr = `${(obra.avnpMaisRecente * 100).toFixed(0)}%`;
+    if (selectedMeses.length > 0) {
+      avnpStr = mesesParaMostrar.map((m: string) => {
+        const avnp = obra.avnpMap[m] !== undefined ? obra.avnpMap[m] : obra.avnpMaisRecente;
+        return `${(avnp * 100).toFixed(0)}%`;
+      }).join(' | ');
+    }
+
+    return [
+      obra.projeto || '',
+      obra.titulo || '',
+      obra.municipio || '',
+      carteiraStr,
+      obra.prioridade || '-',
+      obra.statusExecucao || '-',
+      obra.postesDisponiveis ?? 0,
+      avnpStr,
+      obra.capacidadeFaturamento ?? 0,
+      obra.orcamentoValidado ?? 0,
+      obra.recursosAplicados ?? 0,
+      (obra.orcamentoValidado ?? 0) - (obra.recursosAplicados ?? 0)
+    ];
+  });
+
+  const csvContent = "\uFEFF" + [
+    headers.join(';'),
+    ...rows.map(row => row.map(val => {
+      if (typeof val === 'string') {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    }).join(';'))
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${title.toLowerCase().replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const exportToExcelXML = (obras: any[], selectedMeses: string[], title: string) => {
+  const headers = [
+    'Obra', 'Título', 'Município', 'Carteira', 'Prioridade', 
+    'Status Execução', 'Postes Disp.', 'AVNP', 'Valor Considerado', 
+    'Orçamento Val.', 'Recursos Aplic.', 'Recurso Disp.'
+  ];
+  
+  const rows = obras.map(obra => {
+    const mesesParaMostrar = selectedMeses.length > 0
+      ? obra.meses.filter((m: string) => selectedMeses.includes(m))
+      : obra.meses;
+    const carteiraStr = mesesParaMostrar.join(' | ') || '-';
+
+    let avnpStr = `${(obra.avnpMaisRecente * 100).toFixed(0)}%`;
+    if (selectedMeses.length > 0) {
+      avnpStr = mesesParaMostrar.map((m: string) => {
+        const avnp = obra.avnpMap[m] !== undefined ? obra.avnpMap[m] : obra.avnpMaisRecente;
+        return `${(avnp * 100).toFixed(0)}%`;
+      }).join(' | ');
+    }
+
+    return [
+      obra.projeto || '',
+      obra.titulo || '',
+      obra.municipio || '',
+      carteiraStr,
+      obra.prioridade || '-',
+      obra.statusExecucao || '-',
+      obra.postesDisponiveis ?? 0,
+      avnpStr,
+      obra.capacidadeFaturamento ?? 0,
+      obra.orcamentoValidado ?? 0,
+      obra.recursosAplicados ?? 0,
+      (obra.orcamentoValidado ?? 0) - (obra.recursosAplicados ?? 0)
+    ];
+  });
+
+  let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
+  xml += '<?mso-application progid="Excel.Sheet"?>\n';
+  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
+  xml += ' xmlns:o="urn:schemas-microsoft-com:office:office"\n';
+  xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
+  xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
+  xml += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
+  
+  xml += ' <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">\n';
+  xml += `  <Title>${title}</Title>\n`;
+  xml += '  <Created>' + new Date().toISOString() + '</Created>\n';
+  xml += ' </DocumentProperties>\n';
+
+  xml += ' <Styles>\n';
+  xml += '  <Style ss:ID="Default" ss:Name="Normal">\n';
+  xml += '   <Alignment ss:Vertical="Bottom"/>\n';
+  xml += '   <Borders/>\n';
+  xml += '   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>\n';
+  xml += '   <Interior/>\n';
+  xml += '   <NumberFormat/>\n';
+  xml += '   <Protection/>\n';
+  xml += '  </Style>\n';
+  xml += '  <Style ss:ID="sHeader">\n';
+  xml += '   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>\n';
+  xml += '   <Interior ss:Color="#1f2937" ss:Pattern="Solid"/>\n';
+  xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n';
+  xml += '  </Style>\n';
+  xml += '  <Style ss:ID="sNumber">\n';
+  xml += '   <NumberFormat ss:Format="Standard"/>\n';
+  xml += '  </Style>\n';
+  xml += '  <Style ss:ID="sCurrency">\n';
+  xml += '   <NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00;[Red]&quot;R$&quot;\ #,##0.00"/>\n';
+  xml += '  </Style>\n';
+  xml += ' </Styles>\n';
+
+  const sheetName = title.replace(/[:\/\\\?\*\[\]]/g, '').substring(0, 31) || 'Carteira';
+  xml += ` <Worksheet ss:Name="${sheetName}">\n`;
+  xml += '  <Table>\n';
+  
+  xml += '   <Column ss:Width="100"/>\n';
+  xml += '   <Column ss:Width="250"/>\n';
+  xml += '   <Column ss:Width="120"/>\n';
+  xml += '   <Column ss:Width="120"/>\n';
+  xml += '   <Column ss:Width="80"/>\n';
+  xml += '   <Column ss:Width="120"/>\n';
+  xml += '   <Column ss:Width="80"/>\n';
+  xml += '   <Column ss:Width="80"/>\n';
+  xml += '   <Column ss:Width="120"/>\n';
+  xml += '   <Column ss:Width="120"/>\n';
+  xml += '   <Column ss:Width="120"/>\n';
+  xml += '   <Column ss:Width="120"/>\n';
+
+  xml += '   <Row ss:Height="22">\n';
+  headers.forEach(h => {
+    xml += `    <Cell ss:StyleID="sHeader"><Data ss:Type="String">${h}</Data></Cell>\n`;
+  });
+  xml += '   </Row>\n';
+
+  rows.forEach(row => {
+    xml += '   <Row>\n';
+    xml += `    <Cell><Data ss:Type="String">${escapeXml(row[0])}</Data></Cell>\n`;
+    xml += `    <Cell><Data ss:Type="String">${escapeXml(row[1])}</Data></Cell>\n`;
+    xml += `    <Cell><Data ss:Type="String">${escapeXml(row[2])}</Data></Cell>\n`;
+    xml += `    <Cell><Data ss:Type="String">${escapeXml(row[3])}</Data></Cell>\n`;
+    xml += `    <Cell><Data ss:Type="String">${escapeXml(row[4])}</Data></Cell>\n`;
+    xml += `    <Cell><Data ss:Type="String">${escapeXml(row[5])}</Data></Cell>\n`;
+    xml += `    <Cell ss:StyleID="sNumber"><Data ss:Type="Number">${row[6]}</Data></Cell>\n`;
+    xml += `    <Cell><Data ss:Type="String">${escapeXml(row[7])}</Data></Cell>\n`;
+    xml += `    <Cell ss:StyleID="sCurrency"><Data ss:Type="Number">${row[8]}</Data></Cell>\n`;
+    xml += `    <Cell ss:StyleID="sCurrency"><Data ss:Type="Number">${row[9]}</Data></Cell>\n`;
+    xml += `    <Cell ss:StyleID="sCurrency"><Data ss:Type="Number">${row[10]}</Data></Cell>\n`;
+    xml += `    <Cell ss:StyleID="sCurrency"><Data ss:Type="Number">${row[11]}</Data></Cell>\n`;
+    xml += '   </Row>\n';
+  });
+
+  xml += '  </Table>\n';
+  xml += ' </Worksheet>\n';
+  xml += '</Workbook>\n';
+
+  const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${title.toLowerCase().replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}.xls`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 

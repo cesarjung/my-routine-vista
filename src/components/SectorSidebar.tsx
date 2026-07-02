@@ -21,7 +21,8 @@ import {
   Layers,
   Trash2,
   StickyNote,
-  Home
+  Home,
+  Hammer
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -620,6 +621,20 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               >
                 <Map className="w-4 h-4 shrink-0" />
                 {!collapsed && <span className="text-sm whitespace-nowrap">Carteira Planejada</span>}
+              </button>
+            )}
+
+            {/* Lançamentos de Serviços */}
+            {hasPlanejamentoAccess('carteira') && (
+              <button
+                onClick={() => onNavigate({ type: 'lancamentos_servicos' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'lancamentos_servicos' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Hammer className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Lançamentos de Serviços</span>}
               </button>
             )}
 

@@ -33,7 +33,13 @@ export const FilterSelect = ({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">
-            <span className="truncate">{selectedValues.length === 0 ? 'Todos' : `${selectedValues.length} selec.`}</span>
+            <span className="truncate">
+              {selectedValues.length === 0 
+                ? 'Todos' 
+                : selectedValues.length === 1 
+                  ? (options.find(o => o.value === selectedValues[0])?.label || selectedValues[0])
+                  : `${selectedValues.length} selec.`}
+            </span>
             <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
           </Button>
         </DropdownMenuTrigger>

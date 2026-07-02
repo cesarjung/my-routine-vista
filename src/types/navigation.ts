@@ -13,7 +13,8 @@ export type NavigationContext =
   | { type: 'planejado_meta'; section: 'carteira' }
   | { type: 'cumprimento_planejamento'; section: 'carteira' }
   | { type: 'etapas'; section: 'carteira' }
-  | { type: 'planejamento_semanal'; section: 'carteira' };
+  | { type: 'planejamento_semanal'; section: 'carteira' }
+  | { type: 'lancamentos_servicos' };
 
 export interface NavigationState {
   context: NavigationContext;
@@ -60,5 +61,10 @@ export const VIEW_CONFIG = {
     id: 'planejamento_semanal',
     label: 'Planejamento Semanal',
     icon: 'CalendarDays'
+  },
+  lancamentos_servicos: {
+    id: 'lancamentos_servicos',
+    label: 'Lançamentos de Serviços',
+    icon: 'Hammer'
   }
 } as const;
