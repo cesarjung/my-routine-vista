@@ -389,8 +389,9 @@ def sync_materiais_por_ponto(gc, env_vars):
             "Authorization": f"Bearer {access_token}"
         }
         
-        query = f"'{folder_id}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
-        url_drive = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name)"
+        # Procura por qualquer arquivo na pasta (sem filtrar por planilha do Google, pois pode ser CSV)
+        query = f"'{folder_id}' in parents and trashed = false"
+        url_drive = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name,mimeType)"
         res_drive = requests.get(url_drive, headers=headers_drive, timeout=30)
         
         if res_drive.status_code != 200:
@@ -398,7 +399,7 @@ def sync_materiais_por_ponto(gc, env_vars):
             return
             
         files = res_drive.json().get('files', [])
-        logging.info(f"Planilhas encontradas na pasta de materiais: {[f['name'] for f in files]}")
+        logging.info(f"Planilhas/arquivos encontrados na pasta de materiais: {[f['name'] for f in files]}")
         
         headers = {
             "apikey": supabase_key,
@@ -421,29 +422,57 @@ def sync_materiais_por_ponto(gc, env_vars):
                 
             sheet_title = f"MATERIAIS_POR_PONTO_{tab_name}"
             try:
-                logging.info(f"  [>] Abrindo planilha '{target_file['name']}' (ID: {target_file['id']})...")
-                spreadsheet = gc.open_by_key(target_file['id'])
+                logging.info(f"  [>] Abrindo/Baixando '{target_file['name']}' (ID: {target_file['id']})...")
                 
-                # Abre a aba da planilha correspondente
-                worksheet = None
-                for w in spreadsheet.worksheets():
-                    w_title = w.title.upper().replace(' ', '_').replace('-', '_')
-                    if sheet_title.upper().replace(' ', '_').replace('-', '_') in w_title or tab_name in w_title:
-                        worksheet = w
-                        break
+                raw_data = []
+                # Se for planilha nativa do Google, usamos gspread
+                if target_file.get('mimeType') == 'application/vnd.google-apps.spreadsheet':
+                    spreadsheet = gc.open_by_key(target_file['id'])
+                    
+                    # Abre a aba da planilha correspondente
+                    worksheet = None
+                    for w in spreadsheet.worksheets():
+                        w_title = w.title.upper().replace(' ', '_').replace('-', '_')
+                        if sheet_title.upper().replace(' ', '_').replace('-', '_') in w_title or tab_name in w_title:
+                            worksheet = w
+                            break
+                            
+                    if not worksheet:
+                        # Tenta pegar a primeira aba como fallback
+                        worksheet = spreadsheet.get_worksheet(0)
+                        logging.info(f"  [!] Aba '{sheet_title}' não encontrada. Usando a primeira aba '{worksheet.title}'.")
+                    
+                    logging.info(f"  [>] Lendo aba '{worksheet.title}'...")
+                    raw_data = worksheet.get_all_values()
+                else:
+                    # É um arquivo binário (CSV ou Excel)
+                    url_media = f"https://www.googleapis.com/drive/v3/files/{target_file['id']}?alt=media"
+                    res_media = requests.get(url_media, headers=headers_drive, timeout=90)
+                    if res_media.status_code != 200:
+                        logging.error(f"  [X] Falha ao baixar arquivo binário: {res_media.status_code}")
+                        continue
                         
-                if not worksheet:
-                    # Tenta pegar a primeira aba como fallback
-                    worksheet = spreadsheet.get_worksheet(0)
-                    logging.info(f"  [!] Aba '{sheet_title}' não encontrada. Usando a primeira aba '{worksheet.title}'.")
+                    content_str = res_media.content.decode('utf-8', errors='ignore')
+                    
+                    import csv
+                    import io
+                    # Detecta o delimitador (normalmente ; ou ,)
+                    first_line = content_str.split('\n')[0] if content_str else ''
+                    delimiter = ';' if ';' in first_line else ','
+                    
+                    reader = csv.reader(io.StringIO(content_str), delimiter=delimiter)
+                    raw_data = list(reader)
                 
-                logging.info(f"  [>] Lendo aba '{worksheet.title}'...")
-                raw_data = worksheet.get_all_values()
                 if not raw_data or len(raw_data) < 2:
-                    logging.warning(f"  [!] Aba '{worksheet.title}' está vazia ou sem dados.")
+                    logging.warning(f"  [!] Aba/Arquivo está vazio ou sem dados.")
                     continue
                 
-                headers_row = [h.strip().lower() for h in raw_data[0]]
+                # Remove aspas extras das strings (comum em CSVs exportados)
+                cleaned_data = []
+                for row in raw_data:
+                    cleaned_data.append([c.strip().strip('"').strip("'") for c in row])
+                
+                headers_row = [h.strip().lower() for h in cleaned_data[0]]
                 
                 col_indices = {
                     "projeto": -1,
@@ -476,7 +505,7 @@ def sync_materiais_por_ponto(gc, env_vars):
                     col_indices["mascara_e_ponto"] = headers_row.index("mascara e ponto")
                 
                 records = []
-                for row in raw_data[1:]:
+                for row in cleaned_data[1:]:
                     if not row or not any(row):
                         continue
                     
