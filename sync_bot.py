@@ -390,6 +390,7 @@ def sync_materiais_por_ponto(gc, env_vars):
         }
         
         # Procura por qualquer arquivo na pasta (sem filtrar por planilha do Google, pois pode ser CSV)
+        query = f"'{folder_id}' in parents and trashed = false"
         url_drive = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name,mimeType)&supportsAllDrives=true&includeItemsFromAllDrives=true"
         res_drive = requests.get(url_drive, headers=headers_drive, timeout=30)
         
