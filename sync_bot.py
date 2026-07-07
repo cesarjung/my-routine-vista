@@ -345,6 +345,13 @@ def sync_materiais_regras(gc, env_vars):
                 }
                 
                 url = f"{supabase_url}/rest/v1/materiais_regras"
+                
+                # Delete anterior para evitar violação de constraint de chave única
+                try:
+                    requests.delete(f"{url}?tipo=eq.{tab_name}", headers=headers, timeout=15)
+                except Exception as del_e:
+                    logging.warning(f"  [!] Falha ao deletar regra antiga {tab_name}: {del_e}")
+                
                 res = requests.post(url, headers=headers, json=payload, timeout=30)
                 if res.status_code in [200, 201, 204]:
                     logging.info(f"  [OK] Regras da aba {tab_name} sincronizadas! ({len(records)} registros)")
