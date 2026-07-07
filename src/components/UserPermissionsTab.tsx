@@ -12,6 +12,7 @@ const PLANEJAMENTO_SECTIONS = [
   { id: 'carteira_dashboard', label: 'Carteira' },
   { id: 'carteira', label: 'Carteira Planejada' },
   { id: 'planejamento_semanal', label: 'Planejamento Semanal' },
+  { id: 'planejamento_materiais', label: 'Materiais' },
   { id: 'planejamento_equipes', label: 'Equipes' },
   { id: 'poste_turno', label: 'Poste/Turno' },
   { id: 'deslocamento', label: 'Deslocamento' },

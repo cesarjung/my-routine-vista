@@ -183,7 +183,7 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             # Limite maximo de colunas a extrair de cada aba (para evitar lixo infinito)
             MAX_COLS = {
                 "Carteira_Planejador": 50,
-                "Plan_Principal": 70,
+                "Plan_Principal": 78,
                 "Reprogramadas": 55,
                 "Base_Curva": 10,
                 "BD_Config": 100,
@@ -193,7 +193,7 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             # Colunas (índices 0-based) que o frontend de fato consome. O resto é lixo que incha o payload.
             USED_COLS = {
                 # Carteira liberada até 50 colunas para busca dinâmica de cabeçalhos
-                "Plan_Principal": {0, 1, 4, 6, 7, 12, 20, 21, 22, 23, 24, 25, 28, 29, 37, 38, 40, 42, 53, 64, 67},
+                "Plan_Principal": {0, 1, 4, 6, 7, 8, 12, 14, 20, 21, 22, 23, 24, 25, 28, 29, 37, 38, 40, 42, 53, 64, 67, 76},
                 "Reprogramadas": {0, 1, 4, 6, 7, 12, 20, 28, 29, 37, 38, 40, 42}
             }
             
@@ -306,6 +306,176 @@ def upsert_supabase(env_vars, payload):
         logging.error(f"  [X] Falha de conexão com Supabase: {e}")
     return False
 
+def sync_materiais_regras(gc, env_vars):
+    supabase_url = env_vars.get('VITE_SUPABASE_URL')
+    supabase_key = env_vars.get('VITE_SUPABASE_PUBLISHABLE_KEY')
+    if not supabase_url or not supabase_key:
+        logging.error("Supabase credentials not found for rules sync.")
+        return
+        
+    sheet_id = '1c-Wy5fnNj2Lji7Y-Qv4sFZMqO6Oh-wm9fz-uV-qfyqI'
+    try:
+        logging.info("Sincronizando regras de materiais (DE/PARA)...")
+        spreadsheet = gc.open_by_key(sheet_id)
+        
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+        }
+        
+        for tab_name in ["GRUPOS", "MAPA_LIBERACAO", "REGRAS_MATERIAL"]:
+            try:
+                logging.info(f"  [>] Lendo aba '{tab_name}'...")
+                worksheet = spreadsheet.worksheet(tab_name)
+                raw_data = worksheet.get_all_values()
+                if not raw_data:
+                    continue
+                
+                keys = [k.strip().lower() for k in raw_data[0]]
+                records = []
+                for row in raw_data[1:]:
+                    row_data = {keys[idx]: row[idx].strip() if idx < len(row) else "" for idx in range(len(keys))}
+                    records.append(row_data)
+                
+                payload = {
+                    "tipo": tab_name,
+                    "dados": records
+                }
+                
+                url = f"{supabase_url}/rest/v1/materiais_regras"
+                res = requests.post(url, headers=headers, json=payload, timeout=30)
+                if res.status_code in [200, 201, 204]:
+                    logging.info(f"  [OK] Regras da aba {tab_name} sincronizadas! ({len(records)} registros)")
+                else:
+                    logging.error(f"  [X] Falha ao salvar regras da aba {tab_name}: {res.status_code} - {res.text}")
+                    
+            except Exception as e:
+                logging.error(f"  [X] Erro na aba {tab_name}: {e}")
+                
+    except Exception as e:
+        logging.error(f"Erro ao abrir planilha de regras: {e}")
+
+def sync_materiais_por_ponto(gc, env_vars):
+    supabase_url = env_vars.get('VITE_SUPABASE_URL')
+    supabase_key = env_vars.get('VITE_SUPABASE_PUBLISHABLE_KEY')
+    if not supabase_url or not supabase_key:
+        logging.error("Supabase credentials not found for materials sync.")
+        return
+        
+    sheet_id = '1la_5Ozfa0zkZQ8a4OKElkjrIA9dPUB8Y'
+    unidade_map = {
+        "BARREIRAS": "1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E"
+    }
+    
+    try:
+        logging.info("Sincronizando materiais por ponto...")
+        spreadsheet = gc.open_by_key(sheet_id)
+        
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json"
+        }
+        
+        for tab_name, plan_unidade_id in unidade_map.items():
+            sheet_title = f"MATERIAIS_POR_PONTO_{tab_name}"
+            try:
+                logging.info(f"  [>] Lendo aba '{sheet_title}'...")
+                worksheet = spreadsheet.worksheet(sheet_title)
+                raw_data = worksheet.get_all_values()
+                if not raw_data or len(raw_data) < 2:
+                    logging.warning(f"  [!] Aba {sheet_title} está vazia ou sem dados.")
+                    continue
+                
+                headers_row = [h.strip().lower() for h in raw_data[0]]
+                
+                col_indices = {
+                    "projeto": -1,
+                    "ponto_obra": -1,
+                    "codigo": -1,
+                    "descricao": -1,
+                    "quantidade": -1,
+                    "orcamentista": -1,
+                    "com_mascara": -1,
+                    "unidade": -1,
+                    "mascara_e_ponto": -1,
+                }
+                
+                for col_name in col_indices:
+                    for idx, h in enumerate(headers_row):
+                        if col_name.replace("_", " ") in h or h in col_name.replace("_", " ") or col_name in h:
+                            col_indices[col_name] = idx
+                            break
+                            
+                # Fallbacks manuais caso a correspondência acima falhe
+                if col_indices["ponto_obra"] == -1 and "ponto" in headers_row:
+                    col_indices["ponto_obra"] = headers_row.index("ponto")
+                if col_indices["codigo"] == -1 and "código" in headers_row:
+                    col_indices["codigo"] = headers_row.index("código")
+                if col_indices["descricao"] == -1 and "descrição" in headers_row:
+                    col_indices["descricao"] = headers_row.index("descrição")
+                if col_indices["orcamentista"] == -1 and "orçamentista" in headers_row:
+                    col_indices["orcamentista"] = headers_row.index("orçamentista")
+                if col_indices["mascara_e_ponto"] == -1 and "mascara e ponto" in headers_row:
+                    col_indices["mascara_e_ponto"] = headers_row.index("mascara e ponto")
+                
+                records = []
+                for row in raw_data[1:]:
+                    if not row or not any(row):
+                        continue
+                    
+                    def get_val(col_key):
+                        idx = col_indices[col_key]
+                        return row[idx].strip() if idx != -1 and idx < len(row) else ""
+                    
+                    qty_str = get_val("quantidade")
+                    qty = parse_number(qty_str)
+                    
+                    records.append({
+                        "unidade_id": plan_unidade_id,
+                        "projeto": get_val("projeto"),
+                        "ponto_obra": get_val("ponto_obra"),
+                        "codigo": get_val("codigo"),
+                        "descricao": get_val("descricao"),
+                        "quantidade": qty,
+                        "unidade": get_val("unidade"),
+                        "mascara_e_ponto": get_val("mascara_e_ponto"),
+                        "orçamentista": get_val("orcamentista"),
+                        "com_mascara": get_val("com_mascara")
+                    })
+                
+                logging.info(f"  [>] Carregados {len(records)} registros. Limpando cache antigo no Supabase...")
+                delete_url = f"{supabase_url}/rest/v1/materiais_por_ponto?unidade_id=eq.{plan_unidade_id}"
+                requests.delete(delete_url, headers=headers, timeout=60)
+                
+                chunk_size = 2000
+                insert_url = f"{supabase_url}/rest/v1/materiais_por_ponto"
+                logging.info(f"  [>] Enviando novos registros em blocos de {chunk_size}...")
+                
+                for i in range(0, len(records), chunk_size):
+                    chunk = records[i:i+chunk_size]
+                    res = requests.post(insert_url, headers=headers, json=chunk, timeout=60)
+                    if res.status_code not in [200, 201, 204]:
+                        logging.error(f"  [X] Falha no bloco {i//chunk_size}: {res.status_code} - {res.text}")
+                        # Tenta sub-blocos menores
+                        sub_chunk_size = 500
+                        for j in range(0, len(chunk), sub_chunk_size):
+                            sub_chunk = chunk[j:j+sub_chunk_size]
+                            requests.post(insert_url, headers=headers, json=sub_chunk, timeout=60)
+                    else:
+                        if i % 10000 == 0 or i + chunk_size >= len(records):
+                            logging.info(f"    Sincronizados {min(i + chunk_size, len(records))}/{len(records)} registros...")
+                
+                logging.info(f"  [OK] Aba '{sheet_title}' sincronizada com sucesso!")
+                
+            except Exception as e:
+                logging.error(f"  [X] Erro ao sincronizar aba '{sheet_title}': {e}")
+                
+    except Exception as e:
+        logging.error(f"Erro geral no sync de materiais por ponto: {e}")
+
 def run_sync_cycle():
     logging.info("--- Iniciando ciclo de sincronizacao ---")
     env_vars = load_env()
@@ -317,11 +487,6 @@ def run_sync_cycle():
         
     global_recursos, central_postes = fetch_global_recursos(gc)
     
-    # Em vez de tentar advinhar a unidade com base no nome (o que gera erros e falhas de string match),
-    # enviamos o dicionário completo de Projetos -> Recursos Aplicados para TODAS as unidades.
-    # Como os IDs de projeto (ex: B-1160331) são únicos e o dicionário é pequeno (alguns KB),
-    # o frontend apenas busca o ID da obra e encontra seu respectivo recurso aplicado de imediato!
-        
     for unidade_id in UNIDADES_PLANEJAMENTO:
         sheets_data = fetch_google_sheets(unidade_id, gc)
         
@@ -344,9 +509,15 @@ def run_sync_cycle():
             }
             upsert_supabase(env_vars, payload)
         
-        # Pausa intencional para NUNCA dar cota excedida na Google Sheets API (100 requisicoes por 100 segundos)
         logging.info("Pausando 2 segundos antes da proxima unidade...")
         time.sleep(2)
+        
+    # Executa a sincronização de materiais e regras ao fim do ciclo
+    try:
+        sync_materiais_regras(gc, env_vars)
+        sync_materiais_por_ponto(gc, env_vars)
+    except Exception as e:
+        logging.error(f"Erro no sync de materiais e regras: {e}")
         
     logging.info("--- Ciclo concluido ---")
 

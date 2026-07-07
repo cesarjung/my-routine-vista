@@ -14,6 +14,7 @@ export type NavigationContext =
   | { type: 'cumprimento_planejamento'; section: 'carteira' }
   | { type: 'etapas'; section: 'carteira' }
   | { type: 'planejamento_semanal'; section: 'carteira' }
+  | { type: 'planejamento_materiais'; section: 'carteira' }
   | { type: 'lancamentos_servicos' };
 
 export interface NavigationState {
@@ -61,6 +62,11 @@ export const VIEW_CONFIG = {
     id: 'planejamento_semanal',
     label: 'Planejamento Semanal',
     icon: 'CalendarDays'
+  },
+  planejamento_materiais: {
+    id: 'planejamento_materiais',
+    label: 'Materiais',
+    icon: 'ClipboardList'
   },
   lancamentos_servicos: {
     id: 'lancamentos_servicos',

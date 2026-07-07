@@ -664,6 +664,19 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 {!collapsed && <span className="text-sm whitespace-nowrap">Planejamento Semanal</span>}
               </button>
             )}
+
+            {hasPlanejamentoAccess('planejamento_materiais') && (
+              <button
+                onClick={() => onNavigate({ type: 'planejamento_materiais', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'planejamento_materiais' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <ClipboardList className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Materiais</span>}
+              </button>
+            )}
             
             {hasPlanejamentoAccess('planejamento_equipes') && (
               <button
