@@ -371,14 +371,34 @@ def sync_materiais_por_ponto(gc, env_vars):
         logging.error("Supabase credentials not found for materials sync.")
         return
         
-    sheet_id = '1la_5Ozfa0zkZQ8a4OKElkjrIA9dPUB8Y'
+    folder_id = '1la_5Ozfa0zkZQ8a4OKElkjrIA9dPUB8Y'
     unidade_map = {
         "BARREIRAS": "1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E"
     }
     
     try:
-        logging.info("Sincronizando materiais por ponto...")
-        spreadsheet = gc.open_by_key(sheet_id)
+        logging.info("Buscando arquivos na pasta de materiais no Google Drive...")
+        
+        credentials = gc.http_client.auth
+        if not credentials.valid:
+            from google.auth.transport.requests import Request
+            credentials.refresh(Request())
+        access_token = credentials.token
+        
+        headers_drive = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        
+        query = f"'{folder_id}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
+        url_drive = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name)"
+        res_drive = requests.get(url_drive, headers=headers_drive, timeout=30)
+        
+        if res_drive.status_code != 200:
+            logging.error(f"Erro ao listar arquivos da pasta de materiais: {res_drive.status_code} - {res_drive.text}")
+            return
+            
+        files = res_drive.json().get('files', [])
+        logging.info(f"Planilhas encontradas na pasta de materiais: {[f['name'] for f in files]}")
         
         headers = {
             "apikey": supabase_key,
@@ -387,13 +407,40 @@ def sync_materiais_por_ponto(gc, env_vars):
         }
         
         for tab_name, plan_unidade_id in unidade_map.items():
+            # Busca arquivo que corresponde à unidade
+            target_file = None
+            for f in files:
+                fname = f['name'].upper().replace(' ', '_').replace('-', '_')
+                if f"MATERIAIS_POR_PONTO_{tab_name}" in fname or (tab_name in fname and "MATERIAIS" in fname):
+                    target_file = f
+                    break
+                    
+            if not target_file:
+                logging.warning(f"Nenhuma planilha de materiais encontrada na pasta para a unidade {tab_name}.")
+                continue
+                
             sheet_title = f"MATERIAIS_POR_PONTO_{tab_name}"
             try:
-                logging.info(f"  [>] Lendo aba '{sheet_title}'...")
-                worksheet = spreadsheet.worksheet(sheet_title)
+                logging.info(f"  [>] Abrindo planilha '{target_file['name']}' (ID: {target_file['id']})...")
+                spreadsheet = gc.open_by_key(target_file['id'])
+                
+                # Abre a aba da planilha correspondente
+                worksheet = None
+                for w in spreadsheet.worksheets():
+                    w_title = w.title.upper().replace(' ', '_').replace('-', '_')
+                    if sheet_title.upper().replace(' ', '_').replace('-', '_') in w_title or tab_name in w_title:
+                        worksheet = w
+                        break
+                        
+                if not worksheet:
+                    # Tenta pegar a primeira aba como fallback
+                    worksheet = spreadsheet.get_worksheet(0)
+                    logging.info(f"  [!] Aba '{sheet_title}' não encontrada. Usando a primeira aba '{worksheet.title}'.")
+                
+                logging.info(f"  [>] Lendo aba '{worksheet.title}'...")
                 raw_data = worksheet.get_all_values()
                 if not raw_data or len(raw_data) < 2:
-                    logging.warning(f"  [!] Aba {sheet_title} está vazia ou sem dados.")
+                    logging.warning(f"  [!] Aba '{worksheet.title}' está vazia ou sem dados.")
                     continue
                 
                 headers_row = [h.strip().lower() for h in raw_data[0]]
