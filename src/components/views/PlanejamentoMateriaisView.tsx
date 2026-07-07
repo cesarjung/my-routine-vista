@@ -42,9 +42,11 @@ export const PlanejamentoMateriaisView = () => {
     ? UNIDADES_PLANEJAMENTO.map(u => u.id)
     : selectedUnidades;
 
+  const defaultDate = useMemo(() => format(getProximoDiaUtil(), 'yyyy-MM-dd'), []);
+
   // Busca dados de materiais
-  const { data, isLoading, filtersDateDefault } = useMateriaisData(activeUnits, {
-    data: filterDate || filtersDateDefault,
+  const { data, isLoading } = useMateriaisData(activeUnits, {
+    data: filterDate || defaultDate,
     equipe: filterEquipe,
     obra: filterObra
   });
@@ -114,7 +116,7 @@ export const PlanejamentoMateriaisView = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    const filename = `Separacao_Materiais_${filterDate || filtersDateDefault}_${filterEquipe}.csv`;
+    const filename = `Separacao_Materiais_${filterDate || defaultDate}_${filterEquipe}.csv`;
     link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
@@ -122,13 +124,13 @@ export const PlanejamentoMateriaisView = () => {
   };
 
   const selectedDateFormatted = useMemo(() => {
-    const dStr = filterDate || filtersDateDefault;
+    const dStr = filterDate || defaultDate;
     const parsed = parse(dStr, 'yyyy-MM-dd', new Date());
     if (isValid(parsed)) {
       return format(parsed, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     }
     return dStr;
-  }, [filterDate, filtersDateDefault]);
+  }, [filterDate, defaultDate]);
 
   const totalMateriaisLiberadosCount = useMemo(() => {
     if (!data?.consolidado) return 0;
@@ -262,7 +264,7 @@ export const PlanejamentoMateriaisView = () => {
               <Input
                 type="date"
                 className="pl-9 h-9"
-                value={filterDate || filtersDateDefault}
+                value={filterDate || defaultDate}
                 onChange={(e) => setFilterDate(e.target.value)}
               />
             </div>
