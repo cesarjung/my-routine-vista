@@ -390,8 +390,7 @@ def sync_materiais_por_ponto(gc, env_vars):
         }
         
         # Procura por qualquer arquivo na pasta (sem filtrar por planilha do Google, pois pode ser CSV)
-        query = f"'{folder_id}' in parents and trashed = false"
-        url_drive = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name,mimeType)"
+        url_drive = f"https://www.googleapis.com/drive/v3/files?q={requests.utils.quote(query)}&fields=files(id,name,mimeType)&supportsAllDrives=true&includeItemsFromAllDrives=true"
         res_drive = requests.get(url_drive, headers=headers_drive, timeout=30)
         
         if res_drive.status_code != 200:
@@ -446,7 +445,7 @@ def sync_materiais_por_ponto(gc, env_vars):
                     raw_data = worksheet.get_all_values()
                 else:
                     # É um arquivo binário (CSV ou Excel)
-                    url_media = f"https://www.googleapis.com/drive/v3/files/{target_file['id']}?alt=media"
+                    url_media = f"https://www.googleapis.com/drive/v3/files/{target_file['id']}?alt=media&supportsAllDrives=true"
                     res_media = requests.get(url_media, headers=headers_drive, timeout=90)
                     if res_media.status_code != 200:
                         logging.error(f"  [X] Falha ao baixar arquivo binário: {res_media.status_code}")
