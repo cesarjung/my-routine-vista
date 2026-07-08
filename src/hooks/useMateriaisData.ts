@@ -2,6 +2,18 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePlanejamentoRaw } from './usePlanejamentoRaw';
 import { parse, isValid, addDays, isSunday, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+const parseCurrency = (val: any) => {
+  if (!val) return 0;
+  const cleaned = String(val)
+    .replace('R$', '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .trim();
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+};
 
 export interface MaterialItem {
   id: string;
@@ -20,13 +32,19 @@ export interface MaterialItem {
   liberado: boolean;
   semRegra: boolean;
   motivoNaoLiberado?: string;
+  equipe: string;
+  estoque: number;
+  saldo: number;
 }
 
 export interface ProgramacaoMateriais {
   id: string;
+  unidadeId: string;
   dataString: string;
   dataParsed: Date | null;
   equipe: string;
+  supervisor: string;
+  municipio: string;
   obra: string;
   pontosRaw: string;
   pontosList: string[];
@@ -34,6 +52,7 @@ export interface ProgramacaoMateriais {
   byGrupos: string[];
   byVazio: boolean;
   materiais: MaterialItem[];
+  valorPlanejado: number;
 }
 
 export interface ConsolidatedMaterial {
@@ -43,6 +62,9 @@ export interface ConsolidatedMaterial {
   quantidadeTotal: number;
   pontosOrigem: { ponto: string; obra: string; qtd: number }[];
   grupoTraduzido: string;
+  equipes: string[];
+  estoque: number;
+  saldo: number;
 }
 
 // Helper para obter o próximo dia útil (Segunda a Sábado)
@@ -59,12 +81,15 @@ function normalizeText(text: string): string {
   return text
     .toUpperCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
 }
 
 export const useMateriaisData = (
   selectedUnidadesIds: string[],
-  filters: { data: string; equipe: string; obra: string }
+  filters: { 
+    filterStart: string; 
+    filterEnd: string; 
+    selectedMonths: string[];
+  }
 ) => {
   // 1. Carrega programações brutas do cache
   const rawQuery = usePlanejamentoRaw(selectedUnidadesIds);
@@ -82,19 +107,51 @@ export const useMateriaisData = (
     staleTime: 10 * 60 * 1000,
   });
 
-  // 3. Processa e filtra programações
+  // 2b. Busca o estoque físico no Supabase
+  const estoqueQuery = useQuery({
+    queryKey: ['materiais_estoque', selectedUnidadesIds],
+    enabled: selectedUnidadesIds.length > 0,
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('materiais_estoque')
+          .select('*')
+          .in('unidade_id', selectedUnidadesIds);
+        if (error) {
+          console.warn("Tabela materiais_estoque não criada ou erro ao buscar:", error);
+          return [];
+        }
+        return data || [];
+      } catch (err) {
+        console.warn("Erro ao carregar estoque físico:", err);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 3. Processa e filtra programações por período e mês
   const programacoes = useQuery({
-    queryKey: ['materiais_programacoes', selectedUnidadesIds, filters.data, filters.equipe, filters.obra, rawQuery.data],
+    queryKey: ['materiais_programacoes', selectedUnidadesIds, filters.filterStart, filters.filterEnd, filters.selectedMonths, rawQuery.data],
     enabled: !!rawQuery.data,
     queryFn: () => {
-      const filterDateStr = filters.data || format(getProximoDiaUtil(), 'yyyy-MM-dd');
-      let targetDateFormatted = '';
-      const parsedFilterDate = parse(filterDateStr, 'yyyy-MM-dd', new Date());
-      if (isValid(parsedFilterDate)) {
-        targetDateFormatted = format(parsedFilterDate, 'dd/MM/yyyy');
-      }
-
       const list: Omit<ProgramacaoMateriais, 'materiais'>[] = [];
+      const allEquipesSet = new Set<string>();
+      const allSupervisoresSet = new Set<string>();
+      const allMunicipiosSet = new Set<string>();
+      const allObrasSet = new Set<string>();
+      const allMonthsSet = new Set<string>();
+
+      let filterStartDate: Date | null = null;
+      let filterEndDate: Date | null = null;
+      if (filters.filterStart) {
+        const parsed = parse(filters.filterStart, 'yyyy-MM-dd', new Date());
+        if (isValid(parsed)) filterStartDate = parsed;
+      }
+      if (filters.filterEnd) {
+        const parsed = parse(filters.filterEnd, 'yyyy-MM-dd', new Date());
+        if (isValid(parsed)) filterEndDate = parsed;
+      }
 
       rawQuery.data?.forEach(unidadeData => {
         const principalRows = unidadeData.principal;
@@ -109,18 +166,43 @@ export const useMateriaisData = (
           if (!dataStringFull) continue;
 
           const dataApenas = dataStringFull.split(' - ')[0].trim();
-          
-          // Filtro por Data
-          if (targetDateFormatted && dataApenas !== targetDateFormatted) continue;
+          let dataParsed: Date | null = null;
+          const parsed = parse(dataApenas, 'dd/MM/yyyy', new Date());
+          if (isValid(parsed)) dataParsed = parsed;
 
+          // Mapeia chaves para filtros globais
           const equipe = row[6] ? String(row[6]).trim() : '';
-          // Filtro por Equipe
-          if (filters.equipe && filters.equipe !== 'TODAS' && equipe !== filters.equipe) continue;
+          if (equipe) allEquipesSet.add(equipe);
+
+          const supervisor = row[4] ? String(row[4]).trim() : '';
+          if (supervisor) allSupervisoresSet.add(supervisor);
+
+          const municipio = row[28] ? String(row[28]).trim() : '';
+          if (municipio) allMunicipiosSet.add(municipio);
+
+          let mesAnoLabel = '';
+          if (dataParsed) {
+            const mesAnoCurto = format(dataParsed, 'MMM yyyy', { locale: ptBR });
+            mesAnoLabel = mesAnoCurto.charAt(0).toUpperCase() + mesAnoCurto.slice(1);
+            allMonthsSet.add(mesAnoLabel);
+          }
+
+          // Filtro por Data (Período)
+          if (dataParsed) {
+            if (filterStartDate && dataParsed < filterStartDate) continue;
+            if (filterEndDate && dataParsed > filterEndDate) continue;
+          }
+
+          // Filtro por Mês
+          if (filters.selectedMonths && filters.selectedMonths.length > 0) {
+            if (!mesAnoLabel || !filters.selectedMonths.includes(mesAnoLabel)) {
+              continue;
+            }
+          }
 
           const obra = row[7] ? String(row[7]).trim() : '';
           if (!obra) continue;
-          // Filtro por Obra
-          if (filters.obra && filters.obra !== 'TODAS' && !obra.toLowerCase().includes(filters.obra.toLowerCase())) continue;
+          allObrasSet.add(obra);
 
           const pontosRaw = row[8] ? String(row[8]).trim() : '';
           const pontosList = pontosRaw
@@ -136,34 +218,52 @@ export const useMateriaisData = (
             : [];
           const byVazio = byGrupos.length === 0;
 
-          let dataParsed: Date | null = null;
-          const parsed = parse(dataApenas, 'dd/MM/yyyy', new Date());
-          if (isValid(parsed)) dataParsed = parsed;
+          const valorPlanejadoStr = row[37] ? String(row[37]).trim() : '';
+          const valorPlanejado = parseCurrency(valorPlanejadoStr);
 
           list.push({
             id: `${obra}-${unidadeData.unidadeId}-${i}`,
+            unidadeId: unidadeData.unidadeId,
             dataString: dataStringFull,
             dataParsed,
             equipe,
+            supervisor,
+            municipio,
             obra,
             pontosRaw,
             pontosList,
             descricaoAtividades,
             byGrupos,
-            byVazio
+            byVazio,
+            valorPlanejado
           });
         }
       });
 
-      return list;
+      return {
+        list,
+        allEquipes: Array.from(allEquipesSet).sort(),
+        allSupervisores: Array.from(allSupervisoresSet).sort(),
+        allMunicipios: Array.from(allMunicipiosSet).sort(),
+        allObras: Array.from(allObrasSet).sort(),
+        allMonths: Array.from(allMonthsSet).sort((a, b) => {
+          try {
+            const parsedA = parse(a, 'MMM yyyy', new Date(), { locale: ptBR });
+            const parsedB = parse(b, 'MMM yyyy', new Date(), { locale: ptBR });
+            return parsedA.getTime() - parsedB.getTime();
+          } catch {
+            return a.localeCompare(b);
+          }
+        })
+      };
     }
   });
 
   // 4. Coleta chaves MASCARA_E_PONTO para buscar no banco
   const mascaraEPontoKeys = (() => {
-    if (!programacoes.data || programacoes.data.length === 0) return [];
+    if (!programacoes.data?.list || programacoes.data.list.length === 0) return [];
     const keysSet = new Set<string>();
-    programacoes.data.forEach(prog => {
+    programacoes.data.list.forEach(prog => {
       prog.pontosList.forEach(ponto => {
         keysSet.add(`${prog.obra}_${ponto}`);
       });
@@ -197,12 +297,22 @@ export const useMateriaisData = (
 
   // 6. Processamento dos materiais e aplicação das regras
   const processedData = useQuery({
-    queryKey: ['materiais_processados', programacoes.data, materiaisQuery.data, rulesQuery.data],
+    queryKey: ['materiais_processados', programacoes.data, materiaisQuery.data, rulesQuery.data, estoqueQuery.data],
     enabled: !!programacoes.data && !!rulesQuery.data,
     queryFn: () => {
-      const progsList = programacoes.data || [];
+      const progsList = programacoes.data?.list || [];
       const rawMats = materiaisQuery.data || [];
       const rawRules = rulesQuery.data || [];
+      const rawEstoque = estoqueQuery.data || [];
+
+      // Mapeia estoque físico por key: `${unidade_id}_${codigo}`
+      const estoqueMap = new Map<string, number>();
+      rawEstoque.forEach((e: any) => {
+        if (e.codigo && e.unidade_id) {
+          const key = `${String(e.unidade_id).trim()}_${String(e.codigo).trim()}`;
+          estoqueMap.set(key, (estoqueMap.get(key) || 0) + Number(e.quantidade || 0));
+        }
+      });
 
       // Mapeia regras
       const regrasMaterialList = rawRules.find(r => r.tipo === 'REGRAS_MATERIAL')?.dados || [];
@@ -295,6 +405,10 @@ export const useMateriaisData = (
               }
             }
 
+            const stockKey = `${prog.unidadeId}_${codigo}`;
+            const estoque = estoqueMap.get(stockKey) || 0;
+            const saldo = estoque - Number(m.quantidade || 0);
+
             progMateriais.push({
               id: String(m.id || `${pontoKey}-${codigo}`),
               projeto: String(m.projeto || prog.obra),
@@ -310,7 +424,10 @@ export const useMateriaisData = (
               grupoTraduzido,
               liberado,
               semRegra,
-              motivoNaoLiberado
+              motivoNaoLiberado,
+              equipe: prog.equipe,
+              estoque,
+              saldo
             });
           });
         });
@@ -330,18 +447,32 @@ export const useMateriaisData = (
 
           const key = m.codigo;
           if (!consolidatedMap.has(key)) {
+            // Calcula o estoque consolidado somando a quantidade para o código em todas as unidades selecionadas
+            let estoque = 0;
+            selectedUnidadesIds.forEach(uid => {
+              estoque += estoqueMap.get(`${uid}_${key}`) || 0;
+            });
+
             consolidatedMap.set(key, {
               codigo: m.codigo,
               descricao: m.descricao,
               unidade: m.unidade,
               quantidadeTotal: 0,
               pontosOrigem: [],
-              grupoTraduzido: m.grupoTraduzido
+              grupoTraduzido: m.grupoTraduzido,
+              equipes: [],
+              estoque,
+              saldo: estoque // Será deduzida a quantidadeTotal ao fim do loop
             });
           }
 
           const cons = consolidatedMap.get(key)!;
           cons.quantidadeTotal += m.quantidade;
+          
+          // Rastreia equipe
+          if (prog.equipe && !cons.equipes.includes(prog.equipe)) {
+            cons.equipes.push(prog.equipe);
+          }
           
           // Rastreia a origem (obra + ponto)
           const origExistente = cons.pontosOrigem.find(p => p.ponto === m.pontoObra && p.obra === prog.obra);
@@ -357,6 +488,11 @@ export const useMateriaisData = (
         });
       });
 
+      // Atualiza o saldo consolidado deduzindo a quantidade necessária
+      consolidatedMap.forEach(cons => {
+        cons.saldo = cons.estoque - cons.quantidadeTotal;
+      });
+
       const consolidatedList = Array.from(consolidatedMap.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
 
       // Pontos sem orçamento
@@ -370,19 +506,285 @@ export const useMateriaisData = (
         });
       });
 
+      const faltasDashboard = computeFaltasDashboard(
+        finalProgramacoes,
+        selectedUnidadesIds,
+        estoqueMap,
+        regrasMaterialMap
+      );
+
       return {
         programacoes: finalProgramacoes,
         consolidado: consolidatedList,
         pontosSemOrcamento,
-        lastUpdated: rawQuery.data?.[0]?.lastUpdated || null
+        lastUpdated: rawQuery.data?.[0]?.lastUpdated || null,
+        allEquipes: programacoes.data?.allEquipes || [],
+        allSupervisores: programacoes.data?.allSupervisores || [],
+        allMunicipios: programacoes.data?.allMunicipios || [],
+        allMonths: programacoes.data?.allMonths || [],
+        allObras: programacoes.data?.allObras || [],
+        faltasDashboard
       };
     }
   });
 
   return {
-    isLoading: rawQuery.isLoading || rulesQuery.isLoading || materiaisQuery.isLoading || programacoes.isLoading || processedData.isLoading,
-    isError: rawQuery.isError || rulesQuery.isError || materiaisQuery.isError || programacoes.isError || processedData.isError,
+    isLoading: rawQuery.isLoading || rulesQuery.isLoading || materiaisQuery.isLoading || programacoes.isLoading || processedData.isLoading || estoqueQuery.isLoading,
+    isError: rawQuery.isError || rulesQuery.isError || materiaisQuery.isError || programacoes.isError || processedData.isError || estoqueQuery.isError,
     data: processedData.data,
     filtersDateDefault: format(getProximoDiaUtil(), 'yyyy-MM-dd')
   };
 };
+
+function computeFaltasDashboard(
+  programacoes: ProgramacaoMateriais[],
+  selectedUnidadesIds: string[],
+  estoqueMap: Map<string, number>,
+  regrasMaterialMap: Map<string, any>
+) {
+  // 1. Agrupar programações por unidade
+  const progsByUnit = new Map<string, ProgramacaoMateriais[]>();
+  programacoes.forEach(p => {
+    const uid = p.unidadeId;
+    if (!progsByUnit.has(uid)) progsByUnit.set(uid, []);
+    progsByUnit.get(uid)!.push(p);
+  });
+
+  const faltaAlocadaMap = new Map<string, number>();
+  const estoqueAntesMap = new Map<string, number>();
+  const estoqueDepoisMap = new Map<string, number>();
+
+  const isCritico = (codigo: string, grupo: string) => {
+    const g = String(grupo).toUpperCase();
+    if (g === 'EQUIPAMENTO' || g === 'LANÇAMENTO DE CABO') return true;
+    const regra = regrasMaterialMap.get(codigo);
+    if (regra && String(regra.dispositivo).toUpperCase() === 'SIM') return true;
+    return false;
+  };
+
+  // 2. Alocação cronológica por unidade e código
+  progsByUnit.forEach((progs, uid) => {
+    const codes = new Set<string>();
+    progs.forEach(p => {
+      p.materiais.forEach(m => {
+        if (m.liberado) codes.add(m.codigo);
+      });
+    });
+
+    codes.forEach(code => {
+      const sorted = progs
+        .filter(p => p.materiais.some(m => m.codigo === code && m.liberado))
+        .map((p, idx) => ({ prog: p, globalIdx: idx }))
+        .sort((a, b) => {
+          const timeA = a.prog.dataParsed?.getTime() || 0;
+          const timeB = b.prog.dataParsed?.getTime() || 0;
+          if (timeA !== timeB) return timeA - timeB;
+          return a.globalIdx - b.globalIdx;
+        });
+
+      const stockKey = `${uid}_${code}`;
+      const hasStock = estoqueMap.has(stockKey);
+      let stockRemaining = hasStock ? (estoqueMap.get(stockKey) || 0) : null;
+
+      if (stockRemaining !== null) {
+        sorted.forEach(item => {
+          const m = item.prog.materiais.find(mat => mat.codigo === code && mat.liberado)!;
+          const req = m.quantidade;
+          
+          estoqueAntesMap.set(`${item.prog.id}_${code}`, stockRemaining!);
+          
+          if (stockRemaining! >= req) {
+            faltaAlocadaMap.set(`${item.prog.id}_${code}`, 0);
+            stockRemaining! -= req;
+          } else {
+            const falta = req - stockRemaining!;
+            faltaAlocadaMap.set(`${item.prog.id}_${code}`, falta);
+            stockRemaining! = 0;
+          }
+          
+          estoqueDepoisMap.set(`${item.prog.id}_${code}`, stockRemaining!);
+        });
+      } else {
+        sorted.forEach(item => {
+          faltaAlocadaMap.set(`${item.prog.id}_${code}`, 0);
+        });
+      }
+    });
+  });
+
+  // 3. Monta o status final das programações e coleta os dados das faltas
+  const programacoesAfetadas: any[] = [];
+  const faltasPorCodigo = new Map<string, any>();
+  const progStatusPorDia = new Map<string, { total: number; atendidos: number }>();
+
+  programacoes.forEach(prog => {
+    let status: 'BLOQUEADO' | 'PARCIAL' | 'ATENDIDO' = 'ATENDIDO';
+    const progFaltas: any[] = [];
+
+    const dateKey = prog.dataString;
+    if (!progStatusPorDia.has(dateKey)) {
+      progStatusPorDia.set(dateKey, { total: 0, atendidos: 0 });
+    }
+    progStatusPorDia.get(dateKey)!.total++;
+
+    prog.materiais.forEach(m => {
+      if (!m.liberado) return;
+
+      const code = m.codigo;
+      const lack = faltaAlocadaMap.get(`${prog.id}_${code}`) || 0;
+      const stockKey = `${prog.unidadeId}_${code}`;
+      const isKnown = estoqueMap.has(stockKey);
+
+      if (isKnown && lack > 0) {
+        const crit = isCritico(code, m.grupoTraduzido);
+        progFaltas.push({
+          codigo: code,
+          descricao: m.descricao,
+          faltaAlocada: lack,
+          quantidade: m.quantidade,
+          critico: crit
+        });
+
+        if (crit && lack === m.quantidade) {
+          status = 'BLOQUEADO';
+        } else if (status !== 'BLOQUEADO') {
+          status = 'PARCIAL';
+        }
+      }
+    });
+
+    if (status === 'ATENDIDO') {
+      progStatusPorDia.get(dateKey)!.atendidos++;
+    } else {
+      programacoesAfetadas.push({
+        id: prog.id,
+        dataString: prog.dataString,
+        dataParsed: prog.dataParsed,
+        equipe: prog.equipe,
+        obra: prog.obra,
+        status: status as 'BLOQUEADO' | 'PARCIAL',
+        faltas: progFaltas,
+        valorPlanejado: prog.valorPlanejado || 0
+      });
+    }
+  });
+
+  // 4. Montar a tabela de faltas consolidadas
+  programacoes.forEach(prog => {
+    prog.materiais.forEach(m => {
+      if (!m.liberado) return;
+
+      const code = m.codigo;
+      const stockKey = `${prog.unidadeId}_${code}`;
+      const hasStock = estoqueMap.has(stockKey);
+      const lack = faltaAlocadaMap.get(`${prog.id}_${code}`) || 0;
+
+      if (lack > 0 || !hasStock) {
+        if (!faltasPorCodigo.has(code)) {
+          const crit = isCritico(code, m.grupoTraduzido);
+          const estoqueVal = hasStock ? (estoqueMap.get(stockKey) || 0) : null;
+          
+          faltasPorCodigo.set(code, {
+            codigo: code,
+            descricao: m.descricao,
+            grupoTraduzido: m.grupoTraduzido,
+            critico: crit,
+            necessario: 0,
+            estoque: estoqueVal,
+            falta: 0,
+            primeiroDiaComprometido: null,
+            programacoesCount: 0,
+            equipes: [],
+            tracking: [],
+            estoqueDesconhecido: !hasStock
+          });
+        }
+
+        const fItem = faltasPorCodigo.get(code)!;
+        fItem.necessario += m.quantidade;
+        fItem.falta += lack;
+        
+        if (prog.equipe && !fItem.equipes.includes(prog.equipe)) {
+          fItem.equipes.push(prog.equipe);
+        }
+
+        fItem.programacoesCount++;
+
+        const estAntes = estoqueAntesMap.get(`${prog.id}_${code}`) ?? (hasStock ? 0 : null);
+        const estDepois = estoqueDepoisMap.get(`${prog.id}_${code}`) ?? (hasStock ? 0 : null);
+
+        fItem.tracking.push({
+          dataString: prog.dataString,
+          dataParsed: prog.dataParsed,
+          equipe: prog.equipe,
+          obra: prog.obra,
+          quantidade: m.quantidade,
+          estoqueAntes: estAntes,
+          estoqueDepois: estDepois,
+          faltaAlocada: lack
+        });
+
+        if (prog.dataParsed) {
+          if (!fItem.primeiroDiaComprometido || prog.dataParsed < fItem.primeiroDiaComprometido) {
+            fItem.primeiroDiaComprometido = prog.dataParsed;
+          }
+        }
+      }
+    });
+  });
+
+  faltasPorCodigo.forEach(f => {
+    f.tracking.sort((a: any, b: any) => {
+      const timeA = a.dataParsed?.getTime() || 0;
+      const timeB = b.dataParsed?.getTime() || 0;
+      return timeA - timeB;
+    });
+  });
+
+  const listFaltas = Array.from(faltasPorCodigo.values()).sort((a: any, b: any) => {
+    if (a.estoqueDesconhecido && !b.estoqueDesconhecido) return 1;
+    if (!a.estoqueDesconhecido && b.estoqueDesconhecido) return -1;
+    const timeA = a.primeiroDiaComprometido?.getTime() || 0;
+    const timeB = b.primeiroDiaComprometido?.getTime() || 0;
+    return timeA - timeB;
+  });
+
+  const coberturaDias: any[] = [];
+  progStatusPorDia.forEach((val, dateKey) => {
+    let parsed: Date | null = null;
+    try {
+      const dateApenas = dateKey.split(' - ')[0].trim();
+      const p = parse(dateApenas, 'dd/MM/yyyy', new Date());
+      if (isValid(p)) {
+        parsed = p;
+      } else {
+        const p2 = parse(dateApenas, 'yyyy-MM-dd', new Date());
+        if (isValid(p2)) parsed = p2;
+      }
+    } catch {}
+    const percent = val.total > 0 ? Math.round((val.atendidos / val.total) * 100) : 100;
+    coberturaDias.push({
+      dateString: dateKey,
+      dateParsed: parsed,
+      percent
+    });
+  });
+
+  coberturaDias.sort((a, b) => {
+    const timeA = a.dateParsed?.getTime() || 0;
+    const timeB = b.dateParsed?.getTime() || 0;
+    return timeA - timeB;
+  });
+
+  const valorPlanejadoAfetado = programacoesAfetadas.reduce((acc, curr) => acc + (curr.valorPlanejado || 0), 0);
+
+  return {
+    faltas: listFaltas,
+    afetados: programacoesAfetadas,
+    cobertura: coberturaDias,
+    totalFaltasQty: listFaltas.reduce((acc: number, curr: any) => acc + (curr.falta || 0), 0),
+    totalProgramacoes: programacoes.length,
+    afetadosCount: programacoesAfetadas.length,
+    valorPlanejadoAfetado
+  };
+}

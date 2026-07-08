@@ -29,7 +29,7 @@ export const FilterSelect = ({
 
   return (
     <div className="flex flex-col justify-center min-w-[90px]">
-      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</span>
+      {label && <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</span>}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="w-full justify-between text-left font-normal text-[11px] h-8 bg-background">

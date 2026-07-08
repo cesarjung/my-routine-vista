@@ -78,11 +78,16 @@ def parse_number(val):
     if not val_str or val_str == '-' or val_str.upper() == 'VAZIO':
         return 0.0
     try:
-        # Se tem vírgula, e ponto, retira o ponto e troca vírgula por ponto.
         if ',' in val_str and '.' in val_str:
             val_str = val_str.replace('.', '').replace(',', '.')
         elif ',' in val_str:
             val_str = val_str.replace(',', '.')
+        elif '.' in val_str:
+            parts = val_str.split('.')
+            if len(parts) == 2 and len(parts[1]) == 3:
+                val_str = val_str.replace('.', '')
+            elif len(parts) > 2:
+                val_str = val_str.replace('.', '')
         return float(val_str)
     except Exception:
         return 0.0
@@ -559,6 +564,72 @@ def sync_materiais_por_ponto(gc, env_vars):
     except Exception as e:
         logging.error(f"Erro geral no sync de materiais por ponto: {e}")
 
+def sync_estoque_fisico(gc, env_vars):
+    supabase_url = env_vars.get('VITE_SUPABASE_URL')
+    supabase_key = env_vars.get('VITE_SUPABASE_PUBLISHABLE_KEY')
+    if not supabase_url or not supabase_key:
+        logging.error("Supabase credentials not found for stock sync.")
+        return
+        
+    sheet_id = '17TNlttJwy-cFncGF5IzZB8nV0y8T-Xn9VLhWqFPCHYc'
+    
+    try:
+        logging.info("Sincronizando estoque fisico via gspread...")
+        sh = gc.open_by_key(sheet_id)
+        ws = sh.worksheet("estoque")
+        raw_rows = ws.get_all_values()
+        
+        if not raw_rows or len(raw_rows) < 2:
+            logging.warning("Nenhum dado retornado da planilha de estoque via gspread.")
+            return
+            
+        records = []
+        unidade_barreiras = '1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E'
+        
+        for idx, row in enumerate(raw_rows[1:]):
+            if not row or len(row) <= 5:
+                continue
+                
+            codigo = str(row[3]).strip()
+            if not codigo or not codigo.isdigit():
+                continue
+                
+            descricao = str(row[4]).strip()
+            quantidade_str = str(row[5]).strip()
+            quantidade = parse_number(quantidade_str)
+            
+            existing = next((r for r in records if r["codigo"] == codigo), None)
+            if existing:
+                existing["quantidade"] += quantidade
+            else:
+                records.append({
+                    "unidade_id": unidade_barreiras,
+                    "codigo": codigo,
+                    "descricao": descricao,
+                    "quantidade": quantidade
+                })
+                
+        logging.info(f"  [>] Carregados {len(records)} itens de estoque. Limpando estoque antigo no Supabase...")
+        
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json"
+        }
+        
+        delete_url = f"{supabase_url}/rest/v1/materiais_estoque?unidade_id=eq.{unidade_barreiras}"
+        requests.delete(delete_url, headers=headers, timeout=60)
+        
+        insert_url = f"{supabase_url}/rest/v1/materiais_estoque"
+        res_post = requests.post(insert_url, headers=headers, json=records, timeout=60)
+        if res_post.status_code in [200, 201, 204]:
+            logging.info(f"  [OK] Estoque fisico sincronizado com sucesso! ({len(records)} registros)")
+        else:
+            logging.error(f"  [X] Falha ao salvar estoque no Supabase: {res_post.status_code} - {res_post.text}")
+            
+    except Exception as e:
+        logging.error(f"Erro geral ao sincronizar estoque fisico: {e}")
+
 def run_sync_cycle():
     logging.info("--- Iniciando ciclo de sincronizacao ---")
     env_vars = load_env()
@@ -595,12 +666,13 @@ def run_sync_cycle():
         logging.info("Pausando 2 segundos antes da proxima unidade...")
         time.sleep(2)
         
-    # Executa a sincronização de materiais e regras ao fim do ciclo
+    # Executa a sincronizacao de materiais, regras e estoque ao fim do ciclo
     try:
         sync_materiais_regras(gc, env_vars)
         sync_materiais_por_ponto(gc, env_vars)
+        sync_estoque_fisico(gc, env_vars)
     except Exception as e:
-        logging.error(f"Erro no sync de materiais e regras: {e}")
+        logging.error(f"Erro no sync de materiais, regras e estoque: {e}")
         
     logging.info("--- Ciclo concluido ---")
 
