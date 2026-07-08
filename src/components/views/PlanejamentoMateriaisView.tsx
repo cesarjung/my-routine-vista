@@ -555,12 +555,14 @@ export const PlanejamentoMateriaisView = () => {
     
     if (viewTab === 'consolidada') {
       if (consolidadoList.length === 0) return;
-      const headers = ['Código', 'Descrição', 'Unidade', 'Quantidade Total', 'Estoque', 'Saldo', 'Status', 'Equipes', 'Grupo', 'Pontos Origem'];
+      const headers = ['Código', 'Descrição', 'Unidade', 'Quantidade Planejada', 'Já Fornecido', 'A Separar', 'Estoque Disponível', 'Saldo', 'Status', 'Equipes', 'Grupo', 'Pontos Origem'];
       const rows = consolidadoList.map(item => [
         item.codigo,
         item.descricao,
         item.unidade,
         item.quantidadeTotal,
+        item.qtdJaFornecidaTotal || 0,
+        item.qtdASepararTotal || 0,
         item.estoque,
         item.saldo,
         item.saldo < 0 ? 'Em falta' : 'Disponível',
@@ -571,7 +573,7 @@ export const PlanejamentoMateriaisView = () => {
       downloadCSV(`Separacao_Materiais_Consolidado_${filterStart}_${filterEnd}_${eqLabel}.csv`, headers, rows);
     } else {
       if (finalDetalhado.length === 0) return;
-      const headers = ['Equipe', 'Obra', 'Ponto', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Estoque', 'Saldo', 'Grupo', 'Status', 'Motivo Retenção'];
+      const headers = ['Equipe', 'Obra', 'Ponto', 'Código', 'Descrição', 'Unidade', 'Quantidade Planejada', 'Já Fornecido', 'A Separar', 'Estoque Disponível', 'Saldo', 'Grupo', 'Status', 'Motivo Retenção'];
       const rows: (string | number)[][] = [];
       finalDetalhado.forEach(prog => {
         prog.materiais.forEach(m => {
@@ -583,6 +585,8 @@ export const PlanejamentoMateriaisView = () => {
             m.descricao,
             m.unidade,
             m.quantidade,
+            m.qtdJaFornecida || 0,
+            m.qtdASeparar || 0,
             m.estoque,
             m.saldo,
             m.grupoTraduzido,
@@ -1024,8 +1028,10 @@ export const PlanejamentoMateriaisView = () => {
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Unidade</th>
-                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Total</th>
-                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Estoque</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Plan</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Já Fornecido</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">A Separar</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Estoque Disp.</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Saldo</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Status</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Equipe(s)</th>
@@ -1060,10 +1066,16 @@ export const PlanejamentoMateriaisView = () => {
                             />
                           </td>
                           <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Qtd */}
+                            {/* Qtd Plan */}
                           </td>
                           <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Estoque */}
+                            {/* Já Fornecido */}
+                          </td>
+                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
+                            {/* A Separar */}
+                          </td>
+                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
+                            {/* Estoque Disp */}
                           </td>
                           <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
                             {/* Saldo */}
@@ -1110,18 +1122,20 @@ export const PlanejamentoMateriaisView = () => {
                       </thead>
                       <tbody className="divide-y">
                         {finalConsolidado.length === 0 ? (
-                          <tr>
-                            <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
-                              Nenhum material liberado para separação nesta seleção.
-                            </td>
-                          </tr>
+                           <tr>
+                             <td colSpan={12} className="px-4 py-12 text-center text-muted-foreground">
+                               Nenhum material liberado para separação nesta seleção.
+                             </td>
+                           </tr>
                         ) : (
                           finalConsolidado.map((item, idx) => (
                             <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 border-b dark:border-zinc-900">
                               <td className="px-4 py-3 font-mono font-bold text-violet-600 dark:text-violet-400">{item.codigo}</td>
                               <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{item.descricao}</td>
                               <td className="px-4 py-3 text-center font-semibold text-slate-500 dark:text-slate-400">{item.unidade}</td>
-                              <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-slate-100 bg-slate-50/30 dark:bg-zinc-900/30">{formatQtd(item.quantidadeTotal)}</td>
+                              <td className="px-4 py-3 text-right font-black text-slate-950 dark:text-slate-100 bg-slate-50/30 dark:bg-zinc-900/30">{formatQtd(item.quantidadeTotal)}</td>
+                              <td className="px-4 py-3 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(item.qtdJaFornecidaTotal || 0)}</td>
+                              <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(item.qtdASepararTotal || 0)}</td>
                               <td className="px-4 py-3 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(item.estoque)}</td>
                               <td className={`px-4 py-3 text-right font-black ${item.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                 {formatQtd(item.saldo)}
@@ -1200,21 +1214,23 @@ export const PlanejamentoMateriaisView = () => {
                       /* TABELA GERAL ÚNICA */
                       <div className="border rounded-lg overflow-auto h-[500px] min-h-[250px] max-h-[85vh] resize-y relative shadow-inner bg-white dark:bg-zinc-950">
                         <table className="w-full text-sm text-left border-collapse">
-                          <thead className="bg-slate-50 text-slate-600 uppercase text-xs font-bold border-b sticky top-0 z-20 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
-                            <tr className="bg-slate-50">
-                              <th className="px-4 py-3 text-center bg-slate-50">Equipe</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Ponto</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Código</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Descrição</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Unid</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Qtd</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Estoque</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Saldo</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Grupo Mat.</th>
-                              <th className="px-4 py-3 text-center bg-slate-50">Status</th>
+                          <thead className="bg-slate-50 text-slate-600 dark:text-slate-400 uppercase text-xs font-bold border-b dark:border-zinc-800 sticky top-0 z-20 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                            <tr className="bg-slate-50 dark:bg-zinc-900">
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Equipe</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Ponto</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Unid</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Plan</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Fornecido</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">A Separar</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Estoque Disp</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Saldo</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Grupo Mat.</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Status</th>
                             </tr>
-                            <tr className="bg-slate-100 no-print border-b">
-                              <td className="px-2 py-1 bg-slate-100">
+                            <tr className="bg-slate-100 dark:bg-zinc-900/80 no-print border-b dark:border-zinc-800">
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 <FilterSelect
                                   label=""
                                   options={detalhadaEquipesOptions}
@@ -1223,7 +1239,7 @@ export const PlanejamentoMateriaisView = () => {
                                   searchable={true}
                                 />
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 <FilterSelect
                                   label=""
                                   options={detalhadaPontosOptions}
@@ -1232,7 +1248,7 @@ export const PlanejamentoMateriaisView = () => {
                                   searchable={true}
                                 />
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 <FilterSelect
                                   label=""
                                   options={detalhadaCodigosOptions}
@@ -1241,7 +1257,7 @@ export const PlanejamentoMateriaisView = () => {
                                   searchable={true}
                                 />
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 <FilterSelect
                                   label=""
                                   options={detalhadaDescricoesOptions}
@@ -1250,7 +1266,7 @@ export const PlanejamentoMateriaisView = () => {
                                   searchable={true}
                                 />
                               </td>
-                              <td className="px-2 py-1 text-center bg-slate-100">
+                              <td className="px-2 py-1 text-center bg-slate-100 dark:bg-zinc-900/80">
                                 <FilterSelect
                                   label=""
                                   options={detalhadaUnidadesOptions}
@@ -1258,16 +1274,22 @@ export const PlanejamentoMateriaisView = () => {
                                   onChange={setColFilterDetalhadaUnidade}
                                 />
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
-                                {/* Qtd */}
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                {/* Qtd Plan */}
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
-                                {/* Estoque */}
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                {/* Fornecido */}
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                {/* A Separar */}
+                              </td>
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                {/* Estoque Disp */}
+                              </td>
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 {/* Saldo */}
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 <FilterSelect
                                   label=""
                                   options={detalhadaGruposOptions}
@@ -1276,11 +1298,11 @@ export const PlanejamentoMateriaisView = () => {
                                   searchable={true}
                                 />
                               </td>
-                              <td className="px-2 py-1 bg-slate-100">
+                              <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                  <select
                                    value={globalStatusFilter}
                                    onChange={e => setGlobalStatusFilter(e.target.value as any)}
-                                   className="w-full h-8 px-1 text-xs border rounded bg-white text-slate-700 outline-none font-normal shadow-sm"
+                                   className="w-full h-8 px-1 text-xs border dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-slate-700 dark:text-slate-200 outline-none font-normal shadow-sm"
                                  >
                                    <option value="todos">Todos</option>
                                    <option value="disponivel">Disponíveis</option>
@@ -1292,7 +1314,7 @@ export const PlanejamentoMateriaisView = () => {
                           <tbody className="divide-y text-xs">
                             {allDetailedMaterials.length === 0 ? (
                               <tr>
-                                <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
+                                <td colSpan={12} className="px-4 py-12 text-center text-muted-foreground">
                                   Nenhum material encontrado com os filtros selecionados.
                                 </td>
                               </tr>
@@ -1300,28 +1322,30 @@ export const PlanejamentoMateriaisView = () => {
                               allDetailedMaterials.map((m, idx) => (
                                 <tr 
                                   key={idx} 
-                                  className={`hover:bg-slate-50/50 ${!m.liberado ? 'opacity-40 bg-slate-50/10' : ''}`}
+                                  className={`hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 border-b dark:border-zinc-900 ${!m.liberado ? 'opacity-40 bg-slate-50/10 dark:bg-zinc-900/10' : ''}`}
                                 >
-                                  <td className="px-4 py-3 font-semibold text-slate-800">
+                                  <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
                                     <div className="flex flex-col">
-                                      <span className="font-bold text-indigo-600">{m.equipe}</span>
-                                      <span className="text-[10px] text-slate-400">{m.obra}</span>
+                                      <span className="font-bold text-indigo-600 dark:text-indigo-400">{m.equipe}</span>
+                                      <span className="text-[10px] text-slate-400 dark:text-slate-500">{m.obra}</span>
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 font-mono font-bold text-slate-800">{m.pontoObra}</td>
-                                  <td className="px-4 py-3 font-mono font-bold text-violet-600">{m.codigo}</td>
-                                  <td className="px-4 py-3 font-medium text-slate-800">
+                                  <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-slate-200">{m.pontoObra}</td>
+                                  <td className="px-4 py-3 font-mono font-bold text-violet-600 dark:text-violet-400">{m.codigo}</td>
+                                  <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">
                                     {m.descricao}
                                     {m.semRegra && (
-                                      <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 text-amber-700 bg-amber-50">
+                                      <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-450 bg-amber-50 dark:bg-amber-950/20">
                                         sem regra
                                       </Badge>
                                     )}
                                   </td>
-                                  <td className="px-4 py-3 text-center font-bold text-slate-500">{m.unidade}</td>
-                                  <td className="px-4 py-3 text-right font-black text-slate-900">{formatQtd(m.quantidade)}</td>
-                                  <td className="px-4 py-3 text-right font-bold text-slate-600 bg-slate-50/20">{formatQtd(m.estoque)}</td>
-                                  <td className={`px-4 py-3 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10'}`}>
+                                  <td className="px-4 py-3 text-center font-bold text-slate-500 dark:text-slate-400">{m.unidade}</td>
+                                  <td className="px-4 py-3 text-right font-black text-slate-950 dark:text-slate-100 bg-slate-50/30 dark:bg-zinc-900/30">{formatQtd(m.quantidade)}</td>
+                                  <td className="px-4 py-3 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(m.qtdJaFornecida || 0)}</td>
+                                  <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(m.qtdASeparar || 0)}</td>
+                                  <td className="px-4 py-3 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(m.estoque)}</td>
+                                  <td className={`px-4 py-3 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                     {formatQtd(m.saldo)}
                                   </td>
                                   <td className="px-4 py-3">
@@ -1395,15 +1419,17 @@ export const PlanejamentoMateriaisView = () => {
                                     <th className="px-4 py-2 w-24 text-center bg-slate-50 dark:bg-zinc-900">Ponto</th>
                                     <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
                                     <th className="px-4 py-2 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
-                                    <th className="px-4 py-2 text-center w-16 bg-slate-50 dark:bg-zinc-900">Unid</th>
-                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Qtd</th>
-                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Estoque</th>
+                                    <th className="px-4 py-2 text-center w-12 bg-slate-50 dark:bg-zinc-900">Unid</th>
+                                    <th className="px-4 py-2 text-center w-16 bg-slate-50 dark:bg-zinc-900">Qtd Plan</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Fornecido</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">A Separar</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Estoque Disp</th>
                                     <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Saldo</th>
-                                    <th className="px-4 py-2 w-32 text-center bg-slate-50 dark:bg-zinc-900">Grupo Mat.</th>
-                                    <th className="px-4 py-2 w-36 text-center bg-slate-50 dark:bg-zinc-900">Status</th>
+                                    <th className="px-4 py-2 w-24 text-center bg-slate-50 dark:bg-zinc-900">Status</th>
+                                    <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Grupo Mat.</th>
                                   </tr>
-                                  <tr className="bg-slate-100 no-print border-b">
-                                    <td className="px-2 py-1 bg-slate-100">
+                                  <tr className="bg-slate-100 dark:bg-zinc-900/80 no-print border-b dark:border-zinc-800">
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                       <FilterSelect
                                         label=""
                                         options={detalhadaEquipesOptions}
@@ -1412,7 +1438,7 @@ export const PlanejamentoMateriaisView = () => {
                                         searchable={true}
                                       />
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                       <FilterSelect
                                         label=""
                                         options={detalhadaPontosOptions}
@@ -1421,7 +1447,7 @@ export const PlanejamentoMateriaisView = () => {
                                         searchable={true}
                                       />
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                       <FilterSelect
                                         label=""
                                         options={detalhadaCodigosOptions}
@@ -1430,7 +1456,7 @@ export const PlanejamentoMateriaisView = () => {
                                         searchable={true}
                                       />
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                       <FilterSelect
                                         label=""
                                         options={detalhadaDescricoesOptions}
@@ -1439,7 +1465,7 @@ export const PlanejamentoMateriaisView = () => {
                                         searchable={true}
                                       />
                                     </td>
-                                    <td className="px-2 py-1 text-center bg-slate-100">
+                                    <td className="px-2 py-1 text-center bg-slate-100 dark:bg-zinc-900/80">
                                       <FilterSelect
                                         label=""
                                         options={detalhadaUnidadesOptions}
@@ -1447,16 +1473,33 @@ export const PlanejamentoMateriaisView = () => {
                                         onChange={setColFilterDetalhadaUnidade}
                                       />
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
-                                      {/* Qtd */}
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      {/* Qtd Plan */}
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
-                                      {/* Estoque */}
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      {/* Fornecido */}
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      {/* A Separar */}
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      {/* Estoque Disp */}
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                       {/* Saldo */}
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                       <select
+                                         value={globalStatusFilter}
+                                         onChange={e => setGlobalStatusFilter(e.target.value as any)}
+                                         className="w-full h-8 px-1 text-xs border dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-slate-700 dark:text-slate-200 outline-none font-normal shadow-sm"
+                                       >
+                                         <option value="todos">Todos</option>
+                                         <option value="disponivel">Disponíveis</option>
+                                         <option value="falta">Em falta</option>
+                                       </select>
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                       <FilterSelect
                                         label=""
                                         options={detalhadaGruposOptions}
@@ -1465,23 +1508,12 @@ export const PlanejamentoMateriaisView = () => {
                                         searchable={true}
                                       />
                                     </td>
-                                    <td className="px-2 py-1 bg-slate-100">
-                                       <select
-                                         value={globalStatusFilter}
-                                         onChange={e => setGlobalStatusFilter(e.target.value as any)}
-                                         className="w-full h-8 px-1 text-xs border rounded bg-white text-slate-700 outline-none font-normal shadow-sm"
-                                       >
-                                         <option value="todos">Todos</option>
-                                         <option value="disponivel">Disponíveis</option>
-                                         <option value="falta">Em falta</option>
-                                       </select>
-                                    </td>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y text-xs">
                                   {prog.materiais.length === 0 ? (
                                     <tr>
-                                      <td colSpan={10} className="px-4 py-6 text-center text-muted-foreground">
+                                      <td colSpan={12} className="px-4 py-6 text-center text-muted-foreground">
                                         Nenhum material encontrado ou liberado para os pontos desta obra.
                                       </td>
                                     </tr>
@@ -1497,21 +1529,18 @@ export const PlanejamentoMateriaisView = () => {
                                         <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200">
                                           {m.descricao}
                                           {m.semRegra && (
-                                            <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20">
+                                            <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-450 bg-amber-50 dark:bg-amber-950/20">
                                               sem regra
                                             </Badge>
                                           )}
                                         </td>
                                         <td className="px-4 py-2.5 text-center font-bold text-slate-500 dark:text-slate-400">{m.unidade}</td>
-                                        <td className="px-4 py-2.5 text-right font-black text-slate-900 dark:text-slate-100">{formatQtd(m.quantidade)}</td>
+                                        <td className="px-4 py-2.5 text-right font-black text-slate-950 dark:text-slate-100 bg-slate-50/30 dark:bg-zinc-900/30">{formatQtd(m.quantidade)}</td>
+                                        <td className="px-4 py-2.5 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(m.qtdJaFornecida || 0)}</td>
+                                        <td className="px-4 py-2.5 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(m.qtdASeparar || 0)}</td>
                                         <td className="px-4 py-2.5 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(m.estoque)}</td>
                                         <td className={`px-4 py-2.5 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                           {formatQtd(m.saldo)}
-                                        </td>
-                                        <td className="px-4 py-2.5">
-                                          <Badge variant="outline" className={`font-bold text-[10px] ${getGrupoColorClasses(m.grupoTraduzido)}`}>
-                                            {m.grupoTraduzido}
-                                          </Badge>
                                         </td>
                                         <td className="px-4 py-2.5">
                                           {m.liberado ? (
@@ -1532,6 +1561,11 @@ export const PlanejamentoMateriaisView = () => {
                                               Retido
                                             </span>
                                           )}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                          <Badge variant="outline" className={`font-bold text-[10px] ${getGrupoColorClasses(m.grupoTraduzido)}`}>
+                                            {m.grupoTraduzido}
+                                          </Badge>
                                         </td>
                                       </tr>
                                     ))

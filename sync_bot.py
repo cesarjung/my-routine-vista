@@ -630,6 +630,79 @@ def sync_estoque_fisico(gc, env_vars):
     except Exception as e:
         logging.error(f"Erro geral ao sincronizar estoque fisico: {e}")
 
+def sync_materiais_reservas(gc, env_vars):
+    supabase_url = env_vars.get('VITE_SUPABASE_URL')
+    supabase_key = env_vars.get('VITE_SUPABASE_PUBLISHABLE_KEY')
+    if not supabase_url or not supabase_key:
+        logging.error("Supabase credentials not found for stock reserves sync.")
+        return
+        
+    sheet_id = '17TNlttJwy-cFncGF5IzZB8nV0y8T-Xn9VLhWqFPCHYc'
+    
+    try:
+        logging.info("Sincronizando reservas/formulário de materiais via gspread...")
+        sh = gc.open_by_key(sheet_id)
+        ws = sh.worksheet("Respostas ao formulário 1")
+        raw_rows = ws.get_all_values()
+        
+        if not raw_rows or len(raw_rows) < 2:
+            logging.warning("Nenhum dado retornado da planilha de formulário de materiais.")
+            return
+            
+        records = []
+        unidade_barreiras = '1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E'
+        
+        # Colunas: D (PROJETO OU OC) = index 3, G (CODIGO) = index 6, H (Quantidade) = index 7, J (Status da Liberação) = index 9
+        for idx, row in enumerate(raw_rows[1:]):
+            if not row or len(row) <= 9:
+                continue
+                
+            obra = str(row[3]).strip()
+            codigo = str(row[6]).strip()
+            quantidade_str = str(row[7]).strip()
+            status = str(row[9]).strip()
+            
+            if not codigo or not codigo.isdigit() or not obra:
+                continue
+                
+            status_upper = status.upper()
+            if status_upper not in ['SEPARADO', 'BAIXADO', 'ENTREGUE', 'SEM RESERVA']:
+                continue
+                
+            quantidade = parse_number(quantidade_str)
+            
+            records.append({
+                "unidade_id": unidade_barreiras,
+                "obra": obra,
+                "codigo": codigo,
+                "quantidade": quantidade,
+                "status": status
+            })
+            
+        logging.info(f"  [>] Carregados {len(records)} registros válidos de reservas. Limpando dados antigos no Supabase...")
+        
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json"
+        }
+        
+        delete_url = f"{supabase_url}/rest/v1/materiais_reservas?unidade_id=eq.{unidade_barreiras}"
+        requests.delete(delete_url, headers=headers, timeout=60)
+        
+        insert_url = f"{supabase_url}/rest/v1/materiais_reservas"
+        chunk_size = 2000
+        for i in range(0, len(records), chunk_size):
+            chunk = records[i:i+chunk_size]
+            res_post = requests.post(insert_url, headers=headers, json=chunk, timeout=60)
+            if res_post.status_code not in [200, 201, 204]:
+                logging.error(f"  [X] Falha ao salvar lote no Supabase: {res_post.status_code} - {res_post.text}")
+                
+        logging.info(f"  [OK] Reservas/formulários de materiais sincronizados com sucesso! ({len(records)} registros)")
+        
+    except Exception as e:
+        logging.error(f"Erro ao sincronizar reservas/formulários de materiais: {e}")
+
 def run_sync_cycle():
     logging.info("--- Iniciando ciclo de sincronizacao ---")
     env_vars = load_env()
@@ -639,19 +712,28 @@ def run_sync_cycle():
         logging.error("Abortando ciclo por falta de credenciais do Google Cloud.")
         return
         
-    global_recursos, central_postes = fetch_global_recursos(gc)
+    global_recursos = fetch_global_recursos(gc)
+    central_postes = fetch_poste_turno_all(gc)
     
-    for unidade_id in UNIDADES_PLANEJAMENTO:
-        sheets_data = fetch_google_sheets(unidade_id, gc)
+    # 1. Busca e sincroniza programações para cada unidade
+    unidades = fetch_unidades(env_vars)
+    for u in unidades:
+        unidade_id = u.get("id")
+        tab_name = u.get("tab_name")
+        sheet_id = u.get("sheet_id")
+        
+        if not sheet_id:
+            logging.warning(f"Unidade {tab_name} não possui sheet_id cadastrado. Pulando...")
+            continue
+            
+        logging.info(f"Processando Unidade: {tab_name} (ID: {unidade_id})")
+        sheets_data = fetch_sheets_data(gc, sheet_id)
         
         if sheets_data:
-            import json
-            
             payload = {
                 "unidade_id": unidade_id,
-                "carteira": json.dumps(sheets_data.get("Carteira_Planejador", [])),
-                "principal": json.dumps(sheets_data.get("Plan_Principal", [])),
-                "bd_metas": json.dumps({
+                "principal": json.dumps(sheets_data.get("Plan_principal", [])),
+                "recursos": json.dumps({
                     "bd_metas": sheets_data.get("BD_Metas", []),
                     "base_curva": sheets_data.get("Base_Curva", []),
                     "bd_config": sheets_data.get("BD_Config", []),
@@ -666,13 +748,14 @@ def run_sync_cycle():
         logging.info("Pausando 2 segundos antes da proxima unidade...")
         time.sleep(2)
         
-    # Executa a sincronizacao de materiais, regras e estoque ao fim do ciclo
+    # Executa a sincronizacao de materiais, regras, estoque e reservas ao fim do ciclo
     try:
         sync_materiais_regras(gc, env_vars)
         sync_materiais_por_ponto(gc, env_vars)
         sync_estoque_fisico(gc, env_vars)
+        sync_materiais_reservas(gc, env_vars)
     except Exception as e:
-        logging.error(f"Erro no sync de materiais, regras e estoque: {e}")
+        logging.error(f"Erro no sync de materiais, regras, estoque e reservas: {e}")
         
     logging.info("--- Ciclo concluido ---")
 

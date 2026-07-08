@@ -22,6 +22,8 @@ export interface MaterialItem {
   codigo: string;
   descricao: string;
   quantidade: number;
+  qtdJaFornecida?: number;
+  qtdASeparar?: number;
   unidade: string;
   mascaraEPonto: string;
   orcamentista: string;
@@ -60,6 +62,8 @@ export interface ConsolidatedMaterial {
   descricao: string;
   unidade: string;
   quantidadeTotal: number;
+  qtdJaFornecidaTotal?: number;
+  qtdASepararTotal?: number;
   pontosOrigem: { ponto: string; obra: string; qtd: number }[];
   grupoTraduzido: string;
   equipes: string[];
@@ -124,6 +128,29 @@ export const useMateriaisData = (
         return data || [];
       } catch (err) {
         console.warn("Erro ao carregar estoque físico:", err);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 2c. Busca as reservas/formulários no Supabase
+  const reservasQuery = useQuery({
+    queryKey: ['materiais_reservas', selectedUnidadesIds],
+    enabled: selectedUnidadesIds.length > 0,
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('materiais_reservas')
+          .select('*')
+          .in('unidade_id', selectedUnidadesIds);
+        if (error) {
+          console.warn("Tabela materiais_reservas não criada ou erro ao buscar:", error);
+          return [];
+        }
+        return data || [];
+      } catch (err) {
+        console.warn("Erro ao carregar reservas:", err);
         return [];
       }
     },
@@ -297,20 +324,48 @@ export const useMateriaisData = (
 
   // 6. Processamento dos materiais e aplicação das regras
   const processedData = useQuery({
-    queryKey: ['materiais_processados', programacoes.data, materiaisQuery.data, rulesQuery.data, estoqueQuery.data],
+    queryKey: ['materiais_processados', programacoes.data, materiaisQuery.data, rulesQuery.data, estoqueQuery.data, reservasQuery.data],
     enabled: !!programacoes.data && !!rulesQuery.data,
     queryFn: () => {
       const progsList = programacoes.data?.list || [];
       const rawMats = materiaisQuery.data || [];
       const rawRules = rulesQuery.data || [];
       const rawEstoque = estoqueQuery.data || [];
+      const rawReservas = reservasQuery.data || [];
 
       // Mapeia estoque físico por key: `${unidade_id}_${codigo}`
-      const estoqueMap = new Map<string, number>();
+      const estoqueFisicoMap = new Map<string, number>();
       rawEstoque.forEach((e: any) => {
         if (e.codigo && e.unidade_id) {
           const key = `${String(e.unidade_id).trim()}_${String(e.codigo).trim()}`;
-          estoqueMap.set(key, (estoqueMap.get(key) || 0) + Number(e.quantidade || 0));
+          estoqueFisicoMap.set(key, (estoqueFisicoMap.get(key) || 0) + Number(e.quantidade || 0));
+        }
+      });
+
+      // Mapeia reservas por status SEPARADO por key: `${unidade_id}_${codigo}`
+      const totalReservasSeparadasMap = new Map<string, number>();
+      rawReservas.forEach((r: any) => {
+        const statusUpper = String(r.status).trim().toUpperCase();
+        if (statusUpper === 'SEPARADO') {
+          const key = `${String(r.unidade_id).trim()}_${String(r.codigo).trim()}`;
+          totalReservasSeparadasMap.set(key, (totalReservasSeparadasMap.get(key) || 0) + Number(r.quantidade || 0));
+        }
+      });
+
+      // Estoque disponível = estoque físico - total reservado geral (SEPARADO)
+      const estoqueDisponivelMap = new Map<string, number>();
+      estoqueFisicoMap.forEach((qty, key) => {
+        const sep = totalReservasSeparadasMap.get(key) || 0;
+        estoqueDisponivelMap.set(key, Math.max(0, qty - sep));
+      });
+
+      // Mapeia saldo de fornecido por obra por key: `${unidade_id}_${obra}_${codigo}`
+      const suppliedRemainingMap = new Map<string, number>();
+      rawReservas.forEach((r: any) => {
+        const statusUpper = String(r.status).trim().toUpperCase();
+        if (['SEPARADO', 'BAIXADO', 'ENTREGUE', 'SEM RESERVA'].includes(statusUpper)) {
+          const key = `${String(r.unidade_id).trim()}_${String(r.obra).trim()}_${String(r.codigo).trim()}`;
+          suppliedRemainingMap.set(key, (suppliedRemainingMap.get(key) || 0) + Number(r.quantidade || 0));
         }
       });
 
@@ -354,8 +409,16 @@ export const useMateriaisData = (
       const regexCabo = /(^CABO COBERTO|MULTIPLEX|MPLX|CORDOALHA| CAA|CABO NU ALUM|CABO AL |ESPACADOR|LOSANG|ANEL |LACO)/i;
       const regexEquip = /(RELIGADOR|REGULADOR| RT | RL |TRAFO|BANCO CAP|CONJ MEDICAO|PROTETOR| XLPE|LINHA VIVA|CARTUCHO|BARRA TERMINAL|TERMINAL COMP|ESTRB| COBERTURA|COBERTO)/i;
 
+      // Ordenação estável das programações para consistência no FIFO
+      const sortedProgsList = [...progsList].sort((a, b) => {
+        const timeA = a.dataParsed?.getTime() || 0;
+        const timeB = b.dataParsed?.getTime() || 0;
+        if (timeA !== timeB) return timeA - timeB;
+        return a.id.localeCompare(b.id);
+      });
+
       // Monta as programações finais com seus materiais classificados
-      const finalProgramacoes: ProgramacaoMateriais[] = progsList.map(prog => {
+      const finalProgramacoes: ProgramacaoMateriais[] = sortedProgsList.map(prog => {
         const progMateriais: MaterialItem[] = [];
 
         prog.pontosList.forEach(ponto => {
@@ -406,8 +469,32 @@ export const useMateriaisData = (
             }
 
             const stockKey = `${prog.unidadeId}_${codigo}`;
-            const estoque = estoqueMap.get(stockKey) || 0;
-            const saldo = estoque - Number(m.quantidade || 0);
+            const estoque = estoqueDisponivelMap.has(stockKey)
+              ? (estoqueDisponivelMap.get(stockKey) || 0)
+              : 0;
+
+            // Qtd planejada
+            const quantidadePlanejada = Number(m.quantidade || 0);
+
+            // Alocação FIFO de fornecido para esta obra + codigo
+            const suppliedKey = `${prog.unidadeId}_${prog.obra}_${codigo}`;
+            const suppliedRemaining = suppliedRemainingMap.get(suppliedKey) || 0;
+
+            let qtdJaFornecida = 0;
+            let qtdASeparar = quantidadePlanejada;
+
+            if (suppliedRemaining >= quantidadePlanejada) {
+              qtdJaFornecida = quantidadePlanejada;
+              qtdASeparar = 0;
+              suppliedRemainingMap.set(suppliedKey, suppliedRemaining - quantidadePlanejada);
+            } else {
+              qtdJaFornecida = suppliedRemaining;
+              qtdASeparar = quantidadePlanejada - suppliedRemaining;
+              suppliedRemainingMap.set(suppliedKey, 0);
+            }
+
+            // O saldo deste ponto é baseado no estoque disponível menos o que falta separar
+            const saldo = estoque - qtdASeparar;
 
             progMateriais.push({
               id: String(m.id || `${pontoKey}-${codigo}`),
@@ -415,7 +502,9 @@ export const useMateriaisData = (
               pontoObra: String(m.ponto_obra || ponto),
               codigo,
               descricao,
-              quantidade: Number(m.quantidade || 0),
+              quantidade: quantidadePlanejada,
+              qtdJaFornecida,
+              qtdASeparar,
               unidade: String(m.unidade || ''),
               mascaraEPonto: pontoKey,
               orcamentista: String(m.orçamentista || ''),
@@ -447,10 +536,10 @@ export const useMateriaisData = (
 
           const key = m.codigo;
           if (!consolidatedMap.has(key)) {
-            // Calcula o estoque consolidado somando a quantidade para o código em todas as unidades selecionadas
+            // Calcula o estoque disponível consolidado somando para todas as unidades selecionadas
             let estoque = 0;
             selectedUnidadesIds.forEach(uid => {
-              estoque += estoqueMap.get(`${uid}_${key}`) || 0;
+              estoque += estoqueDisponivelMap.get(`${uid}_${key}`) || 0;
             });
 
             consolidatedMap.set(key, {
@@ -458,39 +547,43 @@ export const useMateriaisData = (
               descricao: m.descricao,
               unidade: m.unidade,
               quantidadeTotal: 0,
+              qtdJaFornecidaTotal: 0,
+              qtdASepararTotal: 0,
               pontosOrigem: [],
               grupoTraduzido: m.grupoTraduzido,
               equipes: [],
               estoque,
-              saldo: estoque // Será deduzida a quantidadeTotal ao fim do loop
+              saldo: estoque
             });
           }
 
           const cons = consolidatedMap.get(key)!;
           cons.quantidadeTotal += m.quantidade;
+          cons.qtdJaFornecidaTotal = (cons.qtdJaFornecidaTotal || 0) + (m.qtdJaFornecida || 0);
+          cons.qtdASepararTotal = (cons.qtdASepararTotal || 0) + (m.qtdASeparar || 0);
           
           // Rastreia equipe
           if (prog.equipe && !cons.equipes.includes(prog.equipe)) {
             cons.equipes.push(prog.equipe);
           }
           
-          // Rastreia a origem (obra + ponto)
+          // Rastreia a origem (obra + ponto) mostrando o saldo pendente de separação
           const origExistente = cons.pontosOrigem.find(p => p.ponto === m.pontoObra && p.obra === prog.obra);
           if (origExistente) {
-            origExistente.qtd += m.quantidade;
+            origExistente.qtd += m.qtdASeparar || 0;
           } else {
             cons.pontosOrigem.push({
               ponto: m.pontoObra,
               obra: prog.obra,
-              qtd: m.quantidade
+              qtd: m.qtdASeparar || 0
             });
           }
         });
       });
 
-      // Atualiza o saldo consolidado deduzindo a quantidade necessária
+      // Atualiza o saldo consolidado deduzindo o total a separar
       consolidatedMap.forEach(cons => {
-        cons.saldo = cons.estoque - cons.quantidadeTotal;
+        cons.saldo = cons.estoque - (cons.qtdASepararTotal || 0);
       });
 
       const consolidatedList = Array.from(consolidatedMap.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
@@ -509,7 +602,7 @@ export const useMateriaisData = (
       const faltasDashboard = computeFaltasDashboard(
         finalProgramacoes,
         selectedUnidadesIds,
-        estoqueMap,
+        estoqueDisponivelMap,
         regrasMaterialMap
       );
 
@@ -529,8 +622,8 @@ export const useMateriaisData = (
   });
 
   return {
-    isLoading: rawQuery.isLoading || rulesQuery.isLoading || materiaisQuery.isLoading || programacoes.isLoading || processedData.isLoading || estoqueQuery.isLoading,
-    isError: rawQuery.isError || rulesQuery.isError || materiaisQuery.isError || programacoes.isError || processedData.isError || estoqueQuery.isError,
+    isLoading: rawQuery.isLoading || rulesQuery.isLoading || materiaisQuery.isLoading || programacoes.isLoading || processedData.isLoading || estoqueQuery.isLoading || reservasQuery.isLoading,
+    isError: rawQuery.isError || rulesQuery.isError || materiaisQuery.isError || programacoes.isError || processedData.isError || estoqueQuery.isError || reservasQuery.isError,
     data: processedData.data,
     filtersDateDefault: format(getProximoDiaUtil(), 'yyyy-MM-dd')
   };
@@ -589,7 +682,7 @@ function computeFaltasDashboard(
       if (stockRemaining !== null) {
         sorted.forEach(item => {
           const m = item.prog.materiais.find(mat => mat.codigo === code && mat.liberado)!;
-          const req = m.quantidade;
+          const req = m.qtdASeparar ?? m.quantidade;
           
           estoqueAntesMap.set(`${item.prog.id}_${code}`, stockRemaining!);
           
@@ -641,11 +734,11 @@ function computeFaltasDashboard(
           codigo: code,
           descricao: m.descricao,
           faltaAlocada: lack,
-          quantidade: m.quantidade,
+          quantidade: m.qtdASeparar ?? m.quantidade,
           critico: crit
         });
 
-        if (crit && lack === m.quantidade) {
+        if (crit && lack === (m.qtdASeparar ?? m.quantidade)) {
           status = 'BLOQUEADO';
         } else if (status !== 'BLOQUEADO') {
           status = 'PARCIAL';
@@ -701,7 +794,7 @@ function computeFaltasDashboard(
         }
 
         const fItem = faltasPorCodigo.get(code)!;
-        fItem.necessario += m.quantidade;
+        fItem.necessario += (m.qtdASeparar ?? m.quantidade);
         fItem.falta += lack;
         
         if (prog.equipe && !fItem.equipes.includes(prog.equipe)) {
@@ -718,7 +811,7 @@ function computeFaltasDashboard(
           dataParsed: prog.dataParsed,
           equipe: prog.equipe,
           obra: prog.obra,
-          quantidade: m.quantidade,
+          quantidade: m.qtdASeparar ?? m.quantidade,
           estoqueAntes: estAntes,
           estoqueDepois: estDepois,
           faltaAlocada: lack
