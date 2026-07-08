@@ -264,16 +264,21 @@ export const PlanejamentoMateriaisView = () => {
             descricao: m.descricao,
             unidade: m.unidade,
             quantidadeTotal: 0,
+            qtdJaFornecidaTotal: 0,
+            qtdASepararTotal: 0,
             pontosOrigem: [],
             grupoTraduzido: m.grupoTraduzido,
             equipes: [],
             estoque,
-            saldo: estoque
+            saldo: estoque,
+            disponivel: false
           });
         }
 
         const cons = consolidatedMap.get(key)!;
         cons.quantidadeTotal += m.quantidade;
+        cons.qtdJaFornecidaTotal = (cons.qtdJaFornecidaTotal || 0) + (m.qtdJaFornecida || 0);
+        cons.qtdASepararTotal = (cons.qtdASepararTotal || 0) + (m.qtdASeparar || 0);
         
         // Rastreia equipe
         if (prog.equipe && !cons.equipes.includes(prog.equipe)) {
@@ -296,6 +301,7 @@ export const PlanejamentoMateriaisView = () => {
     // Atualiza o saldo consolidado deduzindo a quantidade necessária
     consolidatedMap.forEach(cons => {
       cons.saldo = cons.estoque - cons.quantidadeTotal;
+      cons.disponivel = (cons.qtdJaFornecidaTotal || 0) + cons.estoque >= cons.quantidadeTotal;
     });
 
     return Array.from(consolidatedMap.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
