@@ -336,7 +336,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
         {/* Card 2: Exposição Financeira */}
         <Card 
           onClick={handleOpenAfetadosModal}
-          className="bg-white dark:bg-zinc-950 border-slate-200 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-violet-400"
+          className="bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-violet-400"
         >
           <CardHeader className="pb-2">
             <CardDescription className="text-slate-500 dark:text-slate-400 text-xs font-semibold">
@@ -358,7 +358,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
         {/* Card 3: Programações afetadas */}
         <Card 
           onClick={handleOpenAfetadosModal}
-          className="bg-white dark:bg-zinc-950 border-slate-200 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-amber-400"
+          className="bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-amber-400"
         >
           <CardHeader className="pb-2">
             <CardDescription className="text-slate-500 dark:text-slate-400 text-xs font-semibold">
@@ -383,7 +383,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
         {/* Card 4: Primeiro dia comprometido */}
         <Card 
           onClick={handleOpenItensModal}
-          className="bg-white dark:bg-zinc-950 border-slate-200 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-slate-400"
+          className="bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-slate-400"
         >
           <CardHeader className="pb-2">
             <CardDescription className="text-slate-500 dark:text-slate-400 text-xs font-semibold">
@@ -405,7 +405,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
         {/* Card 5: Sem visibilidade */}
         <Card 
           onClick={handleOpenSemOrcamentoModal}
-          className="bg-white dark:bg-zinc-950 border-slate-200 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-amber-500"
+          className="bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:scale-[1.01] hover:border-amber-500"
         >
           <CardHeader className="pb-2">
             <CardDescription className="text-slate-500 dark:text-slate-400 text-xs font-semibold">
@@ -530,15 +530,15 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
               Nenhuma falta encontrada para o dia selecionado.
             </div>
           ) : (
-            <div className="divide-y border-t-0">
+            <div className="divide-y dark:divide-zinc-800 border-t-0">
               {filteredFaltas.map((f: any) => {
                 const dayText = f.primeiroDiaComprometido ? formatSafe(f.primeiroDiaComprometido, 'dd/MM') : '';
                 return (
-                  <div key={f.codigo} className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50/40 transition-colors">
+                  <div key={f.codigo} className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50/40 dark:hover:bg-zinc-900/10 transition-colors">
                     
                     <div className="flex flex-col gap-1.5 max-w-xl">
                       <div className="flex items-baseline gap-1.5 flex-wrap">
-                        <span className="font-mono font-bold text-violet-600 text-xs">{f.codigo}</span>
+                        <span className="font-mono font-bold text-violet-600 dark:text-violet-400 text-xs">{f.codigo}</span>
                         <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm leading-tight">
                           {f.descricao}
                         </h4>
@@ -546,41 +546,41 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
                       
                       <div className="flex flex-wrap items-center gap-2 mt-0.5">
                         {f.estoqueDesconhecido ? (
-                          <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-semibold text-[9px] py-0 px-1.5 leading-tight uppercase">
+                          <Badge className="bg-amber-100 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900 font-semibold text-[9px] py-0 px-1.5 leading-tight uppercase">
                             sem dado de estoque
                           </Badge>
                         ) : f.critico ? (
-                          <Badge className="bg-rose-100 text-rose-800 border-rose-200 font-semibold text-[9px] py-0 px-1.5 leading-tight uppercase">
+                          <Badge className="bg-rose-100 dark:bg-rose-950/20 text-rose-800 dark:text-rose-350 border-rose-200 dark:border-rose-900 font-semibold text-[9px] py-0 px-1.5 leading-tight uppercase">
                             bloqueia programação
                           </Badge>
                         ) : (
-                          <Badge className="bg-amber-50 text-amber-700 border-amber-200 font-semibold text-[9px] py-0 px-1.5 leading-tight uppercase">
+                          <Badge className="bg-amber-50 dark:bg-amber-950/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900 font-semibold text-[9px] py-0 px-1.5 leading-tight uppercase">
                             falta parcial
                           </Badge>
                         )}
                         
                         {!f.estoqueDesconhecido && (
-                          <span className="text-[11px] text-slate-500">
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">
                             a partir de <strong className="text-slate-850 dark:text-slate-200">{dayText}</strong> · <strong>{f.programacoesCount}</strong> programações afetadas
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto shrink-0 border-t md:border-0 pt-3 md:pt-0">
+                    <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto shrink-0 border-t md:border-0 pt-3 md:pt-0 dark:border-zinc-800">
                       
                       <div className="flex flex-col items-end shrink-0 w-20">
                         {f.estoqueDesconhecido ? (
-                          <span className="font-mono font-bold text-amber-600 text-sm italic">Desconhecido</span>
+                          <span className="font-mono font-bold text-amber-600 dark:text-amber-450 text-sm italic">Desconhecido</span>
                         ) : (
                           <>
-                            <span className="font-black text-rose-600 text-xl leading-none">-{f.falta}</span>
-                            <span className="text-[9px] text-rose-500 font-bold uppercase mt-1 leading-none">falta</span>
+                            <span className="font-black text-rose-600 dark:text-rose-450 text-xl leading-none">-{f.falta}</span>
+                            <span className="text-[9px] text-rose-500 dark:text-rose-400 font-bold uppercase mt-1 leading-none">falta</span>
                           </>
                         )}
                       </div>
                       
-                      <div className="text-right text-xs shrink-0 text-slate-500 font-medium w-24">
+                      <div className="text-right text-xs shrink-0 text-slate-500 dark:text-slate-400 font-medium w-24">
                         {f.estoqueDesconhecido ? (
                           <span>{f.necessario} nec. / ? estoque</span>
                         ) : (
@@ -593,12 +593,12 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
 
                       <div className="flex flex-wrap gap-1 w-[130px] shrink-0 justify-end">
                         {f.equipes.slice(0, 3).map((eq: string) => (
-                          <Badge key={eq} variant="outline" className="text-[9px] py-0 px-1.5 bg-slate-50 text-slate-650 border-slate-200 font-semibold">
+                          <Badge key={eq} variant="outline" className="text-[9px] py-0 px-1.5 bg-slate-50 dark:bg-zinc-900 text-slate-650 dark:text-slate-300 border-slate-200 dark:border-zinc-800 font-semibold">
                             {eq}
                           </Badge>
                         ))}
                         {f.equipes.length > 3 && (
-                          <Badge variant="outline" className="text-[9px] py-0 px-1 bg-slate-50 text-slate-500 font-semibold" title={f.equipes.slice(3).join(', ')}>
+                          <Badge variant="outline" className="text-[9px] py-0 px-1 bg-slate-50 dark:bg-zinc-900 text-slate-500 dark:text-slate-400 font-semibold border-slate-200 dark:border-zinc-800" title={f.equipes.slice(3).join(', ')}>
                             +{f.equipes.length - 3}
                           </Badge>
                         )}
@@ -609,7 +609,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
                           variant="outline"
                           size="xs"
                           onClick={() => setAnalyzingCode(f.codigo)}
-                          className="text-xs h-8 font-semibold border-slate-200 text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900"
+                          className="text-xs h-8 font-semibold border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-slate-300 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-900 dark:hover:text-white"
                         >
                           Analisar ↗
                         </Button>

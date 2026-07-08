@@ -871,19 +871,19 @@ export const PlanejamentoMateriaisView = () => {
 
 
           {/* Resumo do Romaneio */}
-          <Card className="border-slate-200 shadow-md">
-            <CardHeader className="bg-slate-50/50 border-b py-4">
+          <Card className="border-slate-200 dark:border-zinc-800 shadow-md">
+            <CardHeader className="bg-slate-50/50 dark:bg-zinc-900/50 border-b dark:border-zinc-800 py-4">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                    <ClipboardList className="h-5 w-5 text-indigo-600" />
+                  <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                    <ClipboardList className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                     Romaneio de Separação
                   </CardTitle>
-                  <CardDescription className="mt-1">
-                    Dia: <span className="font-semibold text-slate-800">{selectedDateFormatted}</span>
+                  <CardDescription className="mt-1 text-slate-500 dark:text-slate-400">
+                    Dia: <span className="font-semibold text-slate-850 dark:text-slate-200">{selectedDateFormatted}</span>
                   {selectedEquipes.length > 0 && (
                     <>
-                      {' '}| Equipes: <span className="font-semibold text-slate-800">{selectedEquipes.join(', ')}</span>
+                      {' '}| Equipes: <span className="font-semibold text-slate-850 dark:text-slate-200">{selectedEquipes.join(', ')}</span>
                     </>
                   )}
                   </CardDescription>
@@ -907,45 +907,45 @@ export const PlanejamentoMateriaisView = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div 
                   onClick={handleOpenProgramacoesModal}
-                  className="p-4 rounded-xl bg-slate-50 border flex flex-col cursor-pointer hover:bg-slate-100 hover:shadow-sm hover:border-slate-300 transition-all"
+                  className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 flex flex-col cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 hover:shadow-sm transition-all"
                 >
-                  <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center justify-between">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider flex items-center justify-between">
                     <span>Programações</span>
                     <span className="text-[10px] text-slate-400 font-normal">ℹ️</span>
                   </span>
-                  <span className="text-2xl font-bold mt-1 text-slate-800">{filteredProgramacoes.length}</span>
+                  <span className="text-2xl font-bold mt-1 text-slate-800 dark:text-slate-100">{filteredProgramacoes.length}</span>
                 </div>
                 <div 
                   onClick={handleOpenPontosModal}
-                  className="p-4 rounded-xl bg-slate-50 border flex flex-col cursor-pointer hover:bg-slate-100 hover:shadow-sm hover:border-slate-300 transition-all"
+                  className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 flex flex-col cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 hover:shadow-sm transition-all"
                 >
-                  <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center justify-between">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider flex items-center justify-between">
                     <span>Pontos Total</span>
                     <span className="text-[10px] text-slate-400 font-normal">ℹ️</span>
                   </span>
-                  <span className="text-2xl font-bold mt-1 text-slate-800">
+                  <span className="text-2xl font-bold mt-1 text-slate-800 dark:text-slate-100">
                     {filteredProgramacoes.reduce((acc, curr) => acc + curr.pontosList.length, 0)}
                   </span>
                 </div>
                 <div 
                   onClick={handleOpenItensModal}
-                  className="p-4 rounded-xl bg-slate-50 border flex flex-col cursor-pointer hover:bg-slate-100 hover:shadow-sm hover:border-slate-300 transition-all"
+                  className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 flex flex-col cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 hover:shadow-sm transition-all"
                 >
-                  <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center justify-between">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider flex items-center justify-between">
                     <span>Itens Únicos Liberados</span>
                     <span className="text-[10px] text-slate-400 font-normal">ℹ️</span>
                   </span>
-                  <span className="text-2xl font-bold mt-1 text-slate-800">{consolidadoList.length}</span>
+                  <span className="text-2xl font-bold mt-1 text-slate-800 dark:text-slate-100">{consolidadoList.length}</span>
                 </div>
                 <div 
                   onClick={handleOpenQtdModal}
-                  className="p-4 rounded-xl bg-violet-50/50 border border-violet-100 flex flex-col cursor-pointer hover:bg-violet-50 hover:shadow-sm hover:border-violet-300 transition-all"
+                  className="p-4 rounded-xl bg-violet-50/50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30 flex flex-col cursor-pointer hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:shadow-sm transition-all"
                 >
-                  <span className="text-xs text-violet-600 font-semibold uppercase tracking-wider flex items-center justify-between">
+                  <span className="text-xs text-violet-600 dark:text-violet-400 font-semibold uppercase tracking-wider flex items-center justify-between">
                     <span>Qtd Total Separar</span>
                     <span className="text-[10px] text-violet-400 font-normal">ℹ️</span>
                   </span>
-                  <span className="text-2xl font-bold mt-1 text-violet-950">{Math.round(totalMateriaisLiberadosCount)}</span>
+                  <span className="text-2xl font-bold mt-1 text-violet-950 dark:text-violet-200">{Math.round(totalMateriaisLiberadosCount)}</span>
                 </div>
               </div>
 
@@ -1019,21 +1019,21 @@ export const PlanejamentoMateriaisView = () => {
                   /* VISÃO CONSOLIDADA */
                   <div className="border rounded-lg overflow-auto h-[750px] min-h-[400px] max-h-[85vh] resize-y relative shadow-inner bg-white dark:bg-zinc-950">
                     <table className="w-full text-sm text-left border-collapse">
-                      <thead className="bg-slate-50 text-slate-600 uppercase text-xs font-bold border-b sticky top-0 z-20 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
-                        <tr className="bg-slate-50">
-                          <th className="px-4 py-3 text-center bg-slate-50">Código</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Descrição</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Unidade</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Qtd Total</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Estoque</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Saldo</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Status</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Equipe(s)</th>
-                          <th className="px-4 py-3 text-center bg-slate-50">Grupo Traduzido</th>
-                          <th className="px-4 py-3 text-center no-print bg-slate-50">Pontos Origem</th>
+                      <thead className="bg-slate-50 dark:bg-zinc-900 text-slate-600 dark:text-slate-400 uppercase text-xs font-bold border-b dark:border-zinc-800 sticky top-0 z-20 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                        <tr className="bg-slate-50 dark:bg-zinc-900">
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Unidade</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Total</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Estoque</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Saldo</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Status</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Equipe(s)</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Grupo Traduzido</th>
+                          <th className="px-4 py-3 text-center no-print bg-slate-50 dark:bg-zinc-900">Pontos Origem</th>
                         </tr>
-                        <tr className="bg-slate-100 no-print border-b">
-                          <td className="px-2 py-1 bg-slate-100">
+                        <tr className="bg-slate-100 dark:bg-zinc-900/80 no-print border-b dark:border-zinc-800">
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                             <FilterSelect
                               label=""
                               options={codigosOptions}
@@ -1042,7 +1042,7 @@ export const PlanejamentoMateriaisView = () => {
                               searchable={true}
                             />
                           </td>
-                          <td className="px-2 py-1 bg-slate-100">
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                             <FilterSelect
                               label=""
                               options={descricoesOptions}
@@ -1051,7 +1051,7 @@ export const PlanejamentoMateriaisView = () => {
                               searchable={true}
                             />
                           </td>
-                          <td className="px-2 py-1 text-center bg-slate-100">
+                          <td className="px-2 py-1 text-center bg-slate-100 dark:bg-zinc-900/80">
                             <FilterSelect
                               label=""
                               options={unidadesOptions}
@@ -1059,27 +1059,27 @@ export const PlanejamentoMateriaisView = () => {
                               onChange={setColFilterUnidade}
                             />
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100">
+                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
                             {/* Qtd */}
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100">
+                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
                             {/* Estoque */}
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100">
+                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
                             {/* Saldo */}
                           </td>
-                          <td className="px-2 py-1 bg-slate-100">
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                              <select
                                value={globalStatusFilter}
                                onChange={e => setGlobalStatusFilter(e.target.value as any)}
-                               className="w-full h-8 px-1 text-xs border rounded bg-white text-slate-700 outline-none font-normal shadow-sm"
+                               className="w-full h-8 px-1 text-xs border dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-slate-700 dark:text-slate-200 outline-none font-normal shadow-sm"
                              >
                                <option value="todos">Todos</option>
                                <option value="disponivel">Disponíveis</option>
                                <option value="falta">Em falta</option>
                              </select>
                           </td>
-                          <td className="px-2 py-1 bg-slate-100">
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                             <FilterSelect
                               label=""
                               options={equipesOptions}
@@ -1088,7 +1088,7 @@ export const PlanejamentoMateriaisView = () => {
                               searchable={true}
                             />
                           </td>
-                          <td className="px-2 py-1 bg-slate-100">
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                             <FilterSelect
                               label=""
                               options={gruposOptions}
@@ -1097,7 +1097,7 @@ export const PlanejamentoMateriaisView = () => {
                               searchable={true}
                             />
                           </td>
-                          <td className="px-2 py-1 no-print bg-slate-100">
+                          <td className="px-2 py-1 no-print bg-slate-100 dark:bg-zinc-900/80">
                             <FilterSelect
                               label=""
                               options={origensOptions}
@@ -1117,13 +1117,13 @@ export const PlanejamentoMateriaisView = () => {
                           </tr>
                         ) : (
                           finalConsolidado.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/50">
-                              <td className="px-4 py-3 font-mono font-bold text-violet-600">{item.codigo}</td>
-                              <td className="px-4 py-3 font-medium text-slate-800">{item.descricao}</td>
-                              <td className="px-4 py-3 text-center font-semibold text-slate-500">{item.unidade}</td>
-                              <td className="px-4 py-3 text-right font-black text-slate-900 bg-slate-50/30">{formatQtd(item.quantidadeTotal)}</td>
-                              <td className="px-4 py-3 text-right font-bold text-slate-600 bg-slate-50/20">{formatQtd(item.estoque)}</td>
-                              <td className={`px-4 py-3 text-right font-black ${item.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10'}`}>
+                            <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 border-b dark:border-zinc-900">
+                              <td className="px-4 py-3 font-mono font-bold text-violet-600 dark:text-violet-400">{item.codigo}</td>
+                              <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{item.descricao}</td>
+                              <td className="px-4 py-3 text-center font-semibold text-slate-500 dark:text-slate-400">{item.unidade}</td>
+                              <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-slate-100 bg-slate-50/30 dark:bg-zinc-900/30">{formatQtd(item.quantidadeTotal)}</td>
+                              <td className="px-4 py-3 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(item.estoque)}</td>
+                              <td className={`px-4 py-3 text-right font-black ${item.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                 {formatQtd(item.saldo)}
                               </td>
                               <td className="px-4 py-3">
@@ -1142,7 +1142,7 @@ export const PlanejamentoMateriaisView = () => {
                               <td className="px-4 py-3">
                                 <div className="grid grid-cols-2 gap-x-1 gap-y-0.5 w-28 min-w-[110px]">
                                   {item.equipes?.map(eq => (
-                                    <Badge key={eq} variant="outline" className="font-semibold text-[9px] py-0 px-1 bg-slate-50 text-slate-700 border-slate-200 justify-center">
+                                    <Badge key={eq} variant="outline" className="font-semibold text-[9px] py-0 px-1 bg-slate-50 dark:bg-zinc-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-zinc-800 justify-center">
                                       {eq}
                                     </Badge>
                                   ))}
@@ -1153,7 +1153,7 @@ export const PlanejamentoMateriaisView = () => {
                                   {item.grupoTraduzido}
                                 </Badge>
                               </td>
-                              <td className="px-4 py-3 no-print text-xs text-slate-500 max-w-xs truncate">
+                              <td className="px-4 py-3 no-print text-xs text-slate-500 dark:text-slate-400 max-w-xs truncate">
                                 {item.pontosOrigem.map(p => `${p.obra} (${p.ponto}: ${p.qtd})`).join(', ')}
                               </td>
                             </tr>
@@ -1366,11 +1366,11 @@ export const PlanejamentoMateriaisView = () => {
                           <div key={prog.id} className="border rounded-lg overflow-hidden shadow-sm bg-white dark:bg-zinc-950 mb-6 last:mb-0">
                             
                             {/* Programacao Header */}
-                            <div className="bg-slate-50/70 border-b px-4 py-3 flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+                            <div className="bg-slate-50/70 dark:bg-zinc-900/70 border-b dark:border-zinc-800 px-4 py-3 flex flex-col md:flex-row md:justify-between md:items-center gap-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <Badge className="bg-indigo-600 text-white font-bold text-xs">{prog.equipe}</Badge>
-                                <span className="font-extrabold text-sm text-slate-900">{prog.obra}</span>
-                                <span className="text-xs text-slate-500 font-medium">({prog.pontosList.length} ponto(s): {prog.pontosRaw})</span>
+                                <Badge className="bg-indigo-600 dark:bg-indigo-500 text-white font-bold text-xs">{prog.equipe}</Badge>
+                                <span className="font-extrabold text-sm text-slate-900 dark:text-slate-150">{prog.obra}</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">({prog.pontosList.length} ponto(s): {prog.pontosRaw})</span>
                               </div>
                               
                               <div className="flex flex-wrap items-center gap-1">
@@ -1382,25 +1382,25 @@ export const PlanejamentoMateriaisView = () => {
                               </div>
                             </div>
 
-                            <div className="p-3 text-xs text-slate-500 italic border-b bg-slate-50/20">
+                            <div className="p-3 text-xs text-slate-500 dark:text-slate-400 italic border-b dark:border-zinc-800 bg-slate-50/20 dark:bg-zinc-900/20">
                               Atividades: {prog.descricaoAtividades || 'Nenhuma descrição fornecida'}
                             </div>
 
                             {/* Materiais da Programação */}
                             <div className="overflow-auto h-[250px] min-h-[150px] max-h-[70vh] resize-y relative shadow-inner bg-white dark:bg-zinc-950">
                               <table className="w-full text-sm text-left border-collapse">
-                                <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold border-b sticky top-0 z-20 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
-                                  <tr className="bg-slate-50">
-                                    <th className="px-4 py-2 w-28 text-center bg-slate-50">Equipe</th>
-                                    <th className="px-4 py-2 w-24 text-center bg-slate-50">Ponto</th>
-                                    <th className="px-4 py-2 w-28 text-center bg-slate-50">Código</th>
-                                    <th className="px-4 py-2 text-center bg-slate-50">Descrição</th>
-                                    <th className="px-4 py-2 text-center w-16 bg-slate-50">Unid</th>
-                                    <th className="px-4 py-2 text-center w-20 bg-slate-50">Qtd</th>
-                                    <th className="px-4 py-2 text-center w-20 bg-slate-50">Estoque</th>
-                                    <th className="px-4 py-2 text-center w-20 bg-slate-50">Saldo</th>
-                                    <th className="px-4 py-2 w-32 text-center bg-slate-50">Grupo Mat.</th>
-                                    <th className="px-4 py-2 w-36 text-center bg-slate-50">Status</th>
+                                <thead className="bg-slate-50 dark:bg-zinc-900 text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold border-b dark:border-zinc-800 sticky top-0 z-20 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                                  <tr className="bg-slate-50 dark:bg-zinc-900">
+                                    <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Equipe</th>
+                                    <th className="px-4 py-2 w-24 text-center bg-slate-50 dark:bg-zinc-900">Ponto</th>
+                                    <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
+                                    <th className="px-4 py-2 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
+                                    <th className="px-4 py-2 text-center w-16 bg-slate-50 dark:bg-zinc-900">Unid</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Qtd</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Estoque</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Saldo</th>
+                                    <th className="px-4 py-2 w-32 text-center bg-slate-50 dark:bg-zinc-900">Grupo Mat.</th>
+                                    <th className="px-4 py-2 w-36 text-center bg-slate-50 dark:bg-zinc-900">Status</th>
                                   </tr>
                                   <tr className="bg-slate-100 no-print border-b">
                                     <td className="px-2 py-1 bg-slate-100">
@@ -1489,23 +1489,23 @@ export const PlanejamentoMateriaisView = () => {
                                     prog.materiais.map((m, idx) => (
                                       <tr 
                                         key={idx} 
-                                        className={`hover:bg-slate-50/50 ${!m.liberado ? 'opacity-40 bg-slate-50/10' : ''}`}
+                                        className={`hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 border-b dark:border-zinc-900 ${!m.liberado ? 'opacity-40 bg-slate-50/10 dark:bg-zinc-900/10' : ''}`}
                                       >
-                                        <td className="px-4 py-2.5 font-bold text-slate-700">{m.equipe}</td>
-                                        <td className="px-4 py-2.5 font-bold font-mono text-slate-800">{m.pontoObra}</td>
-                                        <td className="px-4 py-2.5 font-mono font-bold text-violet-600">{m.codigo}</td>
-                                        <td className="px-4 py-2.5 font-medium text-slate-800">
+                                        <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-slate-300">{m.equipe}</td>
+                                        <td className="px-4 py-2.5 font-bold font-mono text-slate-800 dark:text-slate-200">{m.pontoObra}</td>
+                                        <td className="px-4 py-2.5 font-mono font-bold text-violet-600 dark:text-violet-400">{m.codigo}</td>
+                                        <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200">
                                           {m.descricao}
                                           {m.semRegra && (
-                                            <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 text-amber-700 bg-amber-50">
+                                            <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20">
                                               sem regra
                                             </Badge>
                                           )}
                                         </td>
-                                        <td className="px-4 py-2.5 text-center font-bold text-slate-500">{m.unidade}</td>
-                                        <td className="px-4 py-2.5 text-right font-black text-slate-900">{formatQtd(m.quantidade)}</td>
-                                        <td className="px-4 py-2.5 text-right font-bold text-slate-600 bg-slate-50/20">{formatQtd(m.estoque)}</td>
-                                        <td className={`px-4 py-2.5 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10'}`}>
+                                        <td className="px-4 py-2.5 text-center font-bold text-slate-500 dark:text-slate-400">{m.unidade}</td>
+                                        <td className="px-4 py-2.5 text-right font-black text-slate-900 dark:text-slate-100">{formatQtd(m.quantidade)}</td>
+                                        <td className="px-4 py-2.5 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(m.estoque)}</td>
+                                        <td className={`px-4 py-2.5 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                           {formatQtd(m.saldo)}
                                         </td>
                                         <td className="px-4 py-2.5">
