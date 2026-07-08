@@ -555,7 +555,7 @@ export const PlanejamentoMateriaisView = () => {
     
     if (viewTab === 'consolidada') {
       if (consolidadoList.length === 0) return;
-      const headers = ['Código', 'Descrição', 'Unidade', 'Quantidade Planejada', 'Já Fornecido', 'A Separar', 'Estoque Disponível', 'Saldo', 'Status', 'Equipes', 'Grupo', 'Pontos Origem'];
+      const headers = ['Código', 'Descrição', 'Unidade', 'Quantidade Necessária', 'Separado', 'A Separar', 'Estoque Disponível', 'Saldo', 'Status', 'Equipes', 'Grupo', 'Pontos Origem'];
       const rows = consolidadoList.map(item => [
         item.codigo,
         item.descricao,
@@ -565,7 +565,7 @@ export const PlanejamentoMateriaisView = () => {
         item.qtdASepararTotal || 0,
         item.estoque,
         item.saldo,
-        item.saldo < 0 ? 'Em falta' : 'Disponível',
+        !item.disponivel ? 'Em falta' : 'Disponível',
         item.equipes.join(' | '),
         item.grupoTraduzido,
         item.pontosOrigem.map(p => `${p.obra} (${p.ponto}): ${p.qtd}`).join(' | ')
@@ -573,7 +573,7 @@ export const PlanejamentoMateriaisView = () => {
       downloadCSV(`Separacao_Materiais_Consolidado_${filterStart}_${filterEnd}_${eqLabel}.csv`, headers, rows);
     } else {
       if (finalDetalhado.length === 0) return;
-      const headers = ['Equipe', 'Obra', 'Ponto', 'Código', 'Descrição', 'Unidade', 'Quantidade Planejada', 'Já Fornecido', 'A Separar', 'Estoque Disponível', 'Saldo', 'Grupo', 'Status', 'Motivo Retenção'];
+      const headers = ['Equipe', 'Obra', 'Ponto', 'Código', 'Descrição', 'Unidade', 'Quantidade Necessária', 'Separado', 'A Separar', 'Estoque Disponível', 'Saldo', 'Grupo', 'Status', 'Motivo Retenção'];
       const rows: (string | number)[][] = [];
       finalDetalhado.forEach(prog => {
         prog.materiais.forEach(m => {
@@ -590,7 +590,7 @@ export const PlanejamentoMateriaisView = () => {
             m.estoque,
             m.saldo,
             m.grupoTraduzido,
-            m.liberado ? (m.saldo < 0 ? 'Em falta' : 'Disponível') : 'Retido',
+            m.liberado ? (!m.disponivel ? 'Em falta' : 'Disponível') : 'Retido',
             m.motivoNaoLiberado || ''
           ]);
         });
@@ -1028,8 +1028,8 @@ export const PlanejamentoMateriaisView = () => {
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Unidade</th>
-                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Plan</th>
-                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Já Fornecido</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Nec.</th>
+                          <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Separado</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">A Separar</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Estoque Disp.</th>
                           <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Saldo</th>
@@ -1066,10 +1066,10 @@ export const PlanejamentoMateriaisView = () => {
                             />
                           </td>
                           <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Qtd Plan */}
+                            {/* Qtd Nec */}
                           </td>
                           <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Já Fornecido */}
+                            {/* Separado */}
                           </td>
                           <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
                             {/* A Separar */}
@@ -1141,7 +1141,7 @@ export const PlanejamentoMateriaisView = () => {
                                 {formatQtd(item.saldo)}
                               </td>
                               <td className="px-4 py-3">
-                                {item.saldo < 0 ? (
+                                {!item.disponivel ? (
                                   <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
                                     <AlertCircle className="h-3.5 w-3.5" />
                                     Em falta
@@ -1221,8 +1221,8 @@ export const PlanejamentoMateriaisView = () => {
                               <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
                               <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
                               <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Unid</th>
-                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Plan</th>
-                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Fornecido</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Qtd Nec.</th>
+                              <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Separado</th>
                               <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">A Separar</th>
                               <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Estoque Disp</th>
                               <th className="px-4 py-3 text-center bg-slate-50 dark:bg-zinc-900">Saldo</th>
@@ -1275,10 +1275,10 @@ export const PlanejamentoMateriaisView = () => {
                                 />
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                {/* Qtd Plan */}
+                                {/* Qtd Nec */}
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                {/* Fornecido */}
+                                {/* Separado */}
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 {/* A Separar */}
@@ -1355,7 +1355,7 @@ export const PlanejamentoMateriaisView = () => {
                                   </td>
                                   <td className="px-4 py-3">
                                     {m.liberado ? (
-                                      m.saldo < 0 ? (
+                                      !m.disponivel ? (
                                         <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
                                           <AlertCircle className="h-3 w-3" />
                                           Em falta
@@ -1420,8 +1420,8 @@ export const PlanejamentoMateriaisView = () => {
                                     <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
                                     <th className="px-4 py-2 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
                                     <th className="px-4 py-2 text-center w-12 bg-slate-50 dark:bg-zinc-900">Unid</th>
-                                    <th className="px-4 py-2 text-center w-16 bg-slate-50 dark:bg-zinc-900">Qtd Plan</th>
-                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Fornecido</th>
+                                    <th className="px-4 py-2 text-center w-16 bg-slate-50 dark:bg-zinc-900">Qtd Nec.</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Separado</th>
                                     <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">A Separar</th>
                                     <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Estoque Disp</th>
                                     <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Saldo</th>
@@ -1474,10 +1474,10 @@ export const PlanejamentoMateriaisView = () => {
                                       />
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                      {/* Qtd Plan */}
+                                      {/* Qtd Nec */}
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                      {/* Fornecido */}
+                                      {/* Separado */}
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                       {/* A Separar */}
@@ -1544,7 +1544,7 @@ export const PlanejamentoMateriaisView = () => {
                                         </td>
                                         <td className="px-4 py-2.5">
                                           {m.liberado ? (
-                                            m.saldo < 0 ? (
+                                            !m.disponivel ? (
                                               <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
                                                 <AlertCircle className="h-3 w-3" />
                                                 Em falta

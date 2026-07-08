@@ -37,6 +37,7 @@ export interface MaterialItem {
   equipe: string;
   estoque: number;
   saldo: number;
+  disponivel?: boolean;
 }
 
 export interface ProgramacaoMateriais {
@@ -69,6 +70,7 @@ export interface ConsolidatedMaterial {
   equipes: string[];
   estoque: number;
   saldo: number;
+  disponivel?: boolean;
 }
 
 // Helper para obter o próximo dia útil (Segunda a Sábado)
@@ -363,7 +365,7 @@ export const useMateriaisData = (
       const suppliedRemainingMap = new Map<string, number>();
       rawReservas.forEach((r: any) => {
         const statusUpper = String(r.status).trim().toUpperCase();
-        if (['SEPARADO', 'BAIXADO', 'ENTREGUE', 'SEM RESERVA'].includes(statusUpper)) {
+        if (statusUpper === 'SEPARADO') {
           const key = `${String(r.unidade_id).trim()}_${String(r.obra).trim()}_${String(r.codigo).trim()}`;
           suppliedRemainingMap.set(key, (suppliedRemainingMap.get(key) || 0) + Number(r.quantidade || 0));
         }
@@ -493,8 +495,9 @@ export const useMateriaisData = (
               suppliedRemainingMap.set(suppliedKey, 0);
             }
 
-            // O saldo deste ponto é baseado no estoque disponível menos o que falta separar
-            const saldo = estoque - qtdASeparar;
+            // O saldo deste ponto é baseado no estoque disponível menos a quantidade planejada
+            const saldo = estoque - quantidadePlanejada;
+            const disponivel = (qtdJaFornecida + estoque) >= quantidadePlanejada;
 
             progMateriais.push({
               id: String(m.id || `${pontoKey}-${codigo}`),
@@ -516,7 +519,8 @@ export const useMateriaisData = (
               motivoNaoLiberado,
               equipe: prog.equipe,
               estoque,
-              saldo
+              saldo,
+              disponivel
             });
           });
         });
@@ -553,7 +557,8 @@ export const useMateriaisData = (
               grupoTraduzido: m.grupoTraduzido,
               equipes: [],
               estoque,
-              saldo: estoque
+              saldo: estoque,
+              disponivel: false
             });
           }
 
@@ -581,9 +586,10 @@ export const useMateriaisData = (
         });
       });
 
-      // Atualiza o saldo consolidado deduzindo o total a separar
+      // Atualiza o saldo consolidado e disponibilidade
       consolidatedMap.forEach(cons => {
-        cons.saldo = cons.estoque - (cons.qtdASepararTotal || 0);
+        cons.saldo = cons.estoque - cons.quantidadeTotal;
+        cons.disponivel = (cons.qtdJaFornecidaTotal || 0) + cons.estoque >= cons.quantidadeTotal;
       });
 
       const consolidatedList = Array.from(consolidatedMap.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
