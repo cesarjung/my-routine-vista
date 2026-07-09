@@ -812,7 +812,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
       {/* ==================== MODAL DE SIMULAÇÃO (REPROGRAMAR) ==================== */}
       {reprogrammingProg && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg shadow-2xl border-slate-200 bg-white dark:bg-zinc-950">
+          <Card className="w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl border-slate-200 bg-white dark:bg-zinc-950">
             <CardHeader className="bg-slate-50 dark:bg-zinc-900 border-b pb-4 flex flex-row justify-between items-start">
               <div>
                 <CardTitle className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -833,7 +833,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
               </Button>
             </CardHeader>
             
-            <CardContent className="p-5 flex flex-col gap-4">
+            <CardContent className="p-5 flex flex-col gap-4 overflow-y-auto flex-1">
               
               <div>
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Materiais Faltantes</h4>
