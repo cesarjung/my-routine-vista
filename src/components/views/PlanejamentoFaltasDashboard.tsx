@@ -98,9 +98,9 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
       f.descricao,
       f.grupoTraduzido,
       f.critico ? 'Crítico' : 'Normal',
-      f.falta,
-      f.necessario,
-      f.estoqueDesconhecido ? 'Desconhecido' : f.estoque,
+      formatQtd(f.falta),
+      formatQtd(f.necessario),
+      f.estoqueDesconhecido ? 'Desconhecido' : formatQtd(f.estoque),
       f.primeiroDiaComprometido ? formatSafe(f.primeiroDiaComprometido, 'dd/MM/yyyy') : '-',
       f.equipes.join(' | ')
     ]);
@@ -215,9 +215,9 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
       f.descricao,
       f.grupoTraduzido,
       f.critico ? "CRÍTICO" : "NORMAL",
-      f.falta,
-      f.necessario,
-      f.estoqueDesconhecido ? "DESCONHECIDO" : f.estoque,
+      formatQtd(f.falta),
+      formatQtd(f.necessario),
+      f.estoqueDesconhecido ? "DESCONHECIDO" : formatQtd(f.estoque),
       f.primeiroDiaComprometido ? formatSafe(f.primeiroDiaComprometido, 'dd/MM/yyyy') : '-',
       f.equipes.join(' | ')
     ]);
@@ -574,7 +574,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
                           <span className="font-mono font-bold text-amber-600 dark:text-amber-450 text-sm italic">Desconhecido</span>
                         ) : (
                           <>
-                            <span className="font-black text-rose-600 dark:text-rose-450 text-xl leading-none">-{f.falta}</span>
+                            <span className="font-black text-rose-600 dark:text-rose-455 text-xl leading-none">-{formatQtd(f.falta)}</span>
                             <span className="text-[9px] text-rose-500 dark:text-rose-400 font-bold uppercase mt-1 leading-none">falta</span>
                           </>
                         )}
@@ -582,11 +582,11 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
                       
                       <div className="text-right text-xs shrink-0 text-slate-500 dark:text-slate-400 font-medium w-24">
                         {f.estoqueDesconhecido ? (
-                          <span>{f.necessario} nec. / ? estoque</span>
+                          <span>{formatQtd(f.necessario)} nec. / ? estoque</span>
                         ) : (
                           <>
-                            <div>{f.necessario} nec.</div>
-                            <div className="text-slate-700 dark:text-slate-350 font-bold mt-0.5">{f.estoque} estoque</div>
+                            <div>{formatQtd(f.necessario)} nec.</div>
+                            <div className="text-slate-700 dark:text-slate-350 font-bold mt-0.5">{formatQtd(f.estoque)} estoque</div>
                           </>
                         )}
                       </div>
@@ -749,13 +749,13 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
               
               <div className="mb-4 bg-violet-50/50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 p-3 rounded-lg text-xs flex flex-wrap justify-between items-center gap-3">
                 <div className="text-slate-700 dark:text-slate-350">
-                  Estoque Físico Inicial: <strong className="text-violet-700 dark:text-violet-400">{activeAnalysis.estoqueDesconhecido ? 'Desconhecido' : activeAnalysis.estoque}</strong>
+                  Estoque Físico Inicial: <strong className="text-violet-700 dark:text-violet-400">{activeAnalysis.estoqueDesconhecido ? 'Desconhecido' : formatQtd(activeAnalysis.estoque)}</strong>
                 </div>
                 <div className="text-slate-700 dark:text-slate-350">
-                  Falta Acumulada no Período: <strong className="text-rose-600 dark:text-rose-400">-{activeAnalysis.falta}</strong>
+                  Falta Acumulada no Período: <strong className="text-rose-600 dark:text-rose-400">-{formatQtd(activeAnalysis.falta)}</strong>
                 </div>
                 <div className="text-slate-700 dark:text-slate-350">
-                  Total Solicitado: <strong className="text-slate-900 dark:text-white">{activeAnalysis.necessario}</strong>
+                  Total Solicitado: <strong className="text-slate-900 dark:text-white">{formatQtd(activeAnalysis.necessario)}</strong>
                 </div>
               </div>
 
@@ -844,7 +844,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
                         <span className="font-mono text-violet-600 font-semibold">{f.codigo}</span>
                         <span className="text-slate-700 dark:text-slate-350 leading-none">{f.descricao}</span>
                       </div>
-                      <span className="font-bold text-rose-600 dark:text-rose-400 shrink-0">Falta: {f.faltaAlocada} de {f.quantidade}</span>
+                      <span className="font-bold text-rose-600 dark:text-rose-400 shrink-0">Falta: {formatQtd(f.faltaAlocada)} de {formatQtd(f.quantidade)}</span>
                     </div>
                   ))}
                 </div>
