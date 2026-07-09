@@ -772,9 +772,25 @@ export const PlanejamentoMateriaisView = () => {
             </span>
             <div className="flex items-center gap-1 border border-input bg-background rounded-md h-9 px-2.5 focus-within:ring-1 focus-within:ring-ring w-full sm:w-fit">
               <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-xs outline-none w-[95px] text-foreground" title="Data Inicial" />
+              <input 
+                type="date" 
+                value={filterStart} 
+                onChange={e => setFilterStart(e.target.value)} 
+                onClick={e => { try { e.currentTarget.showPicker(); } catch (err) {} }}
+                onFocus={e => { try { e.currentTarget.showPicker(); } catch (err) {} }}
+                className="bg-transparent text-xs outline-none w-[95px] text-foreground cursor-pointer" 
+                title="Data Inicial" 
+              />
               <span className="text-muted-foreground text-xs shrink-0 px-1 font-medium">-</span>
-              <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-xs outline-none w-[95px] text-foreground" title="Data Final" />
+              <input 
+                type="date" 
+                value={filterEnd} 
+                onChange={e => setFilterEnd(e.target.value)} 
+                onClick={e => { try { e.currentTarget.showPicker(); } catch (err) {} }}
+                onFocus={e => { try { e.currentTarget.showPicker(); } catch (err) {} }}
+                className="bg-transparent text-xs outline-none w-[95px] text-foreground cursor-pointer" 
+                title="Data Final" 
+              />
             </div>
           </div>
 
