@@ -113,21 +113,31 @@ export const useMateriaisData = (
     staleTime: 10 * 60 * 1000,
   });
 
-  // 2b. Busca o estoque físico no Supabase
+  // 2b. Busca o estoque físico no Supabase com paginação (evita limite de 1000 linhas)
   const estoqueQuery = useQuery({
     queryKey: ['materiais_estoque', selectedUnidadesIds],
     enabled: selectedUnidadesIds.length > 0,
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
-          .from('materiais_estoque')
-          .select('*')
-          .in('unidade_id', selectedUnidadesIds);
-        if (error) {
-          console.warn("Tabela materiais_estoque não criada ou erro ao buscar:", error);
-          return [];
+        let allData: any[] = [];
+        let offset = 0;
+        const limit = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('materiais_estoque')
+            .select('*')
+            .in('unidade_id', selectedUnidadesIds)
+            .range(offset, offset + limit - 1);
+          if (error) {
+            console.warn("Erro ao buscar estoque físico:", error);
+            throw error;
+          }
+          if (!data || data.length === 0) break;
+          allData = [...allData, ...data];
+          if (data.length < limit) break;
+          offset += limit;
         }
-        return data || [];
+        return allData;
       } catch (err) {
         console.warn("Erro ao carregar estoque físico:", err);
         return [];
@@ -136,21 +146,31 @@ export const useMateriaisData = (
     staleTime: 5 * 60 * 1000,
   });
 
-  // 2c. Busca as reservas/formulários no Supabase
+  // 2c. Busca as reservas/formulários no Supabase com paginação (evita limite de 1000 linhas)
   const reservasQuery = useQuery({
     queryKey: ['materiais_reservas', selectedUnidadesIds],
     enabled: selectedUnidadesIds.length > 0,
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
-          .from('materiais_reservas')
-          .select('*')
-          .in('unidade_id', selectedUnidadesIds);
-        if (error) {
-          console.warn("Tabela materiais_reservas não criada ou erro ao buscar:", error);
-          return [];
+        let allData: any[] = [];
+        let offset = 0;
+        const limit = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('materiais_reservas')
+            .select('*')
+            .in('unidade_id', selectedUnidadesIds)
+            .range(offset, offset + limit - 1);
+          if (error) {
+            console.warn("Erro ao buscar reservas:", error);
+            throw error;
+          }
+          if (!data || data.length === 0) break;
+          allData = [...allData, ...data];
+          if (data.length < limit) break;
+          offset += limit;
         }
-        return data || [];
+        return allData;
       } catch (err) {
         console.warn("Erro ao carregar reservas:", err);
         return [];
