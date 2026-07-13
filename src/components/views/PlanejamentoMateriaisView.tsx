@@ -192,7 +192,7 @@ export const PlanejamentoMateriaisView = () => {
     );
   }, [kpiModal.rows, modalSearch]);
   const [viewTab, setViewTab] = useState<'consolidada' | 'detalhada'>('consolidada');
-  const [detalhadaMode, setDetalhadaMode] = useState<'equipe' | 'geral'>('equipe');
+  const [detalhadaMode, setDetalhadaMode] = useState<'equipe' | 'obra' | 'geral'>('equipe');
   // Termo de pesquisa para os materiais
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMateriais, setSelectedMateriais] = useSessionState<string[]>('filter_materiais_selecionados', []);
@@ -205,6 +205,11 @@ export const PlanejamentoMateriaisView = () => {
   const [colFilterGrupo, setColFilterGrupo] = useState<string[]>([]);
   const [colFilterEquipes, setColFilterEquipes] = useState<string[]>([]);
   const [colFilterOrigem, setColFilterOrigem] = useState<string[]>([]);
+  const [colFilterConsolidadaQtdNec, setColFilterConsolidadaQtdNec] = useState<string[]>([]);
+  const [colFilterConsolidadaSeparado, setColFilterConsolidadaSeparado] = useState<string[]>([]);
+  const [colFilterConsolidadaASeparar, setColFilterConsolidadaASeparar] = useState<string[]>([]);
+  const [colFilterConsolidadaEstoqueDisp, setColFilterConsolidadaEstoqueDisp] = useState<string[]>([]);
+  const [colFilterConsolidadaSaldo, setColFilterConsolidadaSaldo] = useState<string[]>([]);
   
   // Filtro de Status Global (Separação)
   const [globalStatusFilter, setGlobalStatusFilter] = useState<'todos' | 'disponivel' | 'falta'>('todos');
@@ -214,6 +219,11 @@ export const PlanejamentoMateriaisView = () => {
   const [colFilterDetalhadaCodigo, setColFilterDetalhadaCodigo] = useState<string[]>([]);
   const [colFilterDetalhadaDescricao, setColFilterDetalhadaDescricao] = useState<string[]>([]);
   const [colFilterDetalhadaUnidade, setColFilterDetalhadaUnidade] = useState<string[]>([]);
+  const [colFilterDetalhadaQtdNec, setColFilterDetalhadaQtdNec] = useState<string[]>([]);
+  const [colFilterDetalhadaSeparado, setColFilterDetalhadaSeparado] = useState<string[]>([]);
+  const [colFilterDetalhadaASeparar, setColFilterDetalhadaASeparar] = useState<string[]>([]);
+  const [colFilterDetalhadaEstoqueDisp, setColFilterDetalhadaEstoqueDisp] = useState<string[]>([]);
+  const [colFilterDetalhadaSaldo, setColFilterDetalhadaSaldo] = useState<string[]>([]);
   const [colFilterDetalhadaGrupo, setColFilterDetalhadaGrupo] = useState<string[]>([]);
   const [colFilterDetalhadaEquipe, setColFilterDetalhadaEquipe] = useState<string[]>([]);
 
@@ -337,7 +347,8 @@ export const PlanejamentoMateriaisView = () => {
     const query = searchQuery.trim().toLowerCase();
 
     return filteredProgramacoes.map(prog => {
-      let filteredMats = prog.materiais;
+      // Bring only planned/released materials
+      let filteredMats = prog.materiais.filter(m => m.liberado);
       if (selectedMateriais.length > 0) {
         filteredMats = filteredMats.filter(m => selectedMateriais.includes(m.descricao));
       }
@@ -413,6 +424,48 @@ export const PlanejamentoMateriaisView = () => {
     return Array.from(set).sort().map(v => ({ value: v, label: v }));
   }, [filteredConsolidado]);
 
+  const consolidadaQtdNecOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredConsolidado.forEach(item => {
+      if (item.quantidadeTotal !== undefined && item.quantidadeTotal !== null) {
+        set.add(formatQtd(item.quantidadeTotal));
+      }
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredConsolidado]);
+
+  const consolidadaSeparadoOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredConsolidado.forEach(item => {
+      set.add(formatQtd(item.qtdJaFornecidaTotal || 0));
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredConsolidado]);
+
+  const consolidadaASepararOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredConsolidado.forEach(item => {
+      set.add(formatQtd(item.qtdASepararTotal || 0));
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredConsolidado]);
+
+  const consolidadaEstoqueDispOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredConsolidado.forEach(item => {
+      set.add(formatQtd(item.estoque));
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredConsolidado]);
+
+  const consolidadaSaldoOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredConsolidado.forEach(item => {
+      set.add(formatQtd(item.saldo));
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredConsolidado]);
+
   // 4. Opções para os filtros de cabeçalho do Detalhamento por Ponto
   const detalhadaPontosOptions = useMemo(() => {
     const set = new Set<string>();
@@ -472,6 +525,58 @@ export const PlanejamentoMateriaisView = () => {
       });
     });
     return Array.from(set).sort().map(v => ({ value: v, label: v }));
+  }, [filteredDetalhado]);
+
+  const detalhadaQtdNecOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredDetalhado.forEach(prog => {
+      prog.materiais.forEach(m => {
+        if (m.quantidade !== undefined && m.quantidade !== null) {
+          set.add(formatQtd(m.quantidade));
+        }
+      });
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredDetalhado]);
+
+  const detalhadaSeparadoOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredDetalhado.forEach(prog => {
+      prog.materiais.forEach(m => {
+        set.add(formatQtd(m.qtdJaFornecida || 0));
+      });
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredDetalhado]);
+
+  const detalhadaASepararOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredDetalhado.forEach(prog => {
+      prog.materiais.forEach(m => {
+        set.add(formatQtd(m.qtdASeparar || 0));
+      });
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredDetalhado]);
+
+  const detalhadaEstoqueDispOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredDetalhado.forEach(prog => {
+      prog.materiais.forEach(m => {
+        set.add(formatQtd(m.estoque || 0));
+      });
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+  }, [filteredDetalhado]);
+
+  const detalhadaSaldoOptions = useMemo(() => {
+    const set = new Set<string>();
+    filteredDetalhado.forEach(prog => {
+      prog.materiais.forEach(m => {
+        set.add(formatQtd(m.saldo || 0));
+      });
+    });
+    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
   }, [filteredDetalhado]);
 
   // 5. Aplica filtros de coluna da Visão Consolidada
@@ -550,6 +655,59 @@ export const PlanejamentoMateriaisView = () => {
       });
     });
     return list;
+  }, [finalDetalhado]);
+
+  const detalhadoPorObra = useMemo(() => {
+    const map = new Map<string, {
+      id: string;
+      obra: string;
+      pontosList: string[];
+      pontosRaw: string;
+      descricaoAtividadesList: string[];
+      materiais: any[];
+      byGrupos: string[];
+    }>();
+
+    finalDetalhado.forEach(prog => {
+      const key = prog.obra;
+      if (!map.has(key)) {
+        map.set(key, {
+          id: prog.id + '_obra',
+          obra: prog.obra,
+          pontosList: [],
+          pontosRaw: '',
+          descricaoAtividadesList: [],
+          materiais: [],
+          byGrupos: []
+        });
+      }
+      const group = map.get(key)!;
+      prog.pontosList.forEach(p => {
+        if (!group.pontosList.includes(p)) {
+          group.pontosList.push(p);
+        }
+      });
+      if (prog.descricaoAtividades && !group.descricaoAtividadesList.includes(prog.descricaoAtividades)) {
+        group.descricaoAtividadesList.push(prog.descricaoAtividades);
+      }
+      prog.byGrupos?.forEach(g => {
+        if (!group.byGrupos.includes(g)) {
+          group.byGrupos.push(g);
+        }
+      });
+      prog.materiais.forEach(m => {
+        group.materiais.push({
+          ...m,
+          equipe: prog.equipe
+        });
+      });
+    });
+
+    map.forEach(group => {
+      group.pontosRaw = group.pontosList.join(', ');
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.obra.localeCompare(b.obra));
   }, [finalDetalhado]);
 
   const handlePrint = () => {
@@ -1087,20 +1245,45 @@ export const PlanejamentoMateriaisView = () => {
                               onChange={setColFilterUnidade}
                             />
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Qtd Nec */}
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                            <FilterSelect
+                              label=""
+                              options={consolidadaQtdNecOptions}
+                              selectedValues={colFilterConsolidadaQtdNec}
+                              onChange={setColFilterConsolidadaQtdNec}
+                            />
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Separado */}
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                            <FilterSelect
+                              label=""
+                              options={consolidadaSeparadoOptions}
+                              selectedValues={colFilterConsolidadaSeparado}
+                              onChange={setColFilterConsolidadaSeparado}
+                            />
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* A Separar */}
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                            <FilterSelect
+                              label=""
+                              options={consolidadaASepararOptions}
+                              selectedValues={colFilterConsolidadaASeparar}
+                              onChange={setColFilterConsolidadaASeparar}
+                            />
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Estoque Disp */}
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                            <FilterSelect
+                              label=""
+                              options={consolidadaEstoqueDispOptions}
+                              selectedValues={colFilterConsolidadaEstoqueDisp}
+                              onChange={setColFilterConsolidadaEstoqueDisp}
+                            />
                           </td>
-                          <td className="px-2 py-1 text-right bg-slate-100 dark:bg-zinc-900/80">
-                            {/* Saldo */}
+                          <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                            <FilterSelect
+                              label=""
+                              options={consolidadaSaldoOptions}
+                              selectedValues={colFilterConsolidadaSaldo}
+                              onChange={setColFilterConsolidadaSaldo}
+                            />
                           </td>
                           <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                              <select
@@ -1201,7 +1384,7 @@ export const PlanejamentoMateriaisView = () => {
                 ) : (
                   /* VISÃO DETALHADA POR PONTO */
                   <div className="flex flex-col gap-6">
-                    {/* Toggle button for Mode (Por Equipe vs Geral) */}
+                    {/* Toggle button for Mode (Por Equipe vs Por Obra vs Geral) */}
                     <div className="flex justify-between items-center bg-slate-50/50 p-2 border rounded-lg no-print">
                       <div className="text-xs font-semibold text-slate-600 px-2">
                         Visualização do Detalhamento:
@@ -1217,6 +1400,17 @@ export const PlanejamentoMateriaisView = () => {
                         >
                           <ClipboardList className="h-3 w-3" />
                           Por Equipe
+                        </button>
+                        <button
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1 ${
+                            detalhadaMode === 'obra'
+                              ? 'bg-white shadow text-slate-900'
+                              : 'text-slate-500 hover:text-slate-950'
+                          }`}
+                          onClick={() => setDetalhadaMode('obra')}
+                        >
+                          <FileText className="h-3 w-3" />
+                          Por Obra
                         </button>
                         <button
                           className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1 ${
@@ -1297,19 +1491,44 @@ export const PlanejamentoMateriaisView = () => {
                                 />
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                {/* Qtd Nec */}
+                                <FilterSelect
+                                  label=""
+                                  options={detalhadaQtdNecOptions}
+                                  selectedValues={colFilterDetalhadaQtdNec}
+                                  onChange={setColFilterDetalhadaQtdNec}
+                                />
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                {/* Separado */}
+                                <FilterSelect
+                                  label=""
+                                  options={detalhadaSeparadoOptions}
+                                  selectedValues={colFilterDetalhadaSeparado}
+                                  onChange={setColFilterDetalhadaSeparado}
+                                />
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                {/* A Separar */}
+                                <FilterSelect
+                                  label=""
+                                  options={detalhadaASepararOptions}
+                                  selectedValues={colFilterDetalhadaASeparar}
+                                  onChange={setColFilterDetalhadaASeparar}
+                                />
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                {/* Estoque Disp */}
+                                <FilterSelect
+                                  label=""
+                                  options={detalhadaEstoqueDispOptions}
+                                  selectedValues={colFilterDetalhadaEstoqueDisp}
+                                  onChange={setColFilterDetalhadaEstoqueDisp}
+                                />
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                {/* Saldo */}
+                                <FilterSelect
+                                  label=""
+                                  options={detalhadaSaldoOptions}
+                                  selectedValues={colFilterDetalhadaSaldo}
+                                  onChange={setColFilterDetalhadaSaldo}
+                                />
                               </td>
                               <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                 <FilterSelect
@@ -1401,6 +1620,227 @@ export const PlanejamentoMateriaisView = () => {
                           </tbody>
                         </table>
                       </div>
+                    ) : detalhadaMode === 'obra' ? (
+                      /* VISÃO POR OBRA (CARDS) */
+                      detalhadoPorObra.length === 0 ? (
+                        <div className="border rounded-lg py-12 text-center text-muted-foreground text-sm">
+                          Nenhuma obra encontrada para esta seleção.
+                        </div>
+                      ) : (
+                        detalhadoPorObra.map(prog => (
+                          <div key={prog.id} className="border rounded-lg overflow-hidden shadow-sm bg-white dark:bg-zinc-950 mb-6 last:mb-0">
+                            
+                            {/* Obra Header */}
+                            <div className="bg-slate-50/70 dark:bg-zinc-900/70 border-b dark:border-zinc-800 px-4 py-3 flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-extrabold text-sm text-slate-900 dark:text-slate-150">Obra: {prog.obra}</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">({prog.pontosList.length} ponto(s): {prog.pontosRaw})</span>
+                              </div>
+                              
+                              <div className="flex flex-wrap items-center gap-1">
+                                {prog.byGrupos.map(bg => (
+                                  <Badge key={bg} variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-300 font-bold text-xs">
+                                    {bg}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="p-3 text-xs text-slate-500 dark:text-slate-400 italic border-b dark:border-zinc-800 bg-slate-50/20 dark:bg-zinc-900/20">
+                              Atividades: {prog.descricaoAtividadesList.join(' | ') || 'Nenhuma descrição fornecida'}
+                            </div>
+
+                            {/* Materiais da Obra */}
+                            <div className="overflow-auto h-[250px] min-h-[150px] max-h-[70vh] resize-y relative shadow-inner bg-white dark:bg-zinc-950">
+                              <table className="w-full text-sm text-left border-collapse">
+                                <thead className="bg-slate-50 dark:bg-zinc-900 text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold border-b dark:border-zinc-800 sticky top-0 z-20 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                                  <tr className="bg-slate-50 dark:bg-zinc-900">
+                                    <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Equipe</th>
+                                    <th className="px-4 py-2 w-24 text-center bg-slate-50 dark:bg-zinc-900">Ponto</th>
+                                    <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Código</th>
+                                    <th className="px-4 py-2 text-center bg-slate-50 dark:bg-zinc-900">Descrição</th>
+                                    <th className="px-4 py-2 text-center w-12 bg-slate-50 dark:bg-zinc-900">Unid</th>
+                                    <th className="px-4 py-2 text-center w-16 bg-slate-50 dark:bg-zinc-900">Qtd Nec.</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Separado</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">A Separar</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Estoque Disp</th>
+                                    <th className="px-4 py-2 text-center w-20 bg-slate-50 dark:bg-zinc-900">Saldo</th>
+                                    <th className="px-4 py-2 w-24 text-center bg-slate-50 dark:bg-zinc-900">Status</th>
+                                    <th className="px-4 py-2 w-28 text-center bg-slate-50 dark:bg-zinc-900">Grupo Mat.</th>
+                                  </tr>
+                                  <tr className="bg-slate-100 dark:bg-zinc-900/80 no-print border-b dark:border-zinc-800">
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaEquipesOptions}
+                                        selectedValues={colFilterDetalhadaEquipe}
+                                        onChange={setColFilterDetalhadaEquipe}
+                                        searchable={true}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaPontosOptions}
+                                        selectedValues={colFilterPonto}
+                                        onChange={setColFilterPonto}
+                                        searchable={true}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaCodigosOptions}
+                                        selectedValues={colFilterDetalhadaCodigo}
+                                        onChange={setColFilterDetalhadaCodigo}
+                                        searchable={true}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaDescricoesOptions}
+                                        selectedValues={colFilterDetalhadaDescricao}
+                                        onChange={setColFilterDetalhadaDescricao}
+                                        searchable={true}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 text-center bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaUnidadesOptions}
+                                        selectedValues={colFilterDetalhadaUnidade}
+                                        onChange={setColFilterDetalhadaUnidade}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaQtdNecOptions}
+                                        selectedValues={colFilterDetalhadaQtdNec}
+                                        onChange={setColFilterDetalhadaQtdNec}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaSeparadoOptions}
+                                        selectedValues={colFilterDetalhadaSeparado}
+                                        onChange={setColFilterDetalhadaSeparado}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaASepararOptions}
+                                        selectedValues={colFilterDetalhadaASeparar}
+                                        onChange={setColFilterDetalhadaASeparar}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaEstoqueDispOptions}
+                                        selectedValues={colFilterDetalhadaEstoqueDisp}
+                                        onChange={setColFilterDetalhadaEstoqueDisp}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaSaldoOptions}
+                                        selectedValues={colFilterDetalhadaSaldo}
+                                        onChange={setColFilterDetalhadaSaldo}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                       <select
+                                         value={globalStatusFilter}
+                                         onChange={e => setGlobalStatusFilter(e.target.value as any)}
+                                         className="w-full h-8 px-1 text-xs border dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-slate-700 dark:text-slate-200 outline-none font-normal shadow-sm"
+                                       >
+                                         <option value="todos">Todos</option>
+                                         <option value="disponivel">Disponíveis</option>
+                                         <option value="falta">Em falta</option>
+                                       </select>
+                                    </td>
+                                    <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaGruposOptions}
+                                        selectedValues={colFilterDetalhadaGrupo}
+                                        onChange={setColFilterDetalhadaGrupo}
+                                        searchable={true}
+                                      />
+                                    </td>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y text-xs">
+                                  {prog.materiais.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={12} className="px-4 py-6 text-center text-muted-foreground">
+                                        Nenhum material encontrado ou liberado para esta obra.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    prog.materiais.map((m, idx) => (
+                                      <tr 
+                                        key={idx} 
+                                        className={`hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 border-b dark:border-zinc-900 ${!m.liberado ? 'opacity-40 bg-slate-50/10 dark:bg-zinc-900/10' : ''}`}
+                                      >
+                                        <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-slate-300">{m.equipe}</td>
+                                        <td className="px-4 py-2.5 font-bold font-mono text-slate-800 dark:text-slate-200">{m.pontoObra}</td>
+                                        <td className="px-4 py-2.5 font-mono font-bold text-violet-600 dark:text-violet-400">{m.codigo}</td>
+                                        <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200">
+                                          {m.descricao}
+                                          {m.semRegra && (
+                                            <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-450 bg-amber-50 dark:bg-amber-950/20">
+                                              sem regra
+                                            </Badge>
+                                          )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-center font-bold text-slate-500 dark:text-slate-400">{m.unidade}</td>
+                                        <td className="px-4 py-2.5 text-right font-black text-slate-950 dark:text-slate-100 bg-slate-50/30 dark:bg-zinc-900/30">{formatQtd(m.quantidade)}</td>
+                                        <td className="px-4 py-2.5 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(m.qtdJaFornecida || 0)}</td>
+                                        <td className="px-4 py-2.5 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(m.qtdASeparar || 0)}</td>
+                                        <td className="px-4 py-2.5 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(m.estoque)}</td>
+                                        <td className={`px-4 py-2.5 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
+                                          {formatQtd(m.saldo)}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                          {m.liberado ? (
+                                            !m.disponivel ? (
+                                              <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center justify-center gap-1">
+                                                <AlertCircle className="h-3 w-3" />
+                                                Em falta
+                                              </span>
+                                            ) : (
+                                              <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center justify-center gap-1">
+                                                <CheckCircle2 className="h-3 w-3" />
+                                                Disponível
+                                              </span>
+                                            )
+                                          ) : (
+                                            <span className="text-slate-400 flex items-center justify-center gap-1" title={m.motivoNaoLiberado}>
+                                              <HelpCircle className="h-3 w-3" />
+                                              Retido
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-center">
+                                          <Badge variant="outline" className={`font-bold text-[10px] ${getGrupoColorClasses(m.grupoTraduzido)}`}>
+                                            {m.grupoTraduzido}
+                                          </Badge>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))
+                      )
                     ) : (
                       /* VISÃO POR EQUIPE (CARDS) */
                       finalDetalhado.length === 0 ? (
@@ -1496,19 +1936,44 @@ export const PlanejamentoMateriaisView = () => {
                                       />
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                      {/* Qtd Nec */}
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaQtdNecOptions}
+                                        selectedValues={colFilterDetalhadaQtdNec}
+                                        onChange={setColFilterDetalhadaQtdNec}
+                                      />
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                      {/* Separado */}
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaSeparadoOptions}
+                                        selectedValues={colFilterDetalhadaSeparado}
+                                        onChange={setColFilterDetalhadaSeparado}
+                                      />
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                      {/* A Separar */}
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaASepararOptions}
+                                        selectedValues={colFilterDetalhadaASeparar}
+                                        onChange={setColFilterDetalhadaASeparar}
+                                      />
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                      {/* Estoque Disp */}
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaEstoqueDispOptions}
+                                        selectedValues={colFilterDetalhadaEstoqueDisp}
+                                        onChange={setColFilterDetalhadaEstoqueDisp}
+                                      />
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
-                                      {/* Saldo */}
+                                      <FilterSelect
+                                        label=""
+                                        options={detalhadaSaldoOptions}
+                                        selectedValues={colFilterDetalhadaSaldo}
+                                        onChange={setColFilterDetalhadaSaldo}
+                                      />
                                     </td>
                                     <td className="px-2 py-1 bg-slate-100 dark:bg-zinc-900/80">
                                        <select

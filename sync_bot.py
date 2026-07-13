@@ -151,17 +151,17 @@ def fetch_global_recursos(gc, retries=3):
                         if uid not in central_postes:
                             central_postes[uid] = []
                         
-                    data_val = str(row[0]).strip() if len(row) > 0 else ""
-                    supervisor = str(row[3]).strip() if len(row) > 3 else ""
-                    equipe = str(row[5]).strip() if len(row) > 5 else ""
-                    
-                    central_postes[uid].append({
-                        "data": data_val,
-                        "supervisor": supervisor,
-                        "equipe": equipe,
-                        "projeto": projeto,
-                        "implant": implant_val
-                    })
+                        data_val = str(row[0]).strip() if len(row) > 0 else ""
+                        supervisor = str(row[3]).strip() if len(row) > 3 else ""
+                        equipe = str(row[5]).strip() if len(row) > 5 else ""
+                        
+                        central_postes[uid].append({
+                            "data": data_val,
+                            "supervisor": supervisor,
+                            "equipe": equipe,
+                            "projeto": projeto,
+                            "implant": implant_val
+                        })
 
                 if realizado > 0:
                     if projeto not in recursos_globais:
@@ -712,28 +712,19 @@ def run_sync_cycle():
         logging.error("Abortando ciclo por falta de credenciais do Google Cloud.")
         return
         
-    global_recursos = fetch_global_recursos(gc)
-    central_postes = fetch_poste_turno_all(gc)
+    global_recursos, central_postes = fetch_global_recursos(gc)
     
-    # 1. Busca e sincroniza programações para cada unidade
-    unidades = fetch_unidades(env_vars)
-    for u in unidades:
-        unidade_id = u.get("id")
-        tab_name = u.get("tab_name")
-        sheet_id = u.get("sheet_id")
-        
-        if not sheet_id:
-            logging.warning(f"Unidade {tab_name} não possui sheet_id cadastrado. Pulando...")
-            continue
-            
-        logging.info(f"Processando Unidade: {tab_name} (ID: {unidade_id})")
-        sheets_data = fetch_sheets_data(gc, sheet_id)
+    for unidade_id in UNIDADES_PLANEJAMENTO:
+        sheets_data = fetch_google_sheets(unidade_id, gc)
         
         if sheets_data:
+            import json
+            
             payload = {
                 "unidade_id": unidade_id,
-                "principal": json.dumps(sheets_data.get("Plan_principal", [])),
-                "recursos": json.dumps({
+                "carteira": json.dumps(sheets_data.get("Carteira_Planejador", [])),
+                "principal": json.dumps(sheets_data.get("Plan_Principal", [])),
+                "bd_metas": json.dumps({
                     "bd_metas": sheets_data.get("BD_Metas", []),
                     "base_curva": sheets_data.get("Base_Curva", []),
                     "bd_config": sheets_data.get("BD_Config", []),
