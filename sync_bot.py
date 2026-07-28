@@ -378,7 +378,15 @@ def sync_materiais_por_ponto(gc, env_vars):
         
     folder_id = '1la_5Ozfa0zkZQ8a4OKElkjrIA9dPUB8Y'
     unidade_map = {
-        "BARREIRAS": "1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E"
+        "BARREIRAS": "1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E",
+        "BOM_JESUS_DA_LAPA": "1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI",
+        "GUANAMBI": "1FO5tyhXygbbzSmmTGdnm45j4DD_rRFQgEheN8T8Wy70",
+        "BRUMADO": "1oS619l3x_D1mXkvDpw8vs91G6ipZmsK83JqEIwPj7Uk",
+        "LIVRAMENTO": "1gN2tR_LCuRnVCQ9tm2UURnVuMlJPVNEjvmo02TwFQCI",
+        "IBOTIRAMA": "1dNwj8qWTl1k92PxI9iXwaNZYITnxuKP-kOF1QnZK3Iw",
+        "JEQUIE": "1sGHf-zWXoxjnO20QBw2KWX39BSCzT8rzHdEz1hL7jyU",
+        "VITORIA_DA_CONQUISTA": "1XmpY8mqkRou-CRY68j1ljHH8W8zcROy7wnwMMSfbV7o",
+        "ITAPETINGA": "1rzT8o6XZi4v8j7CYLky3BD3sT5IPjv1PRb45ipBfbw4",
     }
     
     try:
@@ -535,8 +543,14 @@ def sync_materiais_por_ponto(gc, env_vars):
                     })
                 
                 logging.info(f"  [>] Carregados {len(records)} registros. Limpando cache antigo no Supabase...")
-                delete_url = f"{supabase_url}/rest/v1/materiais_por_ponto?unidade_id=eq.{plan_unidade_id}"
-                requests.delete(delete_url, headers=headers, timeout=60)
+                unique_projects = list(set(str(r["com_mascara"]).strip() for r in records if r.get("com_mascara")))
+                logging.info(f"  [>] Limpando cache antigo para {len(unique_projects)} projetos em lotes...")
+                chunk_del_size = 50
+                for idx in range(0, len(unique_projects), chunk_del_size):
+                    proj_chunk = unique_projects[idx:idx+chunk_del_size]
+                    in_cond = ",".join(p for p in proj_chunk)
+                    delete_url = f"{supabase_url}/rest/v1/materiais_por_ponto?com_mascara=in.({in_cond})"
+                    requests.delete(delete_url, headers=headers, timeout=30)
                 
                 chunk_size = 2000
                 insert_url = f"{supabase_url}/rest/v1/materiais_por_ponto"

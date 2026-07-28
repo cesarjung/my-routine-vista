@@ -16,7 +16,7 @@ export interface RawUnidadeData {
 
 export const usePlanejamentoRaw = (selectedUnidadesIds: string[]) => {
   return useQuery({
-    queryKey: ['planejamento_raw_v3'], // Cache unico global
+    queryKey: ['planejamento_raw_v4', selectedUnidadesIds],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planejamento_cache')
@@ -90,7 +90,7 @@ export const useSyncPlanejamento = () => {
       return true;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planejamento_raw_v3'] });
+      queryClient.invalidateQueries({ queryKey: ['planejamento_raw_v4'] });
       toast.success('Painel atualizado com os dados mais recentes do banco!');
     }
   });

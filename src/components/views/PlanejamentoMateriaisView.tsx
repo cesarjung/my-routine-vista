@@ -32,8 +32,8 @@ import {
 } from '@/components/ui/dialog';
 import { downloadCSV } from '@/utils/csvExport';
 
-const formatQtd = (val: number) => {
-  if (val === undefined || val === null) return '';
+const formatQtd = (val: number | null | undefined) => {
+  if (val === undefined || val === null) return '-';
   return val % 1 === 0 ? String(val) : Number(val.toFixed(1)).toString().replace('.', ',');
 };
 
@@ -144,7 +144,7 @@ export const PlanejamentoMateriaisView = () => {
       item.quantidadeTotal,
       item.estoque,
       item.saldo,
-      item.saldo < 0 ? 'Em falta' : 'Disponível',
+      !item.disponivel ? 'Em falta' : 'Disponível',
       item.grupoTraduzido
     ]);
     setKpiModal({
@@ -170,7 +170,7 @@ export const PlanejamentoMateriaisView = () => {
           m.pontoObra,
           m.quantidade,
           p.equipe,
-          m.saldo < 0 ? 'Em falta' : 'Disponível'
+          !m.disponivel ? 'Em falta' : 'Disponível'
         ]);
       });
     });
@@ -267,7 +267,7 @@ export const PlanejamentoMateriaisView = () => {
         const key = m.codigo;
         if (!consolidatedMap.has(key)) {
           const hookCons = data?.consolidado?.find(c => c.codigo === key);
-          const estoque = hookCons ? hookCons.estoque : 0;
+          const estoque = hookCons !== undefined ? hookCons.estoque : null;
 
           consolidatedMap.set(key, {
             codigo: m.codigo,
@@ -310,8 +310,13 @@ export const PlanejamentoMateriaisView = () => {
 
     // Atualiza o saldo consolidado deduzindo a quantidade necessária
     consolidatedMap.forEach(cons => {
-      cons.saldo = cons.estoque - cons.quantidadeTotal;
-      cons.disponivel = (cons.qtdJaFornecidaTotal || 0) + cons.estoque >= cons.quantidadeTotal;
+      if (cons.estoque !== null) {
+        cons.saldo = cons.estoque - cons.quantidadeTotal;
+        cons.disponivel = (cons.qtdJaFornecidaTotal || 0) + cons.estoque >= cons.quantidadeTotal;
+      } else {
+        cons.saldo = null;
+        cons.disponivel = true;
+      }
     });
 
     return Array.from(consolidatedMap.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
@@ -573,10 +578,16 @@ export const PlanejamentoMateriaisView = () => {
     const set = new Set<string>();
     filteredDetalhado.forEach(prog => {
       prog.materiais.forEach(m => {
-        set.add(formatQtd(m.saldo || 0));
+        set.add(formatQtd(m.saldo));
       });
     });
-    return Array.from(set).sort((a,b) => parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.'))).map(v => ({ value: v, label: v }));
+    return Array.from(set).sort((a,b) => {
+      const numA = parseFloat(a.replace(',','.'));
+      const numB = parseFloat(b.replace(',','.'));
+      if (isNaN(numA)) return 1;
+      if (isNaN(numB)) return -1;
+      return numA - numB;
+    }).map(v => ({ value: v, label: v }));
   }, [filteredDetalhado]);
 
   // 5. Aplica filtros de coluna da Visão Consolidada
@@ -604,7 +615,10 @@ export const PlanejamentoMateriaisView = () => {
     }
     if (globalStatusFilter !== 'todos') {
       const isFalta = globalStatusFilter === 'falta';
-      result = result.filter(item => (item.saldo < 0) === isFalta);
+      result = result.filter(item => {
+        const itemFalta = item.saldo !== null && item.saldo < 0;
+        return itemFalta === isFalta;
+      });
     }
     return result;
   }, [filteredConsolidado, colFilterCodigo, colFilterDescricao, colFilterUnidade, colFilterGrupo, colFilterEquipes, colFilterOrigem, globalStatusFilter]);
@@ -633,7 +647,10 @@ export const PlanejamentoMateriaisView = () => {
       }
       if (globalStatusFilter !== 'todos') {
         const isFalta = globalStatusFilter === 'falta';
-        filteredMats = filteredMats.filter(m => (m.saldo < 0) === isFalta);
+        filteredMats = filteredMats.filter(m => {
+          const itemFalta = m.saldo !== null && m.saldo < 0;
+          return itemFalta === isFalta;
+        });
       }
       return {
         ...prog,
@@ -1342,7 +1359,7 @@ export const PlanejamentoMateriaisView = () => {
                               <td className="px-4 py-3 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(item.qtdJaFornecidaTotal || 0)}</td>
                               <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(item.qtdASepararTotal || 0)}</td>
                               <td className="px-4 py-3 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(item.estoque)}</td>
-                              <td className={`px-4 py-3 text-right font-black ${item.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
+                              <td className={`px-4 py-3 text-right font-black ${item.saldo === null ? 'text-slate-500 bg-slate-50/10 dark:text-slate-400 dark:bg-zinc-900/10' : item.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                 {formatQtd(item.saldo)}
                               </td>
                               <td className="px-4 py-3">
@@ -1586,7 +1603,7 @@ export const PlanejamentoMateriaisView = () => {
                                   <td className="px-4 py-3 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(m.qtdJaFornecida || 0)}</td>
                                   <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(m.qtdASeparar || 0)}</td>
                                   <td className="px-4 py-3 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(m.estoque)}</td>
-                                  <td className={`px-4 py-3 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
+                                  <td className={`px-4 py-3 text-right font-black ${m.saldo === null ? 'text-slate-500 bg-slate-50/10 dark:text-slate-400 dark:bg-zinc-900/10' : m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                     {formatQtd(m.saldo)}
                                   </td>
                                   <td className="px-4 py-3">
@@ -1804,7 +1821,7 @@ export const PlanejamentoMateriaisView = () => {
                                         <td className="px-4 py-2.5 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(m.qtdJaFornecida || 0)}</td>
                                         <td className="px-4 py-2.5 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(m.qtdASeparar || 0)}</td>
                                         <td className="px-4 py-2.5 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(m.estoque)}</td>
-                                        <td className={`px-4 py-2.5 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
+                                        <td className={`px-4 py-2.5 text-right font-black ${m.saldo === null ? 'text-slate-500 bg-slate-50/10 dark:text-slate-400 dark:bg-zinc-900/10' : m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                           {formatQtd(m.saldo)}
                                         </td>
                                         <td className="px-4 py-2.5">
@@ -2026,7 +2043,7 @@ export const PlanejamentoMateriaisView = () => {
                                         <td className="px-4 py-2.5 text-right font-bold text-slate-650 dark:text-slate-350 bg-blue-50/20 dark:bg-blue-950/10">{formatQtd(m.qtdJaFornecida || 0)}</td>
                                         <td className="px-4 py-2.5 text-right font-black text-slate-900 dark:text-slate-100 bg-amber-50/20 dark:bg-amber-950/10">{formatQtd(m.qtdASeparar || 0)}</td>
                                         <td className="px-4 py-2.5 text-right font-bold text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-zinc-900/20">{formatQtd(m.estoque)}</td>
-                                        <td className={`px-4 py-2.5 text-right font-black ${m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
+                                        <td className={`px-4 py-2.5 text-right font-black ${m.saldo === null ? 'text-slate-500 bg-slate-50/10 dark:text-slate-400 dark:bg-zinc-900/10' : m.saldo < 0 ? 'text-rose-600 bg-rose-50/20 dark:text-rose-400 dark:bg-rose-950/20' : 'text-emerald-700 bg-emerald-50/10 dark:text-emerald-400 dark:bg-emerald-950/10'}`}>
                                           {formatQtd(m.saldo)}
                                         </td>
                                         <td className="px-4 py-2.5">

@@ -35,8 +35,8 @@ export interface MaterialItem {
   semRegra: boolean;
   motivoNaoLiberado?: string;
   equipe: string;
-  estoque: number;
-  saldo: number;
+  estoque: number | null;
+  saldo: number | null;
   disponivel?: boolean;
 }
 
@@ -68,8 +68,8 @@ export interface ConsolidatedMaterial {
   pontosOrigem: { ponto: string; obra: string; qtd: number }[];
   grupoTraduzido: string;
   equipes: string[];
-  estoque: number;
-  saldo: number;
+  estoque: number | null;
+  saldo: number | null;
   disponivel?: boolean;
 }
 
@@ -357,10 +357,12 @@ export const useMateriaisData = (
 
       // Mapeia estoque físico por key: `${unidade_id}_${codigo}`
       const estoqueFisicoMap = new Map<string, number>();
+      const unidadesComEstoque = new Set<string>();
       rawEstoque.forEach((e: any) => {
         if (e.codigo && e.unidade_id) {
           const key = `${String(e.unidade_id).trim()}_${String(e.codigo).trim()}`;
           estoqueFisicoMap.set(key, (estoqueFisicoMap.get(key) || 0) + Number(e.quantidade || 0));
+          unidadesComEstoque.add(String(e.unidade_id).trim());
         }
       });
 
@@ -490,10 +492,11 @@ export const useMateriaisData = (
               }
             }
 
+            const temEstoqueInformado = unidadesComEstoque.has(String(prog.unidadeId).trim());
             const stockKey = `${prog.unidadeId}_${codigo}`;
-            const estoque = estoqueDisponivelMap.has(stockKey)
+            const estoque = temEstoqueInformado
               ? (estoqueDisponivelMap.get(stockKey) || 0)
-              : 0;
+              : null;
 
             // Qtd planejada
             const quantidadePlanejada = Number(m.quantidade || 0);
@@ -516,8 +519,8 @@ export const useMateriaisData = (
             }
 
             // O saldo deste ponto é baseado no estoque disponível menos a quantidade planejada
-            const saldo = estoque - quantidadePlanejada;
-            const disponivel = (qtdJaFornecida + estoque) >= quantidadePlanejada;
+            const saldo = estoque !== null ? estoque - quantidadePlanejada : null;
+            const disponivel = estoque !== null ? (qtdJaFornecida + estoque) >= quantidadePlanejada : true;
 
             progMateriais.push({
               id: String(m.id || `${pontoKey}-${codigo}`),
@@ -561,9 +564,13 @@ export const useMateriaisData = (
           const key = m.codigo;
           if (!consolidatedMap.has(key)) {
             // Calcula o estoque disponível consolidado somando para todas as unidades selecionadas
-            let estoque = 0;
+            let estoque: number | null = null;
+            let hasAnyStockInfo = false;
             selectedUnidadesIds.forEach(uid => {
-              estoque += estoqueDisponivelMap.get(`${uid}_${key}`) || 0;
+              if (unidadesComEstoque.has(uid)) {
+                hasAnyStockInfo = true;
+                estoque = (estoque || 0) + (estoqueDisponivelMap.get(`${uid}_${key}`) || 0);
+              }
             });
 
             consolidatedMap.set(key, {
@@ -577,8 +584,8 @@ export const useMateriaisData = (
               grupoTraduzido: m.grupoTraduzido,
               equipes: [],
               estoque,
-              saldo: estoque,
-              disponivel: false
+              saldo: estoque !== null ? estoque : null,
+              disponivel: estoque === null
             });
           }
 
@@ -608,8 +615,13 @@ export const useMateriaisData = (
 
       // Atualiza o saldo consolidado e disponibilidade
       consolidatedMap.forEach(cons => {
-        cons.saldo = cons.estoque - cons.quantidadeTotal;
-        cons.disponivel = (cons.qtdJaFornecidaTotal || 0) + cons.estoque >= cons.quantidadeTotal;
+        if (cons.estoque !== null) {
+          cons.saldo = cons.estoque - cons.quantidadeTotal;
+          cons.disponivel = (cons.qtdJaFornecidaTotal || 0) + cons.estoque >= cons.quantidadeTotal;
+        } else {
+          cons.saldo = null;
+          cons.disponivel = true;
+        }
       });
 
       const consolidatedList = Array.from(consolidatedMap.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
@@ -629,7 +641,8 @@ export const useMateriaisData = (
         finalProgramacoes,
         selectedUnidadesIds,
         estoqueDisponivelMap,
-        regrasMaterialMap
+        regrasMaterialMap,
+        unidadesComEstoque
       );
 
       return {
@@ -659,14 +672,17 @@ function computeFaltasDashboard(
   programacoes: ProgramacaoMateriais[],
   selectedUnidadesIds: string[],
   estoqueMap: Map<string, number>,
-  regrasMaterialMap: Map<string, any>
+  regrasMaterialMap: Map<string, any>,
+  unidadesComEstoque: Set<string>
 ) {
-  // 1. Agrupar programações por unidade
+  // 1. Agrupar programações por unidade (apenas para unidades com estoque informado)
   const progsByUnit = new Map<string, ProgramacaoMateriais[]>();
   programacoes.forEach(p => {
     const uid = p.unidadeId;
-    if (!progsByUnit.has(uid)) progsByUnit.set(uid, []);
-    progsByUnit.get(uid)!.push(p);
+    if (unidadesComEstoque.has(uid)) {
+      if (!progsByUnit.has(uid)) progsByUnit.set(uid, []);
+      progsByUnit.get(uid)!.push(p);
+    }
   });
 
   const faltaAlocadaMap = new Map<string, number>();
@@ -737,6 +753,9 @@ function computeFaltasDashboard(
   const progStatusPorDia = new Map<string, { total: number; atendidos: number }>();
 
   programacoes.forEach(prog => {
+    if (!unidadesComEstoque.has(prog.unidadeId)) {
+      return; // Ignora unidades sem estoque informado para o painel de faltas
+    }
     let status: 'BLOQUEADO' | 'PARCIAL' | 'ATENDIDO' = 'ATENDIDO';
     const progFaltas: any[] = [];
 
@@ -790,6 +809,9 @@ function computeFaltasDashboard(
 
   // 4. Montar a tabela de faltas consolidadas
   programacoes.forEach(prog => {
+    if (!unidadesComEstoque.has(prog.unidadeId)) {
+      return; // Ignora unidades sem estoque informado
+    }
     prog.materiais.forEach(m => {
       if (!m.liberado) return;
 
@@ -902,7 +924,7 @@ function computeFaltasDashboard(
     afetados: programacoesAfetadas,
     cobertura: coberturaDias,
     totalFaltasQty: listFaltas.reduce((acc: number, curr: any) => acc + (curr.falta || 0), 0),
-    totalProgramacoes: programacoes.length,
+    totalProgramacoes: programacoes.filter(p => unidadesComEstoque.has(p.unidadeId)).length,
     afetadosCount: programacoesAfetadas.length,
     valorPlanejadoAfetado
   };

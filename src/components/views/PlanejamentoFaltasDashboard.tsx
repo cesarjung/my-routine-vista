@@ -201,7 +201,7 @@ export const PlanejamentoFaltasDashboard: React.FC<PlanejamentoFaltasDashboardPr
 
   // Formatação de quantidade decimal/inteiro
   const formatQtd = (val: number | null | undefined) => {
-    if (val === undefined || val === null) return '';
+    if (val === undefined || val === null) return '-';
     return val % 1 === 0 ? String(val) : Number(val.toFixed(1)).toString().replace('.', ',');
   };
 

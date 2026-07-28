@@ -22,6 +22,7 @@ import { EtapasView } from '@/components/views/EtapasView';
 import { CarteiraDashboardView } from '@/components/views/CarteiraDashboardView';
 import { PlanejamentoSemanalView } from '@/components/views/PlanejamentoSemanalView';
 import { PlanejamentoMateriaisView } from '@/components/views/PlanejamentoMateriaisView';
+import { PlanejamentoEnviosView } from '@/components/views/PlanejamentoEnviosView';
 import { AlojamentosView } from '@/components/views/AlojamentosView';
 import { LancamentosServicosView } from '@/components/views/LancamentosServicosView';
 import { cn } from '@/lib/utils';
@@ -81,6 +82,8 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       }
       case 'lancamentos_servicos':
         return 'Lançamentos de Serviços';
+      case 'planejamento_envios':
+        return 'Envios (Materiais e Postes)';
       default:
         return '';
     }
@@ -187,11 +190,12 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     if (context.type === 'etapas') return <EtapasView />;
     if (context.type === 'planejamento_semanal') return <PlanejamentoSemanalView />;
     if (context.type === 'planejamento_materiais') return <PlanejamentoMateriaisView />;
+    if (context.type === 'planejamento_envios') return <PlanejamentoEnviosView />;
     
     return null;
   };
 
-  const isPlanejamento = context.type === 'planejamento' || context.type === 'alojamentos' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal' || context.type === 'planejamento_materiais';
+  const isPlanejamento = context.type === 'planejamento' || context.type === 'alojamentos' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal' || context.type === 'planejamento_materiais' || context.type === 'planejamento_envios';
   const isGanttView = (context.type === 'planejamento' && context.section === 'carteira') || context.type === 'planejamento_equipes';
 
   // Sector specific view

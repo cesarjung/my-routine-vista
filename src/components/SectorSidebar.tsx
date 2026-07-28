@@ -22,7 +22,8 @@ import {
   Trash2,
   StickyNote,
   Home,
-  Hammer
+  Hammer,
+  Truck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -97,6 +98,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const [isPlanejamentoExpanded, setIsPlanejamentoExpanded] = useState(true);
+  const [isAlmoxarifadoExpanded, setIsAlmoxarifadoExpanded] = useState(true);
 
   // Section Creation State
   const [activeSectorIdForSection, setActiveSectorIdForSection] = useState<string | null>(null);
@@ -665,18 +667,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               </button>
             )}
 
-            {hasPlanejamentoAccess('planejamento_materiais') && (
-              <button
-                onClick={() => onNavigate({ type: 'planejamento_materiais', section: 'carteira' })}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'planejamento_materiais' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                )}
-              >
-                <ClipboardList className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Materiais</span>}
-              </button>
-            )}
+
             
             {hasPlanejamentoAccess('planejamento_equipes') && (
               <button
@@ -753,6 +744,48 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               >
                 <Layers className="w-4 h-4 shrink-0" />
                 {!collapsed && <span className="text-sm whitespace-nowrap">Etapas</span>}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Módulo Almoxarifado Header */}
+        {!collapsed && (hasPlanejamentoAccess('planejamento_materiais') || hasPlanejamentoAccess('planejamento_envios')) && (
+          <div className="px-3 pt-4 pb-2">
+            <button
+              onClick={() => setIsAlmoxarifadoExpanded(!isAlmoxarifadoExpanded)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-white uppercase tracking-wider transition-colors"
+            >
+              <span>Almoxarifado</span>
+              {isAlmoxarifadoExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+          </div>
+        )}
+        {(!collapsed ? isAlmoxarifadoExpanded : true) && (hasPlanejamentoAccess('planejamento_materiais') || hasPlanejamentoAccess('planejamento_envios')) && (
+          <div className="space-y-0.5 px-3">
+            {hasPlanejamentoAccess('planejamento_materiais') && (
+              <button
+                onClick={() => onNavigate({ type: 'planejamento_materiais', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'planejamento_materiais' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <ClipboardList className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Materiais</span>}
+              </button>
+            )}
+
+            {hasPlanejamentoAccess('planejamento_envios') && (
+              <button
+                onClick={() => onNavigate({ type: 'planejamento_envios', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'planejamento_envios' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Truck className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Envios</span>}
               </button>
             )}
           </div>
