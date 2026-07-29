@@ -14,7 +14,7 @@ import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key, Moon } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key, Moon, Trash2 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
@@ -341,6 +341,52 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
       });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteUser = async () => {
+    if (!editingUser) return;
+    
+    if (editingUser.id === user?.id) {
+      toast({
+        title: 'Operação inválida',
+        description: 'Você não pode excluir a si mesmo.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!window.confirm(`Tem certeza que deseja excluir permanentemente o usuário ${editingUser.full_name || editingUser.email}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.rpc('delete_user_rpc' as any, {
+        target_user_id: editingUser.id
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Usuário excluído',
+        description: `${editingUser.full_name || editingUser.email} foi removido com sucesso.`,
+      });
+
+      setEditingUser(null);
+      refetchProfiles();
+      queryClient.invalidateQueries({ queryKey: ['unit-managers'] });
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast({
+        title: 'Erro ao excluir usuário',
+        description: error.message || 'Tente novamente',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -985,13 +1031,29 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingUser(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleUpdateUser} disabled={isUpdating}>
-              {isUpdating ? 'Salvando...' : 'Salvar'}
-            </Button>
+          <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center w-full gap-3 mt-4">
+            <div>
+              {editingUser && editingUser.id !== user?.id && (
+                <Button 
+                  type="button"
+                  variant="destructive" 
+                  onClick={handleDeleteUser} 
+                  disabled={isDeleting || isUpdating}
+                  className="flex items-center gap-1.5 w-full sm:w-auto"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {isDeleting ? 'Excluindo...' : 'Excluir Usuário'}
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto justify-end">
+              <Button type="button" variant="outline" onClick={() => setEditingUser(null)} className="w-full sm:w-auto">
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleUpdateUser} disabled={isUpdating || isDeleting} className="w-full sm:w-auto">
+                {isUpdating ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
