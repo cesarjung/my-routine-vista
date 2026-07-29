@@ -181,10 +181,10 @@ export const useRoutines = (unitId?: string) => {
           ...r,
           status: !r.is_active
             ? 'inativa'
-            : (routineStatusMap.get(r.id) || 'concluida'),
+            : (routineStatusMap.get(r.id) || 'pendente'),
           active_statuses: !r.is_active
             ? ['inativa']
-            : (routineActiveStatusesMap.get(r.id) || ['concluida'])
+            : (routineActiveStatusesMap.get(r.id) || ['pendente'])
         })) as Routine[];
 
         return routinesWithStatus;
@@ -256,10 +256,10 @@ export const useRoutines = (unitId?: string) => {
         ...r,
         status: !r.is_active
           ? 'inativa'
-          : (routineStatusMap.get(r.id) || 'concluida'),
+          : (routineStatusMap.get(r.id) || 'pendente'),
         active_statuses: !r.is_active
           ? ['inativa']
-          : (routineActiveStatusesMap.get(r.id) || ['concluida'])
+          : (routineActiveStatusesMap.get(r.id) || ['pendente'])
       })) as Routine[];
 
       return routinesWithStatus;
