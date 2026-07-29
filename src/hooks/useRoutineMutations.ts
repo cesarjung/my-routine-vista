@@ -436,56 +436,29 @@ export const useUpdateRoutine = () => {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpdateRoutineData }) => {
-
-      const updatePayload: any = { ...data };
-
-      // Extract properties that shouldn't go directly to the routines table
-      const { startDate, dueDate, recurrenceMode, skipWeekendsHolidays, monthlyAnchor, ...routineUpdatePayload } = updatePayload;
-
-      // Update custom_schedule if skipWeekendsHolidays OR monthlyAnchor provided
-      if (skipWeekendsHolidays !== undefined || monthlyAnchor !== undefined) {
-        routineUpdatePayload.custom_schedule = {
-          skipWeekendsHolidays: skipWeekendsHolidays ?? false,
-          monthlyAnchor: monthlyAnchor ?? 'date'
-        };
-      }
-
-      if (recurrenceMode && !routineUpdatePayload.recurrence_mode) {
-        routineUpdatePayload.recurrence_mode = recurrenceMode;
-      }
-
-      const { data: routine, error } = await supabase
-        .from('routines')
-        .update(routineUpdatePayload)
-        .eq('id', id)
-        .select()
-        .single();
+      const { error } = await supabase.rpc('update_routine_rpc' as any, {
+        target_routine_id: id,
+        new_title: data.title || null,
+        new_description: data.description || null,
+        new_frequency: data.frequency || null,
+        new_recurrence_mode: data.recurrence_mode || null,
+        new_skip_weekends_holidays: data.skipWeekendsHolidays ?? null,
+        new_monthly_anchor: data.monthlyAnchor ?? null,
+        new_start_date: data.startDate || null,
+        new_due_date: data.dueDate || null,
+      });
 
       if (error) throw error;
 
-      // Update tasks dates for active tasks of this routine
-      if (startDate !== undefined || dueDate !== undefined) {
-        const taskUpdate: any = {};
-        if (startDate !== undefined) taskUpdate.start_date = startDate;
-        if (dueDate !== undefined) taskUpdate.due_date = dueDate;
-
-        if (Object.keys(taskUpdate).length > 0) {
-          const { error: taskError } = await supabase
-            .from('tasks')
-            .update(taskUpdate)
-            .eq('routine_id', id)
-            .in('status', ['pendente', 'em_andamento', 'atrasada']);
-
-          if (taskError) {
-            console.error("Error updating tasks dates for routine:", taskError);
-          }
-        }
-      }
-
-      return routine;
+      // We still return a mock routine structure for reactivity/types compatibility
+      return { id } as any;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routines'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-periods'] });
+      queryClient.invalidateQueries({ queryKey: ['current-period-checkins'] });
+      queryClient.invalidateQueries({ queryKey: ['routine-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['all-active-routine-periods'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast({
         title: 'Rotina atualizada',
