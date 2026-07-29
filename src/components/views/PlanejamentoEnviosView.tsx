@@ -27,7 +27,8 @@ import {
   Truck, Calendar, Filter, Download, Printer, Settings, 
   AlertTriangle, ClipboardList, Info, CheckCircle2, 
   Search, FileText, MapPin, RefreshCw, Loader2, AlertCircle,
-  Map as MapIcon, User, ListFilter, Building2, ChevronDown, ChevronRight
+  Map as MapIcon, User, ListFilter, Building2, ChevronDown, ChevronRight,
+  ZoomIn, ZoomOut
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -89,6 +90,7 @@ export const PlanejamentoEnviosView = () => {
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_envios', defaultEnd);
   const [modo, setModo] = useSessionState<'DIARIO' | 'MENSAL'>('filter_modo_envios', 'DIARIO');
   const [somentePostes, setSomentePostes] = useSessionState<boolean>('filter_somente_postes_envios', true);
+  const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_envios', 1);
   
   // Custom filter selections (matching materials view FilterSelect)
   const [selectedMunicipios, setSelectedMunicipios] = useState<string[]>([]);
@@ -1901,7 +1903,7 @@ export const PlanejamentoEnviosView = () => {
           )}
         </div>
 
-        {/* Right section: Somente Postes Checkbox */}
+        {/* Right section: Somente Postes Checkbox & Zoom */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-1.5 h-8">
             <Checkbox
@@ -1912,6 +1914,16 @@ export const PlanejamentoEnviosView = () => {
             <label htmlFor="somente-postes" className="text-[11px] font-bold text-slate-700 dark:text-slate-350 cursor-pointer select-none">
               Postes e Estruturas (Bloco 1)
             </label>
+          </div>
+
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900 border p-0.5 rounded-lg h-8">
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} title="Diminuir Zoom">
+              <ZoomOut className="w-3.5 h-3.5 text-muted-foreground" />
+            </Button>
+            <span className="text-[10px] font-bold w-10 text-center text-muted-foreground" title="Nível de Zoom">{(zoomLevel * 100).toFixed(0)}%</span>
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} title="Aumentar Zoom">
+              <ZoomIn className="w-3.5 h-3.5 text-muted-foreground" />
+            </Button>
           </div>
         </div>
       </div>
@@ -1942,7 +1954,7 @@ export const PlanejamentoEnviosView = () => {
           </CardContent>
         </Card>
       ) : (
-        <>
+        <div style={{ zoom: zoomLevel } as React.CSSProperties} className="w-full flex-1 flex flex-col gap-4">
           {/* APP INTEGRATED STATS CARDS (Matching materials styling) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card 
@@ -2211,7 +2223,7 @@ export const PlanejamentoEnviosView = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </>
+        </div>
       )}
     </div>
   );

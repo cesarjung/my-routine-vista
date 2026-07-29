@@ -8,7 +8,8 @@ import { FilterSelect } from '@/components/ui/filter-select';
 import { 
   RefreshCw, Filter, Calendar, Download, Printer, 
   AlertTriangle, ClipboardList, Info, CheckCircle2, 
-  HelpCircle, Search, FileText, Layers, Loader2, AlertCircle
+  HelpCircle, Search, FileText, Layers, Loader2, AlertCircle,
+  ZoomIn, ZoomOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,6 +72,7 @@ export const PlanejamentoMateriaisView = () => {
   const [selectedMunicipios, setSelectedMunicipios] = useSessionState<string[]>('filter_municipios_materiais', []);
   
   const [selectedObras, setSelectedObras] = useSessionState<string[]>('filter_obras_materiais', []);
+  const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_materiais', 1);
   
   // Abas de visualização
   const [activeMainTab, setActiveMainTab] = useState<'separacao' | 'faltas'>('separacao');
@@ -1012,6 +1014,20 @@ export const PlanejamentoMateriaisView = () => {
             />
           </div>
 
+          {/* Zoom Controls */}
+          <div className="flex flex-col justify-end shrink-0">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Zoom</span>
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-800 rounded-md border px-1 h-9 shrink-0">
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} title="Diminuir Zoom">
+                <ZoomOut className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
+              <span className="text-[10px] font-bold w-10 text-center text-muted-foreground" title="Nível de Zoom">{(zoomLevel * 100).toFixed(0)}%</span>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} title="Aumentar Zoom">
+                <ZoomIn className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
+            </div>
+          </div>
+
         </CardContent>
       </Card>
 
@@ -1020,14 +1036,16 @@ export const PlanejamentoMateriaisView = () => {
           <Loader2 className="h-12 w-12 animate-spin text-violet-600" />
           <p className="text-muted-foreground animate-pulse text-sm">Buscando e processando materiais de planejamento...</p>
         </div>
-      ) : activeMainTab === 'faltas' ? (
-        <PlanejamentoFaltasDashboard 
-          data={data}
-          filterStart={filterStart}
-          filterEnd={filterEnd}
-        />
       ) : (
-        <div id="print-area" className="flex flex-col gap-6">
+        <div style={{ zoom: zoomLevel } as React.CSSProperties} className="w-full flex-1 flex flex-col gap-4">
+          {activeMainTab === 'faltas' ? (
+            <PlanejamentoFaltasDashboard 
+              data={data}
+              filterStart={filterStart}
+              filterEnd={filterEnd}
+            />
+          ) : (
+            <div id="print-area" className="flex flex-col gap-6">
           
           {/* Alertas Importantes de Qualidade de Dados */}
           {filteredPontosSemOrcamento.length > 0 && (
@@ -2089,6 +2107,8 @@ export const PlanejamentoMateriaisView = () => {
 
             </CardContent>
           </Card>
+        </div>
+          )}
         </div>
       )}
 
