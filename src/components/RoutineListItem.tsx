@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Clock, ChevronRight } from 'lucide-react';
@@ -28,7 +29,53 @@ const frequencyLabels: Record<string, string> = {
     anual: 'Anual',
 };
 
-export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggleSelect, onClick, onEdit, canEdit, periodDates }: RoutineListItemProps) => {
+export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggleSelect, onClick, onEdit, canEdit, periodDates: propPeriodDates }: RoutineListItemProps) => {
+    const periodDates = useMemo(() => {
+        if (propPeriodDates) return propPeriodDates;
+
+        const periods = (routine as any)?.routine_periods;
+        if (!periods || !Array.isArray(periods) || periods.length === 0) {
+            return null;
+        }
+
+        const activePeriods = periods.filter((p: any) => p.is_active !== false);
+        const targetPeriods = activePeriods.length > 0 ? activePeriods : periods;
+
+        const now = new Date();
+        const todayStr = format(now, 'yyyy-MM-dd');
+
+        // 1. Try to find period matching today's date string
+        let currentPeriod = targetPeriods.find((p: any) => (p.period_start || '').startsWith(todayStr));
+
+        // 2. Try to find period containing now
+        if (!currentPeriod) {
+            currentPeriod = targetPeriods.find((p: any) => {
+                const start = new Date(p.period_start);
+                const end = new Date(p.period_end);
+                return now >= start && now <= end;
+            });
+        }
+
+        // 3. Fallback: closest period to now
+        if (!currentPeriod) {
+            const sorted = [...targetPeriods].sort((a: any, b: any) => {
+                const diffA = Math.abs(new Date(a.period_start).getTime() - now.getTime());
+                const diffB = Math.abs(new Date(b.period_start).getTime() - now.getTime());
+                return diffA - diffB;
+            });
+            currentPeriod = sorted[0];
+        }
+
+        if (currentPeriod) {
+            return {
+                period_start: currentPeriod.period_start,
+                period_end: currentPeriod.period_end,
+            };
+        }
+
+        return null;
+    }, [propPeriodDates, routine]);
+
     const formatPeriodLabel = () => {
         if (!periodDates) return null;
         const start = new Date(periodDates.period_start);
