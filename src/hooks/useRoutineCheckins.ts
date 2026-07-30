@@ -107,18 +107,44 @@ export const useAllActiveRoutinePeriods = () => {
       const { data, error } = await supabase
         .from('routine_periods')
         .select('routine_id, period_start, period_end')
-        .eq('is_active', true)
-        .order('period_start', { ascending: false });
+        .eq('is_active', true);
 
       if (error) throw error;
 
-      // Create a map of routine_id to its active period
+      const now = new Date();
       const periodsByRoutine: Record<string, { period_start: string; period_end: string }> = {};
+      
+      // Group periods by routine_id
+      const periodsGrouped: Record<string, any[]> = {};
       data?.forEach(period => {
-        if (!periodsByRoutine[period.routine_id]) {
-          periodsByRoutine[period.routine_id] = {
-            period_start: period.period_start,
-            period_end: period.period_end,
+        if (!periodsGrouped[period.routine_id]) {
+          periodsGrouped[period.routine_id] = [];
+        }
+        periodsGrouped[period.routine_id].push(period);
+      });
+
+      // For each routine, find the period that contains today or is closest to today
+      Object.entries(periodsGrouped).forEach(([routineId, periods]) => {
+        let currentPeriod = periods.find(p => {
+          const start = new Date(p.period_start);
+          const end = new Date(p.period_end);
+          return now >= start && now <= end;
+        });
+
+        if (!currentPeriod) {
+          // If no period contains today, pick the closest one
+          periods.sort((a, b) => {
+            const diffA = Math.abs(new Date(a.period_start).getTime() - now.getTime());
+            const diffB = Math.abs(new Date(b.period_start).getTime() - now.getTime());
+            return diffA - diffB;
+          });
+          currentPeriod = periods[0];
+        }
+
+        if (currentPeriod) {
+          periodsByRoutine[routineId] = {
+            period_start: currentPeriod.period_start,
+            period_end: currentPeriod.period_end,
           };
         }
       });
@@ -141,24 +167,14 @@ export const useCurrentPeriodCheckins = (routineId: string, contextDate?: string
 
       if (routineError) throw routineError;
 
-      // Get the most recent active period for this routine (current or future)
-      let query = supabase
-        .from('routine_periods')
-        .select(`
-          *,
-          routine_checkins (
-            *,
-            unit:units (id, name, code)
-          )
-        `)
-        .eq('routine_id', routineId);
+      let period = null;
+      let periodError = null;
 
       if (exactDate) {
         // O exactDate que vem do Grid geralmente é o final do dia (ex: 2026-03-05T02:59:59.000Z = 23:59 de 04/03).
         // Se usarmos ele puro, ele pode cair exatamente 1 segundo ANTES do 'period_start' do dia 05/03.
         // A melhor forma é converter isso pro fuso local de volta, extrair a data correta (04/03 ou 05/03) 
         // e ancorar no meio-dia universal (que cruza 100% da janela daquele dia).
-
         const dateObj = new Date(exactDate);
         const year = dateObj.getFullYear();
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -166,11 +182,24 @@ export const useCurrentPeriodCheckins = (routineId: string, contextDate?: string
         const safeDateString = `${year}-${month}-${day}`;
         const targetPoint = `${safeDateString}T12:00:00Z`;
 
-        query = query
+        const { data, error } = await supabase
+          .from('routine_periods')
+          .select(`
+            *,
+            routine_checkins (
+              *,
+              unit:units (id, name, code)
+            )
+          `)
+          .eq('routine_id', routineId)
           .lte('period_start', targetPoint)
           .gte('period_end', targetPoint)
           .order('period_start', { ascending: false })
-          .limit(1);
+          .limit(1)
+          .maybeSingle();
+
+        period = data;
+        periodError = error;
       } else if (contextDate) {
         // Fallback Mestre: a âncora do meio-dia (12:00:00Z) para ignorar fusos horários locais.
         // O Supabase salva periods que começam 03:00 de hoje até 02:59 de amanhã (GMT-3).
@@ -178,16 +207,69 @@ export const useCurrentPeriodCheckins = (routineId: string, contextDate?: string
         const safeDateString = contextDate.substring(0, 10);
         const targetPoint = `${safeDateString}T12:00:00Z`;
 
-        query = query
+        const { data, error } = await supabase
+          .from('routine_periods')
+          .select(`
+            *,
+            routine_checkins (
+              *,
+              unit:units (id, name, code)
+            )
+          `)
+          .eq('routine_id', routineId)
           .lte('period_start', targetPoint)
           .gte('period_end', targetPoint)
           .order('period_start', { ascending: false })
-          .limit(1);
-      } else {
-        query = query.eq('is_active', true).order('period_start', { ascending: false }).limit(1);
-      }
+          .limit(1)
+          .maybeSingle();
 
-      let { data: period, error: periodError } = await query.maybeSingle();
+        period = data;
+        periodError = error;
+      } else {
+        const nowStr = new Date().toISOString();
+        // 1. Tentar período que contém o momento atual
+        const { data: currentPeriod, error: currentError } = await supabase
+          .from('routine_periods')
+          .select(`
+            *,
+            routine_checkins (
+              *,
+              unit:units (id, name, code)
+            )
+          `)
+          .eq('routine_id', routineId)
+          .eq('is_active', true)
+          .lte('period_start', nowStr)
+          .gte('period_end', nowStr)
+          .order('period_start', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (currentError) {
+          periodError = currentError;
+        } else if (currentPeriod) {
+          period = currentPeriod;
+        } else {
+          // 2. Se não encontrar, fallback para o período mais recente
+          const { data: fallbackPeriod, error: fallbackError } = await supabase
+            .from('routine_periods')
+            .select(`
+              *,
+              routine_checkins (
+                *,
+                unit:units (id, name, code)
+              )
+            `)
+            .eq('routine_id', routineId)
+            .eq('is_active', true)
+            .order('period_start', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          period = fallbackPeriod;
+          periodError = fallbackError;
+        }
+      }
 
       if (periodError) throw periodError;
 
