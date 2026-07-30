@@ -436,21 +436,77 @@ export const useUpdateRoutine = () => {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpdateRoutineData }) => {
-      const { error } = await supabase.rpc('update_routine_rpc' as any, {
-        target_routine_id: id,
-        new_title: data.title || null,
-        new_description: data.description || null,
-        new_frequency: data.frequency || null,
-        new_recurrence_mode: data.recurrence_mode || null,
-        new_skip_weekends_holidays: data.skipWeekendsHolidays ?? null,
-        new_monthly_anchor: data.monthlyAnchor ?? null,
-        new_start_date: data.startDate || null,
-        new_due_date: data.dueDate || null,
-      });
+      // 1. Try updating via RPC if available in Supabase schema
+      try {
+        const { error: rpcError } = await supabase.rpc('update_routine_rpc' as any, {
+          target_routine_id: id,
+          new_title: data.title || null,
+          new_description: data.description || null,
+          new_frequency: data.frequency || null,
+          new_recurrence_mode: data.recurrence_mode || null,
+          new_skip_weekends_holidays: data.skipWeekendsHolidays ?? null,
+          new_monthly_anchor: data.monthlyAnchor ?? null,
+          new_start_date: data.startDate || null,
+          new_due_date: data.dueDate || null,
+        });
 
-      if (error) throw error;
+        if (!rpcError) {
+          return { id } as any;
+        }
+      } catch (e) {
+        console.warn("RPC update_routine_rpc not available, falling back to direct table updates:", e);
+      }
 
-      // We still return a mock routine structure for reactivity/types compatibility
+      // 2. Direct table update fallback (works when RPC is not created in DB yet)
+      const updatePayload: any = {};
+      if (data.title !== undefined) updatePayload.title = data.title;
+      if (data.description !== undefined) updatePayload.description = data.description || null;
+      if (data.frequency !== undefined) updatePayload.frequency = data.frequency;
+      if (data.recurrence_mode !== undefined) updatePayload.recurrence_mode = data.recurrence_mode;
+      if (data.skipWeekendsHolidays !== undefined || data.monthlyAnchor !== undefined) {
+        updatePayload.custom_schedule = {
+          skipWeekendsHolidays: data.skipWeekendsHolidays ?? false,
+          monthlyAnchor: data.monthlyAnchor ?? 'date'
+        };
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        const { error: rErr } = await supabase
+          .from('routines')
+          .update(updatePayload)
+          .eq('id', id);
+
+        if (rErr) throw rErr;
+      }
+
+      if (data.startDate || data.dueDate) {
+        const taskUpdate: any = {};
+        if (data.startDate) taskUpdate.start_date = data.startDate;
+        if (data.dueDate) taskUpdate.due_date = data.dueDate;
+
+        // Update tasks (parent & child tasks for this routine)
+        const { error: tErr } = await supabase
+          .from('tasks')
+          .update(taskUpdate)
+          .eq('routine_id', id)
+          .in('status', ['pendente', 'em_andamento', 'atrasada']);
+
+        if (tErr) console.error("Error updating tasks dates:", tErr);
+
+        // Update active routine periods
+        const periodUpdate: any = {};
+        if (data.startDate) periodUpdate.period_start = data.startDate;
+        if (data.dueDate) periodUpdate.period_end = data.dueDate;
+
+        const { error: pErr } = await supabase
+          .from('routine_periods')
+          .update(periodUpdate)
+          .eq('routine_id', id)
+          .eq('is_active', true);
+
+        if (pErr) console.error("Error updating active period dates:", pErr);
+      }
+
       return { id } as any;
     },
     onSuccess: () => {
