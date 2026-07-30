@@ -104,10 +104,19 @@ export const useAllActiveRoutinePeriods = () => {
   return useQuery({
     queryKey: ['all-active-routine-periods'],
     queryFn: async () => {
+      const thirtyTwoDaysAgo = new Date();
+      thirtyTwoDaysAgo.setDate(thirtyTwoDaysAgo.getDate() - 32);
+
+      const thirtyFiveDaysAhead = new Date();
+      thirtyFiveDaysAhead.setDate(thirtyFiveDaysAhead.getDate() + 35);
+
       const { data, error } = await supabase
         .from('routine_periods')
         .select('routine_id, period_start, period_end')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .gte('period_start', thirtyTwoDaysAgo.toISOString())
+        .lte('period_start', thirtyFiveDaysAhead.toISOString())
+        .limit(3000);
 
       if (error) throw error;
 
