@@ -104,35 +104,46 @@ export const useAllActiveRoutinePeriods = () => {
   return useQuery({
     queryKey: ['all-active-routine-periods'],
     queryFn: async () => {
-      const thirtyTwoDaysAgo = new Date();
-      thirtyTwoDaysAgo.setDate(thirtyTwoDaysAgo.getDate() - 32);
+      // 1. Fetch routine periods
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-      const thirtyFiveDaysAhead = new Date();
-      thirtyFiveDaysAhead.setDate(thirtyFiveDaysAhead.getDate() + 35);
+      const ninetyDaysAhead = new Date();
+      ninetyDaysAhead.setDate(ninetyDaysAhead.getDate() + 90);
 
-      const { data, error } = await supabase
+      const { data: periodsData, error } = await supabase
         .from('routine_periods')
         .select('routine_id, period_start, period_end')
         .eq('is_active', true)
-        .gte('period_start', thirtyTwoDaysAgo.toISOString())
-        .lte('period_start', thirtyFiveDaysAhead.toISOString())
-        .limit(3000);
+        .gte('period_start', ninetyDaysAgo.toISOString())
+        .lte('period_start', ninetyDaysAhead.toISOString())
+        .limit(5000);
 
-      if (error) throw error;
+      if (error) console.error("Error fetching routine periods:", error);
+
+      // 2. Fetch active parent tasks for routines as a guaranteed fallback
+      const { data: activeParentTasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('routine_id, start_date, due_date')
+        .not('routine_id', 'is', null)
+        .is('parent_task_id', null)
+        .in('status', ['pendente', 'em_andamento', 'atrasada']);
+
+      if (tasksError) console.error("Error fetching active parent tasks:", tasksError);
 
       const now = new Date();
       const periodsByRoutine: Record<string, { period_start: string; period_end: string }> = {};
       
       // Group periods by routine_id
       const periodsGrouped: Record<string, any[]> = {};
-      data?.forEach(period => {
+      periodsData?.forEach(period => {
         if (!periodsGrouped[period.routine_id]) {
           periodsGrouped[period.routine_id] = [];
         }
         periodsGrouped[period.routine_id].push(period);
       });
 
-      // For each routine, find the period that contains today or is closest to today
+      // For each routine with periods, find the period containing today or closest to today
       Object.entries(periodsGrouped).forEach(([routineId, periods]) => {
         let currentPeriod = periods.find(p => {
           const start = new Date(p.period_start);
@@ -155,6 +166,20 @@ export const useAllActiveRoutinePeriods = () => {
             period_start: currentPeriod.period_start,
             period_end: currentPeriod.period_end,
           };
+        }
+      });
+
+      // Fallback: Populate any missing routine dates using active parent tasks from tasks table
+      activeParentTasks?.forEach(task => {
+        if (task.routine_id && !periodsByRoutine[task.routine_id]) {
+          const start = task.start_date || task.due_date;
+          const end = task.due_date || task.start_date;
+          if (start && end) {
+            periodsByRoutine[task.routine_id] = {
+              period_start: start,
+              period_end: end,
+            };
+          }
         }
       });
 
