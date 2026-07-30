@@ -353,26 +353,51 @@ export const useRoutineTasks = (routineId: string, contextDate?: string, exactDa
         const targetDate = exactDate || contextDate;
         const safeDateString = targetDate!.substring(0, 10); // "YYYY-MM-DD"
 
-        // As tarefas pré-geradas localmente sempre recebem:
-        // due_date e start_date estritamente com a string "YYYY-MM-DD"
-        // ex: "2025-03-09"
-        // Para garantir que a engine do supabase encontre essas datas strings
-        // com segurança independentemente de HH:mm:ss, vamos buscar usando strict `like`
-        // ou um range gte/lt seguro de 24h exatas limitadas ao timezone UTC.
-
         const startPoint = `${safeDateString}T00:00:00.000Z`;
         const endPoint = `${safeDateString}T23:59:59.999Z`;
 
         // Busca hibrida: Tasks novas tem 'YYYY-MM-DD'. Tasks velhas tem ISO.
-        query = query.or(`due_date.eq.${safeDateString},and(due_date.gte.${startPoint},due_date.lte.${endPoint})`);
+        // Suporta tarefas Semanais/Mensais cujo período engloba a data atual (start_date <= endPoint AND due_date >= startPoint)
+        query = query.or(`due_date.eq.${safeDateString},and(due_date.gte.${startPoint},due_date.lte.${endPoint}),and(start_date.lte.${endPoint},due_date.gte.${startPoint})`);
       }
 
       // Evitar crash do maybeSingle caso existam clones órfãos garantindo ordem descendente
       query = query.order('created_at', { ascending: false }).limit(1);
 
-      const { data: parentTask, error: parentError } = await query.maybeSingle();
+      let { data: parentTask, error: parentError } = await query.maybeSingle();
 
       if (parentError) throw parentError;
+
+      // Fallback: Se não encontrou tarefa pai pela data exata (ex: rotina semanal/mensal fora da janela exata),
+      // busca a tarefa pai ativa (pendente/em_andamento/atrasada) mais recente da rotina.
+      if (!parentTask) {
+        const { data: fallbackParent } = await supabase
+          .from('tasks')
+          .select(`*, unit:units(id, name, code)`)
+          .eq('routine_id', routineId)
+          .is('parent_task_id', null)
+          .in('status', ['pendente', 'em_andamento', 'atrasada'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (fallbackParent) {
+          parentTask = fallbackParent;
+        } else {
+          // Último recurso: buscar a tarefa pai mais recente independente de status
+          const { data: lastParent } = await supabase
+            .from('tasks')
+            .select(`*, unit:units(id, name, code)`)
+            .eq('routine_id', routineId)
+            .is('parent_task_id', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (lastParent) parentTask = lastParent;
+        }
+      }
+
       if (!parentTask) return { parentTask: null, childTasks: [] };
 
       // Get child tasks
