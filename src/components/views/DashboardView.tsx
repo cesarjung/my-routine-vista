@@ -376,6 +376,91 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
     setTasksDialog(prev => ({ ...prev, isOpen: false }));
   };
 
+  const renderPanelsGrid = () => (
+    <UnifiedDraggablePanels
+      customPanels={customPanels || []}
+      selectedSectorId={selectedSectorIds[0] || undefined}
+      renderUnitsPanel={() => (
+        <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
+          {unitStatus?.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card z-10">
+                <tr className="border-b border-border">
+                  <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
+                  {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
+                  <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {unitStatus?.map(unit => (
+                  <tr key={unit.id} className="hover:bg-secondary/20">
+                    <td className="p-2">
+                      <p className="font-medium text-foreground" title={unit.name}>{unit.name}</p>
+                    </td>
+                    {FREQUENCIES.map(f => (
+                      <td key={f} className="p-1 text-center">
+                        <StatusBadge 
+                          data={unit.frequencies[f]} 
+                          frequency={f}
+                          onClick={unit.frequencies[f].total > 0 
+                            ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
+                            : undefined
+                          }
+                        />
+                      </td>
+                    ))}
+                    <td className="p-2 text-right"><TotalBadge data={unit.totals} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </ResizablePanel>
+      )}
+      renderResponsiblesPanel={() => (
+        <ResizablePanel title="Responsáveis" icon={Users} count={responsibleStatus?.length || 0}>
+          {responsibleStatus?.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card z-10">
+                <tr className="border-b border-border">
+                  <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
+                  {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
+                  <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {responsibleStatus?.map(person => (
+                  <tr key={person.id} className="hover:bg-secondary/20">
+                    <td className="p-2">
+                      <p className="font-medium text-foreground" title={person.name}>{person.name}</p>
+                    </td>
+                    {FREQUENCIES.map(f => (
+                      <td key={f} className="p-1 text-center">
+                        <StatusBadge 
+                          data={person.frequencies[f]} 
+                          frequency={f}
+                          onClick={person.frequencies[f].total > 0 
+                            ? () => openTasksDialog(person.id, person.name, 'responsible', f)
+                            : undefined
+                          }
+                        />
+                      </td>
+                    ))}
+                    <td className="p-2 text-right"><TotalBadge data={person.totals} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </ResizablePanel>
+      )}
+    />
+  );
+
   // Fullscreen view
   if (isFullscreen) {
     return (
@@ -405,44 +490,16 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
             </TabsList>
           </Tabs>
 
-          {/* Custom Panels */}
-          {customPanels && customPanels.length > 0 && (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-              {customPanels.map(panel => (
-                <CustomPanel key={panel.id} panel={panel} dashboardSectorId={selectedSectorIds[0] || undefined} />
-              ))}
+          {activeTab === 'tracker' ? (
+            <div className="border rounded-lg bg-card shadow-sm p-4">
+              <TaskTrackerPanel sectorIds={selectedSectorIds} />
             </div>
-          )}
-
-          {isLoading ? (
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
-            <>
-              {/* Legend */}
-              <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                <span><b>D</b>=Diária <b>S</b>=Semanal <b>Q</b>=Quinzenal <b>M</b>=Mensal</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-success/30" />100%</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-500/30" />≥70%</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-warning/30" />≥40%</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-destructive/30" />&lt;40%</span>
-              </div>
-
-              {/* Custom Panels */}
-              {filteredPanels && filteredPanels.length > 0 ? (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                  {filteredPanels.map(panel => (
-                    <CustomPanel key={panel.id} panel={panel} />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-lg border border-border border-dashed">
-                  <p className="text-lg font-medium">Nenhum painel configurado</p>
-                  <p className="text-sm">Vá até as Engrenagens do Topo Direto ou '+' para adicionar painéis customizados.</p>
-                </div>
-              )}
-            </>
+            renderPanelsGrid()
           )}
 
           {/* Tasks Dialog */}
@@ -457,24 +514,20 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
   }
 
   return (
-    <div className={cn("flex flex-col h-full", activeTab === 'tracker' ? "overflow-hidden" : "overflow-auto space-y-3")}>
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
+    <div className="flex h-full flex-col p-6 overflow-hidden">
+      {/* Top Controls Bar */}
+      <div className="flex items-center justify-between gap-4 mb-4 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
-          <div className={cn(
-            'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold',
-            overallPercentage >= 70 ? 'bg-success/20 text-success' :
-              overallPercentage >= 40 ? 'bg-warning/20 text-warning' :
-                'bg-destructive/20 text-destructive'
-          )}>
-            {overallPercentage}%
-          </div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Dashboard</h1>
+          <Badge variant="outline" className="text-[10px] uppercase font-mono px-1.5 py-0">
+            {contextIdentifier}
+          </Badge>
         </div>
 
         <div className="flex items-center gap-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[450px] hidden sm:block">
-            <TabsList className="grid w-full grid-cols-3">
+          {/* Dashboard Mode Selector */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[300px]">
+            <TabsList className="grid w-full grid-cols-3 h-8 text-xs">
               <TabsTrigger value="public">Público</TabsTrigger>
               <TabsTrigger value="private">Minha Visão</TabsTrigger>
               <TabsTrigger value="tracker">Rastreador</TabsTrigger>
@@ -560,88 +613,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
         </div>
       ) : (
         /* All Panels with Unified Drag and Drop */
-        <UnifiedDraggablePanels
-          customPanels={customPanels || []}
-          selectedSectorId={selectedSectorIds[0] || undefined}
-          renderUnitsPanel={() => (
-            <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
-              {unitStatus?.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-card z-10">
-                    <tr className="border-b border-border">
-                      <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
-                      {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
-                      <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {unitStatus?.map(unit => (
-                      <tr key={unit.id} className="hover:bg-secondary/20">
-                        <td className="p-2">
-                          <p className="font-medium text-foreground" title={unit.name}>{unit.name}</p>
-                        </td>
-                        {FREQUENCIES.map(f => (
-                          <td key={f} className="p-1 text-center">
-                            <StatusBadge 
-                              data={unit.frequencies[f]} 
-                              frequency={f}
-                              onClick={unit.frequencies[f].total > 0 
-                                ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
-                                : undefined
-                              }
-                            />
-                          </td>
-                        ))}
-                        <td className="p-2 text-right"><TotalBadge data={unit.totals} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </ResizablePanel>
-          )}
-          renderResponsiblesPanel={() => (
-            <ResizablePanel title="Responsáveis" icon={Users} count={responsibleStatus?.length || 0}>
-              {responsibleStatus?.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground text-xs">Sem dados</div>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-card z-10">
-                    <tr className="border-b border-border">
-                      <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
-                      {FREQUENCIES.map(f => <th key={f} className="p-1 text-center font-medium text-muted-foreground w-9">{FREQUENCY_LABELS[f]}</th>)}
-                      <th className="p-2 text-right font-medium text-muted-foreground w-10">%</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {responsibleStatus?.map(person => (
-                      <tr key={person.id} className="hover:bg-secondary/20">
-                        <td className="p-2">
-                          <p className="font-medium text-foreground" title={person.name}>{person.name}</p>
-                        </td>
-                        {FREQUENCIES.map(f => (
-                          <td key={f} className="p-1 text-center">
-                            <StatusBadge 
-                              data={person.frequencies[f]} 
-                              frequency={f}
-                              onClick={person.frequencies[f].total > 0 
-                                ? () => openTasksDialog(person.id, person.name, 'responsible', f)
-                                : undefined
-                              }
-                            />
-                          </td>
-                        ))}
-                        <td className="p-2 text-right"><TotalBadge data={person.totals} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </ResizablePanel>
-          )}
-        />
+        renderPanelsGrid()
       )}
     </div>
   );
