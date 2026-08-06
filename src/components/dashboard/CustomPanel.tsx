@@ -156,9 +156,9 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         const startStr = formatDateString(periodDates.start);
         const endStr = `${formatDateString(periodDates.end)}T23:59:59.999Z`;
 
-        tasksQuery = tasksQuery
-          .gte('due_date', startStr)
-          .lte('due_date', endStr);
+        tasksQuery = tasksQuery.or(
+          `and(due_date.gte.${startStr},due_date.lte.${endStr}),and(start_date.lte.${endStr},due_date.gte.${startStr})`
+        );
       }
 
       // Fetch all task rows bypassing the 1000 row Supabase API default:

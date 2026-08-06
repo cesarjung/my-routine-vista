@@ -484,14 +484,30 @@ export const useUpdateRoutine = () => {
         if (data.startDate) taskUpdate.start_date = data.startDate;
         if (data.dueDate) taskUpdate.due_date = data.dueDate;
 
-        // Update tasks (parent & child tasks for this routine)
-        const { error: tErr } = await supabase
+        // Find current active parent task to update only its current instance and child tasks
+        const { data: activeParent } = await supabase
           .from('tasks')
-          .update(taskUpdate)
+          .select('id')
           .eq('routine_id', id)
-          .in('status', ['pendente', 'em_andamento', 'atrasada']);
+          .is('parent_task_id', null)
+          .in('status', ['pendente', 'em_andamento', 'atrasada'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (tErr) console.error("Error updating tasks dates:", tErr);
+        if (activeParent) {
+          // Update parent task
+          await supabase
+            .from('tasks')
+            .update(taskUpdate)
+            .eq('id', activeParent.id);
+
+          // Update child tasks belonging to this parent task
+          await supabase
+            .from('tasks')
+            .update(taskUpdate)
+            .eq('parent_task_id', activeParent.id);
+        }
 
         // Update active routine periods
         const periodUpdate: any = {};
