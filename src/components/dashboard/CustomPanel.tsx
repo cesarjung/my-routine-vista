@@ -102,16 +102,10 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
 
-      // Instead of relying on task.sector_id which could be null for old tasks,
-      // we filter the routines by sector_id AND frequency together.
-      let queryRoutines = supabase.from('routines').select('id').eq('is_active', true);
+      // Filter routines by frequency and sector_id gracefully
+      let queryRoutines = supabase.from('routines').select('id, sector_id').eq('is_active', true);
       let needsRoutineFilter = false;
 
-      if (effectiveSectorId) {
-        queryRoutines = queryRoutines.eq('sector_id', effectiveSectorId);
-        needsRoutineFilter = true;
-      }
-      
       if (filters.task_frequency && filters.task_frequency.length > 0) {
         queryRoutines = queryRoutines.in('frequency', filters.task_frequency);
         needsRoutineFilter = true;
@@ -122,18 +116,18 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       if (needsRoutineFilter) {
         const { data: matchedRoutines } = await queryRoutines;
         if (matchedRoutines && matchedRoutines.length > 0) {
-          allowedRoutineIds = matchedRoutines.map((r: any) => r.id);
-        } else {
-          allowedRoutineIds = []; // No routines match the filters
+          if (effectiveSectorId) {
+            const sectorMatched = matchedRoutines.filter((r: any) => !r.sector_id || r.sector_id === effectiveSectorId);
+            const targetList = sectorMatched.length > 0 ? sectorMatched : matchedRoutines;
+            allowedRoutineIds = targetList.map((r: any) => r.id);
+          } else {
+            allowedRoutineIds = matchedRoutines.map((r: any) => r.id);
+          }
         }
       }
 
-      if (allowedRoutineIds !== null) {
-        if (allowedRoutineIds.length === 0) {
-          tasksQuery = tasksQuery.eq('routine_id', '00000000-0000-0000-0000-000000000000');
-        } else {
-          tasksQuery = tasksQuery.in('routine_id', allowedRoutineIds);
-        }
+      if (allowedRoutineIds && allowedRoutineIds.length > 0) {
+        tasksQuery = tasksQuery.in('routine_id', allowedRoutineIds);
       } else {
         if (titleFallback && titleFallback.length > 0) {
           tasksQuery = tasksQuery.in('title', titleFallback);
