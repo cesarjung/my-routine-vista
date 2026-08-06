@@ -168,15 +168,22 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
 
 
 
+      // Helper for robust frequency resolution (falls back to panel's target frequency if routinesMap is restricted by RLS)
+      const getTaskFrequency = (t: any) => {
+        if (!t.routine_id) return null;
+        if (routinesMap[t.routine_id]) return routinesMap[t.routine_id];
+        if (filters.task_frequency && filters.task_frequency.length === 1) {
+          return filters.task_frequency[0];
+        }
+        return null;
+      };
+
       // Filter tasks by frequency if specified
       const tasks = rawTasks?.filter(t => {
         if (!filters.task_frequency || filters.task_frequency.length === 0) return true;
-        if (!t.routine_id) return false; // Non-routine tasks don't have frequency
-
-        const freq = routinesMap[t.routine_id];
-        if (!freq) return false; // This filters out tasks belonging to inactive routines automatically!
-
-        return filters.task_frequency.includes(freq);
+        const freq = getTaskFrequency(t);
+        if (!freq) return false;
+        return filters.task_frequency.includes(freq as any);
       });
 
       // Group data based on group_by
@@ -199,7 +206,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           const frequencies: Record<string, StatusData> = {};
 
           FREQUENCIES.forEach(f => {
-            const freqTasks = unitTasks.filter(t => t.routine_id && routinesMap[t.routine_id] === f);
+            const freqTasks = unitTasks.filter(t => getTaskFrequency(t) === f);
             frequencies[f] = {
               completed: freqTasks.filter(t => t.status === 'concluida').length,
               pending: freqTasks.filter(t => t.status !== 'concluida' && t.status !== 'cancelada').length,
@@ -225,7 +232,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           const frequencies: Record<string, StatusData> = {};
 
           FREQUENCIES.forEach(f => {
-            const freqTasks = profileTasks.filter(t => t.routine_id && routinesMap[t.routine_id] === f);
+            const freqTasks = profileTasks.filter(t => getTaskFrequency(t) === f);
             frequencies[f] = {
               completed: freqTasks.filter(t => t.status === 'concluida').length,
               pending: freqTasks.filter(t => t.status !== 'concluida' && t.status !== 'cancelada').length,
