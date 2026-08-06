@@ -76,16 +76,31 @@ const getPeriodDates = (period: string) => {
 };
 
 const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | null) => {
-  const { filters } = panel;
+  const { filters, titleFallback, titleIlikeFallback } = panel;
 
   return useQuery({
     queryKey: ['custom-panel-data', panel.id, filters, dashboardSectorId],
     queryFn: async () => {
+      // 1. Fetch active routines first to build lookup maps
+      const { data: allRoutines } = await supabase
+        .from('routines')
+        .select('id, frequency, title, sector_id, is_active')
+        .eq('is_active', true);
+
+      const activeRoutines = allRoutines || [];
+      const routinesMap: Record<string, string> = {};
+      const routineTitlesMap: Record<string, string> = {};
+
+      activeRoutines.forEach(r => {
+        routinesMap[r.id] = r.frequency;
+        routineTitlesMap[r.id] = r.title;
+      });
+
       // Get period dates
       const periodDates = getPeriodDates(filters.period || 'all');
 
       // Build tasks query
-      let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, sector_id');
+      let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, start_date, sector_id');
       
       const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : filters.sector_id;
 
@@ -102,32 +117,21 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
 
-      // Filter routines by frequency and sector_id gracefully
-      let queryRoutines = supabase.from('routines').select('id, sector_id').eq('is_active', true);
-      let needsRoutineFilter = false;
-
+      // Filter tasks by allowed routine IDs matching frequency and sector
       if (filters.task_frequency && filters.task_frequency.length > 0) {
-        queryRoutines = queryRoutines.in('frequency', filters.task_frequency);
-        needsRoutineFilter = true;
-      }
-
-      let allowedRoutineIds: string[] | null = null;
-
-      if (needsRoutineFilter) {
-        const { data: matchedRoutines } = await queryRoutines;
-        if (matchedRoutines && matchedRoutines.length > 0) {
-          if (effectiveSectorId) {
-            const sectorMatched = matchedRoutines.filter((r: any) => !r.sector_id || r.sector_id === effectiveSectorId);
-            const targetList = sectorMatched.length > 0 ? sectorMatched : matchedRoutines;
-            allowedRoutineIds = targetList.map((r: any) => r.id);
-          } else {
-            allowedRoutineIds = matchedRoutines.map((r: any) => r.id);
+        let matchingRoutines = activeRoutines.filter(r => filters.task_frequency!.includes(r.frequency as any));
+        
+        if (effectiveSectorId && matchingRoutines.length > 0) {
+          const sectorMatches = matchingRoutines.filter(r => !r.sector_id || r.sector_id === effectiveSectorId);
+          if (sectorMatches.length > 0) {
+            matchingRoutines = sectorMatches;
           }
         }
-      }
 
-      if (allowedRoutineIds && allowedRoutineIds.length > 0) {
-        tasksQuery = tasksQuery.in('routine_id', allowedRoutineIds);
+        const allowedIds = matchingRoutines.map(r => r.id);
+        if (allowedIds.length > 0) {
+          tasksQuery = tasksQuery.in('routine_id', allowedIds);
+        }
       } else {
         if (titleFallback && titleFallback.length > 0) {
           tasksQuery = tasksQuery.in('title', titleFallback);
@@ -137,9 +141,6 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       }
 
       if (periodDates) {
-        // Precisamos converter os limites de start/end locais para a janela UTC de GMT-3 correta
-        // Para que o Supabase filtre exatamente o "Hoje" (de 03:00 de hoje até 02:59 de amanhã UTC)
-
         const formatDateString = (date: Date) => {
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -165,31 +166,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         console.log('CustomPanel Debug - Sample rawTask:', rawTasks[0]);
       }
 
-      // Get routines for frequency mapping
-      const routineIds = [...new Set(rawTasks?.filter(t => t.routine_id).map(t => t.routine_id) || [])];
-      let routinesMap: Record<string, string> = {};
-      let routineTitlesMap: Record<string, string> = {};
 
-      if (routineIds.length > 0) {
-        const { data: routines } = await supabase
-          .from('routines')
-          .select('id, frequency, title, is_active')
-          .in('id', routineIds);
-
-        routinesMap = (routines || []).reduce((acc, r) => {
-          if (r.is_active !== false) {
-            acc[r.id] = r.frequency;
-          }
-          return acc;
-        }, {} as Record<string, string>);
-
-        routineTitlesMap = (routines || []).reduce((acc, r) => {
-          if (r.is_active !== false) {
-            acc[r.id] = r.title;
-          }
-          return acc;
-        }, {} as Record<string, string>);
-      }
 
       // Filter tasks by frequency if specified
       const tasks = rawTasks?.filter(t => {
