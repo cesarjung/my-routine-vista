@@ -10,7 +10,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DashboardPanel, useReorderDashboardPanels } from '@/hooks/useDashboardPanels';
 import { CustomPanel } from './CustomPanel';
-import { GripVertical, Lock } from 'lucide-react';
+import { GripVertical, Lock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsAdmin } from '@/hooks/useUserRole';
