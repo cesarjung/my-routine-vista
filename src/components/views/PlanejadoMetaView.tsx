@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 
 const META_PLANEJADO_META = 100; // Meta: 100% de Planejado vs Meta
+const META_PLANEJADO = 100;
 
 // Componente Sparkline SVG para a tabela
 const Sparkline = ({ data, width = 96, height = 24 }: { data: (number | null)[]; width?: number; height?: number }) => {
