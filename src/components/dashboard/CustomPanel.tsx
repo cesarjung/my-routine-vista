@@ -81,11 +81,10 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
   return useQuery({
     queryKey: ['custom-panel-data', panel.id, filters, dashboardSectorId],
     queryFn: async () => {
-      // 1. Fetch active routines first to build lookup maps
+      // 1. Fetch active and past routines to build comprehensive lookup maps
       const { data: allRoutines } = await supabase
         .from('routines')
-        .select('id, frequency, title, sector_id, is_active')
-        .eq('is_active', true);
+        .select('id, frequency, title, sector_id, is_active');
 
       const activeRoutines = allRoutines || [];
       const routinesMap: Record<string, string> = {};
@@ -104,6 +103,10 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       
       const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : filters.sector_id;
 
+      if (effectiveSectorId) {
+        tasksQuery = tasksQuery.or(`sector_id.eq.${effectiveSectorId},sector_id.is.null`);
+      }
+
       if (filters.unit_id) {
         if (Array.isArray(filters.unit_id)) {
           const validUnits = filters.unit_id.filter(id => id && id.toLowerCase() !== 'todas as unidades' && id.toLowerCase() !== 'selecionar todos');
@@ -117,22 +120,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
       }
 
-      // Filter tasks by allowed routine IDs matching frequency and sector
-      if (filters.task_frequency && filters.task_frequency.length > 0) {
-        let matchingRoutines = activeRoutines.filter(r => filters.task_frequency!.includes(r.frequency as any));
-        
-        if (effectiveSectorId && matchingRoutines.length > 0) {
-          const sectorMatches = matchingRoutines.filter(r => !r.sector_id || r.sector_id === effectiveSectorId);
-          if (sectorMatches.length > 0) {
-            matchingRoutines = sectorMatches;
-          }
-        }
-
-        const allowedIds = matchingRoutines.map(r => r.id);
-        if (allowedIds.length > 0) {
-          tasksQuery = tasksQuery.in('routine_id', allowedIds);
-        }
-      } else {
+      if (!filters.task_frequency || filters.task_frequency.length === 0) {
         if (titleFallback && titleFallback.length > 0) {
           tasksQuery = tasksQuery.in('title', titleFallback);
         } else if (titleIlikeFallback) {
@@ -161,21 +149,17 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       const { data: rawTasks, error: fetchError } = await tasksQuery;
       if (fetchError) throw fetchError;
 
-      console.log('CustomPanel Debug - rawTasks fetched for', panel.title, ':', rawTasks?.length);
-      if (rawTasks && rawTasks.length > 0) {
-        console.log('CustomPanel Debug - Sample rawTask:', rawTasks[0]);
-      }
-
-
-
-      // Helper for robust frequency resolution (falls back to panel's target frequency if routinesMap is restricted by RLS)
+      // Helper for robust frequency resolution (falls back gracefully if routinesMap is restricted)
       const getTaskFrequency = (t: any) => {
         if (!t.routine_id) return null;
         if (routinesMap[t.routine_id]) return routinesMap[t.routine_id];
         if (filters.task_frequency && filters.task_frequency.length === 1) {
           return filters.task_frequency[0];
         }
-        return null;
+        if (filters.task_frequency && filters.task_frequency.includes('diaria')) {
+          return 'diaria';
+        }
+        return filters.task_frequency?.[0] || 'diaria';
       };
 
       // Filter tasks by frequency if specified
