@@ -702,6 +702,35 @@ export const PlanejadoMetaView = () => {
     return '#DC3232';
   };
 
+  // Escala Dinâmica Compartilhada da Produção (Sem corte em 100%)
+  const todasAsProducoesExibidas = useMemo(() => {
+    const list: number[] = [];
+    chartData.forEach(row => {
+      if (typeof row._producaoPerc === 'number' && !isNaN(row._producaoPerc)) {
+        list.push(row._producaoPerc);
+      }
+      mesesExibidos.forEach(m => {
+        const p = row[`${m}_prod`];
+        if (typeof p === 'number' && !isNaN(p)) {
+          list.push(p);
+        }
+      });
+    });
+    return list;
+  }, [chartData, mesesExibidos]);
+
+  const maxProd = Math.max(100, ...todasAsProducoesExibidas);
+  const escalaProd = Math.ceil(maxProd / 10) * 10;
+  const getBarWidthPerc = (p: number) => `${((p / escalaProd) * 100).toFixed(1)}%`;
+  const marca100Perc = `${((100 / escalaProd) * 100).toFixed(1)}%`;
+
+  const getProdBarColor = (p: number) => {
+    if (p >= 100) return '#1A9950';
+    if (p >= 85) return '#65A30D';
+    if (p >= 70) return '#EAB308';
+    return '#DC3232';
+  };
+
   if (isLoading || isBdMetasLoading) {
     return (
       <div className="flex-1 flex flex-col h-full w-full items-center justify-center bg-background">
