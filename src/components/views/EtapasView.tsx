@@ -17,41 +17,37 @@ import { parse, startOfDay, endOfDay, isWithinInterval, addDays, subDays, differ
 import { ptBR } from 'date-fns/locale';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { cn } from '@/lib/utils';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  LabelList
-} from 'recharts';
 
 export const EtapasView = () => {
-  const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_etapas', []);
+  const [selectedUnidadesIdsRaw, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_etapas', []);
+  const selectedUnidadesIds = useMemo(() => Array.isArray(selectedUnidadesIdsRaw) ? selectedUnidadesIdsRaw : [], [selectedUnidadesIdsRaw]);
+
   const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_etapas', 1);
   const [unidadesDropdownOpen, setUnidadesDropdownOpen] = useState(false);
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
-  const { data, isLoading, isError, lastUpdated } = useEtapasData(selectedUnidadesIds);
+  const { data: rawData, isLoading, isError, refetch } = useEtapasData(selectedUnidadesIds);
+  const data = useMemo(() => Array.isArray(rawData) ? rawData : [], [rawData]);
 
   // Filtros locais (persistidos em sessão)
-  const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_etapas', []);
-    
+  const [selectedMesesRaw, setSelectedMeses] = useSessionState<string[]>('filter_meses_etapas', []);
+  const selectedMeses = useMemo(() => Array.isArray(selectedMesesRaw) ? selectedMesesRaw : [], [selectedMesesRaw]);
+
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_etapas', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_etapas', '');
 
-  const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores_etapas', []);
+  const [selectedSupervisoresRaw, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores_etapas', []);
+  const selectedSupervisores = useMemo(() => Array.isArray(selectedSupervisoresRaw) ? selectedSupervisoresRaw : [], [selectedSupervisoresRaw]);
   const [supervisoresDropdownOpen, setSupervisoresDropdownOpen] = useState(false);
 
-  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes_etapas', []);
+  const [selectedEquipesRaw, setSelectedEquipes] = useSessionState<string[]>('filter_equipes_etapas', []);
+  const selectedEquipes = useMemo(() => Array.isArray(selectedEquipesRaw) ? selectedEquipesRaw : [], [selectedEquipesRaw]);
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
 
-  const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_etapas', []);
-  
+  const [selectedProjetosRaw, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_etapas', []);
+  const selectedProjetos = useMemo(() => Array.isArray(selectedProjetosRaw) ? selectedProjetosRaw : [], [selectedProjetosRaw]);
+
   // Regra vital
   const [somenteDisponiveis, setSomenteDisponiveis] = useState(false);
 
@@ -201,42 +197,253 @@ export const EtapasView = () => {
     return resultadoFinal;
   }, [filteredData, somenteDisponiveis, mesesExibidos]);
 
-  const COLORS = [
-    'hsl(25, 95%, 50%)', // Laranja Principal (Primary)
-    'hsl(0, 0%, 10%)',   // Preto (Foreground/Black)
-    'hsl(0, 72%, 51%)',  // Vermelho (Destructive)
-    'hsl(38, 92%, 50%)', // Amarelo/Âmbar (Warning)
-    'hsl(30, 20%, 60%)', // Cinza Quente
-    'hsl(25, 95%, 35%)', // Laranja Escuro
-    'hsl(38, 92%, 35%)', // Âmbar Escuro
-    'hsl(0, 0%, 45%)',   // Cinza Neutro
-  ];
+  // Configuração Fixa das 5 Etapas (Cores de Etapa)
+  const ETAPAS_CONFIG: Record<string, { label: string; color: string; rgb: string }> = {
+    'Conclusão': { label: 'Conclusão', color: '#1A9950', rgb: '26, 153, 80' },
+    'Esc/Imp':   { label: 'Esc/Imp', color: '#F97706', rgb: '249, 119, 6' },
+    'Esc/Im/Lç': { label: 'Esc/Im/Lç', color: '#EAB308', rgb: '234, 179, 24' },
+    'Implant.':  { label: 'Implant.', color: '#B45309', rgb: '180, 83, 9' },
+    'Lançamento': { label: 'Lançamento', color: '#3F3F3F', rgb: '63, 63, 63' }
+  };
 
-  const handleQuickDateFilter = (days: number) => {
-    if (days === 0) {
-      setFilterStart('');
-      setFilterEnd('');
-      return;
+  const ETAPAS_LIST = ['Conclusão', 'Esc/Imp', 'Esc/Im/Lç', 'Implant.', 'Lançamento'];
+
+  // Estado do Agrupamento da Tabela (Unidade | Etapa)
+  const [groupBy, setGroupBy] = useSessionState<'unidade' | 'etapa'>('filter_groupby_etapas', 'unidade');
+
+  // Cálculos de Agregação para o Card 1 (Composição Mensal) e Card 2 (Tabela Unificada)
+  const { tableDataByUnit, tableDataByEtapa, composicaoMensalData, maxValPerEtapa } = useMemo(() => {
+    const agrupadoUnidade: Record<string, Record<string, { totalRows: number; grupos: Record<string, number> }>> = {};
+    const agrupadoMesGlobal: Record<string, { totalRows: number; grupos: Record<string, number> }> = {};
+
+    filteredData.forEach(row => {
+      // Regra: Desconsiderar quando não tiver meta na coluna AM
+      if (row.valProdTurno <= 0) return;
+
+      // Se "Somente Disponíveis" estiver ativo, exclui tudo que NÃO FOR 1 na coluna BB
+      if (somenteDisponiveis && row.valDisponivel !== 1) return;
+
+      const uNome = row.unidadeNome.replace('UNIDADE ', '');
+      const m = row.mesCurto;
+      const cat = row.etapaGrupo;
+
+      // Por Unidade
+      if (!agrupadoUnidade[uNome]) agrupadoUnidade[uNome] = {};
+      if (!agrupadoUnidade[uNome][m]) {
+        agrupadoUnidade[uNome][m] = {
+          totalRows: 0,
+          grupos: { 'Conclusão': 0, 'Esc/Imp': 0, 'Esc/Im/Lç': 0, 'Implant.': 0, 'Lançamento': 0 }
+        };
+      }
+      agrupadoUnidade[uNome][m].totalRows += 1;
+      if (agrupadoUnidade[uNome][m].grupos[cat] !== undefined) {
+        agrupadoUnidade[uNome][m].grupos[cat] += 1;
+      }
+
+      // Global por Mês (Card 1: Composição Mensal)
+      if (!agrupadoMesGlobal[m]) {
+        agrupadoMesGlobal[m] = {
+          totalRows: 0,
+          grupos: { 'Conclusão': 0, 'Esc/Imp': 0, 'Esc/Im/Lç': 0, 'Implant.': 0, 'Lançamento': 0 }
+        };
+      }
+      agrupadoMesGlobal[m].totalRows += 1;
+      if (agrupadoMesGlobal[m].grupos[cat] !== undefined) {
+        agrupadoMesGlobal[m].grupos[cat] += 1;
+      }
+    });
+
+    // 1. Dados da Composição Mensal (Empilhado Global)
+    const composicaoMensal = mesesExibidos.map(m => {
+      const mData = agrupadoMesGlobal[m];
+      const total = mData ? mData.totalRows : 0;
+
+      const segmentos = ETAPAS_LIST.map(cat => {
+        const count = mData ? (mData.grupos[cat] || 0) : 0;
+        const perc = total > 0 ? (count / total) * 100 : 0;
+        return {
+          cat,
+          perc: Number(perc.toFixed(1))
+        };
+      });
+
+      return {
+        mes: m,
+        total,
+        segmentos
+      };
+    });
+
+    const unitNames = Object.keys(agrupadoUnidade).sort((a, b) => a.localeCompare(b));
+
+    // 2. Maior Valor Por Etapa (para escala independente de intensidade por etapa)
+    const maxValPerEtapa: Record<string, number> = {
+      'Conclusão': 0,
+      'Esc/Imp': 0,
+      'Esc/Im/Lç': 0,
+      'Implant.': 0,
+      'Lançamento': 0
+    };
+
+    const matrix: Record<string, Record<string, Record<string, number | null>>> = {};
+
+    unitNames.forEach(uName => {
+      matrix[uName] = {};
+      ETAPAS_LIST.forEach(cat => {
+        matrix[uName][cat] = {};
+        mesesExibidos.forEach(m => {
+          const mData = agrupadoUnidade[uName]?.[m];
+          if (mData && mData.totalRows > 0) {
+            const val = Number(((mData.grupos[cat] / mData.totalRows) * 100).toFixed(1));
+            matrix[uName][cat][m] = val;
+            if (val > maxValPerEtapa[cat]) {
+              maxValPerEtapa[cat] = val;
+            }
+          } else {
+            matrix[uName][cat][m] = null;
+          }
+        });
+      });
+    });
+
+    ETAPAS_LIST.forEach(cat => {
+      if (maxValPerEtapa[cat] === 0) maxValPerEtapa[cat] = 1;
+    });
+
+    // 3. Estrutura para Agrupar por Unidade
+    const tableByUnit = unitNames.map(uName => {
+      const etapaRows = ETAPAS_LIST.map(cat => {
+        const monthValues = mesesExibidos.map(m => matrix[uName][cat][m]);
+        const validValues = monthValues.filter((v): v is number => v !== null);
+        const media = validValues.length > 0
+          ? validValues.reduce((acc, curr) => acc + curr, 0) / validValues.length
+          : 0;
+
+        const sparklineData = monthValues.map(v => v ?? 0);
+
+        const lastVal = monthValues[monthValues.length - 1];
+        const prevVal = monthValues[monthValues.length - 2];
+        let variacao: number | null = null;
+        if (lastVal !== null && prevVal !== null) {
+          variacao = Number((lastVal - prevVal).toFixed(1));
+        }
+
+        return {
+          etapa: cat,
+          monthValues,
+          media: Number(media.toFixed(1)),
+          sparklineData,
+          variacao
+        };
+      });
+
+      return {
+        unitName: uName,
+        rows: etapaRows
+      };
+    });
+
+    // 4. Estrutura para Agrupar por Etapa
+    const tableByEtapa = ETAPAS_LIST.map(cat => {
+      const unitRows = unitNames.map(uName => {
+        const monthValues = mesesExibidos.map(m => matrix[uName][cat][m]);
+        const validValues = monthValues.filter((v): v is number => v !== null);
+        const media = validValues.length > 0
+          ? validValues.reduce((acc, curr) => acc + curr, 0) / validValues.length
+          : 0;
+
+        const sparklineData = monthValues.map(v => v ?? 0);
+
+        const lastVal = monthValues[monthValues.length - 1];
+        const prevVal = monthValues[monthValues.length - 2];
+        let variacao: number | null = null;
+        if (lastVal !== null && prevVal !== null) {
+          variacao = Number((lastVal - prevVal).toFixed(1));
+        }
+
+        return {
+          unitName: uName,
+          monthValues,
+          media: Number(media.toFixed(1)),
+          sparklineData,
+          variacao
+        };
+      });
+
+      return {
+        etapa: cat,
+        maxVal: maxValPerEtapa[cat],
+        rows: unitRows
+      };
+    });
+
+    return {
+      tableDataByUnit: tableByUnit,
+      tableDataByEtapa: tableByEtapa,
+      composicaoMensalData: composicaoMensal,
+      maxValPerEtapa
+    };
+  }, [filteredData, somenteDisponiveis, mesesExibidos]);
+
+  // Função de Estilo da Pílula de Célula por Intensidade
+  const getEtapaCellStyle = (val: number | null, cat: string) => {
+    if (val === null || val === undefined) {
+      return { bg: 'transparent', text: '#A1A1AA' };
     }
-    const end = new Date();
-    const start = subDays(end, days);
-    setFilterStart(format(start, 'yyyy-MM-dd'));
-    setFilterEnd(format(end, 'yyyy-MM-dd'));
+
+    const maxVal = maxValPerEtapa[cat] || 1;
+    const rgb = ETAPAS_CONFIG[cat]?.rgb || '63, 63, 63';
+    const intensidade = Math.min(1, Math.max(0, val / maxVal));
+    const alpha = 0.05 + intensidade * 0.32;
+    const bg = `rgba(${rgb}, ${alpha.toFixed(3)})`;
+    const text = intensidade > 0.55 ? '#1F1F1F' : '#4B4B4B';
+
+    return { bg, text };
+  };
+
+  // Sparkline SVG 62x22
+  const EtapaSparkline = ({ data, color }: { data: number[]; color: string }) => {
+    if (!data || data.length === 0) return <div className="w-[62px] h-[22px]" />;
+
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const range = max - min === 0 ? 1 : max - min;
+    const width = 62;
+    const height = 22;
+
+    const points = data.map((val, idx) => {
+      const x = data.length > 1 ? (idx / (data.length - 1)) * (width - 8) + 4 : width / 2;
+      const y = height - 4 - ((val - min) / range) * (height - 8);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    const areaPoints = `${points} ${width - 4},${height} 4,${height}`;
+    const lastPoint = data.length > 1 ? points.split(' ').pop()?.split(',') : null;
+
+    return (
+      <svg width={width} height={height} className="overflow-visible shrink-0">
+        <polygon points={areaPoints} fill={color} fillOpacity={0.15} />
+        <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        {lastPoint && (
+          <circle cx={lastPoint[0]} cy={lastPoint[1]} r={2.5} fill={color} />
+        )}
+      </svg>
+    );
   };
 
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col h-full w-full items-center justify-center bg-background">
         <div className="animate-spin text-primary mb-4"><RefreshCw className="w-8 h-8" /></div>
-        <p>Carregando dados de Etapas...</p>
+        <p className="text-sm font-medium text-muted-foreground">Carregando dados de Etapas...</p>
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex-1 flex flex-col h-full w-full items-center justify-center text-red-500 bg-background">
-        <p>Ocorreu um erro ao carregar os dados.</p>
+      <div className="flex-1 flex flex-col h-full w-full items-center justify-center text-destructive bg-background">
+        <p className="text-sm font-medium">Ocorreu um erro ao carregar os dados.</p>
         <Button onClick={() => refetch()} variant="outline" className="mt-4">Tentar Novamente</Button>
       </div>
     );
@@ -300,10 +507,10 @@ export const EtapasView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
-            </div>
+                  <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                    <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Selecionar todos</Button>
+                    <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
+                  </div>
                   {UNIDADES_PLANEJAMENTO.map(u => (
                     <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
                       if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
@@ -338,10 +545,10 @@ export const EtapasView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores(supervisoresUnicos)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores([])}>Limpar</Button>
-            </div>
+                  <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                    <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores(supervisoresUnicos)}>Selecionar todos</Button>
+                    <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores([])}>Limpar</Button>
+                  </div>
                   {supervisoresUnicos.map(s => (
                     <DropdownMenuCheckboxItem key={s} checked={selectedSupervisores.includes(s)} onCheckedChange={(checked) => {
                       if (checked) setSelectedSupervisores([...selectedSupervisores.filter(x => x !== s), s]);
@@ -362,10 +569,10 @@ export const EtapasView = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes(equipesUnicas)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes([])}>Limpar</Button>
-            </div>
+                  <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                    <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes(equipesUnicas)}>Selecionar todos</Button>
+                    <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes([])}>Limpar</Button>
+                  </div>
                   {equipesUnicas.map(e => (
                     <DropdownMenuCheckboxItem key={e} checked={selectedEquipes.includes(e)} onCheckedChange={(checked) => {
                       if (checked) setSelectedEquipes([...selectedEquipes.filter(x => x !== e), e]);
@@ -395,79 +602,308 @@ export const EtapasView = () => {
         </div>
       </div>
 
-      {/* CONTEÚDO PRINCIPAL */}
-      <div style={{ zoom: zoomLevel } as React.CSSProperties} className="flex flex-col gap-6 p-4 pb-8">
+      {/* CONTEÚDO PRINCIPAL REDESENHADO */}
+      <div style={{ zoom: zoomLevel } as React.CSSProperties} className="flex flex-col gap-6 p-4 pb-8 w-full">
         
-        {/* Grid de Evolução (Small Multiples) */}
-        <div className="w-full shrink-0 flex flex-col gap-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">Etapas Programadas</h2>
-              <p className="text-xs text-muted-foreground">Evolução percentual por grupo</p>
-            </div>
-            
-            {/* Legend for Months */}
-            <div className="flex gap-4 text-xs font-medium bg-muted/30 px-3 py-1.5 rounded-md border border-border">
-              <span className="text-muted-foreground mr-1">Cores = meses:</span>
-              {mesesExibidos.map((m, i) => (
-                <div key={m} className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                  {m}
-                </div>
-              ))}
-            </div>
+        {/* CABEÇALHO DO DASHBOARD + LEGENDA DAS 5 ETAPAS */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Distribuição de Etapas</h2>
+            <p className="text-xs text-muted-foreground">Evolução da composição e histórico por unidade e etapa</p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {gridData.map(unidade => (
-              <div key={unidade.name} className="border border-border rounded-lg bg-card shadow-sm overflow-hidden flex flex-col">
-                <div className="bg-[#c92a2a] text-white px-3 py-1.5 font-bold text-sm tracking-wide">
-                  {unidade.name}
-                </div>
-                <div className="p-4 h-[250px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={unidade.data} margin={{ top: 15, right: 10, left: -20, bottom: 25 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
-                      <XAxis 
-                        dataKey="category" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} 
-                        angle={0}
-                      />
-                      <YAxis 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} 
-                        domain={[0, 50]} 
-                      />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
-                        itemStyle={{ fontWeight: 'bold' }}
-                        cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
-                      />
-                      {mesesExibidos.map((m, i) => (
-                        <Bar key={m} dataKey={m} name={m} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} maxBarSize={20}>
-                          <LabelList 
-                            dataKey={m} 
-                            position="top" 
-                            fill={COLORS[i % COLORS.length]} 
-                            fontSize={9} 
-                            fontWeight="bold" 
-                            offset={5} 
-                            formatter={(v: any) => v > 0 ? v : ''} 
-                          />
-                        </Bar>
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+
+          {/* Legenda de 5 Cores Fixas de Etapa no Topo */}
+          <div className="flex flex-wrap items-center gap-3 text-xs font-medium bg-muted/30 px-3 py-1.5 rounded-lg border border-border">
+            {ETAPAS_LIST.map(cat => (
+              <div key={cat} className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-[3px] shrink-0" style={{ backgroundColor: ETAPAS_CONFIG[cat].color }} />
+                <span className="text-foreground">{cat}</span>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* CARD 1: COMPOSIÇÃO MENSAL (GRÁFICO EMPILHADO GLOBAL) */}
+        <div className="w-full border border-border rounded-xl bg-card p-4 shadow-[var(--shadow-card)] flex flex-col gap-4">
+          <div>
+            <h3 className="text-base font-bold text-foreground">Composição mensal</h3>
+            <p className="text-xs text-muted-foreground">Participação de cada etapa no total programado do mês, somando todas as unidades</p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 w-full pt-1">
+            {composicaoMensalData.map(mItem => (
+              <div key={mItem.mes} className="flex flex-col items-center gap-2 flex-1 min-w-[75px]">
+                
+                {/* Barra Empilhada (Altura 170px) */}
+                <div className="h-[170px] w-full rounded-[6px] overflow-hidden bg-muted/40 flex flex-col-reverse relative shadow-inner">
+                  {mItem.segmentos.map(seg => {
+                    const cfg = ETAPAS_CONFIG[seg.cat];
+                    const showLabel = seg.perc >= 9;
+
+                    return (
+                      <div
+                        key={seg.cat}
+                        style={{
+                          height: `${seg.perc}%`,
+                          backgroundColor: cfg.color
+                        }}
+                        className="w-full transition-all duration-300 relative flex items-center justify-center"
+                        title={`${seg.cat} · ${mItem.mes}: ${seg.perc.toFixed(1).replace('.', ',')}% do programado`}
+                      >
+                        {showLabel && (
+                          <span className="text-[10px] font-bold text-white tabular-nums select-none drop-shadow-sm">
+                            {seg.perc.toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Rótulo do Mês Apenas Abaixo da Barra */}
+                <span className="text-xs font-bold text-foreground uppercase tracking-wide">
+                  {mItem.mes}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CARD 2: HISTÓRICO POR ETAPA, MÊS E UNIDADE (TABELA UNIFICADA E AGRUPADA) */}
+        <div className="w-full border border-border rounded-xl bg-card shadow-[var(--shadow-card)] flex flex-col overflow-hidden">
+          
+          {/* Header do Card 2 com Segmented Control de Agrupamento */}
+          <div className="p-4 border-b border-border bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-foreground">Histórico por etapa, mês e unidade</h3>
+              <p className="text-xs text-muted-foreground">Detalhamento temporal e tendência por unidade e etapa</p>
+            </div>
+
+            {/* Segmented Control "Agrupar por: Unidade | Etapa" */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-medium text-muted-foreground">Agrupar por:</span>
+              <div className="inline-flex p-0.5 rounded-lg bg-muted/50 border border-border">
+                <button
+                  onClick={() => setGroupBy('unidade')}
+                  className={cn(
+                    "px-3 py-1 rounded-md text-xs font-semibold transition-all duration-180",
+                    groupBy === 'unidade' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Unidade
+                </button>
+                <button
+                  onClick={() => setGroupBy('etapa')}
+                  className={cn(
+                    "px-3 py-1 rounded-md text-xs font-semibold transition-all duration-180",
+                    groupBy === 'etapa' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Etapa
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela Interativa de Detalhamento */}
+          <div className="w-full overflow-x-auto custom-scrollbar">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr className="bg-[#F7F4F0] dark:bg-muted/50 border-b border-border text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                  <th className="px-3 py-2.5 sticky left-0 z-10 bg-[#F7F4F0] dark:bg-card border-r border-border min-w-[170px]">
+                    {groupBy === 'unidade' ? 'Etapa' : 'Unidade'}
+                  </th>
+                  {mesesExibidos.map(m => (
+                    <th key={m} className="px-2 py-2.5 text-center min-w-[70px]">{m}</th>
+                  ))}
+                  <th className="px-3 py-2.5 text-center min-w-[80px]">Média</th>
+                  <th className="px-3 py-2.5 text-center min-w-[130px]">Tendência</th>
+                </tr>
+              </thead>
+
+              {/* MODO 1: AGRUPAR POR UNIDADE */}
+              {groupBy === 'unidade' && (
+                <>
+                  {tableDataByUnit.map(unit => (
+                    <tbody key={unit.unitName} className="divide-y divide-[#F5F2EE] dark:divide-border/40">
+                      {/* Linha de Cabeçalho do Bloco da Unidade */}
+                      <tr className="bg-[#F7F4F0] dark:bg-muted/60 border-t border-[#E4DED7] dark:border-border">
+                        <td colSpan={mesesExibidos.length + 3} className="px-3 py-2 font-bold text-xs text-foreground">
+                          {unit.unitName}
+                          <span className="ml-2 font-normal text-[11px] text-muted-foreground">
+                            5 etapas · {mesesExibidos.length} meses
+                          </span>
+                        </td>
+                      </tr>
+
+                      {/* 5 Linhas de Etapas */}
+                      {unit.rows.map(r => {
+                        const cfg = ETAPAS_CONFIG[r.etapa];
+
+                        return (
+                          <tr key={r.etapa} className="hover:bg-muted/30 transition-colors">
+                            {/* Nome da Etapa + Marcador de Cor */}
+                            <td className="px-3 py-2 font-medium whitespace-nowrap sticky left-0 z-10 bg-card border-r border-border">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.color }} />
+                                <span className="text-xs font-semibold text-foreground">{r.etapa}</span>
+                              </div>
+                            </td>
+
+                            {/* Células de Meses */}
+                            {mesesExibidos.map((m, idx) => {
+                              const val = r.monthValues[idx];
+                              const style = getEtapaCellStyle(val, r.etapa);
+
+                              return (
+                                <td key={m} className="px-1.5 py-1.5 text-center">
+                                  <div 
+                                    className="inline-flex items-center justify-center min-w-[48px] px-2 py-1 rounded-[6px] text-[11.5px] font-bold tabular-nums transition-all"
+                                    style={{ backgroundColor: style.bg, color: style.text }}
+                                    title={`${unit.unitName} · ${r.etapa} · ${m}: ${val !== null && val !== undefined ? val.toFixed(1).replace('.', ',') : '0'}%`}
+                                  >
+                                    {val !== null && val !== undefined ? `${val.toFixed(1).replace('.', ',')}%` : '-'}
+                                  </div>
+                                </td>
+                              );
+                            })}
+
+                            {/* Média */}
+                            <td className="px-2 py-2 text-center">
+                              <span className="text-xs font-bold text-foreground tabular-nums">
+                                {r.media.toFixed(1).replace('.', ',')}%
+                              </span>
+                            </td>
+
+                            {/* Tendência (Sparkline + Variação) */}
+                            <td className="px-3 py-2 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <EtapaSparkline data={r.sparklineData} color={cfg.color} />
+                                {r.variacao !== null && (
+                                  <span 
+                                    className={cn(
+                                      "text-[10px] font-bold tabular-nums px-1 py-0.5 rounded",
+                                      r.variacao > 0 
+                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
+                                        : r.variacao < 0 
+                                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" 
+                                        : "text-muted-foreground"
+                                    )}
+                                  >
+                                    {r.variacao > 0 ? `+${r.variacao.toFixed(1).replace('.', ',')}` : r.variacao.toFixed(1).replace('.', ',')}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  ))}
+                </>
+              )}
+
+              {/* MODO 2: AGRUPAR POR ETAPA */}
+              {groupBy === 'etapa' && (
+                <>
+                  {tableDataByEtapa.map(etapaBlock => {
+                    const cfg = ETAPAS_CONFIG[etapaBlock.etapa];
+
+                    return (
+                      <tbody key={etapaBlock.etapa} className="divide-y divide-[#F5F2EE] dark:divide-border/40">
+                        {/* Linha de Cabeçalho do Bloco da Etapa */}
+                        <tr className="bg-[#F7F4F0] dark:bg-muted/60 border-t border-[#E4DED7] dark:border-border">
+                          <td colSpan={mesesExibidos.length + 3} className="px-3 py-2 font-bold text-xs text-foreground">
+                            <div className="inline-flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.color }} />
+                              <span>{etapaBlock.etapa}</span>
+                              <span className="font-normal text-[11px] text-muted-foreground">
+                                escala 0 – {etapaBlock.maxVal.toFixed(1).replace('.', ',')}% · {etapaBlock.rows.length} unidades
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Linhas de Unidades */}
+                        {etapaBlock.rows.map(r => (
+                          <tr key={r.unitName} className="hover:bg-muted/30 transition-colors">
+                            {/* Nome da Unidade */}
+                            <td className="px-3 py-2 font-medium whitespace-nowrap sticky left-0 z-10 bg-card border-r border-border">
+                              <span className="text-xs font-semibold text-foreground">{r.unitName}</span>
+                            </td>
+
+                            {/* Células de Meses */}
+                            {mesesExibidos.map((m, idx) => {
+                              const val = r.monthValues[idx];
+                              const style = getEtapaCellStyle(val, etapaBlock.etapa);
+
+                              return (
+                                <td key={m} className="px-1.5 py-1.5 text-center">
+                                  <div 
+                                    className="inline-flex items-center justify-center min-w-[48px] px-2 py-1 rounded-[6px] text-[11.5px] font-bold tabular-nums transition-all"
+                                    style={{ backgroundColor: style.bg, color: style.text }}
+                                    title={`${r.unitName} · ${etapaBlock.etapa} · ${m}: ${val !== null && val !== undefined ? val.toFixed(1).replace('.', ',') : '0'}%`}
+                                  >
+                                    {val !== null && val !== undefined ? `${val.toFixed(1).replace('.', ',')}%` : '-'}
+                                  </div>
+                                </td>
+                              );
+                            })}
+
+                            {/* Média */}
+                            <td className="px-2 py-2 text-center">
+                              <span className="text-xs font-bold text-foreground tabular-nums">
+                                {r.media.toFixed(1).replace('.', ',')}%
+                              </span>
+                            </td>
+
+                            {/* Tendência (Sparkline + Variação) */}
+                            <td className="px-3 py-2 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <EtapaSparkline data={r.sparklineData} color={cfg.color} />
+                                {r.variacao !== null && (
+                                  <span 
+                                    className={cn(
+                                      "text-[10px] font-bold tabular-nums px-1 py-0.5 rounded",
+                                      r.variacao > 0 
+                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
+                                        : r.variacao < 0 
+                                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" 
+                                        : "text-muted-foreground"
+                                    )}
+                                  >
+                                    {r.variacao > 0 ? `+${r.variacao.toFixed(1).replace('.', ',')}` : r.variacao.toFixed(1).replace('.', ',')}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    );
+                  })}
+                </>
+              )}
+            </table>
+          </div>
+
+          {/* Rodapé da Tabela com Legenda de Intensidade */}
+          <div className="p-3 border-t border-border bg-muted/20 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="font-semibold text-foreground">Intensidade:</span>
+            <div className="flex items-center gap-1">
+              <div className="w-4 h-3 rounded bg-neutral-200/50 dark:bg-neutral-800/50" />
+              <div className="w-4 h-3 rounded bg-neutral-300/60 dark:bg-neutral-700/60" />
+              <div className="w-4 h-3 rounded bg-neutral-400/70 dark:bg-neutral-600/70" />
+              <div className="w-4 h-3 rounded bg-neutral-600/80 dark:bg-neutral-400/80" />
+              <div className="w-4 h-3 rounded bg-neutral-800 dark:bg-neutral-200" />
+            </div>
+            <span>clara = baixo · escura = próximo do maior valor daquela etapa</span>
+          </div>
+
         </div>
 
       </div>
     </div>
   );
 };
+

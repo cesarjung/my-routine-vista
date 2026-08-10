@@ -83,10 +83,22 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const { isAdmin } = useIsAdmin();
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
   const { data: planejamentoPermissionsData } = useModulePermissions('PLANEJAMENTO');
+  const { data: almoxarifadoPermissionsData } = useModulePermissions('ALMOXARIFADO');
 
-  const allowedPlanejamentoSections = planejamentoPermissionsData?.permissions || [];
-  const hasPlanejamentoAccess = (sectionId: string) => true; // Bypass
-  const hasAnyPlanejamentoAccess = true; // Bypass
+  const hasPlanejamentoAccess = (sectionId: string) => {
+    if (isAdmin || isGestorOrAdmin) return true;
+    if (!planejamentoPermissionsData || !Array.isArray(planejamentoPermissionsData.permissions)) return true;
+    return planejamentoPermissionsData.permissions.includes(sectionId);
+  };
+
+  const hasAlmoxarifadoAccess = (sectionId: string) => {
+    if (isAdmin || isGestorOrAdmin) return true;
+    if (!almoxarifadoPermissionsData || !Array.isArray(almoxarifadoPermissionsData.permissions)) return true;
+    return almoxarifadoPermissionsData.permissions.includes(sectionId);
+  };
+
+  const hasAnyPlanejamentoAccess = isAdmin || isGestorOrAdmin || !planejamentoPermissionsData || (Array.isArray(planejamentoPermissionsData.permissions) && planejamentoPermissionsData.permissions.length > 0);
+  const hasAnyAlmoxarifadoAccess = isAdmin || isGestorOrAdmin || !almoxarifadoPermissionsData || (Array.isArray(almoxarifadoPermissionsData.permissions) && almoxarifadoPermissionsData.permissions.length > 0);
 
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -601,6 +613,21 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         )}
         {(!collapsed ? isPlanejamentoExpanded : true) && hasAnyPlanejamentoAccess && (
           <div className="space-y-0.5 px-3">
+            {/* Alojamentos e Bases */}
+            {hasPlanejamentoAccess('carteira') && (
+              <button
+                onClick={() => onNavigate({ type: 'alojamentos', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'alojamentos' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Home className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Alojamentos e Bases</span>}
+              </button>
+            )}
+
+            {/* Carteira */}
             {hasPlanejamentoAccess('carteira_dashboard') && (
               <button
                 onClick={() => onNavigate({ type: 'planejamento', section: 'carteira_dashboard' })}
@@ -613,6 +640,8 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 {!collapsed && <span className="text-sm">Carteira</span>}
               </button>
             )}
+
+            {/* Carteira Planejada */}
             {hasPlanejamentoAccess('carteira') && (
               <button
                 onClick={() => onNavigate({ type: 'planejamento', section: 'carteira' })}
@@ -623,6 +652,62 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               >
                 <Map className="w-4 h-4 shrink-0" />
                 {!collapsed && <span className="text-sm whitespace-nowrap">Carteira Planejada</span>}
+              </button>
+            )}
+
+            {/* Cumprimento Plan. */}
+            {hasPlanejamentoAccess('cumprimento_planejamento') && (
+              <button
+                onClick={() => onNavigate({ type: 'cumprimento_planejamento', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'cumprimento_planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Cumprimento Plan.</span>}
+              </button>
+            )}
+
+            {/* Deslocamento */}
+            {hasPlanejamentoAccess('deslocamento') && (
+              <button
+                onClick={() => onNavigate({ type: 'deslocamento', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'deslocamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Navigation className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Deslocamento</span>}
+              </button>
+            )}
+
+            {/* Equipes */}
+            {hasPlanejamentoAccess('planejamento_equipes') && (
+              <button
+                onClick={() => onNavigate({ type: 'planejamento_equipes', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'planejamento_equipes' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Users className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm">Equipes</span>}
+              </button>
+            )}
+
+            {/* Etapas */}
+            {hasPlanejamentoAccess('etapas') && (
+              <button
+                onClick={() => onNavigate({ type: 'etapas', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'etapas' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Layers className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Etapas</span>}
               </button>
             )}
 
@@ -640,74 +725,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               </button>
             )}
 
-            {/* Alojamentos */}
-            {hasPlanejamentoAccess('carteira') && (
-              <button
-                onClick={() => onNavigate({ type: 'alojamentos', section: 'carteira' })}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'alojamentos' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                )}
-              >
-                <Home className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Alojamentos e Bases</span>}
-              </button>
-            )}
-
-            {hasPlanejamentoAccess('planejamento_semanal') && (
-              <button
-                onClick={() => onNavigate({ type: 'planejamento_semanal', section: 'carteira' })}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'planejamento_semanal' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                )}
-              >
-                <Calendar className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Planejamento Semanal</span>}
-              </button>
-            )}
-
-
-            
-            {hasPlanejamentoAccess('planejamento_equipes') && (
-              <button
-                onClick={() => onNavigate({ type: 'planejamento_equipes', section: 'carteira' })}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'planejamento_equipes' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                )}
-              >
-                <Users className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm">Equipes</span>}
-              </button>
-            )}
-
-            {hasPlanejamentoAccess('poste_turno') && (
-              <button
-                onClick={() => onNavigate({ type: 'poste_turno', section: 'carteira' })}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'poste_turno' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                )}
-              >
-                <Activity className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Poste/Turno</span>}
-              </button>
-            )}
-
-            {hasPlanejamentoAccess('deslocamento') && (
-              <button
-                onClick={() => onNavigate({ type: 'deslocamento', section: 'carteira' })}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'deslocamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                )}
-              >
-                <Navigation className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Deslocamento</span>}
-              </button>
-            )}
-
+            {/* Planejado x Meta */}
             {hasPlanejamentoAccess('planejado_meta') && (
               <button
                 onClick={() => onNavigate({ type: 'planejado_meta', section: 'carteira' })}
@@ -721,36 +739,38 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               </button>
             )}
 
-            {hasPlanejamentoAccess('cumprimento_planejamento') && (
+            {/* Planejamento Semanal */}
+            {hasPlanejamentoAccess('planejamento_semanal') && (
               <button
-                onClick={() => onNavigate({ type: 'cumprimento_planejamento', section: 'carteira' })}
+                onClick={() => onNavigate({ type: 'planejamento_semanal', section: 'carteira' })}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'cumprimento_planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                  context.type === 'planejamento_semanal' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
                 )}
               >
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Cumprimento Plan.</span>}
+                <Calendar className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Planejamento Semanal</span>}
               </button>
             )}
 
-            {hasPlanejamentoAccess('etapas') && (
+            {/* Poste/Turno */}
+            {hasPlanejamentoAccess('poste_turno') && (
               <button
-                onClick={() => onNavigate({ type: 'etapas', section: 'carteira' })}
+                onClick={() => onNavigate({ type: 'poste_turno', section: 'carteira' })}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'etapas' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                  context.type === 'poste_turno' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
                 )}
               >
-                <Layers className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Etapas</span>}
+                <Activity className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Poste/Turno</span>}
               </button>
             )}
           </div>
         )}
 
         {/* Módulo Almoxarifado Header */}
-        {!collapsed && (hasPlanejamentoAccess('planejamento_materiais') || hasPlanejamentoAccess('planejamento_envios')) && (
+        {!collapsed && (hasAlmoxarifadoAccess('planejamento_materiais') || hasAlmoxarifadoAccess('planejamento_envios')) && (
           <div className="px-3 pt-4 pb-2">
             <button
               onClick={() => setIsAlmoxarifadoExpanded(!isAlmoxarifadoExpanded)}
@@ -761,22 +781,10 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
             </button>
           </div>
         )}
-        {(!collapsed ? isAlmoxarifadoExpanded : true) && (hasPlanejamentoAccess('planejamento_materiais') || hasPlanejamentoAccess('planejamento_envios')) && (
+        {(!collapsed ? isAlmoxarifadoExpanded : true) && (hasAlmoxarifadoAccess('planejamento_materiais') || hasAlmoxarifadoAccess('planejamento_envios')) && (
           <div className="space-y-0.5 px-3">
-            {hasPlanejamentoAccess('planejamento_materiais') && (
-              <button
-                onClick={() => onNavigate({ type: 'planejamento_materiais', section: 'carteira' })}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                  context.type === 'planejamento_materiais' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                )}
-              >
-                <ClipboardList className="w-4 h-4 shrink-0" />
-                {!collapsed && <span className="text-sm whitespace-nowrap">Materiais</span>}
-              </button>
-            )}
-
-            {hasPlanejamentoAccess('planejamento_envios') && (
+            {/* Envios */}
+            {hasAlmoxarifadoAccess('planejamento_envios') && (
               <button
                 onClick={() => onNavigate({ type: 'planejamento_envios', section: 'carteira' })}
                 className={cn(
@@ -786,6 +794,20 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
               >
                 <Truck className="w-4 h-4 shrink-0" />
                 {!collapsed && <span className="text-sm whitespace-nowrap">Envios</span>}
+              </button>
+            )}
+
+            {/* Materiais */}
+            {hasAlmoxarifadoAccess('planejamento_materiais') && (
+              <button
+                onClick={() => onNavigate({ type: 'planejamento_materiais', section: 'carteira' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'planejamento_materiais' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <ClipboardList className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Materiais</span>}
               </button>
             )}
           </div>

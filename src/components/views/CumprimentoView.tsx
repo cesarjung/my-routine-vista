@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Filter, Calendar, RefreshCw, BarChart2, Hash, ZoomIn, ZoomOut } from 'lucide-react';
+import { Filter, Calendar, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FilterSelect } from '@/components/ui/filter-select';
-import { Toggle } from '@/components/ui/toggle';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -14,23 +13,64 @@ import { useCumprimentoData } from '@/hooks/useCumprimentoData';
 import { usePlanejamentoRaw, useSyncPlanejamento } from '@/hooks/usePlanejamentoRaw';
 import { useBdMetasData } from '@/hooks/useBdMetasData';
 import { useSessionState } from '@/hooks/useSessionState';
-import { parse, startOfDay, endOfDay, isWithinInterval, differenceInDays, addDays, subDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { parse, startOfDay, endOfDay, isValid } from 'date-fns';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { cn } from '@/lib/utils';
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  LabelList,
-  LineChart,
-  Line
+  ReferenceLine,
+  ReferenceArea
 } from 'recharts';
+
+const META_CUMPRIMENTO = 100; // Meta: 100% de Cumprimento
+
+// Componente Sparkline SVG para a tabela
+const Sparkline = ({ data, width = 96, height = 24 }: { data: (number | null)[]; width?: number; height?: number }) => {
+  const validData = data.map(v => (v === null || v === undefined ? null : v));
+  const numericValues = validData.filter((v): v is number => v !== null);
+
+  if (numericValues.length < 2) {
+    return <div className="w-[96px] h-[24px] flex items-center justify-center text-[10px] text-muted-foreground">-</div>;
+  }
+
+  const min = Math.min(...numericValues);
+  const max = Math.max(...numericValues);
+  const range = max - min || 1;
+
+  const points = validData.map((val, i) => {
+    if (val === null) return null;
+    const x = (i / (validData.length - 1)) * (width - 8) + 4;
+    const y = height - 4 - ((val - min) / range) * (height - 8);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const validPoints = points.filter((p): p is string => p !== null);
+  const pathD = `M ${validPoints.join(' L ')}`;
+
+  const isImproving = numericValues[numericValues.length - 1] >= numericValues[0];
+  const strokeColor = isImproving ? 'hsl(var(--success))' : 'hsl(var(--primary))';
+
+  return (
+    <svg width={width} height={height} className="overflow-visible">
+      <path d={pathD} fill="none" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      {validPoints.length > 0 && (
+        <circle
+          cx={Number(validPoints[validPoints.length - 1].split(',')[0])}
+          cy={Number(validPoints[validPoints.length - 1].split(',')[1])}
+          r="2.5"
+          fill={strokeColor}
+        />
+      )}
+    </svg>
+  );
+};
 
 export const CumprimentoView = () => {
   const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_cumprimento', []);
@@ -39,31 +79,44 @@ export const CumprimentoView = () => {
   const [draftUnidadesIds, setDraftUnidadesIds] = useState<string[]>(selectedUnidadesIds);
   const { mutate: syncPlanejamento, isPending: isSyncing } = useSyncPlanejamento();
 
-  const { data, isLoading, isError, lastUpdated } = useCumprimentoData(selectedUnidadesIds);
+  const { data, isLoading, isError, lastUpdated, refetch } = useCumprimentoData(selectedUnidadesIds);
   const { data: bdMetasData = [], isLoading: isBdMetasLoading } = useBdMetasData(selectedUnidadesIds);
 
   // Filtros locais (persistidos em sessão)
   const [selectedMeses, setSelectedMeses] = useSessionState<string[]>('filter_meses_cumprimento', []);
-    
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_cumprimento', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_cumprimento', '');
-  
   const [selectedSupervisores, setSelectedSupervisores] = useSessionState<string[]>('filter_supervisores_cumprimento', []);
   const [supervisoresDropdownOpen, setSupervisoresDropdownOpen] = useState(false);
-  
   const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('filter_equipes_cumprimento', []);
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
-  
   const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_cumprimento', []);
   
-  // Toggle "Somente Disponíveis" (Coluna BB == 1)
+  // Toggle "Somente Disponíveis"
   const [somenteDisponiveis, setSomenteDisponiveis] = useState(false);
 
   // Filtro "Tipo de Equipe"
   const [selectedTiposEquipe, setSelectedTiposEquipe] = useState<string[]>(['CONSTRUÇÃO', 'LINHA VIVA']);
   const [tiposEquipeDropdownOpen, setTiposEquipeDropdownOpen] = useState(false);
 
-  // Mapear Equipe para TipoEquipe e Extrair Tipos Únicos da BD_Metas
+  // Novos estados do Redesign
+  const [janela, setJanela] = useSessionState<number>('filter_janela_cumprimento', 6);
+  const [chartMode, setChartMode] = useState<'grid' | 'line'>('grid');
+  const [unidadeAtiva, setUnidadeAtiva] = useState<string | null>(null);
+
+  // Tooltip Flutuante que Segue o Cursor do Mouse
+  const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [activeHoverData, setActiveHoverData] = useState<{
+    title: string;
+    producaoPerc?: number | null;
+    items?: Array<{ label: string; value: string; color?: string }>;
+  } | null>(null);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  };
+
+  // Mapear Equipe para TipoEquipe
   const { equipeToTipo, tiposEquipeUnicos } = useMemo(() => {
     const map = new Map<string, string>();
     const tipos = new Set<string>();
@@ -96,13 +149,7 @@ export const CumprimentoView = () => {
     const ORDER = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     
     return {
-      mesesUnicos: Array.from(meses).sort((a, b) => {
-        let iA = ORDER.indexOf(a);
-        let iB = ORDER.indexOf(b);
-        if (iA === -1) iA = 99;
-        if (iB === -1) iB = 99;
-        return iB - iA;
-      }),
+      mesesUnicos: Array.from(meses).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)),
       supervisoresUnicos: Array.from(supervisores).sort(),
       equipesUnicas: Array.from(equipes).sort(),
       projetosUnicos: Array.from(projetos).sort(),
@@ -112,17 +159,11 @@ export const CumprimentoView = () => {
   // Aplicar Filtros Locais
   const filteredData = useMemo(() => {
     return data.filter(row => {
-      // Filtrar pelo Tipo de Equipe
       if (bdMetasData.length > 0 && selectedTiposEquipe.length > 0) {
         const tipoEquipe = equipeToTipo.get(row.equipe.trim().toUpperCase());
-        if (!tipoEquipe || !selectedTiposEquipe.includes(tipoEquipe)) {
-          return false;
-        }
+        if (!tipoEquipe || !selectedTiposEquipe.includes(tipoEquipe)) return false;
       }
-
-      // Mês
       if (selectedMeses.length > 0 && !selectedMeses.includes(row.mesCurto)) return false;
-      // Período
       if (filterStart || filterEnd) {
         let isWithin = true;
         if (filterStart) {
@@ -135,69 +176,54 @@ export const CumprimentoView = () => {
         }
         if (!isWithin) return false;
       }
-      // Supervisor
       if (selectedSupervisores.length > 0 && !selectedSupervisores.includes(row.supervisor)) return false;
-      // Equipe
       if (selectedEquipes.length > 0 && !selectedEquipes.includes(row.equipe)) return false;
-      // Projeto
       if (selectedProjetos.length > 0 && !selectedProjetos.includes(row.projeto)) return false;
 
       return true;
     });
-  }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos, selectedTiposEquipe, equipeToTipo]);
+  }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos, selectedTiposEquipe, equipeToTipo, bdMetasData]);
 
-  // Meses a serem exibidos nas tabelas e gráficos
+  // Meses exibidos em ordem cronológica crescente
   const mesesExibidos = useMemo(() => {
     const ORDER = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    
+    let list: string[] = [];
+
     if (selectedMeses.length > 0) {
-      return [...selectedMeses].sort((a, b) => {
-        let iA = ORDER.indexOf(a);
-        let iB = ORDER.indexOf(b);
-        if (iA === -1) iA = 99;
-        if (iB === -1) iB = 99;
-        return iB - iA;
-      });
+      list = [...selectedMeses].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
     } else {
       const meses = new Set<string>();
       filteredData.forEach(row => {
         if (row.mesCurto) meses.add(row.mesCurto);
       });
-      return Array.from(meses).sort((a, b) => {
-        let iA = ORDER.indexOf(a);
-        let iB = ORDER.indexOf(b);
-        if (iA === -1) iA = 99;
-        if (iB === -1) iB = 99;
-        return iB - iA;
-      });
+      list = Array.from(meses).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
     }
-  }, [selectedMeses, filteredData]);
 
-  // Cálculos de Agrupamento
+    if (janela > 0 && list.length > janela) {
+      list = list.slice(list.length - janela);
+    }
+
+    return list;
+  }, [selectedMeses, filteredData, janela]);
+
+  // Cálculos de Agrupamento por Unidade
   const chartData = useMemo(() => {
     const agrupado: Record<string, any> = {};
 
     filteredData.forEach(row => {
-      // Somente considera as linhas em que a coluna AM (Meta) seja maior que zero
-      // Critério AM (valProdTurno > 0) removido conforme solicitado
-
-      // Se "Somente Disponíveis" estiver ativo, exclui tudo que NÃO FOR 1 (100%) na coluna BB
       if (somenteDisponiveis && row.valDisponivel !== 1) return;
 
       const uNome = row.unidadeNome.replace('UNIDADE ', '');
       if (!agrupado[uNome]) {
         agrupado[uNome] = {
           name: uNome,
-          // Totais globais da unidade para média geral e prod%
           sumAL: 0, sumAO: 0, countAL: 0, countAM: 0,
           sumAQ: 0, sumAMGlob: 0,
-          meses: {} as Record<string, { sumAL: number, countAL: number, countAM: number, sumAQ: number, sumAM: number }>
+          meses: {} as Record<string, { sumAL: number, sumAO: number, countAL: number, countAM: number, sumAQ: number, sumAM: number }>
         };
       }
 
       const g = agrupado[uNome];
-      
-      // Global
       if (row.valPlanejado !== 0) {
         g.sumAL += row.valPlanejado;
         g.sumAO += row.valRealizado;
@@ -208,7 +234,6 @@ export const CumprimentoView = () => {
       g.sumAQ += row.valProgTurno;
       g.sumAMGlob += row.valProdTurno;
 
-      // Por Mês
       if (!g.meses[row.mesCurto]) {
         g.meses[row.mesCurto] = { sumAL: 0, sumAO: 0, countAL: 0, countAM: 0, sumAQ: 0, sumAM: 0 };
       }
@@ -229,10 +254,8 @@ export const CumprimentoView = () => {
         _producaoPerc: u.sumAMGlob > 0 ? (u.sumAQ / u.sumAMGlob) * 100 : 0
       };
 
-      // Média Geral da Unidade
-      item._mediaGeral = u.sumAL > 0 ? (u.sumAO / u.sumAL) * 100 : 0;
+      item._mediaGeral = u.sumAL > 0 ? Number(((u.sumAO / u.sumAL) * 100).toFixed(1)) : 0;
 
-      // Médias por mês (para o chart e tabela)
       mesesExibidos.forEach(m => {
         if (u.meses[m]) {
           item[m] = u.meses[m].sumAL > 0 ? Number(((u.meses[m].sumAO / u.meses[m].sumAL) * 100).toFixed(1)) : null;
@@ -243,163 +266,178 @@ export const CumprimentoView = () => {
         }
       });
 
+      const latestMonth = mesesExibidos[mesesExibidos.length - 1];
+      const prevMonth = mesesExibidos[mesesExibidos.length - 2];
+
+      item._latestVal = latestMonth && item[latestMonth] !== undefined ? item[latestMonth] : null;
+      item._prevVal = prevMonth && item[prevMonth] !== undefined ? item[prevMonth] : null;
+      item._variation = (item._latestVal !== null && item._prevVal !== null) ? (item._latestVal - item._prevVal) : 0;
+
+      item._sparklineData = mesesExibidos.map(m => item[m]);
+
       return item;
     });
 
-    // Ordenar do maior para o menor cumprimento
-    resultadoFinal.sort((a, b) => b._mediaGeral - a._mediaGeral);
-
+    resultadoFinal.sort((a, b) => a.name.localeCompare(b.name));
     return resultadoFinal;
   }, [filteredData, somenteDisponiveis, mesesExibidos]);
 
-  const globalChartData = useMemo(() => {
-    const agrupado: Record<string, any> = {};
+  // Cálculo do Domínio Y Compartilhado
+  const { yMin, yMax } = useMemo(() => {
+    let min = 999;
+    let max = 0;
 
-    data.forEach(row => {
-      // Critério AM (valProdTurno > 0) removido conforme solicitado
-      if (somenteDisponiveis && row.valDisponivel !== 1) return;
-
-      const uNome = row.unidadeNome.replace('UNIDADE ', '');
-      if (!agrupado[uNome]) {
-        agrupado[uNome] = {
-          name: uNome,
-          meses: {} as Record<string, { sumAL: number, sumAO: number, sumAM: number, sumAQ: number }>
-        };
-      }
-
-      const g = agrupado[uNome];
-      const m = row.mesCurto;
-      if (!g.meses[m]) g.meses[m] = { sumAL: 0, sumAO: 0, sumAM: 0, sumAQ: 0 };
-      
-      const gm = g.meses[m];
-      if (row.valPlanejado !== 0) {
-        gm.sumAL += row.valPlanejado;
-        gm.sumAO += row.valRealizado;
-      }
-      gm.sumAM += row.valProdTurno;
-      gm.sumAQ += row.valProgTurno;
-    });
-
-    const resultadoFinal = Object.values(agrupado).map(u => {
-      let totalAO = 0;
-      let totalAL = 0;
-      const evolution = mesesExibidos.map(m => {
-        if (u.meses[m]) {
-          totalAO += u.meses[m].sumAO;
-          totalAL += u.meses[m].sumAL;
-          return {
-            name: m,
-            cumprimento: u.meses[m].sumAL > 0 ? Number(((u.meses[m].sumAO / u.meses[m].sumAL) * 100).toFixed(1)) : null,
-            producao: u.meses[m].sumAM > 0 ? Number(((u.meses[m].sumAQ / u.meses[m].sumAM) * 100).toFixed(1)) : null
-          };
+    chartData.forEach(unit => {
+      mesesExibidos.forEach(m => {
+        const val = unit[m];
+        if (val !== null && val !== undefined && typeof val === 'number') {
+          if (val < min) min = val;
+          if (val > max) max = val;
         }
-        return { name: m, cumprimento: null, producao: null };
       });
-      const mediaGeral = totalAL > 0 ? (totalAO / totalAL) * 100 : 0;
-      return { name: u.name, evolution, _mediaGeral: mediaGeral };
     });
 
-    // Ordenar do maior para o menor cumprimento
-    resultadoFinal.sort((a, b) => b._mediaGeral - a._mediaGeral);
-    return resultadoFinal;
-  }, [data, somenteDisponiveis, mesesExibidos]);
+    if (min === 999) min = 50;
+    if (max === 0) max = 120;
 
-  const equipesChartData = useMemo(() => {
-    const agrupado: Record<string, { name: string, sumAL: number, sumAO: number }> = {};
+    let calculatedMin = Math.max(0, Math.floor((min - 10) / 10) * 10);
+    let calculatedMax = Math.ceil((max + 10) / 10) * 10;
 
-    filteredData.forEach(row => {
-      const eNome = row.equipe?.trim();
-      if (!eNome) return;
-      if (!agrupado[eNome]) {
-        agrupado[eNome] = { name: eNome, sumAL: 0, sumAO: 0 };
-      }
-      if (row.valPlanejado !== 0) {
-        agrupado[eNome].sumAL += row.valPlanejado;
-        agrupado[eNome].sumAO += row.valRealizado;
-      }
-    });
+    if (calculatedMin >= META_CUMPRIMENTO) calculatedMin = 50;
+    if (calculatedMax <= META_CUMPRIMENTO) calculatedMax = 120;
 
-    const result = Object.values(agrupado).map(e => ({
-      name: e.name,
-      cumprimento: e.sumAL > 0 ? (e.sumAO / e.sumAL) * 100 : 0
-    }));
+    return {
+      yMin: calculatedMin,
+      yMax: calculatedMax
+    };
+  }, [chartData, mesesExibidos]);
 
-    // Ordenar do maior para o menor cumprimento
-    result.sort((a, b) => b.cumprimento - a.cumprimento);
-
-    return result;
-  }, [filteredData, somenteDisponiveis]);
-
-  const totaisGlobais = useMemo(() => {
-    let sumAL = 0;
-    let sumAO = 0;
+  // KPIs
+  const kpis = useMemo(() => {
+    const latestMonth = mesesExibidos[mesesExibidos.length - 1] || '';
+    const totalUnits = chartData.length;
     
-    filteredData.forEach(row => {
-      if (somenteDisponiveis && row.valDisponivel !== 1) return;
-      if (row.valPlanejado !== 0) {
-        sumAL += row.valPlanejado;
-        sumAO += row.valRealizado;
+    const validLatestVals = chartData
+      .map(u => u._latestVal)
+      .filter((v): v is number => v !== null && v !== undefined);
+
+    const avgLatest = validLatestVals.length > 0
+      ? validLatestVals.reduce((acc, v) => acc + v, 0) / validLatestVals.length
+      : 0;
+
+    const withinTargetCount = validLatestVals.filter(v => v >= META_CUMPRIMENTO).length;
+
+    let bestVal = 0;
+    let bestUnit = '-';
+    chartData.forEach(u => {
+      if (u._latestVal !== null && u._latestVal > bestVal) {
+        bestVal = u._latestVal;
+        bestUnit = u.name;
       }
     });
 
-    const percentual = sumAL > 0 ? (sumAO / sumAL) * 100 : 0;
+    const avgProd = chartData.length > 0
+      ? chartData.reduce((acc, u) => acc + (u._producaoPerc || 0), 0) / chartData.length
+      : 0;
 
-    return { sumAL, sumAO, percentual };
-  }, [filteredData, somenteDisponiveis]);
+    return {
+      avgLatest,
+      withinTargetCount,
+      totalUnits,
+      bestVal,
+      bestUnit,
+      avgProd,
+      latestMonth
+    };
+  }, [chartData, mesesExibidos]);
 
-  const inconsistencias = useMemo(() => {
-    return filteredData
-      .filter(row => row.valRealizado > 0 && row.valPlanejado === 0)
-      .map(row => ({
-        id: row.id,
-        data: row.dataString || '',
-        unidade: row.planilha || row.unidadeNome,
-        equipe: row.equipe || '-',
-        valor: row.valRealizado,
-        acao: 'Corrigir valor planejado'
-      }));
-  }, [filteredData]);
+  // Dados para o Ranking (ordenado do maior para o menor cumprimento)
+  const rankingUnits = useMemo(() => {
+    const sorted = [...chartData].sort((a, b) => {
+      const valA = a._latestVal ?? 0;
+      const valB = b._latestVal ?? 0;
+      return valB - valA;
+    });
 
-  const COLORS = [
-    'hsl(25, 95%, 50%)', // Laranja Principal (Primary)
-    'hsl(0, 0%, 10%)',   // Preto (Foreground/Black)
-    'hsl(0, 72%, 51%)',  // Vermelho (Destructive)
-    'hsl(38, 92%, 50%)', // Amarelo/Âmbar (Warning)
-    'hsl(30, 20%, 60%)', // Cinza Quente
-    'hsl(25, 95%, 35%)', // Laranja Escuro
-    'hsl(38, 92%, 35%)', // Âmbar Escuro
-    'hsl(0, 0%, 45%)',   // Cinza Neutro
-  ];
+    const maxVal = Math.max(...sorted.map(u => u._latestVal ?? 0), 120);
 
-  const getGradualColor = (perc: number) => {
-    let hue = 0;
-    if (perc < 70) {
-      hue = (perc / 70) * 35; 
-    } else if (perc < 90) {
-      hue = 35 + ((perc - 70) / 20) * 25; 
-    } else if (perc <= 110) {
-      hue = 60 + ((perc - 90) / 20) * 60;
-    } else {
-      hue = 210;
+    return sorted.map(u => ({
+      ...u,
+      barWidthPerc: u._latestVal !== null ? Math.min(100, (u._latestVal / maxVal) * 100) : 0
+    }));
+  }, [chartData]);
+
+  // Dados para o LineChart (Modo B)
+  const lineChartData = useMemo(() => {
+    return mesesExibidos.map(m => {
+      const entry: any = { mes: m };
+      chartData.forEach(unit => {
+        entry[unit.name] = unit[m];
+      });
+      return entry;
+    });
+  }, [mesesExibidos, chartData]);
+
+  // Estilos de Heatmap Suave para Células
+  const getHeatmapStyle = (val: number | null) => {
+    if (val === null || val === undefined) {
+      return { bg: '#F5F2EE', text: '#A8A099' };
     }
-    return `hsl(${hue}, 85%, 45%)`;
+    if (val >= 110) {
+      return { bg: '#E0F2FE', text: '#0369A1' }; // Azul (≥ 110%)
+    }
+    if (val >= 90) {
+      return { bg: '#E7F6EC', text: '#15803D' }; // Verde (90% - 109%)
+    }
+    if (val >= 70) {
+      return { bg: '#FDF3DC', text: '#B45309' }; // Amarelo (70% - 89%)
+    }
+    return { bg: '#FBE5E5', text: '#B91C1C' }; // Vermelho (< 70%)
   };
 
-  const getCellClassName = (perc: number | null) => {
-    if (perc === null || perc === undefined) return 'bg-muted/30 text-muted-foreground';
-    return 'text-white font-bold';
+  // Cor das Barras de Ranking por Faixa
+  const getRankingBarColor = (val: number | null) => {
+    if (val === null || val === undefined) return 'hsl(var(--muted))';
+    if (val >= 110) return 'hsl(210, 85%, 45%)';
+    if (val >= 90) return 'hsl(var(--success))';
+    if (val >= 70) return 'hsl(var(--warning))';
+    return 'hsl(var(--destructive))';
   };
 
-  const getCellStyle = (perc: number | null): React.CSSProperties => {
-    if (perc === null || perc === undefined) return {};
-    return { backgroundColor: getGradualColor(perc) };
+  // Escala Dinâmica Compartilhada da Produção (Sem corte em 100%)
+  const todasAsProducoesExibidas = useMemo(() => {
+    const list: number[] = [];
+    chartData.forEach(row => {
+      if (typeof row._producaoPerc === 'number' && !isNaN(row._producaoPerc)) {
+        list.push(row._producaoPerc);
+      }
+      mesesExibidos.forEach(m => {
+        const p = row[`${m}_prod`];
+        if (typeof p === 'number' && !isNaN(p)) {
+          list.push(p);
+        }
+      });
+    });
+    return list;
+  }, [chartData, mesesExibidos]);
+
+  const maxProd = Math.max(100, ...todasAsProducoesExibidas);
+  const escalaProd = Math.ceil(maxProd / 10) * 10;
+  const getBarWidthPerc = (p: number) => `${((p / escalaProd) * 100).toFixed(1)}%`;
+  const marca100Perc = `${((100 / escalaProd) * 100).toFixed(1)}%`;
+
+  const getProdBarColor = (p: number) => {
+    if (p >= 100) return '#1A9950';
+    if (p >= 85) return '#65A30D';
+    if (p >= 70) return '#EAB308';
+    return '#DC3232';
   };
 
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col h-full w-full items-center justify-center bg-background">
         <div className="animate-spin text-primary mb-4"><RefreshCw className="w-8 h-8" /></div>
-        <p>Carregando dados de Cumprimento Planejamento...</p>
+        <p className="text-sm font-medium text-muted-foreground">Carregando dados de Cumprimento...</p>
       </div>
     );
   }
@@ -407,472 +445,760 @@ export const CumprimentoView = () => {
   if (isError) {
     return (
       <div className="flex-1 flex flex-col h-full w-full items-center justify-center bg-background text-destructive">
-        <p>Falha ao carregar os dados.</p>
+        <p className="text-sm font-medium">Falha ao carregar os dados.</p>
         <Button onClick={() => refetch()} className="mt-4" variant="outline">Tentar Novamente</Button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-background overflow-y-auto overflow-x-hidden custom-scrollbar relative">
+    <div 
+      className="flex flex-col h-full w-full bg-background overflow-y-auto overflow-x-hidden custom-scrollbar relative"
+      onMouseMove={handleMouseMove}
+    >
       
-      {/* HEADER COMPACTO */}
-      <div className="flex flex-col gap-3 p-4 shrink-0 border-b border-border sticky top-0 z-10 bg-background w-full min-w-0">
-        <div className="flex flex-row flex-nowrap items-end gap-4 overflow-x-auto custom-scrollbar w-full pb-2">
-          <div className="shrink-0 mb-1">
-            <h1 className="text-xl font-bold text-foreground mb-0.5 leading-none">Percentual Cumprimento Planejamento</h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Módulo Cumprimento Planejamento</p>
-          </div>
-          
-          <div className="w-px h-10 bg-border shrink-0"></div>
+      {/* TOOLTIP FLUTUANTE QUE SEGUE O CURSOR DO MOUSE */}
+      {activeHoverData && (
+        <div 
+          className="fixed z-[9999] pointer-events-none bg-card border border-border/80 rounded-xl p-3 shadow-xl backdrop-blur min-w-[170px] animate-in fade-in-50 duration-100"
+          style={{
+            left: Math.min(mousePos.x + 16, window.innerWidth - 200),
+            top: Math.min(mousePos.y + 16, window.innerHeight - 180)
+          }}
+        >
+          <p className="font-bold text-sm text-foreground uppercase tracking-tight mb-2 border-b border-border/50 pb-1">
+            {activeHoverData.title}
+          </p>
 
-          {/* FILTROS */}
-          <div className="flex flex-nowrap items-end gap-2 shrink-0">
-            
-            {/* Toggle Button */}
-            <div className="flex flex-col justify-center mr-2">
-              <Toggle 
-                pressed={somenteDisponiveis} 
-                onPressedChange={setSomenteDisponiveis}
-                variant="outline"
+          {typeof activeHoverData.producaoPerc === 'number' && !isNaN(activeHoverData.producaoPerc) && (
+            <div className="flex items-center gap-2 text-xs mb-1.5 font-medium">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getProdBarColor(activeHoverData.producaoPerc) }} />
+              <span className="text-muted-foreground">Produção:</span>
+              <strong className="font-bold text-foreground tabular-nums ml-auto">
+                {activeHoverData.producaoPerc.toFixed(0)}%
+              </strong>
+            </div>
+          )}
+
+          {activeHoverData.items?.map((item, idx) => (
+            <div key={idx} className="flex items-center gap-2 text-xs mb-1 font-medium">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color || '#F97706' }} />
+              <span className="text-muted-foreground">{item.label}:</span>
+              <strong className="font-bold text-foreground tabular-nums ml-auto">
+                {item.value}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* HEADER COMPACTO EM 2 FILEIRAS */}
+      <div className="flex flex-col gap-2.5 p-4 shrink-0 border-b border-border sticky top-0 z-20 bg-background/85 backdrop-blur w-full">
+        {/* Fileira 1 */}
+        <div className="flex items-center justify-between gap-4 w-full">
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-8 rounded-full bg-primary shrink-0" />
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-1">
+                PLANEJAMENTO · CUMPRIMENTO
+              </p>
+              <h1 className="text-xl font-bold text-foreground leading-none">
+                Cumprimento do Planejamento
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 shrink-0">
+            <SyncIndicator />
+
+            {/* Switch para Somente Disponíveis */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground font-medium">Somente Disponíveis</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={somenteDisponiveis}
+                onClick={() => setSomenteDisponiveis(!somenteDisponiveis)}
                 className={cn(
-                  "h-10 px-3 border transition-colors", 
-                  somenteDisponiveis ? "border-primary bg-primary/10 text-primary" : ""
+                  "w-[26px] h-[15px] rounded-full transition-colors relative focus:outline-none",
+                  somenteDisponiveis ? "bg-primary" : "bg-muted-foreground/30"
                 )}
                 title="Considerar apenas linhas onde a coluna BB (Disponível) é igual a 1"
               >
-                <Hash className="w-4 h-4 mr-2" />
-                Somente Disponíveis
-              </Toggle>
-            </div>
-
-            <div className="flex flex-col justify-center min-w-[100px]">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Unidade</span>
-              <DropdownMenu 
-                open={unidadesDropdownOpen} 
-                onOpenChange={(open) => {
-                  setUnidadesDropdownOpen(open);
-                  if (!open) setSelectedUnidadesIds(draftUnidadesIds);
-                  else setDraftUnidadesIds(selectedUnidadesIds);
-                }}
-              >
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
-                    <span className="truncate">
-                      {draftUnidadesIds.length === 0 
-                        ? 'Unidades' 
-                        : draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
-                          ? 'Unidades'
-                          : draftUnidadesIds.length === 1 
-                            ? UNIDADES_PLANEJAMENTO.find(u => u.id === draftUnidadesIds[0])?.nome 
-                            : `${draftUnidadesIds.length} unid.`}
-                    </span>
-                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
-            </div>
-                  {UNIDADES_PLANEJAMENTO.map(u => (
-                    <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
-                      if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
-                      else setDraftUnidadesIds(draftUnidadesIds.filter(id => id !== u.id));
-                    }}>{u.nome}</DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div className="flex flex-col justify-center min-w-[110px]">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Tipo Equipe</span>
-              <DropdownMenu open={tiposEquipeDropdownOpen} onOpenChange={setTiposEquipeDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
-                    <span className="truncate">{selectedTiposEquipe.length === 0 ? 'Todos' : `${selectedTiposEquipe.length} selec.`}</span>
-                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedTiposEquipe(tiposEquipeUnicos)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedTiposEquipe([])}>Limpar</Button>
-            </div>
-                  {tiposEquipeUnicos.map(t => (
-                    <DropdownMenuCheckboxItem key={t} checked={selectedTiposEquipe.includes(t)} onCheckedChange={(checked) => {
-                      if (checked) setSelectedTiposEquipe([...selectedTiposEquipe.filter(x => x !== t), t]);
-                      else setSelectedTiposEquipe(selectedTiposEquipe.filter(x => x !== t));
-                    }}>{t}</DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <FilterSelect label="Mês" options={mesesUnicos.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} searchable={true} />
-
-            <div className="flex flex-col justify-center min-w-[130px]">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 flex justify-between">Período
-                {(filterStart || filterEnd) && <button onClick={() => { setFilterStart(''); setFilterEnd(''); }} className="text-foreground hover:underline ml-1">Limpar</button>}
-              </span>
-              <div className="flex items-center gap-1 border border-input bg-background rounded-md h-10 px-2 focus-within:ring-1 focus-within:ring-ring">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-xs outline-none w-[100px] text-foreground" title="Data Inicial" />
-                <span className="text-muted-foreground text-xs shrink-0">-</span>
-                <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-xs outline-none w-[100px] text-foreground" title="Data Final" />
-              </div>
-            </div>
-
-            <div className="flex flex-col justify-center min-w-[100px]">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Supervisor</span>
-              <DropdownMenu open={supervisoresDropdownOpen} onOpenChange={setSupervisoresDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
-                    <span className="truncate">{selectedSupervisores.length === 0 ? 'Todos' : `${selectedSupervisores.length} selec.`}</span>
-                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores(supervisoresUnicos)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores([])}>Limpar</Button>
-            </div>
-                  {supervisoresUnicos.map(s => (
-                    <DropdownMenuCheckboxItem key={s} checked={selectedSupervisores.includes(s)} onCheckedChange={(checked) => {
-                      if (checked) setSelectedSupervisores([...selectedSupervisores.filter(x => x !== s), s]);
-                      else setSelectedSupervisores(selectedSupervisores.filter(x => x !== s));
-                    }}>{s}</DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            
-            <div className="flex flex-col justify-center min-w-[100px]">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Equipe</span>
-              <DropdownMenu open={equipesDropdownOpen} onOpenChange={setEquipesDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-left font-normal text-xs h-10">
-                    <span className="truncate">{selectedEquipes.length === 0 ? 'Todas' : `${selectedEquipes.length} selec.`}</span>
-                    <Filter className="w-3 h-3 ml-2 opacity-50 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
-            <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-              <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes(equipesUnicas)}>Selecionar todos</Button>
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes([])}>Limpar</Button>
-            </div>
-                  {equipesUnicas.map(e => (
-                    <DropdownMenuCheckboxItem key={e} checked={selectedEquipes.includes(e)} onCheckedChange={(checked) => {
-                      if (checked) setSelectedEquipes([...selectedEquipes.filter(x => x !== e), e]);
-                      else setSelectedEquipes(selectedEquipes.filter(x => x !== e));
-                    }}>{e}</DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <FilterSelect label="Projeto" options={projetosUnicos.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
-
-            <div className="flex items-center gap-1 bg-secondary/30 rounded-md border border-border px-1 h-10 ml-2 shrink-0">
-               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} title="Diminuir Zoom">
-                 <ZoomOut className="w-4 h-4 text-muted-foreground" />
-               </Button>
-               <span className="text-xs font-bold w-10 text-center text-muted-foreground" title="Nível de Zoom">{(zoomLevel * 100).toFixed(0)}%</span>
-               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} title="Aumentar Zoom">
-                 <ZoomIn className="w-4 h-4 text-muted-foreground" />
-               </Button>
-            </div>
-
-            <div className="flex items-center ml-2">
-              <SyncIndicator />
+                <span
+                  className={cn(
+                    "w-[11px] h-[11px] rounded-full bg-white transition-transform absolute top-[2px] left-[2px]",
+                    somenteDisponiveis ? "translate-x-[11px]" : "translate-x-0"
+                  )}
+                />
+              </button>
             </div>
           </div>
+        </div>
+
+        {/* Fileira 2 */}
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto custom-scrollbar pb-1 w-full text-xs">
+          
+          {/* Segmented Control da Janela Temporal */}
+          <div className="inline-flex p-0.5 rounded-lg bg-muted/50 border border-border shrink-0">
+            <button
+              onClick={() => setJanela(6)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-180",
+                janela === 6 ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              6 meses
+            </button>
+            <button
+              onClick={() => setJanela(12)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-180",
+                janela === 12 ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              12 meses
+            </button>
+            <button
+              onClick={() => setJanela(0)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-180",
+                janela === 0 ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Tudo
+            </button>
+          </div>
+
+          <div className="w-px h-5 bg-border shrink-0 mx-1" />
+
+          {/* Chips de Filtros */}
+          <DropdownMenu 
+            open={unidadesDropdownOpen} 
+            onOpenChange={(open) => {
+              setUnidadesDropdownOpen(open);
+              if (!open) setSelectedUnidadesIds(draftUnidadesIds);
+              else setDraftUnidadesIds(selectedUnidadesIds);
+            }}
+          >
+            <DropdownMenuTrigger asChild>
+              <button className="h-[30px] px-3 rounded-full border border-border bg-card hover:bg-accent flex items-center gap-1.5 transition-colors shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">UNIDADE</span>
+                <span className="font-semibold text-foreground truncate max-w-[110px]">
+                  {draftUnidadesIds.length === 0 || draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
+                    ? 'Todas' 
+                    : draftUnidadesIds.length === 1 
+                      ? UNIDADES_PLANEJAMENTO.find(u => u.id === draftUnidadesIds[0])?.nome 
+                      : `${draftUnidadesIds.length} selec.`}
+                </span>
+                <Filter className="w-3 h-3 text-muted-foreground shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="start">
+              <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Selecionar todos</Button>
+                <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
+              </div>
+              {UNIDADES_PLANEJAMENTO.map(u => (
+                <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
+                  if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
+                  else setDraftUnidadesIds(draftUnidadesIds.filter(id => id !== u.id));
+                }}>{u.nome}</DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Tipo Equipe Chip */}
+          <DropdownMenu open={tiposEquipeDropdownOpen} onOpenChange={setTiposEquipeDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <button className="h-[30px] px-3 rounded-full border border-border bg-card hover:bg-accent flex items-center gap-1.5 transition-colors shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">TIPO EQUIPE</span>
+                <span className="font-semibold text-foreground truncate max-w-[110px]">
+                  {selectedTiposEquipe.length === 0 ? 'Todos' : `${selectedTiposEquipe.length} selec.`}
+                </span>
+                <Filter className="w-3 h-3 text-muted-foreground shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
+              <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedTiposEquipe(tiposEquipeUnicos)}>Selecionar todos</Button>
+                <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedTiposEquipe([])}>Limpar</Button>
+              </div>
+              {tiposEquipeUnicos.map(t => (
+                <DropdownMenuCheckboxItem key={t} checked={selectedTiposEquipe.includes(t)} onCheckedChange={(checked) => {
+                  if (checked) setSelectedTiposEquipe([...selectedTiposEquipe.filter(x => x !== t), t]);
+                  else setSelectedTiposEquipe(selectedTiposEquipe.filter(x => x !== t));
+                }}>{t}</DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Mês Chip */}
+          <FilterSelect label="MÊS" options={mesesUnicos.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} searchable={true} />
+
+          {/* Período Chip */}
+          <div className="h-[30px] px-3 rounded-full border border-border bg-card flex items-center gap-1.5 shrink-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">PERÍODO</span>
+            <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-transparent text-xs text-foreground font-semibold outline-none w-[90px]" title="Data Inicial" />
+            <span className="text-muted-foreground">-</span>
+            <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-transparent text-xs text-foreground font-semibold outline-none w-[90px]" title="Data Final" />
+            {(filterStart || filterEnd) && (
+              <button onClick={() => { setFilterStart(''); setFilterEnd(''); }} className="text-[10px] text-muted-foreground hover:text-foreground font-bold ml-1">✕</button>
+            )}
+          </div>
+
+          {/* Supervisor Chip */}
+          <DropdownMenu open={supervisoresDropdownOpen} onOpenChange={setSupervisoresDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <button className="h-[30px] px-3 rounded-full border border-border bg-card hover:bg-accent flex items-center gap-1.5 transition-colors shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">SUPERVISOR</span>
+                <span className="font-semibold text-foreground truncate max-w-[110px]">
+                  {selectedSupervisores.length === 0 ? 'Todos' : `${selectedSupervisores.length} selec.`}
+                </span>
+                <Filter className="w-3 h-3 text-muted-foreground shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="start">
+              <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores(supervisoresUnicos)}>Selecionar todos</Button>
+                <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedSupervisores([])}>Limpar</Button>
+              </div>
+              {supervisoresUnicos.map(s => (
+                <DropdownMenuCheckboxItem key={s} checked={selectedSupervisores.includes(s)} onCheckedChange={(checked) => {
+                  if (checked) setSelectedSupervisores([...selectedSupervisores.filter(x => x !== s), s]);
+                  else setSelectedSupervisores(selectedSupervisores.filter(x => x !== s));
+                }}>{s}</DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Equipe Chip */}
+          <DropdownMenu open={equipesDropdownOpen} onOpenChange={setEquipesDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <button className="h-[30px] px-3 rounded-full border border-border bg-card hover:bg-accent flex items-center gap-1.5 transition-colors shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">EQUIPE</span>
+                <span className="font-semibold text-foreground truncate max-w-[110px]">
+                  {selectedEquipes.length === 0 ? 'Todas' : `${selectedEquipes.length} selec.`}
+                </span>
+                <Filter className="w-3 h-3 text-muted-foreground shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 max-h-64 overflow-auto" align="start">
+              <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
+                <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes(equipesUnicas)}>Selecionar todos</Button>
+                <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setSelectedEquipes([])}>Limpar</Button>
+              </div>
+              {equipesUnicas.map(e => (
+                <DropdownMenuCheckboxItem key={e} checked={selectedEquipes.includes(e)} onCheckedChange={(checked) => {
+                  if (checked) setSelectedEquipes([...selectedEquipes.filter(x => x !== e), e]);
+                  else setSelectedEquipes(selectedEquipes.filter(x => x !== e));
+                }}>{e}</DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Projeto Chip */}
+          <FilterSelect label="PROJETO" options={projetosUnicos.map(p => ({ value: p, label: p }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
+
+          {/* Zoom Control */}
+          <div className="flex items-center gap-1 bg-muted/40 rounded-full border border-border px-2 h-[30px] shrink-0">
+            <button onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} className="text-muted-foreground hover:text-foreground" title="Diminuir Zoom">
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs font-bold text-muted-foreground w-9 text-center tabular-nums font-mono font-normal font-sans">{(zoomLevel * 100).toFixed(0)}%</span>
+            <button onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} className="text-muted-foreground hover:text-foreground" title="Aumentar Zoom">
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
         </div>
       </div>
 
-      {/* CONTEÚDO PRINCIPAL (Gráfico + Tabela) */}
-      <div style={{ zoom: zoomLevel } as React.CSSProperties} className="flex flex-col gap-6 p-4 pb-8">
+      {/* CONTEÚDO PRINCIPAL (KPIs + Gráficos/Ranking + Tabela) */}
+      <div style={{ zoom: zoomLevel } as React.CSSProperties} className="flex flex-col gap-6 p-4 pb-8 w-full">
         
-        {/* Gráfico */}
-        <div className="w-full h-[320px] shrink-0 border border-border rounded-xl bg-card p-4 shadow-sm flex flex-col">
-          <div className="mb-4">
-            <h2 className="text-lg font-bold text-foreground">Média por Unidade</h2>
-            <p className="text-xs text-muted-foreground">Evolução mensal</p>
+        {/* LINHA DE KPIS (4 CARDS) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+          {/* KPI 1: Média Geral */}
+          <div className="bg-card border border-border rounded-xl p-4 shadow-[var(--shadow-card)] relative flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">MÉDIA GERAL</span>
+            <div className="my-1.5 flex items-baseline gap-1">
+              <span className="text-[30px] font-bold text-foreground tabular-nums leading-none">
+                {kpis.avgLatest.toFixed(1).replace('.', ',')}%
+              </span>
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              Meta 100% · {kpis.latestMonth}
+            </span>
+            <div className="w-3 h-3 rounded-[3px] bg-primary absolute top-3.5 right-3.5" />
           </div>
-          <div className="flex-1 w-full min-h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} domain={[0, 'dataMax + 1']} />
-                <Tooltip 
-                  cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                {mesesExibidos.map((m, i) => (
-                  <Bar key={m} dataKey={m} name={m} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} maxBarSize={30}>
-                    <LabelList dataKey={m} position="top" fill="currentColor" fontSize={11} formatter={(v: any) => v > 0 ? `${v}%` : ''} />
-                  </Bar>
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
+
+          {/* KPI 2: Dentro da Meta */}
+          <div className="bg-card border border-border rounded-xl p-4 shadow-[var(--shadow-card)] relative flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">DENTRO DA META</span>
+            <div className="my-1.5 flex items-baseline gap-1">
+              <span className="text-[30px] font-bold text-foreground tabular-nums leading-none">
+                {kpis.withinTargetCount}
+              </span>
+              <span className="text-xs text-muted-foreground font-medium">de {kpis.totalUnits} unidades</span>
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              ≥ 100% no mês
+            </span>
+            <div className="w-3 h-3 rounded-[3px] bg-[hsl(var(--success))] absolute top-3.5 right-3.5" />
+          </div>
+
+          {/* KPI 3: Maior Cumprimento */}
+          <div className="bg-card border border-border rounded-xl p-4 shadow-[var(--shadow-card)] relative flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">MAIOR CUMPRIMENTO</span>
+            <div className="my-1.5 flex items-baseline gap-1">
+              <span className="text-[30px] font-bold text-foreground tabular-nums leading-none">
+                {kpis.bestVal > 0 ? `${kpis.bestVal.toFixed(1).replace('.', ',')}%` : '-'}
+              </span>
+            </div>
+            <span className="text-[11px] text-muted-foreground truncate">
+              {kpis.bestUnit}
+            </span>
+            <div className="w-3 h-3 rounded-[3px] bg-[hsl(var(--success))] absolute top-3.5 right-3.5" />
+          </div>
+
+          {/* KPI 4: Produção Global */}
+          <div className="bg-card border border-border rounded-xl p-4 shadow-[var(--shadow-card)] relative flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">PRODUÇÃO GLOBAL</span>
+            <div className="my-1.5 flex items-baseline gap-1">
+              <span className="text-[30px] font-bold text-foreground tabular-nums leading-none">
+                {kpis.avgProd.toFixed(1).replace('.', ',')}%
+              </span>
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              Média de execução
+            </span>
+            <div className="w-3 h-3 rounded-[3px] bg-[hsl(var(--warning))] absolute top-3.5 right-3.5" />
           </div>
         </div>
 
-        {/* Tabela */}
-        <div className="w-full shrink-0 border border-border rounded-xl bg-card shadow-sm flex flex-col mb-4 overflow-hidden">
-          <div className="p-4 border-b border-border bg-muted/30">
-            <h2 className="text-lg font-bold text-foreground">Indicadores de Produção</h2>
-            <p className="text-xs text-muted-foreground">Detalhamento por Unidade</p>
+        {/* GRÁFICO PRINCIPAL + PAINEL DE RANKING */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-start">
+          
+          {/* GRÁFICO PRINCIPAL */}
+          <div className="lg:col-span-8 border border-border rounded-xl bg-card p-4 shadow-[var(--shadow-card)] flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-foreground">Evolução do Cumprimento</h2>
+                <p className="text-xs text-muted-foreground">Visão temporal por unidade</p>
+              </div>
+
+              <div className="inline-flex p-0.5 rounded-lg bg-muted/50 border border-border">
+                <button
+                  onClick={() => setChartMode('grid')}
+                  className={cn(
+                    "px-3 py-1 rounded-md text-xs font-semibold transition-all duration-180",
+                    chartMode === 'grid' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Painel por unidade
+                </button>
+                <button
+                  onClick={() => setChartMode('line')}
+                  className={cn(
+                    "px-3 py-1 rounded-md text-xs font-semibold transition-all duration-180",
+                    chartMode === 'line' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Linhas
+                </button>
+              </div>
+            </div>
+
+            {/* MODO A: PAINEL POR UNIDADE */}
+            {chartMode === 'grid' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+                {chartData.map(unit => {
+                  const isSelected = unidadeAtiva === unit.name;
+                  const latestVal = unit._latestVal;
+                  const variation = unit._variation;
+                  const isAboveMeta = latestVal !== null && latestVal >= META_CUMPRIMENTO;
+
+                  const miniData = mesesExibidos.map(m => ({
+                    mes: m,
+                    val: unit[m]
+                  }));
+
+                  return (
+                    <div
+                      key={unit.name}
+                      onClick={() => setUnidadeAtiva(isSelected ? null : unit.name)}
+                      className={cn(
+                        "p-3 rounded-xl border transition-all duration-180 cursor-pointer flex flex-col justify-between",
+                        isSelected 
+                          ? "border-primary bg-primary/[0.06] shadow-sm" 
+                          : "border-border bg-card hover:border-primary/50"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-xs text-foreground truncate">{unit.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-sm text-foreground tabular-nums">
+                            {latestVal !== null ? `${latestVal.toFixed(1).replace('.', ',')}%` : '-'}
+                          </span>
+                          {variation !== 0 && (
+                            <span 
+                              className={cn(
+                                "text-[10px] font-bold px-1 py-0.5 rounded tabular-nums",
+                                variation > 0 
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
+                                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              )}
+                            >
+                              {variation > 0 ? `+${variation.toFixed(1).replace('.', ',')}%` : `${variation.toFixed(1).replace('.', ',')}%`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Mini AreaChart com meses visíveis */}
+                      <div className="h-[96px] w-full mt-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={miniData} margin={{ top: 6, right: 6, left: 6, bottom: 2 }}>
+                            <YAxis hide domain={[yMin, yMax]} />
+                            <XAxis 
+                              dataKey="mes" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))', fontWeight: 600 }}
+                              interval={0}
+                              dy={2}
+                            />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--card))', 
+                                borderColor: 'hsl(var(--border))', 
+                                borderRadius: '8px',
+                                fontSize: '11px',
+                                padding: '4px 8px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                              }}
+                              formatter={(val: any) => [val !== null && val !== undefined ? `${Number(val).toFixed(1).replace('.', ',')}%` : '-', 'Cumprimento']}
+                              labelFormatter={(label: any) => `Mês: ${label}`}
+                            />
+                            <ReferenceArea y1={META_CUMPRIMENTO} y2={yMax} fill="hsl(var(--success))" fillOpacity={0.06} />
+                            <ReferenceLine y={META_CUMPRIMENTO} strokeDasharray="4 4" stroke="hsl(var(--muted-foreground))" />
+                            <Area
+                              type="monotone"
+                              dataKey="val"
+                              stroke={
+                                isSelected 
+                                  ? 'hsl(var(--primary))' 
+                                  : isAboveMeta 
+                                  ? 'hsl(var(--success))' 
+                                  : 'hsl(var(--primary))'
+                              }
+                              fill={
+                                isSelected 
+                                  ? 'hsl(var(--primary) / 0.15)' 
+                                  : isAboveMeta 
+                                  ? 'hsl(var(--success) / 0.15)' 
+                                  : 'hsl(var(--primary) / 0.15)'
+                              }
+                              strokeWidth={2}
+                              dot={{ r: 3, strokeWidth: 1.5, fill: 'hsl(var(--card))' }}
+                              activeDot={{ r: 5, strokeWidth: 2 }}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* MODO B: LINHAS */}
+            {chartMode === 'line' && (
+              <div className="h-[340px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={lineChartData} margin={{ top: 20, right: 30, left: 10, bottom: 5 }}>
+                    <XAxis dataKey="mes" stroke="hsl(var(--muted-foreground))" fontSize={11} fontWeight={600} axisLine={false} tickLine={false} />
+                    <YAxis 
+                      domain={[yMin, yMax]} 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={11} 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tickFormatter={(v: number) => `${v.toFixed(0)}%`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        borderColor: 'hsl(var(--border))', 
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      formatter={(v: any) => [v !== null && v !== undefined ? `${Number(v).toFixed(1).replace('.', ',')}%` : '-', '']}
+                    />
+                    <ReferenceArea y1={META_CUMPRIMENTO} y2={yMax} fill="hsl(var(--success))" fillOpacity={0.05} />
+                    <ReferenceLine 
+                      y={META_CUMPRIMENTO} 
+                      strokeDasharray="4 4" 
+                      stroke="hsl(var(--muted-foreground))" 
+                      label={{ value: 'Meta (100%)', fill: 'hsl(var(--muted-foreground))', fontSize: 10, position: 'insideTopRight' }} 
+                    />
+                    {chartData.map(unit => {
+                      const isSelected = unidadeAtiva === unit.name;
+                      return (
+                        <Line
+                          key={unit.name}
+                          type="monotone"
+                          dataKey={unit.name}
+                          stroke={isSelected ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
+                          strokeWidth={isSelected ? 2.4 : 1.2}
+                          strokeOpacity={isSelected ? 1 : 0.6}
+                          dot={{ r: 3, strokeWidth: 1.5, fill: 'hsl(var(--card))' }}
+                          activeDot={{ r: 5.5 }}
+                        />
+                      );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* PAINEL DE RANKING */}
+          <div className="lg:col-span-4 border border-border rounded-xl bg-card p-4 shadow-[var(--shadow-card)] flex flex-col justify-between">
+            <div>
+              <div className="border-b border-border pb-3 mb-3">
+                <h2 className="text-base font-bold text-foreground">Ranking por Unidade</h2>
+                <p className="text-xs text-muted-foreground">Mês corrente: {kpis.latestMonth}</p>
+              </div>
+
+              <div className="space-y-2.5">
+                {rankingUnits.map(unit => {
+                  const isSelected = unidadeAtiva === unit.name;
+                  const latestVal = unit._latestVal;
+                  const variation = unit._variation;
+
+                  return (
+                    <div
+                      key={unit.name}
+                      onClick={() => setUnidadeAtiva(isSelected ? null : unit.name)}
+                      className={cn(
+                        "p-2 rounded-lg transition-all duration-180 cursor-pointer flex flex-col gap-1",
+                        isSelected ? "bg-primary/[0.08]" : "hover:bg-muted/40"
+                      )}
+                    >
+                      <div className="flex items-center justify-between text-xs font-medium">
+                        <span className="font-semibold text-foreground truncate">{unit.name}</span>
+                        <div className="flex items-center gap-2">
+                          {variation !== 0 && (
+                            <span 
+                              className={cn(
+                                "text-[10px] font-bold tabular-nums",
+                                variation > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                              )}
+                            >
+                              {variation > 0 ? `+${variation.toFixed(1).replace('.', ',')}%` : `${variation.toFixed(1).replace('.', ',')}%`}
+                            </span>
+                          )}
+                          <span className="font-bold text-foreground tabular-nums">
+                            {latestVal !== null ? `${latestVal.toFixed(1).replace('.', ',')}%` : '-'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full bg-muted/40 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${unit.barWidthPerc}%`,
+                            backgroundColor: getRankingBarColor(latestVal)
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-border mt-4 text-[10px] text-muted-foreground">
+              Barras proporcionais ao maior valor do mês. Maior é melhor.
+            </div>
+          </div>
+
+        </div>
+
+        {/* TABELA COM SPARKLINE E HEATMAP */}
+        <div className="w-full border border-border rounded-xl bg-card shadow-[var(--shadow-card)] flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-border bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-foreground">Detalhamento de Cumprimento</h2>
+              <p className="text-xs text-muted-foreground">Por mês: percentual de cumprimento na célula e, abaixo, a barra de produção do mesmo mês</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#E0F2FE', border: '1px solid #0369A1' }} />
+                <span className="text-muted-foreground">≥ 110%</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#E7F6EC', border: '1px solid #15803D' }} />
+                <span className="text-muted-foreground">90% - 109%</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#FDF3DC', border: '1px solid #B45309' }} />
+                <span className="text-muted-foreground">70% - 89%</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#FBE5E5', border: '1px solid #B91C1C' }} />
+                <span className="text-muted-foreground">&lt; 70%</span>
+              </div>
+            </div>
           </div>
           
-          <div className="w-full overflow-x-auto p-4">
-            <table className="w-auto text-sm text-left border-collapse">
+          <div className="w-full overflow-x-auto custom-scrollbar">
+            <table className="w-full text-xs text-left border-collapse">
               <thead>
-                <tr>
-                  <th className="px-3 py-2 w-[250px] font-bold text-muted-foreground border-b border-border bg-muted/10 rounded-tl-lg">Unidade</th>
-                  <th className="px-3 py-2 w-[120px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center">Prod %</th>
-                  {mesesExibidos.map(m => [
-                    <th key={m} className="px-2 py-2 font-bold text-muted-foreground border-b border-border bg-muted/10 text-center">{m}</th>,
-                    <th key={`${m}_prod`} className="px-1 py-2 w-[80px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center text-[10px]">Prod {m}</th>
-                  ])}
-                  <th className="px-2 py-2 w-[100px] font-bold text-muted-foreground border-b border-border bg-muted/10 text-center rounded-tr-lg">Média</th>
+                <tr className="bg-[#F7F4F0] dark:bg-muted/50 border-b border-border text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                  <th className="px-3 py-2.5 sticky left-0 z-10 bg-[#F7F4F0] dark:bg-card border-r border-border min-w-[160px]">
+                    Unidade
+                  </th>
+                  <th className="px-3 py-2.5 min-w-[130px]">Produção</th>
+                  <th className="px-3 py-2.5 min-w-[110px] text-center">Tendência</th>
+                  {mesesExibidos.map(m => (
+                    <th key={m} className="px-2 py-2.5 text-center min-w-[70px]">{m}</th>
+                  ))}
+                  <th className="px-3 py-2.5 text-center min-w-[80px]">Média</th>
                 </tr>
               </thead>
-              <tbody>
-                {chartData.map((row, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
-                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">{row.name}</td>
-                    
-                    {/* Prod % */}
-                    <td className="px-3 py-2.5 text-center relative min-w-[100px]">
-                      <div className="absolute inset-y-1.5 left-2 right-2 bg-muted/50 rounded-sm overflow-hidden border border-border/50">
-                        <div 
-                          className="h-full transition-all" 
-                          style={{ width: `${Math.min(row._producaoPerc, 100)}%`, backgroundColor: getGradualColor(row._producaoPerc) }}
-                        ></div>
-                      </div>
-                      <span className="relative z-10 text-xs font-bold text-white">{row._producaoPerc.toFixed(1)}%</span>
-                    </td>
+              <tbody className="divide-y divide-border/60">
+                {chartData.map((row) => {
+                  const isSelected = unidadeAtiva === row.name;
 
-                    {/* Meses */}
-                    {mesesExibidos.map(m => {
-                      const val = row[m];
-                      const prodVal = row[`${m}_prod`];
-                      return [
-                        <td key={m} className="p-0 border border-background">
-                          <div 
-                            className={cn("w-full max-w-[64px] mx-auto h-full min-h-[32px] flex items-center justify-center text-xs rounded-sm", getCellClassName(val))}
-                            style={getCellStyle(val)}
-                          >
-                            {val !== null && val !== undefined ? val.toFixed(1) + '%' : '-'}
+                  return (
+                    <tr
+                      key={row.name}
+                      onClick={() => setUnidadeAtiva(isSelected ? null : row.name)}
+                      onMouseEnter={() => {
+                        setActiveHoverData({
+                          title: row.name,
+                          producaoPerc: row._producaoPerc,
+                          items: [
+                            { label: 'Cumprimento', value: `${row._mediaGeral.toFixed(1).replace('.', ',')}%`, color: '#F97706' }
+                          ]
+                        });
+                      }}
+                      onMouseLeave={() => setActiveHoverData(null)}
+                      className={cn(
+                        "transition-colors duration-180 cursor-pointer",
+                        isSelected ? "bg-primary/[0.08]" : "hover:bg-[#FFF7ED] dark:hover:bg-primary/5"
+                      )}
+                    >
+                      <td className="px-3 py-2.5 font-medium whitespace-nowrap sticky left-0 z-10 bg-card border-r border-border relative">
+                        {isSelected && (
+                          <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" />
+                        )}
+                        <span className="text-xs font-semibold text-foreground">{row.name}</span>
+                      </td>
+                      
+                      {/* Coluna Única de Produção (Barra com Régua de 100% sem corte) */}
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-[#EFEBE6] dark:bg-muted/60 h-[6px] rounded-full relative">
+                            <div 
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{ 
+                                width: getBarWidthPerc(row._producaoPerc),
+                                backgroundColor: getProdBarColor(row._producaoPerc)
+                              }} 
+                            />
+                            <div 
+                              className="absolute top-0 bottom-0 w-px bg-[#A8A099] z-10"
+                              style={{ left: marca100Perc }}
+                            />
                           </div>
-                        </td>,
-                        <td key={`${m}_prod`} className="px-1 py-2 text-center relative min-w-[70px]">
-                          {prodVal !== null && prodVal !== undefined ? (
-                            <>
-                              <div className="absolute inset-y-1.5 left-1 right-1 bg-muted/50 rounded-sm overflow-hidden border border-border/50">
-                                <div 
-                                  className="h-full transition-all" 
-                                  style={{ width: `${Math.min(prodVal, 100)}%`, backgroundColor: getGradualColor(prodVal) }}
-                                ></div>
-                              </div>
-                              <span className="relative z-10 text-[10px] font-bold text-white">{prodVal.toFixed(1)}%</span>
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </td>
-                      ];
-                    })}
+                          <span className="text-xs font-bold tabular-nums text-foreground w-11 text-right">
+                            {row._producaoPerc.toFixed(1).replace('.', ',')}%
+                          </span>
+                        </div>
+                      </td>
 
-                    <td className="p-0 border border-background">
-                      <div 
-                        className={cn("w-full max-w-[64px] mx-auto h-full min-h-[32px] flex items-center justify-center text-xs rounded-sm", getCellClassName(row._mediaGeral))}
-                        style={getCellStyle(row._mediaGeral)}
-                      >
-                        {row._mediaGeral !== null ? row._mediaGeral.toFixed(1) + '%' : '-'}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-2 py-2.5 text-center">
+                        <Sparkline data={row._sparklineData} />
+                      </td>
+
+                      {/* Colunas dos Meses (Heatmap em Pills + Barra de Produção 3px) */}
+                      {mesesExibidos.map(m => {
+                        const val = row[m];
+                        const style = getHeatmapStyle(val);
+                        const prodVal = row[`${m}_prod`];
+
+                        return (
+                          <td 
+                            key={m} 
+                            className="px-1.5 py-2 text-center"
+                            onMouseEnter={(e) => {
+                              e.stopPropagation();
+                              setActiveHoverData({
+                                title: `${row.name} · ${m}`,
+                                producaoPerc: prodVal,
+                                items: [
+                                  { label: 'Cumprimento', value: val !== null && val !== undefined ? `${val.toFixed(1).replace('.', ',')}%` : '-', color: '#F97706' }
+                                ]
+                              });
+                            }}
+                          >
+                            <div className="inline-flex flex-col items-center gap-[3px]">
+                              <div 
+                                className="inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-[6px] text-xs font-bold tabular-nums"
+                                style={{ backgroundColor: style.bg, color: style.text }}
+                              >
+                                {val !== null && val !== undefined ? `${val.toFixed(1).replace('.', ',')}%` : '-'}
+                              </div>
+
+                              {prodVal !== null && prodVal !== undefined ? (
+                                <div 
+                                  className="w-[46px] h-[3px] bg-[#EFEBE6] dark:bg-muted/60 rounded-full relative cursor-pointer"
+                                  title={`Produção em ${m}: ${Number(prodVal).toFixed(1).replace('.', ',')}%`}
+                                >
+                                  <div 
+                                    className="h-full rounded-full transition-all duration-300"
+                                    style={{
+                                      width: getBarWidthPerc(Number(prodVal)),
+                                      backgroundColor: getProdBarColor(Number(prodVal))
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute top-0 bottom-0 w-px bg-[#A8A099] z-10"
+                                    style={{ left: marca100Perc }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-[46px] h-[3px]" />
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+
+                      <td className="px-2 py-2 text-center">
+                        {(() => {
+                          const style = getHeatmapStyle(row._mediaGeral);
+                          return (
+                            <div 
+                              className="inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-[6px] text-xs font-bold tabular-nums"
+                              style={{ backgroundColor: style.bg, color: style.text }}
+                            >
+                              {row._mediaGeral !== null ? `${row._mediaGeral.toFixed(1).replace('.', ',')}%` : '-'}
+                            </div>
+                          );
+                        })()}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            
-            {/* Legenda de Cores */}
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-blue-500"></div>
-                <span>≥ 110%</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-green-500"></div>
-                <span>90% - 109%</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-yellow-500"></div>
-                <span>70% - 89%</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-red-500"></div>
-                <span>&lt; 70%</span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Gráfico de Equipes, Inconsistências e Resumo */}
-        <div className="w-full shrink-0 border border-border rounded-xl bg-card p-4 shadow-sm flex flex-col xl:flex-row gap-6 mb-4">
-          
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="mb-4 text-center">
-              <h2 className="text-lg font-bold text-foreground">Equipes</h2>
-            </div>
-            <div className="flex-1 w-full min-h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={equipesChartData} margin={{ top: 20, right: 10, left: -20, bottom: 40 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => `${val}%`} />
-                  <Tooltip 
-                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                    formatter={(val: number) => [`${val.toFixed(1)}%`, 'Cumprimento']}
-                  />
-                  <Bar 
-                    dataKey="cumprimento" 
-                    fill="hsl(0, 0%, 10%)" 
-                    radius={[2, 2, 0, 0]} 
-                    background={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
-                  >
-                    <LabelList 
-                      dataKey="cumprimento" 
-                      position="center" 
-                      content={(props: any) => {
-                        const { x, y, width, height, value } = props;
-                        if (!value) return null;
-                        // Se a barra for muito baixa, coloca a label acima dela
-                        const labelY = height < 20 ? y - 10 : y + height / 2;
-                        return (
-                          <g>
-                            <rect x={x + width / 2 - 18} y={labelY - 8} width="36" height="16" fill="white" fillOpacity="0.4" rx="4" />
-                            <text x={x + width / 2} y={labelY + 3} fill="white" fontSize="9" fontWeight="bold" textAnchor="middle">{`${value.toFixed(0)}%`}</text>
-                          </g>
-                        );
-                      }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Resumo Lateral */}
-          <div className="w-full xl:w-[220px] flex flex-col justify-center shrink-0 border-t xl:border-t-0 xl:border-l border-border pt-4 xl:pt-0 xl:pl-6">
-            <div className="mb-4">
-              <h3 className="text-sm font-bold text-foreground">Cumprimento no Período</h3>
-            </div>
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center gap-3">
-                <div className="w-1.5 h-10 bg-muted-foreground/30 rounded-full"></div>
-                <div>
-                  <p className="text-lg font-bold text-foreground leading-tight">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totaisGlobais.sumAL)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Valor Planejado</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="w-1.5 h-10 bg-muted-foreground/30 rounded-full"></div>
-                <div>
-                  <p className="text-lg font-bold text-foreground leading-tight">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totaisGlobais.sumAO)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Valor Realizado</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="w-1.5 h-10 bg-muted-foreground/30 rounded-full"></div>
-                <div>
-                  <p className="text-lg font-bold text-foreground leading-tight">
-                    {totaisGlobais.percentual.toFixed(2).replace('.', ',')}%
-                  </p>
-                  <p className="text-xs text-muted-foreground">% Concluído</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tabela de Inconsistências */}
-          {inconsistencias.length > 0 && (
-            <div className="w-full xl:w-[450px] flex flex-col shrink-0 border-t xl:border-t-0 xl:border-l border-border pt-4 xl:pt-0 xl:pl-6">
-              <div className="mb-4">
-                <h3 className="text-sm font-bold text-destructive">Inconsistências ({inconsistencias.length})</h3>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Realizado com Planejado zerado</p>
-              </div>
-              <div className="flex-1 max-h-[300px] overflow-auto border border-border rounded-md custom-scrollbar">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-muted/50 sticky top-0 shadow-sm">
-                    <tr>
-                      <th className="px-2 py-1.5 font-semibold text-muted-foreground">Data</th>
-                      <th className="px-2 py-1.5 font-semibold text-muted-foreground">Unidade</th>
-                      <th className="px-2 py-1.5 font-semibold text-muted-foreground">Equipe</th>
-                      <th className="px-2 py-1.5 font-semibold text-muted-foreground">Valor</th>
-                      <th className="px-2 py-1.5 font-semibold text-destructive">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inconsistencias.map(inc => (
-                      <tr key={inc.id} className="border-t border-border/50 hover:bg-muted/30">
-                        <td className="px-2 py-1.5 whitespace-nowrap text-[10px] font-medium text-muted-foreground">{inc.data}</td>
-                        <td className="px-2 py-1.5 font-medium truncate max-w-[100px]" title={inc.unidade}>{inc.unidade}</td>
-                        <td className="px-2 py-1.5 font-medium truncate max-w-[100px]" title={inc.equipe}>{inc.equipe}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-[10px] font-medium text-foreground">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(inc.valor)}
-                        </td>
-                        <td className="px-2 py-1.5 text-[10px] text-destructive font-bold">{inc.acao}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* SMALL MULTIPLES - Evolução Global */}
-        <div className="w-full shrink-0 border border-border rounded-xl bg-card shadow-sm flex flex-col mb-4 overflow-hidden">
-          <div className="p-4 border-b border-border bg-destructive">
-            <h2 className="text-lg font-bold text-white">Evolução Global por Unidade</h2>
-            <p className="text-xs text-white/80">Comparativo de Cumprimento e Produção</p>
-          </div>
-          
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-              {globalChartData.map((unidade) => (
-                <div key={unidade.name} className="border border-border/50 rounded-lg p-3 bg-muted/10">
-                  <h3 className="text-sm font-bold text-center mb-2 text-foreground">{unidade.name}</h3>
-                  <div className="h-[150px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={unidade.evolution} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} domain={[0, 150]} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
-                        />
-                        <Line type="monotone" dataKey="cumprimento" name="Cumprimento" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />
-                        <Line type="monotone" dataKey="producao" name="Produção" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
