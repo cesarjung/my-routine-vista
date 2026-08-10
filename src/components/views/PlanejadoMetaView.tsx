@@ -356,11 +356,12 @@ export const PlanejadoMetaView = () => {
         }
       });
 
-      const latestMonth = mesesExibidos[mesesExibidos.length - 1];
-      const prevMonth = mesesExibidos[mesesExibidos.length - 2];
+      const validMonths = mesesExibidos.filter(m => item[m] !== null && item[m] !== undefined);
+      const latestMonth = validMonths[validMonths.length - 1] || mesesExibidos[mesesExibidos.length - 1];
+      const prevMonth = validMonths[validMonths.length - 2] || mesesExibidos[mesesExibidos.length - 2];
 
-      item._latestVal = latestMonth && item[latestMonth] !== undefined ? item[latestMonth] : null;
-      item._prevVal = prevMonth && item[prevMonth] !== undefined ? item[prevMonth] : null;
+      item._latestVal = latestMonth && item[latestMonth] !== null && item[latestMonth] !== undefined ? item[latestMonth] : null;
+      item._prevVal = prevMonth && item[prevMonth] !== null && item[prevMonth] !== undefined ? item[prevMonth] : null;
       item._variation = (item._latestVal !== null && item._prevVal !== null) ? (item._latestVal - item._prevVal) : 0;
 
       item._sparklineData = mesesExibidos.map(m => item[m]);
@@ -613,7 +614,15 @@ export const PlanejadoMetaView = () => {
 
   // KPIs
   const kpis = useMemo(() => {
-    const latestMonth = mesesExibidos[mesesExibidos.length - 1] || '';
+    let latestMonth = '';
+    for (let i = mesesExibidos.length - 1; i >= 0; i--) {
+      const m = mesesExibidos[i];
+      if (chartData.some(u => u[m] !== null && u[m] !== undefined)) {
+        latestMonth = m;
+        break;
+      }
+    }
+    if (!latestMonth) latestMonth = mesesExibidos[mesesExibidos.length - 1] || '';
     const totalUnits = chartData.length;
     
     const validLatestVals = chartData
