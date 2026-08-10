@@ -104,7 +104,14 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : filters.sector_id;
 
       if (effectiveSectorId) {
-        tasksQuery = tasksQuery.or(`sector_id.eq.${effectiveSectorId},sector_id.is.null`);
+        if (Array.isArray(effectiveSectorId)) {
+          const validSectors = effectiveSectorId.filter(Boolean);
+          if (validSectors.length > 0) {
+            tasksQuery = tasksQuery.in('sector_id', validSectors);
+          }
+        } else if (typeof effectiveSectorId === 'string' && effectiveSectorId.trim() !== '') {
+          tasksQuery = tasksQuery.or(`sector_id.eq.${effectiveSectorId},sector_id.is.null`);
+        }
       }
 
       if (filters.unit_id) {

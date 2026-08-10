@@ -432,7 +432,22 @@ export const UnifiedDraggablePanels = ({
 
   const activePanel = activeId ? panels.find(p => p.id === activeId) : null;
 
-  if (panels.length === 0 || isLoadingLayout || isLoadingRole) return null;
+  if (isLoadingLayout || isLoadingRole) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (panels.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl border-border bg-card/50 text-center my-4">
+        <p className="text-sm font-semibold text-foreground mb-1">Nenhum painel exibido neste contexto</p>
+        <p className="text-xs text-muted-foreground font-medium">Clique em "+ Novo Painel" no topo para criar um painel personalizado ou selecione outro setor.</p>
+      </div>
+    );
+  }
 
   return (
     <DndContext
