@@ -142,24 +142,11 @@ export const RoutinesView = ({
     const normAFreq = normalizeFreq(activeFrequency);
     const matchesFrequency = activeFrequency === 'all' || normRFreq === normAFreq;
     
-    const isGlobalOrAll = !sectorId || sectorId === 'all' || sectorId === 'global';
-    const routineSectorId = (r as any).sector_id;
-    const routineHasNoSector = !routineSectorId || routineSectorId === 'all' || routineSectorId === 'global';
-    
-    const routineTasks = allTasks?.filter(t => t.routine_id === r.id) || [];
-    const hasTaskInSector = routineTasks.some(t => 
-      t.sector_id === sectorId || 
-      t.unit?.sector_id === sectorId || 
-      !t.sector_id
-    );
-    
-    const matchesSector = isGlobalOrAll || routineHasNoSector || routineSectorId === sectorId || hasTaskInSector;
-    
     const isCompleted = isRoutineCompleted(r.id);
     const matchesHideCompleted = hideCompleted ? !isCompleted : true;
     const matchesSearch = !search || r.title?.toLowerCase().includes(search.toLowerCase());
     
-    return matchesFrequency && matchesSector && matchesHideCompleted && matchesSearch;
+    return matchesFrequency && matchesHideCompleted && matchesSearch;
   });
 
   const renderContent = () => {

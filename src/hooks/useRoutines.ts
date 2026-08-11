@@ -20,7 +20,6 @@ export const useRoutines = (unitId?: string) => {
       let query = supabase
         .from('routines')
         .select('*, routine_periods(id, period_start, period_end, is_active)')
-        .or('is_active.eq.true,is_active.is.null')
         .order('title');
 
       if (unitId) {
@@ -162,59 +161,23 @@ export const useRoutinesByFrequency = (frequency: TaskFrequency) => {
       const { data, error } = await supabase
         .from('routines')
         .select('*')
-        .eq('frequency', frequency)
-        .or('is_active.eq.true,is_active.is.null')
         .order('title');
 
       if (error) throw error;
 
-      // Se usuário não é admin/gestor, filtrar
-      if (role === 'usuario' && user?.id) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('unit_id')
-          .eq('id', user.id)
-          .single();
+      const routines = (data || []) as Routine[];
+      const normalizeFreq = (f?: string): string => {
+        if (!f) return 'diaria';
+        const norm = f.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (norm.startsWith('diar')) return 'diaria';
+        if (norm.startsWith('seman')) return 'semanal';
+        if (norm.startsWith('quinz')) return 'quinzenal';
+        if (norm.startsWith('mens')) return 'mensal';
+        return norm;
+      };
 
-        const userUnitId = profile?.unit_id;
-
-        const { data: routineAssignees } = await supabase
-          .from('routine_assignees')
-          .select('routine_id')
-          .eq('user_id', user.id);
-
-        const assignedRoutineIds = new Set(routineAssignees?.map(ra => ra.routine_id) || []);
-
-        // Buscar rotinas que têm checkins para a unidade do usuário
-        let routinesWithUserUnitCheckins = new Set<string>();
-        if (userUnitId) {
-          const { data: checkins } = await supabase
-            .from('routine_checkins')
-            .select('routine_period_id')
-            .eq('unit_id', userUnitId);
-
-          if (checkins && checkins.length > 0) {
-            const periodIds = checkins.map(c => c.routine_period_id);
-            const { data: periods } = await supabase
-              .from('routine_periods')
-              .select('routine_id')
-              .in('id', periodIds);
-
-            routinesWithUserUnitCheckins = new Set(periods?.map(p => p.routine_id) || []);
-          }
-        }
-
-        return (data as Routine[]).filter(routine => {
-          if (routine.created_by === user.id) return true;
-          if (!routine.unit_id) return true;
-          if (assignedRoutineIds.has(routine.id)) return true;
-          if (userUnitId && routine.unit_id === userUnitId) return true;
-          if (routinesWithUserUnitCheckins.has(routine.id)) return true;
-          return false;
-        });
-      }
-
-      return data as Routine[];
+      const targetFreq = normalizeFreq(frequency);
+      return routines.filter(r => normalizeFreq(r.frequency) === targetFreq);
     },
     enabled: !!user?.id,
   });
