@@ -37,7 +37,9 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
     const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>(initialRoutineIds);
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [trackerSectorIds, setTrackerSectorIds] = useState<string[]>([]);
-    const [frequencyFilter, setFrequencyFilter] = useState<string[]>(initialFrequencies);
+    const [frequencyFilter, setFrequencyFilter] = useState<string[]>(
+        initialFrequencies.length > 0 ? initialFrequencies : ['diaria', 'semanal', 'quinzenal', 'mensal']
+    );
     const [layouts, setLayouts] = useState<Record<string, { x: number, y: number, width: number, height: number }>>({});
     const [maxHeight, setMaxHeight] = useState(600);
     const [selectedRoutineForPanel, setSelectedRoutineForPanel] = useState<{ routine: any; date: Date | string; exactDate?: string } | null>(null);
@@ -119,11 +121,11 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
 
         let filtered = _active;
         if (sectorIds && sectorIds.length > 0) {
-            filtered = filtered.filter((r: any) => sectorIds.includes(r.sector_id));
+            filtered = filtered.filter((r: any) => !r.sector_id || sectorIds.includes(r.sector_id));
         }
 
         if (trackerSectorIds.length > 0) {
-            filtered = filtered.filter((r: any) => trackerSectorIds.includes(r.sector_id));
+            filtered = filtered.filter((r: any) => !r.sector_id || trackerSectorIds.includes(r.sector_id));
         }
 
         return filtered;
@@ -133,14 +135,11 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
     const routinesToShow = useMemo(() => {
         let baseRoutines = activeRoutines;
 
-        // Se não existir seleção manual de rotina nenhuma vez E não recebemos initialFrequencies
-        // Mantemos o painel vazio por segurança. Mas se recebemos frequências via widget dashboard
-        // ou salvamos globalmente, liberamos as rotinas ligadas àquelas frequências.
         const hasManualRoutines = selectedRoutineIds.length > 0;
         const hasFrequencies = frequencyFilter.length > 0;
 
         if (!hasManualRoutines && !hasFrequencies) {
-            return []; // Nothing selected anywhere
+            return baseRoutines;
         }
 
         let result = baseRoutines;

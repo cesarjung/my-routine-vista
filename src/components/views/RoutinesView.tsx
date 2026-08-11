@@ -133,7 +133,7 @@ export const RoutinesView = ({
     const routineTasks = allTasks?.filter(t => t.routine_id === r.id) || [];
     const hasTaskInSector = routineTasks.some(t => t.sector_id === sectorId || t.unit?.sector_id === sectorId);
     
-    const matchesSector = !sectorId || (r as any).sector_id === sectorId || hasTaskInSector;
+    const matchesSector = !sectorId || !(r as any).sector_id || (r as any).sector_id === sectorId || hasTaskInSector;
     
     const isCompleted = isRoutineCompleted(r.id);
     const matchesHideCompleted = hideCompleted ? !isCompleted : true;
