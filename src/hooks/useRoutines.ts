@@ -90,10 +90,10 @@ export const useRoutines = (unitId?: string) => {
 
       const routinesWithStatus = routines.map(r => ({
         ...r,
-        status: !r.is_active
+        status: r.is_active === false
           ? 'inativa'
           : (routineStatusMap.get(r.id) || 'pendente'),
-        active_statuses: !r.is_active
+        active_statuses: r.is_active === false
           ? ['inativa']
           : (routineActiveStatusesMap.get(r.id) || ['pendente'])
       })) as Routine[];
