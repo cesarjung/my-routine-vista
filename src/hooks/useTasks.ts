@@ -139,6 +139,7 @@ export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
         filteredTasks = filteredTasks.filter(task => {
           if (task.assigned_to === user.id) return true;
           if (assignedTaskIds.has(task.id)) return true;
+          if (!task.unit_id || (task.routine && !task.routine.unit_id)) return true; // Global task or routine
           if (userUnitId && task.unit_id === userUnitId) return true;
           if (task.unit_id && managedUnitIds.has(task.unit_id)) return true;
           return false;
