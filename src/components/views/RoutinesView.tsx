@@ -93,6 +93,7 @@ export const RoutinesView = ({
   const { data: periodsByRoutine } = useAllActiveRoutinePeriods();
   const { data: allTasks } = useTasks();
   const [hideCompleted, setHideCompleted] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   const allFilteredSelected = routines && routines.length > 0
     ? routines.every((r) => selectedRoutineIds.includes(r.id)) : false;
@@ -145,8 +146,9 @@ export const RoutinesView = ({
     const isCompleted = isRoutineCompleted(r.id);
     const matchesHideCompleted = hideCompleted ? !isCompleted : true;
     const matchesSearch = !search || r.title?.toLowerCase().includes(search.toLowerCase());
+    const matchesInactive = showInactive ? true : r.status !== 'inativa';
     
-    return matchesFrequency && matchesHideCompleted && matchesSearch;
+    return matchesFrequency && matchesHideCompleted && matchesSearch && matchesInactive;
   });
 
   const renderContent = () => {
@@ -292,6 +294,16 @@ export const RoutinesView = ({
                 />
                 <Label htmlFor="hide-completed-routines" className="text-sm cursor-pointer whitespace-nowrap">
                   Ocultar Concluídas
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 border rounded-md px-3 py-1.5 border-input bg-background w-fit">
+                <Switch
+                  id="show-inactive-routines"
+                  checked={showInactive}
+                  onCheckedChange={setShowInactive}
+                />
+                <Label htmlFor="show-inactive-routines" className="text-sm cursor-pointer whitespace-nowrap">
+                  Exibir Inativas
                 </Label>
               </div>
             </div>

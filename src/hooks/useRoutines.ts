@@ -88,15 +88,20 @@ export const useRoutines = (unitId?: string) => {
         });
       }
 
-      const routinesWithStatus = routines.map(r => ({
-        ...r,
-        status: r.is_active === false
-          ? 'inativa'
-          : (routineStatusMap.get(r.id) || 'pendente'),
-        active_statuses: r.is_active === false
-          ? ['inativa']
-          : (routineActiveStatusesMap.get(r.id) || ['pendente'])
-      })) as Routine[];
+      const routinesWithStatus = routines.map(r => {
+        const hasActivePeriods = Array.isArray(r.routine_periods) && r.routine_periods.some((p: any) => p.is_active !== false);
+        const isTrulyInactive = r.is_active === false && !hasActivePeriods;
+
+        return {
+          ...r,
+          status: isTrulyInactive
+            ? 'inativa'
+            : (routineStatusMap.get(r.id) || 'pendente'),
+          active_statuses: isTrulyInactive
+            ? ['inativa']
+            : (routineActiveStatusesMap.get(r.id) || ['pendente'])
+        };
+      }) as Routine[];
 
       return routinesWithStatus;
     },
