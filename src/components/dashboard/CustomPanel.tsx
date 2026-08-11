@@ -86,12 +86,22 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         .from('routines')
         .select('id, frequency, title, sector_id, is_active');
 
+      const normalizeFreq = (f?: string): string => {
+        if (!f) return 'diaria';
+        const norm = f.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (norm.startsWith('diar')) return 'diaria';
+        if (norm.startsWith('seman')) return 'semanal';
+        if (norm.startsWith('quinz')) return 'quinzenal';
+        if (norm.startsWith('mens')) return 'mensal';
+        return norm;
+      };
+
       const activeRoutines = allRoutines || [];
       const routinesMap: Record<string, string> = {};
       const routineTitlesMap: Record<string, string> = {};
 
       activeRoutines.forEach(r => {
-        routinesMap[r.id] = r.frequency;
+        routinesMap[r.id] = normalizeFreq(r.frequency);
         routineTitlesMap[r.id] = r.title;
       });
 
@@ -104,13 +114,17 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : filters.sector_id;
 
       if (effectiveSectorId) {
-        if (Array.isArray(effectiveSectorId)) {
-          const validSectors = effectiveSectorId.filter(Boolean);
-          if (validSectors.length > 0) {
-            tasksQuery = tasksQuery.in('sector_id', validSectors);
+        const sectorIdStr = Array.isArray(effectiveSectorId) ? effectiveSectorId[0] : effectiveSectorId;
+        if (sectorIdStr && typeof sectorIdStr === 'string' && sectorIdStr.trim() !== '') {
+          // Pre-fetch units for this sector to ensure tasks belonging to sector units are never dropped
+          const { data: sectorUnits } = await supabase.from('units').select('id').eq('sector_id', sectorIdStr);
+          const sectorUnitIds = sectorUnits?.map(u => u.id).filter(Boolean) || [];
+
+          if (sectorUnitIds.length > 0) {
+            tasksQuery = tasksQuery.or(`sector_id.eq.${sectorIdStr},sector_id.is.null,unit_id.in.(${sectorUnitIds.join(',')})`);
+          } else {
+            tasksQuery = tasksQuery.or(`sector_id.eq.${sectorIdStr},sector_id.is.null`);
           }
-        } else if (typeof effectiveSectorId === 'string' && effectiveSectorId.trim() !== '') {
-          tasksQuery = tasksQuery.or(`sector_id.eq.${effectiveSectorId},sector_id.is.null`);
         }
       }
 

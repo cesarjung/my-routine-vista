@@ -127,8 +127,20 @@ export const RoutinesView = ({
     return false;
   };
 
+  const normalizeFreq = (f?: string): string => {
+    if (!f) return 'diaria';
+    const norm = f.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (norm.startsWith('diar')) return 'diaria';
+    if (norm.startsWith('seman')) return 'semanal';
+    if (norm.startsWith('quinz')) return 'quinzenal';
+    if (norm.startsWith('mens')) return 'mensal';
+    return norm;
+  };
+
   const filteredRoutines = routines?.filter(r => {
-    const matchesFrequency = activeFrequency === 'all' || r.frequency === activeFrequency;
+    const normRFreq = normalizeFreq(r.frequency);
+    const normAFreq = normalizeFreq(activeFrequency);
+    const matchesFrequency = activeFrequency === 'all' || normRFreq === normAFreq;
     
     const routineTasks = allTasks?.filter(t => t.routine_id === r.id) || [];
     const hasTaskInSector = routineTasks.some(t => t.sector_id === sectorId || t.unit?.sector_id === sectorId);

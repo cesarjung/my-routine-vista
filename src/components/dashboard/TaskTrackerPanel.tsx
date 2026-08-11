@@ -148,8 +148,19 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
             result = result.filter(r => selectedRoutineIds.includes(r.id));
         }
 
+        const normalizeFreq = (f?: string): string => {
+            if (!f) return 'diaria';
+            const norm = f.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (norm.startsWith('diar')) return 'diaria';
+            if (norm.startsWith('seman')) return 'semanal';
+            if (norm.startsWith('quinz')) return 'quinzenal';
+            if (norm.startsWith('mens')) return 'mensal';
+            return norm;
+        };
+
         if (hasFrequencies) {
-            result = result.filter(r => frequencyFilter.includes(r.frequency));
+            const normFilter = frequencyFilter.map(f => normalizeFreq(f));
+            result = result.filter(r => normFilter.includes(normalizeFreq(r.frequency)));
         }
 
         return result;
