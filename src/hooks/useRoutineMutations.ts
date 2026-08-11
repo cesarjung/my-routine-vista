@@ -463,6 +463,7 @@ export const useUpdateRoutine = () => {
       if (data.description !== undefined) updatePayload.description = data.description || null;
       if (data.frequency !== undefined) updatePayload.frequency = data.frequency;
       if (data.recurrence_mode !== undefined) updatePayload.recurrence_mode = data.recurrence_mode;
+      if (data.is_active !== undefined) updatePayload.is_active = data.is_active;
       if (data.skipWeekendsHolidays !== undefined || data.monthlyAnchor !== undefined) {
         updatePayload.custom_schedule = {
           skipWeekendsHolidays: data.skipWeekendsHolidays ?? false,
