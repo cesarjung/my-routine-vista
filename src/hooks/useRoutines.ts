@@ -20,7 +20,7 @@ export const useRoutines = (unitId?: string) => {
       let query = supabase
         .from('routines')
         .select('*, routine_periods(id, period_start, period_end, is_active)')
-        .eq('is_active', true)
+        .or('is_active.eq.true,is_active.is.null')
         .order('title');
 
       if (unitId) {
@@ -97,7 +97,7 @@ export const useRoutines = (unitId?: string) => {
           }
         }
 
-        return (data as Routine[]).filter(routine => {
+        const routinesToCalculateStatus = (data as Routine[]).filter(routine => {
           // Mostrar se for o criador da rotina
           if (routine.created_by === user.id) return true;
           // Mostrar se a rotina for global (sem unidade específica)
@@ -328,7 +328,7 @@ export const useRoutinesByFrequency = (frequency: TaskFrequency) => {
         .from('routines')
         .select('*')
         .eq('frequency', frequency)
-        .eq('is_active', true)
+        .or('is_active.eq.true,is_active.is.null')
         .order('title');
 
       if (error) throw error;
