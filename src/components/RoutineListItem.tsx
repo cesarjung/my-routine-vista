@@ -29,7 +29,10 @@ const frequencyLabels: Record<string, string> = {
     anual: 'Anual',
 };
 
+import { useUpdateRoutine } from '@/hooks/useRoutineMutations';
+
 export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggleSelect, onClick, onEdit, canEdit, periodDates: propPeriodDates }: RoutineListItemProps) => {
+    const updateRoutine = useUpdateRoutine();
     const periodDates = useMemo(() => {
         if (propPeriodDates) return propPeriodDates;
 
@@ -192,6 +195,19 @@ export const RoutineListItem = ({ routine, isSelected, isMultiSelected, onToggle
 
             {/* Actions */}
             <div className="flex items-center gap-1">
+                {routine.is_active === false && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            updateRoutine.mutate({ id: routine.id, data: { is_active: true } });
+                        }}
+                        className="h-6 px-2 text-[10px] bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100"
+                    >
+                        Reativar
+                    </Button>
+                )}
                 {canEdit && (
                     <Button
                         variant="ghost"

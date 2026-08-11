@@ -146,7 +146,9 @@ export const RoutinesView = ({
     const isCompleted = isRoutineCompleted(r.id);
     const matchesHideCompleted = hideCompleted ? !isCompleted : true;
     const matchesSearch = !search || r.title?.toLowerCase().includes(search.toLowerCase());
-    const matchesInactive = showInactive ? true : r.status !== 'inativa';
+    
+    // Oculta rotinas desativadas (is_active === false) por padrão, a menos que "Exibir Inativas" esteja ativado
+    const matchesInactive = showInactive ? true : r.is_active !== false;
     
     return matchesFrequency && matchesHideCompleted && matchesSearch && matchesInactive;
   });
