@@ -111,41 +111,6 @@ export const useTasks = (unitId?: string, options?: { enabled?: boolean }) => {
         return (task.routine as any).is_active !== false; // Active routine
       });
 
-      // Permission Filtering
-      if (role === 'usuario' && user?.id) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('unit_id')
-          .eq('id', user.id)
-          .single();
-
-        const userUnitId = profile?.unit_id;
-
-        const { data: taskAssignees } = await supabase
-          .from('task_assignees')
-          .select('task_id')
-          .eq('user_id', user.id);
-
-        const assignedTaskIds = new Set(taskAssignees?.map(ta => ta.task_id) || []);
-
-        // Also fetch units this user manages
-        const { data: managedUnits } = await supabase
-          .from('unit_managers')
-          .select('unit_id')
-          .eq('user_id', user.id);
-
-        const managedUnitIds = new Set(managedUnits?.map(m => m.unit_id) || []);
-
-        filteredTasks = filteredTasks.filter(task => {
-          if (task.assigned_to === user.id) return true;
-          if (assignedTaskIds.has(task.id)) return true;
-          if (!task.unit_id || (task.routine && !task.routine.unit_id)) return true; // Global task or routine
-          if (userUnitId && task.unit_id === userUnitId) return true;
-          if (task.unit_id && managedUnitIds.has(task.unit_id)) return true;
-          return false;
-        });
-      }
-
       // Fetch and merge assignees for the filtered tasks
       return await fetchAndMergeAssignees(filteredTasks);
     },
