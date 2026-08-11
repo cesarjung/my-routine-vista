@@ -536,9 +536,13 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
                             .matrix-table thead .sticky-col-2 { z-index: 50; }
                         `}} />
                         <div className="relative w-full" style={{ minHeight: maxHeight }}>
-                            {/* BODY REPEATED PER ROUTINE */}
                             {sortedRoutinesData.map(({ routine, matrix, dailyStats, timeRange }, rIndex) => {
-                                const l = layouts[routine.id] || { x: rIndex * 50, y: rIndex * 50, width: 400, height: 250 };
+                                const getInitialTrackerPosition = (index: number) => {
+                                    const col = index % 2;
+                                    const row = Math.floor(index / 2);
+                                    return { x: col * 570, y: row * 290, width: 550, height: 270 };
+                                };
+                                const l = layouts[routine.id] || getInitialTrackerPosition(rIndex);
 
                                 const getFrequencyColor = (freq: string | undefined) => {
                                     switch (freq) {

@@ -336,20 +336,26 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
   const overallPercentage = statsData?.percentage || 0;
 
   const filteredPanels = customPanels?.filter(panel => {
-    // Backwards compatibility: if dashboard_context doesn't exist, try to infer from sector_id or treat as global
     let panelContext = panel.filters?.dashboard_context;
 
     if (!panelContext) {
-      if (panel.filters?.sector_id && typeof panel.filters.sector_id === 'string') {
-        panelContext = panel.filters.sector_id;
+      const sectorFilter = panel.filters?.sector_id;
+      if (Array.isArray(sectorFilter) && sectorFilter.length > 0) {
+        panelContext = sectorFilter[0];
+      } else if (typeof sectorFilter === 'string' && sectorFilter.trim() !== '') {
+        panelContext = sectorFilter;
       } else {
         panelContext = 'global';
       }
     }
 
-    if (panelContext !== contextIdentifier) return false;
+    const matchesContext = panelContext === contextIdentifier || panelContext === 'global';
+    const matchesSector = Array.isArray(panel.filters?.sector_id)
+      ? panel.filters.sector_id.includes(contextIdentifier)
+      : panel.filters?.sector_id === contextIdentifier;
 
-    // Permissions checking
+    if (!matchesContext && !matchesSector) return false;
+
     if (activeTab === 'public') {
       return !panel.is_private;
     } else {
