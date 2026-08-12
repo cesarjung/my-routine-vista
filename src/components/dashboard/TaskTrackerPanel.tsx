@@ -431,13 +431,13 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
 
         sortedRoutinesData.forEach((r, index) => {
             const existing = newLayouts[r.routine.id];
-            // If card layout doesn't exist or is an old 400px narrow card, initialize to full-width frequency position
-            if (!existing || existing.width < 800) {
+            // Force full width (1180px) and vertical stacking (x: 0, y: index * 285)
+            if (!existing || existing.x > 50 || existing.width < 1000) {
                 newLayouts[r.routine.id] = {
                     x: 0,
                     y: index * 285,
                     width: 1180,
-                    height: 275
+                    height: existing?.height || 275
                 };
                 changed = true;
             }
@@ -445,15 +445,11 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
 
         if (changed) {
             setLayouts(newLayouts);
-            // Salvar silenciosamente se mudou via carregamento inicial sem layouts
             setIsLayoutDirty(true);
         }
 
-        let maxBottom = 600;
-        Object.values(newLayouts).forEach(l => {
-            if (l.y + l.height > maxBottom) maxBottom = l.y + l.height;
-        });
-        setMaxHeight(maxBottom + 100);
+        const calculatedMaxHeight = Math.max(600, sortedRoutinesData.length * 290 + 100);
+        setMaxHeight(calculatedMaxHeight);
 
     }, [sortedRoutinesData, layouts]);
 
@@ -584,12 +580,11 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
                         `}} />
                         <div className="relative w-full" style={{ minHeight: maxHeight }}>
                             {sortedRoutinesData.map(({ routine, matrix, dailyStats, timeRange }, rIndex) => {
-                                const getInitialTrackerPosition = (index: number) => {
-                                    const col = index % 2;
-                                    const row = Math.floor(index / 2);
-                                    return { x: col * 570, y: row * 290, width: 550, height: 270 };
-                                };
-                                const l = layouts[routine.id] || getInitialTrackerPosition(rIndex);
+                                const rawL = layouts[routine.id];
+                                // Auto-expand cards to full-width (1180px) and stack vertically one below the other (x: 0, y: rIndex * 285)
+                                const l = (!rawL || rawL.x > 50 || rawL.width < 1000)
+                                    ? { x: 0, y: rIndex * 285, width: 1180, height: rawL?.height || 275 }
+                                    : { ...rawL, y: rIndex * 285 };
 
                                 const getFrequencyColor = (freq: string | undefined) => {
                                     switch (freq) {
