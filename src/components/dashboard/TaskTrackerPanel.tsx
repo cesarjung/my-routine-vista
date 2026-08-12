@@ -415,7 +415,7 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
             newLayouts[r.routine.id] = {
                 x: 0,
                 y: index * 285,
-                width: 1180,
+                width: 1420,
                 height: 275
             };
         });
@@ -431,12 +431,12 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
 
         sortedRoutinesData.forEach((r, index) => {
             const existing = newLayouts[r.routine.id];
-            // Force full width (1180px) and vertical stacking (x: 0, y: index * 285)
-            if (!existing || existing.x > 50 || existing.width < 1000) {
+            // Force full width (1420px) to display all 31 days and vertical stacking (x: 0, y: index * 285)
+            if (!existing || existing.x > 50 || existing.width < 1380) {
                 newLayouts[r.routine.id] = {
                     x: 0,
                     y: index * 285,
-                    width: 1180,
+                    width: 1420,
                     height: existing?.height || 275
                 };
                 changed = true;
@@ -581,10 +581,10 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
                         <div className="relative w-full" style={{ minHeight: maxHeight }}>
                             {sortedRoutinesData.map(({ routine, matrix, dailyStats, timeRange }, rIndex) => {
                                 const rawL = layouts[routine.id];
-                                // Auto-expand cards to full-width (1180px) and stack vertically one below the other (x: 0, y: rIndex * 285)
-                                const l = (!rawL || rawL.x > 50 || rawL.width < 1000)
-                                    ? { x: 0, y: rIndex * 285, width: 1180, height: rawL?.height || 275 }
-                                    : { ...rawL, y: rIndex * 285 };
+                                // Auto-expand cards to full-width (1420px) to show all 31 days (01/M to 31/M) and stack vertically one below the other
+                                const l = (!rawL || rawL.x > 50 || rawL.width < 1380)
+                                    ? { x: 0, y: rIndex * 285, width: 1420, height: rawL?.height || 275 }
+                                    : { ...rawL, y: rIndex * 285, width: Math.max(rawL.width || 1420, 1420) };
 
                                 const getFrequencyColor = (freq: string | undefined) => {
                                     switch (freq) {
