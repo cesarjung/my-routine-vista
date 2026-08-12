@@ -163,7 +163,19 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
             result = result.filter(r => normFilter.includes(normalizeFreq(r.frequency)));
         }
 
-        return result;
+        const frequencyOrder: Record<string, number> = {
+            diaria: 1,
+            semanal: 2,
+            quinzenal: 3,
+            mensal: 4,
+        };
+
+        return [...result].sort((a, b) => {
+            const freqA = frequencyOrder[normalizeFreq(a.frequency)] || 99;
+            const freqB = frequencyOrder[normalizeFreq(b.frequency)] || 99;
+            if (freqA !== freqB) return freqA - freqB;
+            return a.title.localeCompare(b.title);
+        });
 
     }, [activeRoutines, selectedRoutineIds, frequencyFilter]);
 
@@ -397,6 +409,20 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
 
     const sortedRoutinesData = routinesData;
 
+    const handleAutoArrangeByFrequency = () => {
+        const newLayouts: Record<string, { x: number, y: number, width: number, height: number }> = {};
+        sortedRoutinesData.forEach((r, index) => {
+            newLayouts[r.routine.id] = {
+                x: 0,
+                y: index * 285,
+                width: 1180,
+                height: 275
+            };
+        });
+        setLayouts(newLayouts);
+        setIsLayoutDirty(true);
+    };
+
     useEffect(() => {
         if (sortedRoutinesData.length === 0) return;
 
@@ -404,14 +430,14 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
         const newLayouts = { ...layouts };
 
         sortedRoutinesData.forEach((r, index) => {
-            if (!newLayouts[r.routine.id]) {
-                const col = index % 3;
-                const row = Math.floor(index / 3);
+            const existing = newLayouts[r.routine.id];
+            // If card layout doesn't exist or is an old 400px narrow card, initialize to full-width frequency position
+            if (!existing || existing.width < 800) {
                 newLayouts[r.routine.id] = {
-                    x: col * 420,
-                    y: row * 280,
-                    width: 400,
-                    height: 250
+                    x: 0,
+                    y: index * 285,
+                    width: 1180,
+                    height: 275
                 };
                 changed = true;
             }
@@ -484,9 +510,19 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
                             />
                         </div>
 
-                        {/* Botão de salvar vista para Gestores/Admin */}
-                        {isGestorOrAdmin && (
-                            <div className="ml-auto mr-1 shrink-0">
+                        {/* Botão de auto-organização por Frequência */}
+                        <div className="ml-auto mr-1 shrink-0 flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleAutoArrangeByFrequency}
+                                className="gap-1.5 h-8 text-xs px-3 font-normal"
+                                title="Reorganizar automaticamente por Frequência (Diárias, Semanais, Quinzenais, Mensais)"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5 text-primary" />
+                                Organizar por Frequência
+                            </Button>
+                            {isGestorOrAdmin && (
                                 <Button
                                     size="sm"
                                     variant={singleSectorId ? "default" : "secondary"}
@@ -497,8 +533,8 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
                                     {saveSettings.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                                     {singleSectorId ? "Salvar Local" : "Salvar Global"}
                                 </Button>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         <div className={`flex items-center gap-1 bg-secondary/30 rounded-md p-0.5 border shrink-0 ${isGestorOrAdmin ? '' : 'ml-auto'}`}>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePrevMonth}>
