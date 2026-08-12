@@ -340,7 +340,6 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       localStorage.setItem('dashboard_global_sector_filters', JSON.stringify(selectedSectorIds));
     }
   }, [selectedSectorIds, forcedSectorId]);
-  const { data: sectors } = useSectors();
   const { data: statsData, isLoading } = useOverallStats(selectedSectorIds);
   const unitStatus = statsData?.unitStatus || [];
   const responsibleStatus = statsData?.responsibleStatus || [];
