@@ -412,11 +412,12 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
     const handleAutoArrangeByFrequency = () => {
         const newLayouts: Record<string, { x: number, y: number, width: number, height: number }> = {};
         sortedRoutinesData.forEach((r, index) => {
+            const matrixLength = r.matrix?.length || 1;
             newLayouts[r.routine.id] = {
                 x: 0,
-                y: index * 285,
-                width: 1420,
-                height: 275
+                y: index * 310,
+                width: 1550,
+                height: Math.max(260, matrixLength * 26 + 140)
             };
         });
         setLayouts(newLayouts);
@@ -431,13 +432,15 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
 
         sortedRoutinesData.forEach((r, index) => {
             const existing = newLayouts[r.routine.id];
-            // Force full width (1420px) to display all 31 days and vertical stacking (x: 0, y: index * 285)
-            if (!existing || existing.x > 50 || existing.width < 1380) {
+            const matrixLength = r.matrix?.length || 1;
+            const targetHeight = Math.max(260, matrixLength * 26 + 140);
+
+            if (!existing || existing.x > 50 || existing.width !== 1550) {
                 newLayouts[r.routine.id] = {
                     x: 0,
-                    y: index * 285,
-                    width: 1420,
-                    height: existing?.height || 275
+                    y: index * 310,
+                    width: 1550,
+                    height: Math.max(existing?.height || 0, targetHeight)
                 };
                 changed = true;
             }
@@ -448,7 +451,7 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
             setIsLayoutDirty(true);
         }
 
-        const calculatedMaxHeight = Math.max(600, sortedRoutinesData.length * 290 + 100);
+        const calculatedMaxHeight = Math.max(600, sortedRoutinesData.length * 330 + 100);
         setMaxHeight(calculatedMaxHeight);
 
     }, [sortedRoutinesData, layouts]);
@@ -581,10 +584,15 @@ export const TaskTrackerPanel = ({ sectorIds = [], initialRoutineIds = [], initi
                         <div className="relative w-full" style={{ minHeight: maxHeight }}>
                             {sortedRoutinesData.map(({ routine, matrix, dailyStats, timeRange }, rIndex) => {
                                 const rawL = layouts[routine.id];
-                                // Auto-expand cards to full-width (1420px) to show all 31 days (01/M to 31/M) and stack vertically one below the other
-                                const l = (!rawL || rawL.x > 50 || rawL.width < 1380)
-                                    ? { x: 0, y: rIndex * 285, width: 1420, height: rawL?.height || 275 }
-                                    : { ...rawL, y: rIndex * 285, width: Math.max(rawL.width || 1420, 1420) };
+                                const matrixLength = matrix?.length || 1;
+                                const calculatedHeight = Math.max(260, matrixLength * 26 + 140);
+                                // Force uniform width (1550px) across ALL cards so they align 100% pixel-perfect at the right edge
+                                const l = {
+                                    x: 0,
+                                    y: rIndex * 310,
+                                    width: 1550,
+                                    height: Math.max(rawL?.height || 0, calculatedHeight)
+                                };
 
                                 const getFrequencyColor = (freq: string | undefined) => {
                                     switch (freq) {
