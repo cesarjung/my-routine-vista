@@ -387,7 +387,6 @@ export const UnifiedDraggablePanels = ({
   }, [panels]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    if (!isAdmin) return;
     setActiveId(event.active.id as string);
   };
 
@@ -395,7 +394,7 @@ export const UnifiedDraggablePanels = ({
     const { active, delta } = event;
     setActiveId(null);
 
-    if (!isAdmin || !delta) return;
+    if (!delta) return;
 
     const panelIndex = panels.findIndex(p => p.id === active.id);
     if (panelIndex === -1) return;
@@ -414,7 +413,7 @@ export const UnifiedDraggablePanels = ({
 
     setPanels(newPanels);
 
-    // Save to database (admin only - RLS will enforce this)
+    // Save to database
     console.log('handleDragEnd sectorId:', selectedSectorId);
     saveLayout.mutate({ panels: newPanels, sectorId: selectedSectorId });
   };
@@ -454,13 +453,6 @@ export const UnifiedDraggablePanels = ({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {!isAdmin && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 bg-muted/30 px-3 py-1.5 rounded-md w-fit">
-          <Lock className="w-3 h-3" />
-          <span>Layout definido pelo administrador</span>
-        </div>
-      )}
-
       <div
         className="relative w-full"
         style={{ minHeight: containerHeight }}
@@ -470,13 +462,13 @@ export const UnifiedDraggablePanels = ({
             key={panel.id}
             panel={panel}
             renderContent={() => renderPanelContent(panel)}
-            canDrag={isAdmin}
+            canDrag={true}
           />
         ))}
       </div>
 
       <DragOverlay>
-        {activePanel && isAdmin && (
+        {activePanel && (
           <DragOverlayContent
             panel={activePanel}
             selectedSectorId={selectedSectorId}

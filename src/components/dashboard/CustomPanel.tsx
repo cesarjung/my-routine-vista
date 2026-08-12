@@ -628,16 +628,10 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
 
     if (!data?.results?.length) {
       return (
-        <div className="p-4 flex flex-col items-center justify-center text-xs text-muted-foreground gap-2">
-          <p className="font-semibold text-destructive">Sem dados para os filtros: {JSON.stringify(panel.filters.task_frequency)}</p>
-          <div className="text-left w-full space-y-1 bg-secondary/20 p-2 rounded">
-            <p><strong>DB rawTasks Total:</strong> {data?.rawTasks?.length || 0}</p>
-            <p><strong>Routines Map Keys:</strong> {Object.keys(data?.routinesMap || {}).length}</p>
-            <p><strong>Frequencies mapped:</strong> {Object.values(data?.routinesMap || {}).join(', ')}</p>
-            <p><strong>Frequencies mapped:</strong> {Object.values(data?.routinesMap || {}).join(', ')}</p>
-            <p> Se 'rawTasks' estiver vazio, o Supabase não devolveu tarefas nesse período.</p>
-            <p> Se 'rawTasks' for {'>'} 0, a falha está no filtro routinesMap ou Unit ID.</p>
-          </div>
+        <div className="p-6 flex flex-col items-center justify-center text-xs text-muted-foreground text-center gap-1.5 min-h-[140px]">
+          <ClipboardList className="w-8 h-8 text-muted-foreground/30 mb-1" />
+          <p className="font-semibold text-foreground/80">Sem tarefas para este painel</p>
+          <p className="text-[11px] text-muted-foreground/70 max-w-[240px]">Não foram encontradas tarefas ativas correspondentes aos filtros selecionados.</p>
         </div>
       );
     }
@@ -754,36 +748,34 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
           <Icon className="w-4 h-4 text-primary" />
           <span className="font-medium text-sm truncate">{panel.title}</span>
 
-          {isAdmin && (
-            <div className="flex items-center gap-1 ml-auto">
-              <PanelFormDialog
-                panel={panel}
-                trigger={
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
-                    <Settings className="w-3 h-3" />
-                  </Button>
-                }
-              />
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Remover painel?</AlertDialogTitle>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
-                      Remover
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
+          <div className="flex items-center gap-1 ml-auto">
+            <PanelFormDialog
+              panel={panel}
+              trigger={
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Settings className="w-3 h-3" />
+                </Button>
+              }
+            />
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remover painel?</AlertDialogTitle>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
+                    Remover
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
         <TaskTrackerPanel
           sectorIds={
@@ -817,40 +809,38 @@ export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
           <span className="font-medium text-sm truncate">{panel.title}</span>
           <span className="text-[10px] text-muted-foreground ml-auto">{data?.results?.length || 0}</span>
 
-          {isAdmin && (
-            <div className="flex items-center gap-1 ml-2">
-              <PanelFormDialog
-                panel={panel}
-                trigger={
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
-                    <Settings className="w-3 h-3" />
-                  </Button>
-                }
-              />
+          <div className="flex items-center gap-1 ml-2">
+            <PanelFormDialog
+              panel={panel}
+              trigger={
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Settings className="w-3 h-3" />
+                </Button>
+              }
+            />
 
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Remover painel?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Esta ação não pode ser desfeita. O painel "{panel.title}" será removido permanentemente.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
-                      Remover
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive">
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remover painel?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. O painel "{panel.title}" será removido permanentemente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deletePanel.mutate(panel.id)}>
+                    Remover
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         <div className="overflow-auto flex-1">
