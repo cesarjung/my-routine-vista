@@ -89,8 +89,8 @@ export const useRoutines = (unitId?: string) => {
       }
 
       const routinesWithStatus = routines.map(r => {
-        const hasActivePeriods = Array.isArray(r.routine_periods) && r.routine_periods.some((p: any) => p.is_active !== false);
-        const isTrulyInactive = r.is_active === false && !hasActivePeriods;
+        const hasActivePeriods = Array.isArray(r.routine_periods) && r.routine_periods.some((p: any) => p.is_active === true);
+        const isTrulyInactive = r.is_active !== true || !hasActivePeriods;
 
         return {
           ...r,
@@ -118,13 +118,18 @@ export const useDeleteRoutines = () => {
       for (let i = 0; i < routineIds.length; i += chunkSize) {
         const chunk = routineIds.slice(i, i + chunkSize);
         
-        // 1. Soft-delete routines
+        // 1. Soft-delete routines and their periods
         const { error: updateError } = await supabase
           .from('routines')
           .update({ is_active: false })
           .in('id', chunk);
 
         if (updateError) throw updateError;
+        
+        await supabase
+          .from('routine_periods')
+          .update({ is_active: false })
+          .in('routine_id', chunk);
         
         // 2. Cascade delete all pending future tasks for these routines
         const { error: tasksError } = await supabase

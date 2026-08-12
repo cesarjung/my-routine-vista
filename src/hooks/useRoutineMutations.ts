@@ -554,13 +554,18 @@ export const useDeleteRoutine = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // 1. Soft-delete the routine
+      // 1. Soft-delete the routine and its periods
       const { error } = await supabase
         .from('routines')
         .update({ is_active: false })
         .eq('id', id);
 
       if (error) throw error;
+
+      await supabase
+        .from('routine_periods')
+        .update({ is_active: false })
+        .eq('routine_id', id);
 
       // 2. Cascade delete all pending future tasks for this routine so they don't haunt the dashboards
       await supabase

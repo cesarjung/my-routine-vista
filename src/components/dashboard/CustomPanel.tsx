@@ -81,10 +81,10 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
   return useQuery({
     queryKey: ['custom-panel-data', panel.id, filters, dashboardSectorId],
     queryFn: async () => {
-      // 1. Fetch active and past routines to build comprehensive lookup maps
+      // 1. Fetch active routines to build lookup maps
       const { data: allRoutines } = await supabase
         .from('routines')
-        .select('id, frequency, title, sector_id, is_active');
+        .select('id, frequency, title, sector_id, is_active, routine_periods(id, is_active)');
 
       const normalizeFreq = (f?: string): string => {
         if (!f) return 'diaria';
@@ -96,7 +96,13 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         return norm;
       };
 
-      const activeRoutines = allRoutines || [];
+      const activeRoutines = (allRoutines || []).filter(r => {
+        if (r.is_active !== true) return false;
+        const hasActive = Array.isArray(r.routine_periods) && r.routine_periods.some((p: any) => p.is_active === true);
+        if (!hasActive) return false;
+        return true;
+      });
+      const activeRoutineIds = new Set(activeRoutines.map(r => r.id));
       const routinesMap: Record<string, string> = {};
       const routineTitlesMap: Record<string, string> = {};
 
@@ -167,8 +173,9 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
 
       // Fetch all task rows bypassing the 1000 row Supabase API default:
       tasksQuery = tasksQuery.limit(3000); // 3000 is a safe threshold for browser memory per panel.
-      const { data: rawTasks, error: fetchError } = await tasksQuery;
+      const { data: rawTasksData, error: fetchError } = await tasksQuery;
       if (fetchError) throw fetchError;
+      const rawTasks = (rawTasksData || []).filter(t => !t.routine_id || activeRoutineIds.has(t.routine_id));
 
       // Helper for robust frequency resolution (falls back gracefully if routinesMap is restricted)
       const getTaskFrequency = (t: any) => {
@@ -183,12 +190,30 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         return filters.task_frequency?.[0] || 'diaria';
       };
 
-      // Filter tasks by frequency if specified
+      const titleFilters = Array.isArray(filters.title_filter)
+        ? filters.title_filter
+        : typeof filters.title_filter === 'string' && (filters.title_filter as string).trim() !== ''
+          ? [filters.title_filter]
+          : [];
+
+      // Filter tasks by frequency and title filter if specified
       const tasks = rawTasks?.filter(t => {
-        if (!filters.task_frequency || filters.task_frequency.length === 0) return true;
-        const freq = getTaskFrequency(t);
-        if (!freq) return false;
-        return filters.task_frequency.includes(freq as any);
+        if (filters.task_frequency && filters.task_frequency.length > 0) {
+          const freq = getTaskFrequency(t);
+          if (!freq || !filters.task_frequency.includes(freq as any)) return false;
+        }
+
+        if (titleFilters.length > 0) {
+          const routineTitle = t.routine_id ? routineTitlesMap[t.routine_id] : null;
+          const taskTitle = t.title;
+          const matchesTitle = titleFilters.some((tf: string) => 
+            (routineTitle && routineTitle.toLowerCase() === tf.toLowerCase()) || 
+            (taskTitle && taskTitle.toLowerCase() === tf.toLowerCase())
+          );
+          if (!matchesTitle) return false;
+        }
+
+        return true;
       });
 
       // Group data based on group_by
@@ -270,8 +295,10 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           .select('id, status, sector_id, routine_id, created_at, due_date')
           .not('sector_id', 'is', null);
 
+        const validTasksWithSector = (tasksWithSector || []).filter(t => !t.routine_id || activeRoutineIds.has(t.routine_id));
+
         results = (sectors || []).map(sector => {
-          const sectorTasks = tasksWithSector?.filter(t => t.sector_id === sector.id) || [];
+          const sectorTasks = validTasksWithSector.filter(t => t.sector_id === sector.id);
           const frequencies: Record<string, StatusData> = {};
 
           FREQUENCIES.forEach(f => {
@@ -301,7 +328,8 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           const { data: routines } = await supabase
             .from('routines')
             .select('id, title')
-            .in('id', distinctRoutineIds as string[]);
+            .in('id', distinctRoutineIds as string[])
+            .neq('is_active', false);
 
           routines?.forEach(r => {
             routineMap.set(r.id, { id: r.id, name: r.title, tasks: [] });
@@ -364,7 +392,8 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           const { data: routines } = await supabase
             .from('routines')
             .select('id, title')
-            .in('id', distinctRoutineIds as string[]);
+            .in('id', distinctRoutineIds as string[])
+            .neq('is_active', false);
 
           routines?.forEach(r => {
             routineMap.set(r.id, { id: r.id, name: r.title, units: {} });

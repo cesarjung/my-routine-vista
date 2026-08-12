@@ -174,6 +174,58 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger, dashboardConte
     setGroupBy('unit');
   };
 
+  const normalizeFreq = (f?: string): string => {
+    if (!f) return 'diaria';
+    const norm = f.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (norm.startsWith('diar')) return 'diaria';
+    if (norm.startsWith('seman')) return 'semanal';
+    if (norm.startsWith('quinz')) return 'quinzenal';
+    if (norm.startsWith('mens')) return 'mensal';
+    return norm;
+  };
+
+  const availableRoutines = (routines || []).filter(r => {
+    // 1. Exclude soft-deleted or inactive routines (must strictly be is_active === true)
+    if (r.is_active !== true || r.status === 'inativa') return false;
+
+    // 2. Determine target frequencies from checkboxes OR infer from panel title
+    let targetFrequencies = selectedFrequencies.map(f => normalizeFreq(f));
+    const effectiveTitle = title || panel?.title || '';
+    if (targetFrequencies.length === 0 && effectiveTitle) {
+      const normTitle = effectiveTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (normTitle.includes('diaria') || normTitle.includes('diario')) {
+        targetFrequencies = ['diaria'];
+      } else if (normTitle.includes('semanal') || normTitle.includes('semana')) {
+        targetFrequencies = ['semanal'];
+      } else if (normTitle.includes('quinzenal') || normTitle.includes('quinzena')) {
+        targetFrequencies = ['quinzenal'];
+      } else if (normTitle.includes('mensal') || normTitle.includes('mes')) {
+        targetFrequencies = ['mensal'];
+      }
+    }
+
+    if (targetFrequencies.length > 0) {
+      const normRFreq = normalizeFreq(r.frequency);
+      if (!targetFrequencies.includes(normRFreq)) return false;
+    }
+
+    // 3. If sector filter is selected, match sector
+    if (sectorIds.length > 0) {
+      const validSectors = sectorIds.filter(id => id && id.toLowerCase() !== 'todos os setores' && id.toLowerCase() !== 'selecionar todos');
+      if (validSectors.length > 0 && r.sector_id && !validSectors.includes(r.sector_id)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const routineOptions = Array.from(new Set(availableRoutines.map(r => r.title)))
+    .sort()
+    .map(title => ({ label: title, value: title }));
+
+  const activeSelectedTitles = selectedTitles.filter(t => routineOptions.some(o => o.value === t));
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -203,13 +255,8 @@ export const PanelFormDialog = ({ panel, panelCount = 0, trigger, dashboardConte
           <div className="space-y-2">
             <Label>Filtrar por Nome da Tarefa (Rotina)</Label>
             <MultiSelect
-              options={
-                Array.from(new Set(routines?.map(r => r.title) || [])).sort().map(title => ({
-                  label: title,
-                  value: title
-                }))
-              }
-              selected={selectedTitles}
+              options={routineOptions}
+              selected={activeSelectedTitles}
               onChange={setSelectedTitles}
               placeholder="Todas as tarefas"
               searchPlaceholder="Buscar tarefa..."

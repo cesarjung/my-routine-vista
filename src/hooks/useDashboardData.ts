@@ -301,28 +301,30 @@ export const useOverallStats = (sectorIds?: string[]) => {
     queryFn: async () => {
       let routineQuery = supabase
         .from('routines')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact' })
         .eq('is_active', true);
 
       if (sectorIds && sectorIds.length > 0) {
         routineQuery = routineQuery.in('sector_id', sectorIds);
       }
 
-      const { count: routineCount } = await routineQuery;
+      const { data: activeRoutines, count: routineCount } = await routineQuery;
+      const activeRoutineIds = new Set(activeRoutines?.map(r => r.id));
 
       let tasksQuery = supabase
         .from('tasks')
-        .select('status');
+        .select('status, routine_id');
 
       if (sectorIds && sectorIds.length > 0) {
         tasksQuery = tasksQuery.in('sector_id', sectorIds);
       }
 
       const { data: tasks } = await tasksQuery;
+      const validTasks = tasks?.filter(t => !t.routine_id || activeRoutineIds.has(t.routine_id)) || [];
 
-      const total = tasks?.length || 0;
-      const completed = tasks?.filter(t => t.status === 'concluida').length || 0;
-      const pending = tasks?.filter(t => t.status !== 'concluida').length || 0;
+      const total = validTasks.length;
+      const completed = validTasks.filter(t => t.status === 'concluida').length;
+      const pending = validTasks.filter(t => t.status !== 'concluida').length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
       return {
