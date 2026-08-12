@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Building2, Users, Loader2, CheckCircle2, Maximize2, X, ExternalLink } from 'lucide-react';
+import { Building2, Users, Loader2, CheckCircle2, Maximize2, X, ExternalLink, Trash2 } from 'lucide-react';
 import { useOverallStats } from '@/hooks/useDashboardData';
-import { useDashboardPanels } from '@/hooks/useDashboardPanels';
+import { useDashboardPanels, useDeleteAllDashboardPanels } from '@/hooks/useDashboardPanels';
 import { useTasks } from '@/hooks/useTasks';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,6 +34,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
@@ -325,12 +336,12 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       localStorage.setItem('dashboard_global_sector_filters', JSON.stringify(selectedSectorIds));
     }
   }, [selectedSectorIds, forcedSectorId]);
-
   const { data: sectors } = useSectors();
   const { data: statsData, isLoading } = useOverallStats(selectedSectorIds);
   const unitStatus = statsData?.unitStatus || [];
   const responsibleStatus = statsData?.responsibleStatus || [];
   const { data: customPanels } = useDashboardPanels();
+  const deleteAllPanels = useDeleteAllDashboardPanels();
   const { isAdmin } = useIsAdmin();
 
   const overallPercentage = statsData?.percentage || 0;
@@ -557,7 +568,35 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
             </Tooltip>
           </TooltipProvider>
 
-          {isAdmin && <PanelFormDialog panelCount={filteredPanels?.length || 0} dashboardContext={contextIdentifier} />}
+          <PanelFormDialog panelCount={filteredPanels?.length || 0} dashboardContext={contextIdentifier} />
+
+          {filteredPanels && filteredPanels.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10 font-normal">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Zerar Dashboard
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Zerar todos os painéis do Dashboard?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação removerá todos os {filteredPanels.length} painéis do seu dashboard para que você possa criar novos painéis do zero.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => deleteAllPanels.mutate()}
+                  >
+                    Sim, Zerar Dashboard
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
 
           {!forcedSectorId && (
             <DropdownMenu>

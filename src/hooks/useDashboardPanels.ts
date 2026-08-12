@@ -152,6 +152,28 @@ export const useDeleteDashboardPanel = () => {
   });
 };
 
+export const useDeleteAllDashboardPanels = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('dashboard_panels')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-panels'] });
+      toast.success('Todos os painéis foram removidos. Dashboard zerado!');
+    },
+    onError: (error) => {
+      toast.error('Erro ao zerar dashboard: ' + error.message);
+    }
+  });
+};
+
 export const useReorderDashboardPanels = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
