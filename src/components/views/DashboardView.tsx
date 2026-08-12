@@ -418,10 +418,10 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
                     </td>
                     {FREQUENCIES.map(f => (
                       <td key={f} className="p-1 text-center">
-                        <StatusBadge 
-                          data={unit.frequencies[f]} 
+                        <StatusBadge
+                          data={unit.frequencies[f]}
                           frequency={f}
-                          onClick={unit.frequencies[f].total > 0 
+                          onClick={unit.frequencies[f].total > 0
                             ? () => openTasksDialog(unit.id, unit.name, 'unit', f)
                             : undefined
                           }
@@ -457,10 +457,10 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
                     </td>
                     {FREQUENCIES.map(f => (
                       <td key={f} className="p-1 text-center">
-                        <StatusBadge 
-                          data={person.frequencies[f]} 
+                        <StatusBadge
+                          data={person.frequencies[f]}
                           frequency={f}
-                          onClick={person.frequencies[f].total > 0 
+                          onClick={person.frequencies[f].total > 0
                             ? () => openTasksDialog(person.id, person.name, 'responsible', f)
                             : undefined
                           }
@@ -536,8 +536,8 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       <div className="flex items-center justify-between gap-4 mb-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold tracking-tight text-foreground">Dashboard</h1>
-          <Badge variant="outline" className="text-[10px] uppercase font-mono px-1.5 py-0">
-            {contextIdentifier}
+          <Badge variant="outline" className="text-[10px] uppercase font-medium px-2 py-0.5 tracking-wider bg-secondary/30">
+            {contextLabel}
           </Badge>
         </div>
 
