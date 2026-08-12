@@ -3,6 +3,7 @@ import { Building2, Users, Loader2, CheckCircle2, Maximize2, X, ExternalLink, Tr
 import { useOverallStats } from '@/hooks/useDashboardData';
 import { useDashboardPanels, useDeleteAllDashboardPanels } from '@/hooks/useDashboardPanels';
 import { useTasks } from '@/hooks/useTasks';
+import { useSectors } from '@/hooks/useSectors';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -312,6 +313,9 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
 
   // Track the layout context based strictly on forcedSectorId or 'global'
   const contextIdentifier = forcedSectorId || 'global';
+  const { data: sectors } = useSectors();
+  const currentSector = sectors?.find(s => s.id === forcedSectorId);
+  const contextLabel = forcedSectorId ? (currentSector?.name || 'Setor') : 'GLOBAL';
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState('public');
