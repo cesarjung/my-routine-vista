@@ -65,6 +65,106 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { MaterialPontoBudget } from '@/hooks/usePcpPlanejamentoData';
+
+// ─── PontosMultiSelect — Popover compacto de seleção múltipla de pontos ───
+interface PontosMultiSelectProps {
+  pontos: string[];
+  selected: string[];
+  orcamentoPorPontoMap: Map<string, MaterialPontoBudget[]>;
+  onToggle: (p: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+}
+
+const PontosMultiSelect = ({
+  pontos,
+  selected,
+  orcamentoPorPontoMap,
+  onToggle,
+  onSelectAll,
+  onDeselectAll,
+}: PontosMultiSelectProps) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = pontos.filter(p => p.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="h-8 text-xs font-semibold px-3 bg-background min-w-[200px] justify-between">
+          <span className="flex items-center gap-1.5">
+            <PackageCheck className="w-3.5 h-3.5 text-primary" />
+            {selected.length === 0
+              ? 'Selecionar Pontos...'
+              : `${selected.length} de ${pontos.length} pontos`}
+          </span>
+          <ChevronDown className="w-3 h-3 opacity-50 ml-2 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0" align="start">
+        {/* Header com busca */}
+        <div className="p-2 border-b border-border">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+            <input
+              placeholder="Buscar ponto (P1, V2...)..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full h-8 pl-8 pr-2 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* Ações rápidas */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-border text-[10px]">
+          <button onClick={onSelectAll} className="text-primary hover:underline font-semibold">
+            Selecionar todos ({pontos.length})
+          </button>
+          <button onClick={onDeselectAll} className="text-muted-foreground hover:underline">
+            Limpar
+          </button>
+        </div>
+
+        {/* Lista de pontos com scroll */}
+        <div className="overflow-y-auto max-h-[260px] p-1.5 space-y-0.5
+          [&::-webkit-scrollbar]:w-1.5
+          [&::-webkit-scrollbar-thumb]:bg-border
+          [&::-webkit-scrollbar-thumb]:rounded-full">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-center text-muted-foreground py-4">Nenhum ponto encontrado</p>
+          ) : (
+            filtered.map(p => {
+              const isChecked = selected.includes(p);
+              const count = (orcamentoPorPontoMap.get(p) || []).length;
+              return (
+                <div
+                  key={p}
+                  onClick={() => onToggle(p)}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-xs ${
+                    isChecked ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-accent text-foreground'
+                  }`}
+                >
+                  <Checkbox checked={isChecked} onCheckedChange={() => onToggle(p)} className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-mono font-bold">{p}</span>
+                  <span className="text-[10px] text-muted-foreground ml-auto">{count} ativ.</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer com contador */}
+        <div className="px-3 py-2 border-t border-border text-[10px] text-muted-foreground flex justify-between">
+          <span>{selected.length} selecionados</span>
+          <button onClick={() => setOpen(false)} className="text-primary hover:underline font-semibold">Confirmar</button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 export const PcpPlanejamentoView = () => {
   // State
@@ -1277,84 +1377,65 @@ export const PcpPlanejamentoView = () => {
                 </div>
               </div>
 
-              {/* C6 — SELEÇÃO E MARCAÇÃO DOS PONTOS PREVISTOS PARA ESTA OBRA (PROG_TPM) */}
+              {/* C6 — SELEÇÃO DOS PONTOS: Popover multi-select compacto */}
               <div className="pt-2.5 border-t border-primary/20 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <PackageCheck className="w-4 h-4 text-primary" />
-                    C6 — Marque abaixo os Pontos que vai trabalhar hoje nesta Obra:
+                    C6 — Pontos para trabalhar hoje:
                   </span>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleSelectAllPontosDaObra}
-                      className="h-6 text-[11px] px-2 text-primary hover:underline"
-                    >
-                      <CheckSquare className="w-3 h-3 mr-1" /> Marcar Todos
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleDeselectAllPontos}
-                      className="h-6 text-[11px] px-2 text-muted-foreground hover:underline"
-                    >
-                      <Square className="w-3 h-3 mr-1" /> Desmarcar
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Loading state for points query */}
-                {orcamentoPontosQuery.isLoading ? (
-                  <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" /> Carregando pontos orçados da obra {selectedObra.projeto}...
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    {pontosDisponiveisDoProjeto.length > 0 ? (
-                      pontosDisponiveisDoProjeto.map(pLabel => {
-                        const isSelectedPonto = selectedPontosLabels.includes(pLabel);
-                        const itemsCount = (orcamentoPorPontoMap.get(pLabel) || []).length;
-                        return (
-                          <button
-                            key={pLabel}
-                            onClick={() => handleTogglePontoLabel(pLabel)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-                              isSelectedPonto
-                                ? 'bg-primary text-primary-foreground border-primary shadow-sm scale-102'
-                                : 'bg-card hover:bg-accent text-muted-foreground border-border/80'
-                            }`}
-                          >
-                            <Checkbox checked={isSelectedPonto} onCheckedChange={() => handleTogglePontoLabel(pLabel)} className="h-3.5 w-3.5" />
-                            <span>{pLabel}</span>
-                            <span className="text-[10px] opacity-75">({itemsCount} {itemsCount === 1 ? 'atividade' : 'atividades'})</span>
-                          </button>
-                        );
-                      })
+                  {/* Popover multi-select de Pontos */}
+                  <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
+                    {orcamentoPontosQuery.isLoading ? (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando pontos...
+                      </div>
                     ) : (
-                      <span className="text-xs text-muted-foreground italic">
-                        Nenhum ponto orçado predefinido na base. Adicione um ponto manualmente ao lado.
-                      </span>
+                      <PontosMultiSelect
+                        pontos={pontosDisponiveisDoProjeto}
+                        selected={selectedPontosLabels}
+                        orcamentoPorPontoMap={orcamentoPorPontoMap}
+                        onToggle={handleTogglePontoLabel}
+                        onSelectAll={handleSelectAllPontosDaObra}
+                        onDeselectAll={handleDeselectAllPontos}
+                      />
                     )}
 
-                    {/* Input rápido para adicionar ponto customizado */}
-                    <div className="flex items-center gap-1 ml-auto pt-1 sm:pt-0">
+                    {/* Input rápido para ponto customizado */}
+                    <div className="flex items-center gap-1">
                       <Input
-                        placeholder="Outro Ponto (ex: P99)..."
+                        placeholder="Outro Ponto (P99)..."
                         value={newCustomPontoInput}
                         onChange={e => setNewCustomPontoInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleAddCustomPontoLabel()}
-                        className="h-8 text-xs w-[140px] font-mono"
+                        className="h-8 text-xs w-[130px] font-mono"
                       />
                       <Button size="sm" variant="outline" onClick={handleAddCustomPontoLabel} className="h-8 text-xs px-2.5">
-                        <Plus className="w-3.5 h-3.5 mr-1" /> Ponto
+                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
                       </Button>
                     </div>
                   </div>
+                </div>
+
+                {/* Badges dos pontos selecionados */}
+                {selectedPontosLabels.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedPontosLabels.map(p => (
+                      <Badge
+                        key={p}
+                        variant="secondary"
+                        className="font-mono text-[11px] px-2 py-0.5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        onClick={() => handleTogglePontoLabel(p)}
+                        title="Clique para remover"
+                      >
+                        {p} ✕
+                      </Badge>
+                    ))}
+                  </div>
                 )}
               </div>
+
             </div>
           ) : (
             <div className="p-4 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 flex items-center gap-3 text-amber-600 text-xs font-medium">
