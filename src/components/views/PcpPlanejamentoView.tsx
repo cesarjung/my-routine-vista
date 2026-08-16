@@ -1751,52 +1751,7 @@ export const PcpPlanejamentoView = () => {
             </CardContent>
           </Card>
 
-          {/* Programações Gravadas Recentes */}
-          <Card className="border border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-primary" />
-                Programações na Plan_Principal ({programacoesAtivas.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-xl border border-border overflow-hidden max-h-[220px] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 text-[11px]">
-                      <TableHead>Data</TableHead>
-                      <TableHead>Equipe</TableHead>
-                      <TableHead>Projeto</TableHead>
-                      <TableHead>Município</TableHead>
-                      <TableHead>Detalhes dos Pontos (Coluna O)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="text-xs">
-                    {programacoesAtivas.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-xs">
-                          Nenhuma programação cadastrada na Plan_Principal para esta unidade.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      programacoesAtivas.slice(-15).reverse().map((p, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-mono text-muted-foreground">{p.data || '-'}</TableCell>
-                          <TableCell className="font-mono font-semibold">{p.equipe || '-'}</TableCell>
-                          <TableCell className="font-mono font-bold text-primary">{p.projeto || '-'}</TableCell>
-                          <TableCell>{p.municipio || '-'}</TableCell>
-                          <TableCell className="font-mono text-[11px] truncate max-w-[300px]" title={p.detalhesPontos}>
-                            {p.detalhesPontos || '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        
       </div>
     </div>
   );
