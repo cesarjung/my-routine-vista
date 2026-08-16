@@ -717,6 +717,116 @@ def sync_materiais_reservas(gc, env_vars):
     except Exception as e:
         logging.error(f"Erro ao sincronizar reservas/formulários de materiais: {e}")
 
+def sync_atividades_por_ponto(gc, env_vars):
+    """
+    Sincroniza a aba ATIVIDADES_POR_PONTO_BASE da planilha centralizada
+    (ID: 1Ipp454Clq0lKik8G5LjMMmV-8eA0R6if4FGG555K1j8) para a tabela
+    atividades_por_ponto no Supabase.
+    
+    Colunas da aba:
+      A=Projeto, B=Ponto Obra, C=Etapa, D=Atividade (código),
+      E=Descrição, F=Unidade medida, G=Quantidade, H=Orçamentista,
+      I=Com Mascara, J=Unidade da obra, K=Com ponto e Máscara, L=Atualização
+    """
+    supabase_url = env_vars.get('VITE_SUPABASE_URL')
+    supabase_key = env_vars.get('VITE_SUPABASE_PUBLISHABLE_KEY')
+    if not supabase_url or not supabase_key:
+        logging.error("Supabase credentials not found for atividades sync.")
+        return
+
+    SHEET_ID = "1Ipp454Clq0lKik8G5LjMMmV-8eA0R6if4FGG555K1j8"
+    TAB_NAME = "ATIVIDADES_POR_PONTO_BASE"
+
+    headers_supa = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        logging.info(f"[ATIVIDADES] Abrindo planilha centralizada {SHEET_ID}...")
+        sh = gc.open_by_key(SHEET_ID)
+        ws = sh.worksheet(TAB_NAME)
+        logging.info(f"[ATIVIDADES] Lendo aba '{TAB_NAME}' (~537k linhas)... isso pode levar alguns minutos.")
+        raw_data = ws.get_all_values()
+
+        if not raw_data or len(raw_data) < 2:
+            logging.warning("[ATIVIDADES] Aba vazia ou sem dados.")
+            return
+
+        logging.info(f"[ATIVIDADES] {len(raw_data) - 1} linhas lidas. Processando...")
+
+        # Mapeamento de colunas (baseado na estrutura confirmada):
+        # A=0=Projeto, B=1=PontoObra, C=2=Etapa, D=3=CodAtividade,
+        # E=4=Descricao, F=5=UnidadeMedida, G=6=Quantidade, H=7=Orcamentista,
+        # I=8=ComMascara, J=9=UnidadeObra, K=10=ComPontoMascara
+        COL = {
+            "projeto": 0, "ponto_obra": 1, "etapa": 2, "codigo_atividade": 3,
+            "descricao": 4, "unidade_medida": 5, "quantidade": 6, "orcamentista": 7,
+            "com_mascara": 8, "unidade_obra": 9, "com_ponto_mascara": 10
+        }
+
+        records = []
+        for row in raw_data[1:]:
+            if not row or not any(row):
+                continue
+
+            def safe_get(col_idx):
+                return row[col_idx].strip() if col_idx < len(row) else ""
+
+            com_mascara = safe_get(COL["com_mascara"])
+            if not com_mascara:
+                continue
+
+            qty_str = safe_get(COL["quantidade"])
+            try:
+                qty = float(qty_str.replace(",", ".")) if qty_str else 1.0
+            except (ValueError, AttributeError):
+                qty = 1.0
+
+            records.append({
+                "projeto": safe_get(COL["projeto"]),
+                "ponto_obra": safe_get(COL["ponto_obra"]),
+                "etapa": safe_get(COL["etapa"]),
+                "codigo_atividade": safe_get(COL["codigo_atividade"]),
+                "descricao": safe_get(COL["descricao"]),
+                "unidade_medida": safe_get(COL["unidade_medida"]) or "UND",
+                "quantidade": qty,
+                "orcamentista": safe_get(COL["orcamentista"]),
+                "com_mascara": com_mascara,
+                "unidade_obra": safe_get(COL["unidade_obra"]),
+                "com_ponto_mascara": safe_get(COL["com_ponto_mascara"]),
+            })
+
+        logging.info(f"[ATIVIDADES] {len(records)} registros válidos. Sincronizando em lotes...")
+
+        # Limpa todos os dados antigos primeiro (substituição total)
+        logging.info("[ATIVIDADES] Limpando tabela atividades_por_ponto...")
+        del_url = f"{supabase_url}/rest/v1/atividades_por_ponto?id=gt.0"
+        requests.delete(del_url, headers=headers_supa, timeout=60)
+
+        # Insere em lotes de 2000
+        chunk_size = 2000
+        insert_url = f"{supabase_url}/rest/v1/atividades_por_ponto"
+        total = len(records)
+
+        for i in range(0, total, chunk_size):
+            chunk = records[i:i + chunk_size]
+            res = requests.post(insert_url, headers=headers_supa, json=chunk, timeout=60)
+            if res.status_code not in [200, 201, 204]:
+                logging.error(f"[ATIVIDADES] Falha no bloco {i // chunk_size}: {res.status_code} - {res.text[:200]}")
+                # Sub-lotes menores em caso de falha
+                for j in range(0, len(chunk), 500):
+                    requests.post(insert_url, headers=headers_supa, json=chunk[j:j + 500], timeout=60)
+            else:
+                if i == 0 or (i + chunk_size) >= total or i % 50000 == 0:
+                    logging.info(f"[ATIVIDADES] Sincronizados {min(i + chunk_size, total)}/{total} registros...")
+
+        logging.info(f"[ATIVIDADES] Sincronização concluída! {total} atividades salvas no Supabase.")
+
+    except Exception as e:
+        logging.error(f"[ATIVIDADES] Erro geral na sincronização de atividades: {e}")
+
 def run_sync_cycle():
     logging.info("--- Iniciando ciclo de sincronizacao ---")
     env_vars = load_env()
@@ -759,6 +869,7 @@ def run_sync_cycle():
         sync_materiais_por_ponto(gc, env_vars)
         sync_estoque_fisico(gc, env_vars)
         sync_materiais_reservas(gc, env_vars)
+        sync_atividades_por_ponto(gc, env_vars)  # Base centralizada de atividades
     except Exception as e:
         logging.error(f"Erro no sync de materiais, regras, estoque e reservas: {e}")
         
