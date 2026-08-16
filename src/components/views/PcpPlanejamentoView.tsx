@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Building2,
   Calendar as CalendarIcon,
@@ -122,6 +122,39 @@ export const PcpPlanejamentoView = () => {
 
   // ZOOM — igual padrão das outras seções do Módulo Planejamento
   const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_pcpplanejamento', 1);
+
+  // RESIZE da lista de obras (drag-to-resize na borda inferior)
+  const [obrasListHeight, setObrasListHeight] = useState<number>(350);
+  const isDraggingRef = useRef<boolean>(false);
+  const dragStartYRef = useRef<number>(0);
+  const dragStartHeightRef = useRef<number>(350);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    dragStartYRef.current = e.clientY;
+    dragStartHeightRef.current = obrasListHeight;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = ev.clientY - dragStartYRef.current;
+      const newH = Math.max(150, Math.min(700, dragStartHeightRef.current + delta));
+      setObrasListHeight(newH);
+    };
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [obrasListHeight]);
 
   // Formatted date string for submission & display
   const dataProgramacaoFormatada = useMemo(() => {
@@ -779,15 +812,18 @@ export const PcpPlanejamentoView = () => {
               </div>
             </CardHeader>
 
-            {/* Lista com pega (scrollbar visível) — altura fixa para aparecer a barra */}
+            {/* Lista com pega drag-to-resize — barra de scroll sempre visível */}
             <CardContent className="p-0">
-              <div className="overflow-y-scroll max-h-[380px] space-y-2.5 px-4 pb-4 pt-1
-                [&::-webkit-scrollbar]:w-2
-                [&::-webkit-scrollbar-track]:bg-muted/30
-                [&::-webkit-scrollbar-track]:rounded-full
-                [&::-webkit-scrollbar-thumb]:bg-border
-                [&::-webkit-scrollbar-thumb]:rounded-full
-                [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
+              <div
+                className="overflow-y-scroll space-y-2.5 px-4 pb-4 pt-1
+                  [&::-webkit-scrollbar]:w-2
+                  [&::-webkit-scrollbar-track]:bg-muted/30
+                  [&::-webkit-scrollbar-track]:rounded-full
+                  [&::-webkit-scrollbar-thumb]:bg-border
+                  [&::-webkit-scrollbar-thumb]:rounded-full
+                  [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40"
+                style={{ height: obrasListHeight }}
+              >
               {rawCacheQuery.isLoading ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground text-xs gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" /> Carregando Carteira_Planejador...
@@ -855,6 +891,20 @@ export const PcpPlanejamentoView = () => {
                   );
                 })
               )}
+              </div>
+
+              {/* Handle de redimensionamento (drag) — borda inferior do card */}
+              <div
+                onMouseDown={handleResizeMouseDown}
+                className="flex items-center justify-center h-3 w-full cursor-ns-resize group border-t border-border/60 hover:border-primary/40 transition-colors"
+                title="Arraste para redimensionar a lista"
+              >
+                {/* Grip dots */}
+                <div className="flex gap-0.5 items-center opacity-40 group-hover:opacity-80 transition-opacity">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="w-0.5 h-0.5 rounded-full bg-muted-foreground" />
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
