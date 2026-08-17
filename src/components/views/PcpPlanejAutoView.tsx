@@ -253,7 +253,12 @@ export const PcpPlanejAutoView = () => {
   }, [selectedObraId]);
 
   // Reset obra ao mudar unidade
+  const isFirstRenderUnidade = useRef(true);
   useEffect(() => {
+    if (isFirstRenderUnidade.current) {
+      isFirstRenderUnidade.current = false;
+      return;
+    }
     setSelectedObraId('');
     setSelectedMesFilter('TODOS');
     setSelectedMunicipioFilter('TODOS');
