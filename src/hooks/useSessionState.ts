@@ -1,16 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-// In-memory store that resets on page reload but persists across navigation
-const globalState: Record<string, any> = {};
+// In-memory listeners for cross-component sync without reloading
 const listeners: Record<string, Set<(value: any) => void>> = {};
 
 export function useSessionState<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  // Initialize global state for this key if not present
-  if (!(key in globalState)) {
-    globalState[key] = initialValue;
-  }
-
-  const [state, setState] = useState<T>(globalState[key]);
+  // Read from sessionStorage on mount
+  const [state, setState] = useState<T>(() => {
+    try {
+      const item = window.sessionStorage.getItem(key);
+      if (item !== null) {
+        return JSON.parse(item);
+      }
+    } catch (error) {
+      console.warn(`Error reading sessionStorage key "${key}":`, error);
+    }
+    return initialValue;
+  });
 
   useEffect(() => {
     if (!listeners[key]) {
@@ -23,15 +28,28 @@ export function useSessionState<T>(key: string, initialValue: T): [T, React.Disp
     };
   }, [key]);
 
-  const setValue: React.Dispatch<React.SetStateAction<T>> = (value) => {
-    const valueToStore = value instanceof Function ? (value as (val: T) => T)(globalState[key]) : value;
-    globalState[key] = valueToStore;
-    
-    // Notify all listeners
-    if (listeners[key]) {
-      listeners[key].forEach(listener => listener(valueToStore));
-    }
-  };
+  const setValue: React.Dispatch<React.SetStateAction<T>> = useCallback((value) => {
+    setState((prevState) => {
+      const valueToStore = value instanceof Function ? (value as (val: T) => T)(prevState) : value;
+      
+      try {
+        window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
+      } catch (error) {
+        console.warn(`Error setting sessionStorage key "${key}":`, error);
+      }
+
+      // Notify all listeners
+      if (listeners[key]) {
+        listeners[key].forEach(listener => {
+          if (listener !== setState) {
+            listener(valueToStore);
+          }
+        });
+      }
+
+      return valueToStore;
+    });
+  }, [key]);
 
   return [state, setValue];
 }
