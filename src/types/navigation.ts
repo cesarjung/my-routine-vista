@@ -16,6 +16,8 @@ export type NavigationContext =
   | { type: 'planejamento_semanal'; section: 'carteira' }
   | { type: 'planejamento_materiais'; section: 'carteira' }
   | { type: 'planejamento_envios'; section: 'carteira' }
+  | { type: 'pcp_planejamento'; section: 'planejamento' }
+  | { type: 'pcp_planejamento_auto'; section: 'planejamento' }
   | { type: 'lancamentos_servicos' };
 
 export interface NavigationState {
@@ -74,9 +76,15 @@ export const VIEW_CONFIG = {
     label: 'Envios',
     icon: 'Truck'
   },
+  pcp_planejamento: {
+    id: 'pcp_planejamento',
+    label: 'Planejamento (PCP)',
+    icon: 'ClipboardCheck'
+  },
   lancamentos_servicos: {
     id: 'lancamentos_servicos',
     label: 'Lançamentos de Serviços',
     icon: 'Hammer'
   }
 } as const;
+

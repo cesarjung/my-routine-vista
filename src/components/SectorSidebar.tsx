@@ -23,7 +23,9 @@ import {
   StickyNote,
   Home,
   Hammer,
-  Truck
+  Truck,
+  ClipboardCheck,
+  Bot
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -111,6 +113,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
 
   const [isPlanejamentoExpanded, setIsPlanejamentoExpanded] = useState(true);
   const [isAlmoxarifadoExpanded, setIsAlmoxarifadoExpanded] = useState(true);
+  const [isPcpExpanded, setIsPcpExpanded] = useState(true);
 
   // Section Creation State
   const [activeSectorIdForSection, setActiveSectorIdForSection] = useState<string | null>(null);
@@ -766,6 +769,44 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
                 {!collapsed && <span className="text-sm whitespace-nowrap">Poste/Turno</span>}
               </button>
             )}
+          </div>
+        )}
+
+        {/* Módulo PCP Header */}
+        {!collapsed && (
+          <div className="px-3 pt-4 pb-2">
+            <button
+              onClick={() => setIsPcpExpanded(!isPcpExpanded)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-amber-400 uppercase tracking-wider transition-colors"
+            >
+              <span>Módulo PCP</span>
+              {isPcpExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+          </div>
+        )}
+        {(!collapsed ? isPcpExpanded : true) && (
+          <div className="space-y-0.5 px-3">
+            <button
+              onClick={() => onNavigate({ type: 'pcp_planejamento', section: 'planejamento' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'pcp_planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <ClipboardCheck className="w-4 h-4 shrink-0 text-amber-400" />
+              {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Planejamento</span>}
+            </button>
+
+            <button
+              onClick={() => onNavigate({ type: 'pcp_planejamento_auto', section: 'planejamento' })}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                context.type === 'pcp_planejamento_auto' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+              )}
+            >
+              <Bot className="w-4 h-4 shrink-0 text-violet-400" />
+              {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Planej. Automático</span>}
+            </button>
           </div>
         )}
 

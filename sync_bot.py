@@ -870,10 +870,71 @@ def run_sync_cycle():
         sync_estoque_fisico(gc, env_vars)
         sync_materiais_reservas(gc, env_vars)
         sync_atividades_por_ponto(gc, env_vars)  # Base centralizada de atividades
+        sync_realizadas_vistoria(gc, env_vars)   # Obs. vistoria para análise de risco por IA
     except Exception as e:
         logging.error(f"Erro no sync de materiais, regras, estoque e reservas: {e}")
         
     logging.info("--- Ciclo concluido ---")
+
+# ─── Sync da planilha Realizadas (col H = obra, col Z = obs vistoria) ────────
+REALIZADAS_SHEET_ID = '1NU3JY3fON8qiX8zOcQint07XybKNBrGBleBLyRLr2ag'
+
+def sync_realizadas_vistoria(gc, env_vars):
+    """Sync da aba Realizadas: captura obra_id (col H, idx=7) e obs vistoria (col Z, idx=25)."""
+    logging.info("[realizadas_vistoria] Iniciando sync...")
+    try:
+        spreadsheet = gc.open_by_key(REALIZADAS_SHEET_ID)
+        worksheet = spreadsheet.worksheet("Realizadas")
+        all_rows = worksheet.get_all_values()
+        
+        if len(all_rows) < 2:
+            logging.warning("[realizadas_vistoria] Planilha vazia ou sem dados.")
+            return
+
+        # Col H = index 7 (obra_id), Col Z = index 25 (observacoes_vistoria)
+        rows_to_upsert = []
+        for row in all_rows[1:]:  # Pula o cabeçalho
+            obra_id = row[7].strip() if len(row) > 7 else ''
+            obs = row[25].strip() if len(row) > 25 else ''
+            if obra_id:
+                rows_to_upsert.append({
+                    'obra_id': obra_id,
+                    'observacoes_vistoria': obs or None,
+                    'synced_at': datetime.utcnow().isoformat() + 'Z'
+                })
+
+        if not rows_to_upsert:
+            logging.info("[realizadas_vistoria] Nenhum dado para sincronizar.")
+            return
+
+        supabase_url = env_vars.get('VITE_SUPABASE_URL', '')
+        supabase_key = env_vars.get('VITE_SUPABASE_PUBLISHABLE_KEY', '')
+        headers = {
+            'apikey': supabase_key,
+            'Authorization': f'Bearer {supabase_key}',
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+        }
+
+        BATCH = 500
+        total = 0
+        for i in range(0, len(rows_to_upsert), BATCH):
+            batch = rows_to_upsert[i:i+BATCH]
+            resp = requests.post(
+                f"{supabase_url}/rest/v1/realizadas_vistoria",
+                headers=headers,
+                json=batch,
+                timeout=60
+            )
+            if resp.status_code in (200, 201):
+                total += len(batch)
+            else:
+                logging.error(f"[realizadas_vistoria] Erro batch {i}: {resp.status_code} — {resp.text[:200]}")
+
+        logging.info(f"[realizadas_vistoria] {total} registros sincronizados.")
+
+    except Exception as e:
+        logging.error(f"[realizadas_vistoria] Erro: {e}")
 
 if __name__ == "__main__":
     # Se estiver rodando no GitHub Actions, roda apenas um ciclo e encerra

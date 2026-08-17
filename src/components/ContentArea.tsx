@@ -25,6 +25,8 @@ import { PlanejamentoMateriaisView } from '@/components/views/PlanejamentoMateri
 import { PlanejamentoEnviosView } from '@/components/views/PlanejamentoEnviosView';
 import { AlojamentosView } from '@/components/views/AlojamentosView';
 import { LancamentosServicosView } from '@/components/views/LancamentosServicosView';
+import { PcpPlanejamentoView } from '@/components/views/PcpPlanejamentoView';
+import { PcpPlanejAutoView } from '@/components/views/PcpPlanejAutoView';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -191,11 +193,13 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     if (context.type === 'planejamento_semanal') return <PlanejamentoSemanalView />;
     if (context.type === 'planejamento_materiais') return <PlanejamentoMateriaisView />;
     if (context.type === 'planejamento_envios') return <PlanejamentoEnviosView />;
+    if (context.type === 'pcp_planejamento') return <PcpPlanejamentoView />;
+    if (context.type === 'pcp_planejamento_auto') return <PcpPlanejAutoView />;
     
     return null;
   };
 
-  const isPlanejamento = context.type === 'planejamento' || context.type === 'alojamentos' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal' || context.type === 'planejamento_materiais' || context.type === 'planejamento_envios';
+  const isPlanejamento = context.type === 'planejamento' || context.type === 'alojamentos' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal' || context.type === 'planejamento_materiais' || context.type === 'planejamento_envios' || context.type === 'pcp_planejamento' || context.type === 'pcp_planejamento_auto';
   const isGanttView = (context.type === 'planejamento' && context.section === 'carteira') || context.type === 'planejamento_equipes';
 
   // Sector specific view

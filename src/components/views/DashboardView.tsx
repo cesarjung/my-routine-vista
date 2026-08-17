@@ -290,8 +290,6 @@ const TasksDialog = ({ state, onClose, sectorId }: TasksDialogProps) => {
   );
 };
 
-import { useSectors } from '@/hooks/useSectors';
-
 export interface DashboardViewProps {
   forcedSectorId?: string;
   hideHeader?: boolean;
