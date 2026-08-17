@@ -210,6 +210,7 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
       };
 
       setMessages(prev => [...prev.filter(m => !m.loading), assistantMsg]);
+      return planData;
     } catch (e: any) {
       const errMsg: ChatMessage = {
         id: `error-${Date.now()}`,
@@ -218,6 +219,7 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
         timestamp: new Date(),
       };
       setMessages(prev => [...prev.filter(m => !m.loading), errMsg]);
+      return null;
     } finally {
       setIsLoading(false);
     }
