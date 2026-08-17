@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { AiPlanEditor } from './AiPlanEditor';
+import { PlanResponse } from '@/hooks/usePcpAiPlanner';
 import {
   Bot, Send, Loader2, RefreshCw, Building2, AlertTriangle, ShieldAlert,
   MapPin, Clock, Target, Zap, ChevronDown, Users, Layers, TrendingUp, Home,
@@ -16,6 +18,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { usePcpPlanejamentoData, UNIDADES_DISPONIVEIS } from '@/hooks/usePcpPlanejamentoData';
 import { useAlojamentos } from '@/hooks/useAlojamentos';
 import { usePcpAiPlanner, useVistoriaRisk, PlanoEquipe } from '@/hooks/usePcpAiPlanner';
+import type { PlanResponse as _PlanResponse } from '@/hooks/usePcpAiPlanner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -129,13 +132,19 @@ export const PcpPlanejAutoView = () => {
   // ── Zoom ──────────────────────────────────────────────────────────────────
   const [zoomLevel, setZoomLevel] = useSessionState<number>('zoom_pcp_auto', 1);
 
+  // ── AI Plans — resultado da IA para renderizar editável ────────────────────
+  const [aiPlans, setAiPlans] = useState<PlanResponse | null>(null);
+
   // ── Chat ──────────────────────────────────────────────────────────────────
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // ── Dados ─────────────────────────────────────────────────────────────────
-  const { rawCacheQuery, obras, equipesDisponiveis, mesesCarteira, statusesCarteira, orcamentoPorPontoMap } =
-    usePcpPlanejamentoData(selectedUnidadeId, selectedObraId || undefined);
+  const {
+    rawCacheQuery, obras, equipesDisponiveis, supervisoresDisponiveis, etapasDisponiveis,
+    mesesCarteira, statusesCarteira, orcamentoPorPontoMap, pontosDisponiveisDoProjeto,
+    salvarProgramacao,
+  } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId || undefined);
 
   const { alojamentos } = useAlojamentos();
   const { messages, sendMessage, isLoading, clearMessages } = usePcpAiPlanner();
@@ -236,11 +245,18 @@ export const PcpPlanejAutoView = () => {
     parametros: { jornadaHoras, metaPercent, pontoSaida },
   }), [filteredObras, equipesSelecionadas, equipesDisponiveis, alojamentosUnidade, atividadesQuery.data, orcamentoPorPontoMap, jornadaHoras, metaPercent, pontoSaida]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!chatInput.trim() || isLoading) return;
     const prompt = chatInput.trim();
     setChatInput('');
-    sendMessage(prompt, buildContext());
+    const planData = await sendMessage(prompt, buildContext());
+    if (planData && planData.planejamento?.length > 0) {
+      setAiPlans(planData);
+      // Scroll para o editor logo abaixo
+      setTimeout(() => {
+        document.getElementById('ai-plan-editor-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
   };
 
   const handleExportar = (plano: PlanoEquipe) => {
@@ -760,6 +776,33 @@ export const PcpPlanejAutoView = () => {
           </Card>
         </div>
       </div>
+
+      {/* ── Seção de Edição da Programação da IA ── */}
+      {aiPlans && aiPlans.planejamento && aiPlans.planejamento.length > 0 && (
+        <div id="ai-plan-editor-section" className="flex flex-col gap-6 pt-4 border-t border-border mt-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Bot className="w-5 h-5 text-violet-500" />
+            <h2 className="text-base font-bold text-foreground">Programação Gerada pela IA para Edição</h2>
+          </div>
+          {aiPlans.planejamento.map((plano, i) => (
+            <AiPlanEditor
+              key={`${plano.equipe}-${i}`}
+              plano={plano}
+              obra={obras.find(o => o.projeto === plano.obra) || null}
+              obraId={plano.obra}
+              unidadeId={selectedUnidadeId}
+              pontosDisponiveis={pontosDisponiveisDoProjeto}
+              orcamentoPorPontoMap={orcamentoPorPontoMap}
+              supervisoresDisponiveis={supervisoresDisponiveis}
+              equipesDisponiveis={equipesDisponiveis}
+              etapasDisponiveis={etapasDisponiveis}
+              salvarProgramacao={salvarProgramacao}
+              index={i}
+            />
+          ))}
+        </div>
+      )}
+
     </div>
   );
 };

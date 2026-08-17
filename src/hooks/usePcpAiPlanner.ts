@@ -159,7 +159,7 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
         pontoSaida: string;
       };
     }
-  ) => {
+  ): Promise<PlanResponse | null> => {
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
