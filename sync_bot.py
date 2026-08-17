@@ -909,13 +909,20 @@ def sync_realizadas_vistoria(gc, env_vars):
             logging.info("[realizadas_vistoria] Nenhum dado para sincronizar.")
             return
 
+        # De-duplica por obra_id (mantém o último registro de cada obra)
+        seen = {}
+        for r in rows_to_upsert:
+            seen[r['obra_id']] = r
+        rows_to_upsert = list(seen.values())
+        logging.info(f"[realizadas_vistoria] {len(rows_to_upsert)} obras únicas encontradas.")
+
         supabase_url = env_vars.get('VITE_SUPABASE_URL', '')
         supabase_key = env_vars.get('VITE_SUPABASE_PUBLISHABLE_KEY', '')
         headers = {
             'apikey': supabase_key,
             'Authorization': f'Bearer {supabase_key}',
             'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
+            'Prefer': 'resolution=merge-duplicates,return=minimal'
         }
 
         BATCH = 500
@@ -923,7 +930,7 @@ def sync_realizadas_vistoria(gc, env_vars):
         for i in range(0, len(rows_to_upsert), BATCH):
             batch = rows_to_upsert[i:i+BATCH]
             resp = requests.post(
-                f"{supabase_url}/rest/v1/realizadas_vistoria",
+                f"{supabase_url}/rest/v1/realizadas_vistoria?on_conflict=obra_id",
                 headers=headers,
                 json=batch,
                 timeout=60
@@ -932,6 +939,7 @@ def sync_realizadas_vistoria(gc, env_vars):
                 total += len(batch)
             else:
                 logging.error(f"[realizadas_vistoria] Erro batch {i}: {resp.status_code} — {resp.text[:200]}")
+
 
         logging.info(f"[realizadas_vistoria] {total} registros sincronizados.")
 
