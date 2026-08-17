@@ -179,13 +179,27 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('pcp-ai-planner', {
-        body: { mode: 'plan', prompt: userPrompt, context },
+      // Usa fetch direto para ter controle total sobre erros
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+
+      const resp = await fetch(`${supabaseUrl}/functions/v1/pcp-ai-planner`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({ mode: 'plan', prompt: userPrompt, context }),
       });
 
-      if (error) throw error;
+      const respBody = await resp.json();
 
-      const planData = data as PlanResponse;
+      if (!resp.ok) {
+        throw new Error(respBody?.error ?? `HTTP ${resp.status}: ${JSON.stringify(respBody).slice(0, 200)}`);
+      }
+
+      const planData = respBody as PlanResponse;
 
       const assistantMsg: ChatMessage = {
         id: `assistant-${Date.now()}`,
@@ -197,24 +211,19 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
 
       setMessages(prev => [...prev.filter(m => !m.loading), assistantMsg]);
     } catch (e: any) {
-      // Tenta extrair mensagem real do erro da edge function
-      let errDetail = String(e);
-      if (e?.message) errDetail = e.message;
-      if (e?.context?.json) {
-        try { errDetail = JSON.stringify(e.context.json); } catch {}
-      }
       const errMsg: ChatMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: `❌ Erro ao gerar planejamento:\n\`${errDetail}\`\n\nVerifique se a chave GEMINI_API_KEY está configurada nos Secrets do Supabase.`,
+        content: `❌ Erro: ${e?.message ?? String(e)}`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev.filter(m => !m.loading), errMsg]);
-
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+
 
   const clearMessages = useCallback(() => {
     setMessages(prev => prev.slice(0, 1)); // Mantém apenas a mensagem de boas-vindas
