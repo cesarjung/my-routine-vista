@@ -5,7 +5,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+// Modelos em ordem de preferência — fallback automático se 503/429/404
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_MODELS = [
+  "gemini-flash-latest",
+  "gemini-flash-lite-latest",
+  "gemma-4-26b-a4b-it",
+];
 
 interface RiskAnalysisRequest {
   mode: "analyze_risk";
@@ -67,20 +73,35 @@ async function callGemini(apiKey: string, systemPrompt: string, userMessage: str
     },
   };
 
-  const resp = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let lastErr = "";
+  for (const model of GEMINI_MODELS) {
+    const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-  if (!resp.ok) {
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+      return text;
+    }
+
     const errText = await resp.text();
+    lastErr = `${model} → ${resp.status}: ${errText.slice(0, 200)}`;
+
+    // Se for 503 (sobrecarga), 429 (quota) ou 404 (modelo não encontrado), tenta próximo
+    if (resp.status === 503 || resp.status === 429 || resp.status === 404) {
+      console.warn(`[pcp-ai-planner] ${model} indisponível (${resp.status}), tentando próximo...`);
+      continue;
+    }
+
+    // Para outros erros (401, 400), não adianta tentar outro modelo
     throw new Error(`Gemini API error ${resp.status}: ${errText}`);
   }
 
-  const data = await resp.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  return text;
+  throw new Error(`Todos os modelos Gemini indisponíveis. Último erro: ${lastErr}`);
 }
 
 // ─── MODO: analyze_risk ─────────────────────────────────────────────────────
@@ -110,7 +131,6 @@ Se não houver observações relevantes ou o texto estiver vazio, retorne: {"tag
   const raw = await callGemini(apiKey, systemPrompt, userMessage);
   
   try {
-    // Limpar possível markdown ```json ... ```
     const clean = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
     return JSON.parse(clean);
   } catch {
@@ -123,7 +143,6 @@ async function generatePlan(apiKey: string, body: PlanRequest) {
   const { prompt, context } = body;
   const { obras, equipes, alojamentos, atividades, parametros } = context;
 
-  // Monta contexto resumido para o Gemini
   const obrasResumidas = obras.slice(0, 10).map(o => ({
     projeto: o.projeto,
     nome: o.nomeProjeto,
@@ -132,7 +151,6 @@ async function generatePlan(apiKey: string, body: PlanRequest) {
     pontos: o.pontosDisponiveis?.slice(0, 30) ?? [],
   }));
 
-  // Agrupa atividades por obra
   const atividadesPorObra: Record<string, { pontos: Set<string>; totalMinutos: number; totalValor: number }> = {};
   for (const a of atividades) {
     if (!atividadesPorObra[a.obra_id]) {
@@ -152,10 +170,10 @@ Seu trabalho é gerar planejamentos semanais de execução para equipes de campo
 
 REGRAS IMPORTANTES:
 1. Cada dia deve ter entre ${parametros.jornadaHoras}h e ${parametros.jornadaHoras + 1.5}h de atividades
-2. Otimize a ordem dos pontos para minimizar deslocamento (pontos consecutivos numericamente tendem a ser próximos)
+2. Otimize a ordem dos pontos para minimizar deslocamento
 3. A meta de ${parametros.metaPercent}% é o alvo — pode não ser atingida todos os dias por limitação de tempo
-4. Para múltiplas equipes, distribua os pontos de forma que não haja conflito (cada ponto em apenas uma equipe)
-5. Considere que pontos com prefixo P são poste, V são vão de cabo — podem ser executados sequencialmente
+4. Para múltiplas equipes, distribua os pontos sem conflito (cada ponto em apenas uma equipe)
+5. Considere que pontos P são postes, V são vãos de cabo — podem ser executados sequencialmente
 
 FORMATO DE RESPOSTA — retorne APENAS JSON válido:
 {
@@ -184,8 +202,8 @@ FORMATO DE RESPOSTA — retorne APENAS JSON válido:
       }
     }
   ],
-  "alertas": ["Observação importante 1", "Observação importante 2"],
-  "resumoTextual": "Texto descritivo do planejamento para exibir no chat"
+  "alertas": ["Observação importante 1"],
+  "resumoTextual": "Texto descritivo do planejamento"
 }`;
 
   const contextoJSON = JSON.stringify({
