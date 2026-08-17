@@ -880,20 +880,22 @@ def run_sync_cycle():
 REALIZADAS_SHEET_ID = '1NU3JY3fON8qiX8zOcQint07XybKNBrGBleBLyRLr2ag'
 
 def sync_realizadas_vistoria(gc, env_vars):
-    """Sync da aba Realizadas: captura obra_id (col H, idx=7) e obs vistoria (col Z, idx=25)."""
+    """Sync da aba Realizadas: col H (idx=7) = obra_id, col Z (idx=25) = obs vistoria.
+    Cabeçalho real está na linha 4 (idx=3); dados começam no idx=4."""
     logging.info("[realizadas_vistoria] Iniciando sync...")
     try:
         spreadsheet = gc.open_by_key(REALIZADAS_SHEET_ID)
         worksheet = spreadsheet.worksheet("Realizadas")
         all_rows = worksheet.get_all_values()
-        
-        if len(all_rows) < 2:
-            logging.warning("[realizadas_vistoria] Planilha vazia ou sem dados.")
+
+        # Cabeçalho na linha 4 (idx=3), dados a partir do idx=4
+        DATA_START = 4
+        if len(all_rows) <= DATA_START:
+            logging.warning("[realizadas_vistoria] Planilha sem dados.")
             return
 
-        # Col H = index 7 (obra_id), Col Z = index 25 (observacoes_vistoria)
         rows_to_upsert = []
-        for row in all_rows[1:]:  # Pula o cabeçalho
+        for row in all_rows[DATA_START:]:
             obra_id = row[7].strip() if len(row) > 7 else ''
             obs = row[25].strip() if len(row) > 25 else ''
             if obra_id:
@@ -937,6 +939,7 @@ def sync_realizadas_vistoria(gc, env_vars):
         logging.error(f"[realizadas_vistoria] Erro: {e}")
 
 if __name__ == "__main__":
+
     # Se estiver rodando no GitHub Actions, roda apenas um ciclo e encerra
     if os.environ.get("GITHUB_ACTIONS") == "true":
         logging.info("Executando em modo GitHub Actions (ciclo único)")
