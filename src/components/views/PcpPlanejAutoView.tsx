@@ -38,10 +38,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useSessionState } from '@/hooks/useSessionState';
 import { usePcpPlanejamentoData, UNIDADES_DISPONIVEIS } from '@/hooks/usePcpPlanejamentoData';
 import { useAlojamentos } from '@/hooks/useAlojamentos';
-import { usePcpAiPlanner, useVistoriaRisk, PlanoEquipe, DiaPlano } from '@/hooks/usePcpAiPlanner';
+import { usePcpAiPlanner, useVistoriaRisk, PlanoEquipe } from '@/hooks/usePcpAiPlanner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
 
@@ -435,7 +435,7 @@ export const PcpPlanejAutoView = () => {
                 <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
                   Meta Planejada
-                  <span className="text-[10px] text-muted-foreground font-normal">(> 100%)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">(&gt; 100%)</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <Input
