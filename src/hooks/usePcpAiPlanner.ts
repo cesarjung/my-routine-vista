@@ -196,14 +196,21 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
       };
 
       setMessages(prev => [...prev.filter(m => !m.loading), assistantMsg]);
-    } catch (e) {
+    } catch (e: any) {
+      // Tenta extrair mensagem real do erro da edge function
+      let errDetail = String(e);
+      if (e?.message) errDetail = e.message;
+      if (e?.context?.json) {
+        try { errDetail = JSON.stringify(e.context.json); } catch {}
+      }
       const errMsg: ChatMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: `❌ Erro ao gerar planejamento: ${String(e)}. Verifique se a chave GEMINI_API_KEY está configurada nos Secrets do Supabase.`,
+        content: `❌ Erro ao gerar planejamento:\n\`${errDetail}\`\n\nVerifique se a chave GEMINI_API_KEY está configurada nos Secrets do Supabase.`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev.filter(m => !m.loading), errMsg]);
+
     } finally {
       setIsLoading(false);
     }
