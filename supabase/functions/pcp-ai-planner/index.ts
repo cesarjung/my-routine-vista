@@ -141,7 +141,7 @@ Se não houver observações relevantes ou o texto estiver vazio, retorne: {"tag
 // ─── MODO: plan ──────────────────────────────────────────────────────────────
 async function generatePlan(apiKey: string, body: PlanRequest) {
   const { prompt, context } = body;
-  const { obras, equipes, alojamentos, atividades, parametros } = context;
+  const { obras, equipes, alojamentos, atividades, parametros, orcamentoDetalhado } = context;
 
   const obrasResumidas = obras.slice(0, 10).map(o => ({
     projeto: o.projeto,
@@ -209,6 +209,7 @@ FORMATO DE RESPOSTA — retorne APENAS JSON válido:
   const contextoJSON = JSON.stringify({
     obras: obrasResumidas,
     equipes,
+    orcamentoObraSelecionada: orcamentoDetalhado,
     atividadesPorObra: Object.fromEntries(
       Object.entries(atividadesPorObra).map(([k, v]) => [
         k,

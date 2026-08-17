@@ -232,18 +232,28 @@ export const PcpPlanejAutoView = () => {
   const handleToggleStatus = (st: string) =>
     setSelectedStatuses(prev => prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st]);
 
-  const buildContext = useCallback(() => ({
-    obras: filteredObras.slice(0, 15).map(o => ({
-      projeto: o.projeto,
-      nomeProjeto: o.nomeProjeto,
-      municipio: o.municipio,
-      pontosDisponiveis: Array.from(orcamentoPorPontoMap.keys()).filter(k => k.startsWith(o.projeto)),
-    })),
-    equipes: equipesSelecionadas.length > 0 ? equipesSelecionadas : equipesDisponiveis.slice(0, 3),
-    alojamentos: alojamentosUnidade.map(a => ({ nome: a.nome, latitude: a.latitude, longitude: a.longitude, unidadeNome: a.unidadeNome })),
-    atividades: atividadesQuery.data ?? [],
-    parametros: { jornadaHoras, metaPercent, pontoSaida },
-  }), [filteredObras, equipesSelecionadas, equipesDisponiveis, alojamentosUnidade, atividadesQuery.data, orcamentoPorPontoMap, jornadaHoras, metaPercent, pontoSaida]);
+  const buildContext = useCallback(() => {
+    const orcamentoDetalhado = selectedObraId ? Object.fromEntries(
+      Array.from(orcamentoPorPontoMap.entries()).map(([ponto, ativs]) => [
+        ponto,
+        ativs.map(a => ({ servico: a.servico, qtd: a.qtdOrcada, tempo_min: a.tempoEstimadoMinutos, valor: a.valorEstimado }))
+      ])
+    ) : undefined;
+
+    return {
+      obras: filteredObras.slice(0, 15).map(o => ({
+        projeto: o.projeto,
+        nomeProjeto: o.nomeProjeto,
+        municipio: o.municipio,
+        pontosDisponiveis: o.projeto === selectedObraId ? pontosDisponiveisDoProjeto : [],
+      })),
+      equipes: equipesSelecionadas.length > 0 ? equipesSelecionadas : equipesDisponiveis.slice(0, 3),
+      alojamentos: alojamentosUnidade.map(a => ({ nome: a.nome, latitude: a.latitude, longitude: a.longitude, unidadeNome: a.unidadeNome })),
+      atividades: atividadesQuery.data ?? [],
+      orcamentoDetalhado,
+      parametros: { jornadaHoras, metaPercent, pontoSaida },
+    };
+  }, [filteredObras, equipesSelecionadas, equipesDisponiveis, alojamentosUnidade, atividadesQuery.data, orcamentoPorPontoMap, pontosDisponiveisDoProjeto, selectedObraId, jornadaHoras, metaPercent, pontoSaida]);
 
   const handleSend = async () => {
     if (!chatInput.trim() || isLoading) return;
