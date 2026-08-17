@@ -956,7 +956,7 @@ export const PcpPlanejamentoView = () => {
                   return (
                     <div
                       key={o.projeto}
-                      onClick={() => setSelectedObra(o)}
+                      onClick={() => handleSelectObra(o)}
                       className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 ${
                         isSelected
                           ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/40'
