@@ -169,15 +169,15 @@ const PontosMultiSelect = ({
 export const PcpPlanejamentoView = () => {
   // State
   // Selected Obra & Filters (Filtros da Carteira)
-  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_auto_obra', '');
-  const [searchObra, setSearchObra] = useSessionState<string>('pcp_auto_search', '');
-  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_auto_statuses', DEFAULT_SELECTED_STATUSES);
+  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_manual_obra', '');
+  const [searchObra, setSearchObra] = useSessionState<string>('pcp_manual_search', '');
+  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_manual_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState<boolean>(false);
-  const [selectedSituacao, setSelectedSituacao] = useSessionState<string>('pcp_auto_situacao', 'APTA');
-  const [selectedMesFilter, setSelectedMesFilter] = useSessionState<string>('pcp_auto_mes', 'TODOS');
-  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState<string>('pcp_auto_municipio', 'TODOS');
-  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_auto_prioridade', 'TODAS');
-  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_auto_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
+  const [selectedSituacao, setSelectedSituacao] = useSessionState<string>('pcp_manual_situacao', 'APTA');
+  const [selectedMesFilter, setSelectedMesFilter] = useSessionState<string>('pcp_manual_mes', 'TODOS');
+  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState<string>('pcp_manual_municipio', 'TODOS');
+  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_manual_prioridade', 'TODAS');
+  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_manual_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
 
   // Selected Pontos list for active Obra
   const [selectedPontosLabels, setSelectedPontosLabels] = useState<string[]>([]);
