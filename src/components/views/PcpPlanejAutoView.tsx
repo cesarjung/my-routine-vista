@@ -25,7 +25,19 @@ import { format } from 'date-fns';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const DEFAULT_SELECTED_STATUSES = [
-  'EM EXECUÇÃO', 'PENDENTE', 'NÃO INICIADO', 'AGUARDANDO', 'APTA', 'VISTORIADA', 'LIBERADA',
+  'PROGRAMADA',
+  'EM EXECUÇÃO',
+  'AGENDADA',
+  'LIBERADA',
+  'PROGRAMADA/PARCIAL',
+  'EM ESPERA',
+  'REPROGRAMAR',
+  'VISTORIADA',
+  'PENDÊNCIA CLIENTE',
+  'PENDÊNCIA TÉCNICA',
+  'SEM MATERIAL',
+  'PROJETO / ORÇAMENTO',
+  'PENDENCIA SUPRIMENTOS',
 ];
 
 const RISK_STYLE: Record<string, string> = {
@@ -112,16 +124,16 @@ const TabelaSemanal = ({ plano, onExportar }: { plano: PlanoEquipe; onExportar: 
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 export const PcpPlanejAutoView = () => {
-  // ── Filtros (idênticos ao Planejamento) ──────────────────────────────────
-  const [selectedUnidadeId, setSelectedUnidadeId] = useState('1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI');
-  const [selectedSituacao, setSelectedSituacao] = useState('APTA');
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(DEFAULT_SELECTED_STATUSES);
+  // ── Filtros (persistentes) ────────────────────────────────────────────────
+  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState('pcp_auto_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI');
+  const [selectedSituacao, setSelectedSituacao] = useSessionState('pcp_auto_situacao', 'APTA');
+  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_auto_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState(false);
-  const [selectedMesFilter, setSelectedMesFilter] = useState('TODOS');
-  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useState('TODOS');
-  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useState('TODAS');
-  const [searchObra, setSearchObra] = useState('');
-  const [selectedObraId, setSelectedObraId] = useState('');
+  const [selectedMesFilter, setSelectedMesFilter] = useSessionState('pcp_auto_mes', 'TODOS');
+  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState('pcp_auto_municipio', 'TODOS');
+  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState('pcp_auto_prioridade', 'TODAS');
+  const [searchObra, setSearchObra] = useSessionState('pcp_auto_search', '');
+  const [selectedObraId, setSelectedObraId] = useSessionState('pcp_auto_obra', '');
 
   // ── Parâmetros IA ─────────────────────────────────────────────────────────
   const [jornadaHoras, setJornadaHoras] = useState(9);
@@ -145,6 +157,19 @@ export const PcpPlanejAutoView = () => {
     mesesCarteira, statusesCarteira, orcamentoPorPontoMap, pontosDisponiveisDoProjeto,
     salvarProgramacao,
   } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId || undefined);
+
+  // ── Auto-selecionar status dinâmicos (menos os concluídos) ────────────────
+  useEffect(() => {
+    if (statusesCarteira.length > 0) {
+      // Se a sessão ainda tiver apenas os defaults, sobrescrevemos com todos da carteira exceto concluídos
+      const isStillDefault = selectedStatuses.length === DEFAULT_SELECTED_STATUSES.length &&
+        selectedStatuses.every(s => DEFAULT_SELECTED_STATUSES.includes(s));
+      if (isStillDefault) {
+        setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusesCarteira]);
 
   const { alojamentos } = useAlojamentos();
   const { messages, sendMessage, isLoading, clearMessages } = usePcpAiPlanner();
@@ -389,7 +414,7 @@ export const PcpPlanejAutoView = () => {
                 <PopoverContent className="w-[230px] p-3 text-xs" align="start">
                   <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold text-xs">
                     <span>Status das Obras</span>
-                    <button onClick={() => setSelectedStatuses(DEFAULT_SELECTED_STATUSES)} className="text-[10px] text-primary hover:underline">
+                    <button onClick={() => setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')))} className="text-[10px] text-primary hover:underline">
                       Sem Concluídas
                     </button>
                   </div>
