@@ -175,6 +175,16 @@ export const PcpPlanejAutoView = () => {
   const { messages, sendMessage, isLoading, clearMessages } = usePcpAiPlanner();
   const { analyzeRisk, riskCache, loadingRisk } = useVistoriaRisk(selectedObraId || null);
 
+  // Helper for "Limpar Filtros"
+  const handleClearFilters = () => {
+    setSelectedSituacao('TODAS');
+    setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+    setSelectedMesFilter('TODOS');
+    setSelectedMunicipioFilter('TODOS');
+    setSelectedPrioridadeFilter('TODAS');
+    setSearchObra('');
+  };
+
   // Atividades da obra selecionada
   const atividadesQuery = useQuery({
     queryKey: ['atividades_plano', selectedUnidadeId, selectedObraId],
@@ -487,7 +497,12 @@ export const PcpPlanejAutoView = () => {
 
             {/* Busca */}
             <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Pesquisar Obra</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground font-semibold">Pesquisar Obra</span>
+                <button onClick={handleClearFilters} className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> Limpar Filtros
+                </button>
+              </div>
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                 <Input

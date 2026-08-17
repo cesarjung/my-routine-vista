@@ -168,30 +168,16 @@ const PontosMultiSelect = ({
 
 export const PcpPlanejamentoView = () => {
   // State
-  const [selectedUnidadeId, setSelectedUnidadeId] = useState<string>('1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
-
-  const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
-  const [equipe, setEquipe] = useState<string>('EH156');
-
-  // TEMPOS COMPLEMENTARES (Minutos)
-  const [tempoDeslocamento, setTempoDeslocamento] = useState<number>(30);
-  const [tempoSaidaBase, setTempoSaidaBase] = useState<number>(15);
-  const [tempoSeguranca, setTempoSeguranca] = useState<number>(15);
-
-  // META DA EQUIPE (R$)
-  const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
-  
   // Selected Obra & Filters (Filtros da Carteira)
-  const [selectedObra, setSelectedObra] = useState<PcpObra | null>(null);
-  const [searchObra, setSearchObra] = useState<string>('');
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(DEFAULT_SELECTED_STATUSES);
+  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_auto_obra', '');
+  const [searchObra, setSearchObra] = useSessionState<string>('pcp_auto_search', '');
+  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_auto_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState<boolean>(false);
-  const [selectedSituacao, setSelectedSituacao] = useState<string>('APTA'); // 'APTA' | 'INAPTA' | 'TODAS'
-  const [selectedMesFilter, setSelectedMesFilter] = useState<string>('TODOS');
-  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useState<string>('TODOS');
-  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useState<string>('TODAS');
+  const [selectedSituacao, setSelectedSituacao] = useSessionState<string>('pcp_auto_situacao', 'APTA');
+  const [selectedMesFilter, setSelectedMesFilter] = useSessionState<string>('pcp_auto_mes', 'TODOS');
+  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState<string>('pcp_auto_municipio', 'TODOS');
+  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_auto_prioridade', 'TODAS');
+  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_auto_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
 
   // Selected Pontos list for active Obra
   const [selectedPontosLabels, setSelectedPontosLabels] = useState<string[]>([]);
@@ -214,7 +200,19 @@ export const PcpPlanejamentoView = () => {
     orcamentoPorPontoMap,
     pontosDisponiveisDoProjeto,
     salvarProgramacao
-  } = usePcpPlanejamentoData(selectedUnidadeId, selectedObra?.projeto);
+  } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId);
+
+  const selectedObra = useMemo(() => obras.find(o => o.projeto === selectedObraId) || null, [obras, selectedObraId]);
+
+  // Outros states fixos
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
+  const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
+  const [equipe, setEquipe] = useState<string>('EH156');
+  const [tempoDeslocamento, setTempoDeslocamento] = useState<number>(30);
+  const [tempoSaidaBase, setTempoSaidaBase] = useState<number>(15);
+  const [tempoSeguranca, setTempoSeguranca] = useState<number>(15);
+  const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
 
   // MULTI-SELECT ETAPAS FILTER (Tudo desmarcado pré-definido por padrão)
   const [selectedEtapas, setSelectedEtapas] = useState<string[]>([]);
@@ -261,7 +259,18 @@ export const PcpPlanejamentoView = () => {
     return format(selectedDate, 'dd/MM/yyyy');
   }, [selectedDate]);
 
-  // Sync default supervisor & equipe when unit changes
+  // ── Auto-selecionar status dinâmicos (menos os concluídos) ────────────────
+  useEffect(() => {
+    if (statusesCarteira.length > 0) {
+      const isStillDefault = selectedStatuses.length === DEFAULT_SELECTED_STATUSES.length &&
+        selectedStatuses.every(s => DEFAULT_SELECTED_STATUSES.includes(s));
+      if (isStillDefault) {
+        setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+      }
+    }
+  }, [statusesCarteira]);
+
+  // Load equipe default and its meta based on list
   useEffect(() => {
     if (supervisoresDisponiveis.length > 0 && !supervisoresDisponiveis.includes(supervisor)) {
       setSupervisor(supervisoresDisponiveis[0]);
@@ -270,14 +279,6 @@ export const PcpPlanejamentoView = () => {
       setEquipe(equipesDisponiveis[0]);
     }
   }, [selectedUnidadeId, supervisoresDisponiveis, equipesDisponiveis]);
-
-  // Quando os status reais chegam (statusesCarteira), atualiza selectedStatuses
-  // para "todos exceto CONCLUÍDA" — evita que status fictícios bloqueiem a lista
-  useEffect(() => {
-    if (statusesCarteira.length === 0) return;
-    const semConcluida = statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU'));
-    setSelectedStatuses(semConcluida);
-  }, [statusesCarteira]);
 
   // Auto-sync team goal (Meta da Equipe R$) whenever team changes
   useEffect(() => {
@@ -290,11 +291,21 @@ export const PcpPlanejamentoView = () => {
   // Map of PcpPontoItem[] grouped by Ponto Label (e.g., 'P71' -> items[], 'P72' -> items[])
   const [pontosGroupedMap, setPontosGroupedMap] = useState<Record<string, PcpPontoItem[]>>({});
 
-  // When selectedObra changes, ALL points come UNCHECKED by default
-  useEffect(() => {
+  // Helper for "Limpar Filtros"
+  const handleClearFilters = () => {
+    setSelectedSituacao('TODAS');
+    setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+    setSelectedMesFilter('TODOS');
+    setSelectedMunicipioFilter('TODOS');
+    setSelectedPrioridadeFilter('TODAS');
+    setSearchObra('');
+  };
+
+  const handleSelectObra = (obra: PcpObra) => {
+    setSelectedObraId(obra.projeto);
     setSelectedPontosLabels([]);
     setPontosGroupedMap({});
-  }, [selectedObra]);
+  };
 
   // Sync items table grouped by Ponto whenever selectedPontosLabels or orcamentoPorPontoMap changes
   useEffect(() => {
@@ -318,7 +329,7 @@ export const PcpPlanejamentoView = () => {
               codigoMaterial: bItem.codigo,
               descricaoMaterial: bItem.descricao,
               qtdOrcadaPonto: bItem.quantidade, // Coluna F: Qtd Prevista
-              etapaPrevista: inferEtapaFromServico(bItem.servicoPrevisto), // Coluna M: Etapa Prevista
+              etapaPrevista: inferEtapaFromServico(bItem.servicoPrevista), // Coluna M: Etapa Prevista
               quantidade: bItem.quantidade,
               tempoEstimadoMinutos: bItem.tempoMinutos,
               valorEstimado: bItem.valorEstimado,
@@ -756,7 +767,7 @@ export const PcpPlanejamentoView = () => {
                   <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold text-xs">
                     <span>Status das Obras</span>
                     <button
-                      onClick={() => setSelectedStatuses(DEFAULT_SELECTED_STATUSES)}
+                      onClick={() => setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')))}
                       className="text-[10px] text-primary hover:underline"
                     >
                       Sem Concluídas
@@ -866,7 +877,12 @@ export const PcpPlanejamentoView = () => {
 
             {/* Busca por Obra */}
             <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Pesquisar Obra</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground font-semibold">Pesquisar Obra</span>
+                <button onClick={handleClearFilters} className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> Limpar Filtros
+                </button>
+              </div>
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                 <Input
