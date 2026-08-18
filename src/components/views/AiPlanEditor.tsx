@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Users, Clock, Send, Loader2, Layers, AlertCircle, PackageCheck,
   ChevronDown, Tag, Wrench, Target, Navigation, ShieldCheck, LogOut,
@@ -11,24 +11,21 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import {
-  SERVICOS_PADRAO, ETAPAS_PADRAO, PcpObra, PcpPontoItem,
-  inferEtapaFromServico, MaterialPontoBudget,
-} from '@/hooks/usePcpPlanejamentoData';
+import { usePcpPlanejamentoData, inferEtapaFromServico, ETAPAS_PADRAO, formatQuantityDisplay, PcpPontoItem, formatCurrency } from '@/hooks/usePcpPlanejamentoData';
 import { PlanoEquipe } from '@/hooks/usePcpAiPlanner';
 
 // ─── PontosMultiSelect (copiado do PcpPlanejamentoView) ───────────────────────
 interface PontosMultiSelectProps {
   pontos: string[];
   selected: string[];
-  orcamentoPorPontoMap: Map<string, MaterialPontoBudget[]>;
+  orcamentoPorPontoMap: Map<string, any[]>;
   onToggle: (p: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
@@ -88,11 +85,11 @@ const PontosMultiSelect = ({ pontos, selected, orcamentoPorPontoMap, onToggle, o
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface AiPlanEditorProps {
   plano: PlanoEquipe;
-  obra: PcpObra | null;
+  obra: any | null;
   obraId: string;
   unidadeId: string;
   pontosDisponiveis: string[];
-  orcamentoPorPontoMap: Map<string, MaterialPontoBudget[]>;
+  orcamentoPorPontoMap: Map<string, any[]>;
   supervisoresDisponiveis: string[];
   equipesDisponiveis: string[];
   etapasDisponiveis: string[];
@@ -114,10 +111,9 @@ export const AiPlanEditor = ({
   salvarProgramacao,
   index,
 }: AiPlanEditorProps) => {
+  const { servicosBase } = usePcpPlanejamentoData(unidadeId, plano.projeto);
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [equipe, setEquipe] = useState(plano.equipe || (equipesDisponiveis[0] ?? ''));
   const [supervisor, setSupervisor] = useState(supervisoresDisponiveis[0] ?? 'SUPERVISOR');
   const [selectedEtapas, setSelectedEtapas] = useState<string[]>([]);
@@ -128,45 +124,49 @@ export const AiPlanEditor = ({
   const [tempoSeguranca, setTempoSeguranca] = useState(15);
   const [metaEquipeInput, setMetaEquipeInput] = useState(4442);
 
-  const [newCustomPontoInput, setNewCustomPontoInput] = useState('');
+  const [newCustomPontoInput, setNewCustomPontoInput] = useState<{ dayIdx: number, value: string }>({ dayIdx: 0, value: '' });
 
-  // Pré-seleciona pontos sugeridos pela IA (union de todos os dias)
+  // Array of days containing the sequence of points
+  const [diasProgramacao, setDiasProgramacao] = useState(() => plano.dias || []);
+
+  // Compute a unique list of all points across all days (for initializing the activities map)
   const pontosIa = useMemo(() => {
     const set = new Set<string>();
     plano.dias?.forEach(dia => dia.pontos?.forEach(p => set.add(p.toUpperCase())));
     return Array.from(set);
   }, [plano]);
 
-  const [selectedPontosLabels, setSelectedPontosLabels] = useState<string[]>(pontosIa);
-
   // Monta mapa de atividades pré-preenchidas a partir do orçamento
   const [pontosGroupedMap, setPontosGroupedMap] = useState<Record<string, PcpPontoItem[]>>(() => {
     const map: Record<string, PcpPontoItem[]> = {};
     pontosIa.forEach(pLabel => {
       const orcItems = orcamentoPorPontoMap.get(pLabel) ?? [];
-      map[pLabel] = orcItems.map((o, idx) => ({
-        id: `${pLabel}-${idx}`,
-        ponto: pLabel,
-        servico: o.servico ?? '',
-        qtdOrcadaPonto: o.qtdOrcada ?? 1,
-        etapaPrevista: o.etapaPrevista ?? inferEtapaFromServico(o.servico ?? ''),
-        quantidade: 1,
-        tempoEstimadoMinutos: o.tempoEstimadoMinutos ?? 0,
-        valorEstimado: o.valorEstimado ?? 0,
-        selected: true,
-        isBudgeted: true,
-      }));
-      // Se não há atividades no orçamento, cria uma linha em branco
+      map[pLabel] = orcItems.map((o, idx) => {
+        const qty = o.quantidade ?? 1;
+        return {
+          id: `${pLabel}-${idx}`,
+          ponto: pLabel,
+          servico: o.servicoPrevisto ?? '',
+          qtdOrcadaPonto: qty,
+          etapaPrevista: o.etapaPrevista ?? inferEtapaFromServico(o.servicoPrevisto ?? ''),
+          quantidade: qty,
+          tempoEstimadoMinutos: o.tempoMinutos ?? 0,
+          valorEstimado: o.valorEstimado ?? 0,
+          selected: true,
+          isBudgeted: true,
+        };
+      });
       if (map[pLabel].length === 0) {
+        const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
         map[pLabel] = [{
           id: `${pLabel}-blank-0`,
           ponto: pLabel,
-          servico: SERVICOS_PADRAO[0]?.servico ?? 'SUBSTITUIÇÃO DE POSTE',
+          servico: fallback.servico,
           qtdOrcadaPonto: 1,
-          etapaPrevista: inferEtapaFromServico(SERVICOS_PADRAO[0]?.servico ?? ''),
+          etapaPrevista: inferEtapaFromServico(fallback.servico),
           quantidade: 1,
-          tempoEstimadoMinutos: SERVICOS_PADRAO[0]?.tempoMinutosPorUnidade ?? 60,
-          valorEstimado: SERVICOS_PADRAO[0]?.valorPorUnidade ?? 0,
+          tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade,
+          valorEstimado: fallback.valorPorUnidade,
           selected: true,
           isBudgeted: false,
         }];
@@ -175,48 +175,119 @@ export const AiPlanEditor = ({
     return map;
   });
 
+  useEffect(() => {
+    setDiasProgramacao(plano.dias || []);
+    
+    const newMap: Record<string, PcpPontoItem[]> = {};
+    const newPontosIa = new Set<string>();
+    plano.dias?.forEach(dia => dia.pontos?.forEach(p => newPontosIa.add(p.toUpperCase())));
+    
+    Array.from(newPontosIa).forEach(pLabel => {
+      const orcItems = orcamentoPorPontoMap.get(pLabel) ?? [];
+      newMap[pLabel] = orcItems.map((o, idx) => ({
+        id: `${pLabel}-${idx}`,
+        ponto: pLabel,
+        servico: o.servicoPrevisto ?? '',
+        qtdOrcadaPonto: o.quantidade ?? 1,
+        etapaPrevista: o.etapaPrevista ?? inferEtapaFromServico(o.servicoPrevisto ?? ''),
+        quantidade: 1,
+        tempoEstimadoMinutos: o.tempoMinutos ?? 0,
+        valorEstimado: o.valorEstimado ?? 0,
+        selected: true,
+        isBudgeted: true,
+      }));
+      // Se não há atividades no orçamento, cria uma linha em branco
+      if (newMap[pLabel].length === 0) {
+        const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+        newMap[pLabel] = [{
+          id: `${pLabel}-blank-0`,
+          ponto: pLabel,
+          servico: fallback.servico,
+          qtdOrcadaPonto: 1,
+          etapaPrevista: inferEtapaFromServico(fallback.servico),
+          quantidade: 1,
+          tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade,
+          valorEstimado: fallback.valorPorUnidade,
+          selected: true,
+          isBudgeted: false,
+        }];
+      }
+    });
+    setPontosGroupedMap(newMap);
+  }, [plano, orcamentoPorPontoMap]);
+
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleTogglePontoLabel = (pLabel: string) => {
+  const handleTogglePontoDia = (dayIdx: number, pLabel: string) => {
     const upper = pLabel.toUpperCase().trim();
-    setSelectedPontosLabels(prev =>
-      prev.includes(upper) ? prev.filter(p => p !== upper) : [...prev, upper]
-    );
+    setDiasProgramacao(prev => {
+      const next = [...prev];
+      const dia = next[dayIdx];
+      if (dia.pontos.includes(upper)) {
+        dia.pontos = dia.pontos.filter(p => p !== upper);
+      } else {
+        dia.pontos = [...dia.pontos, upper];
+      }
+      return next;
+    });
   };
 
-  const handleSelectAllPontos = () => setSelectedPontosLabels([...pontosDisponiveis]);
-  const handleDeselectAllPontos = () => setSelectedPontosLabels([]);
+  const handleSelectAllPontosDia = (dayIdx: number) => {
+    setDiasProgramacao(prev => {
+      const next = [...prev];
+      next[dayIdx].pontos = [...pontosDisponiveis];
+      return next;
+    });
+  };
 
-  const handleAddCustomPontoLabel = () => {
-    if (!newCustomPontoInput.trim()) return;
-    const clean = newCustomPontoInput.toUpperCase().trim();
-    if (!selectedPontosLabels.includes(clean)) {
-      setSelectedPontosLabels(prev => [...prev, clean]);
-      // Adiciona linha vazia para este ponto
+  const handleDeselectAllPontosDia = (dayIdx: number) => {
+    setDiasProgramacao(prev => {
+      const next = [...prev];
+      next[dayIdx].pontos = [];
+      return next;
+    });
+  };
+
+  const handleAddCustomPontoLabel = (dayIdx: number) => {
+    const inputStr = newCustomPontoInput.dayIdx === dayIdx ? newCustomPontoInput.value : '';
+    if (!inputStr.trim()) return;
+    const clean = inputStr.toUpperCase().trim();
+    
+    setDiasProgramacao(prev => {
+      const next = [...prev];
+      if (!next[dayIdx].pontos.includes(clean)) {
+        next[dayIdx].pontos = [...next[dayIdx].pontos, clean];
+      }
+      return next;
+    });
+
+    // Adiciona linha vazia no mapa se não existir
       if (!pontosGroupedMap[clean]) {
+        const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
         setPontosGroupedMap(prev => ({
           ...prev,
           [clean]: [{
             id: `${clean}-blank-0`,
             ponto: clean,
-            servico: SERVICOS_PADRAO[0]?.servico ?? '',
+            servico: fallback.servico,
             qtdOrcadaPonto: 1,
-            etapaPrevista: inferEtapaFromServico(SERVICOS_PADRAO[0]?.servico ?? ''),
+            etapaPrevista: inferEtapaFromServico(fallback.servico),
             quantidade: 1,
-            tempoEstimadoMinutos: SERVICOS_PADRAO[0]?.tempoMinutosPorUnidade ?? 60,
-            valorEstimado: SERVICOS_PADRAO[0]?.valorPorUnidade ?? 0,
+            tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade,
+            valorEstimado: fallback.valorPorUnidade,
             selected: true,
             isBudgeted: false,
           }]
         }));
       }
-    }
-    setNewCustomPontoInput('');
+    
+    setNewCustomPontoInput({ dayIdx: 0, value: '' });
   };
 
   const handleAddAtividadeNoPonto = (pontoLabelTarget: string) => {
     const existing = pontosGroupedMap[pontoLabelTarget] || [];
     const existingServicos = new Set(existing.map(i => i.servico));
-    const next = SERVICOS_PADRAO.find(s => !existingServicos.has(s.servico)) || SERVICOS_PADRAO[0];
+    const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+    const next = servicosBase.find(s => !existingServicos.has(s.servico)) || fallback;
     const newItem: PcpPontoItem = {
       id: `${pontoLabelTarget}-manual-${Date.now()}`,
       ponto: pontoLabelTarget,
@@ -238,7 +309,7 @@ export const AiPlanEditor = ({
       if (!items[idx]) return prev;
       const target = { ...items[idx] };
       if (field === 'servico') {
-        const found = SERVICOS_PADRAO.find(s => s.servico === value);
+        const found = servicosBase.find(s => s.servico === value);
         target.servico = value;
         target.etapaPrevista = inferEtapaFromServico(value);
         if (found) {
@@ -247,7 +318,8 @@ export const AiPlanEditor = ({
         }
       } else if (field === 'quantidade') {
         const qty = Math.max(1, Math.round(Number(value) || 1));
-        const found = SERVICOS_PADRAO.find(s => s.servico === target.servico) || SERVICOS_PADRAO[0];
+        const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: target.servico, tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+        const found = servicosBase.find(s => s.servico === target.servico) || fallback;
         target.quantidade = qty;
         target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * qty);
         target.valorEstimado = found.valorPorUnidade * qty;
@@ -276,9 +348,17 @@ export const AiPlanEditor = ({
   // ── Computed ──────────────────────────────────────────────────────────────
   const allPontosListFlat = useMemo(() => {
     const list: PcpPontoItem[] = [];
-    selectedPontosLabels.forEach(p => list.push(...(pontosGroupedMap[p] || [])));
+    const seen = new Set<string>();
+    diasProgramacao.forEach(dia => {
+      dia.pontos.forEach(p => {
+        if (!seen.has(p)) {
+          seen.add(p);
+          list.push(...(pontosGroupedMap[p] || []));
+        }
+      });
+    });
     return list;
-  }, [selectedPontosLabels, pontosGroupedMap]);
+  }, [diasProgramacao, pontosGroupedMap]);
 
   const selectedItemsFlat = useMemo(() => allPontosListFlat.filter(p => p.selected), [allPontosListFlat]);
 
@@ -311,9 +391,6 @@ export const AiPlanEditor = ({
       return `${p.ponto} - [${p.etapaPrevista}] ${p.servico} - Qtd: ${p.quantidade} - Hr. Prev: ${hr}`;
     }).join(' | '), [selectedItemsFlat]);
 
-  const dataProgramacaoFormatada = useMemo(() =>
-    format(selectedDate, 'dd/MM/yyyy', { locale: ptBR }), [selectedDate]);
-
   const postesProgramados = useMemo(() =>
     selectedItemsFlat.filter(i => (i.servico || '').toUpperCase().includes('POSTE'))
       .reduce((acc, i) => acc + (i.quantidade || 0), 0), [selectedItemsFlat]);
@@ -321,23 +398,56 @@ export const AiPlanEditor = ({
   const saldoPostes = obra ? obra.qtdPostesDisponiveis - postesProgramados : 0;
 
   // ── Submit ─────────────────────────────────────────────────────────────────
-  const handleEnviar = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleEnviar = async () => {
     if (!obra) { alert('Obra não encontrada.'); return; }
-    if (selectedItemsFlat.length === 0) { alert('Selecione ao menos uma atividade.'); return; }
-    salvarProgramacao.mutate({
-      unidadeId,
-      dataProgramacao: dataProgramacaoFormatada,
-      dateObj: selectedDate,
-      supervisor,
-      equipe,
-      etapa: selectedEtapas.join(', '),
-      obra,
-      pontos: allPontosListFlat,
-      tempoDeslocamentoMinutos: tempoDeslocamento,
-      tempoSaidaBaseMinutos: tempoSaidaBase,
-      tempoSegurancaMinutos: tempoSeguranca,
-      metaEquipeValor: metaEquipeInput,
-    });
+    if (selectedItemsFlat.length === 0) { alert('Selecione ao menos uma atividade na semana.'); return; }
+
+    setIsSubmitting(true);
+    try {
+      // Para cada dia programado, envia as atividades correspondentes àquele dia
+      for (const dia of diasProgramacao) {
+        const pontosDoDia = dia.pontos;
+        if (pontosDoDia.length === 0) continue;
+
+        const itemsDoDia: PcpPontoItem[] = [];
+        pontosDoDia.forEach(p => {
+          const acts = pontosGroupedMap[p] || [];
+          itemsDoDia.push(...acts.filter(a => a.selected));
+        });
+
+        if (itemsDoDia.length === 0) continue;
+
+        // Parse a data que vem no formato "18/08/2026"
+        const [day, month, year] = dia.data.split('/');
+        const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+
+        // Determina a etapa geral para este dia pegando a primeira etapa
+        const etapaDia = itemsDoDia[0]?.etapaPrevista || selectedEtapas.join(', ');
+
+        await salvarProgramacao.mutateAsync({
+          unidadeId,
+          dataProgramacao: dia.data,
+          dateObj: dateObj,
+          supervisor,
+          equipe,
+          etapa: etapaDia,
+          obra,
+          pontos: itemsDoDia,
+          tempoDeslocamentoMinutos: tempoDeslocamento,
+          tempoSaidaBaseMinutos: tempoSaidaBase,
+          tempoSegurancaMinutos: tempoSeguranca,
+          metaEquipeValor: metaEquipeInput,
+        });
+      }
+      alert('Programação semanal salva com sucesso na Plan_Principal!');
+    } catch (error) {
+      console.error('Erro ao salvar programação semanal:', error);
+      alert('Ocorreu um erro ao salvar um dos dias da programação. Verifique o console.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -378,24 +488,6 @@ export const AiPlanEditor = ({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-0">
-              {/* Data */}
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs">Data da Programação</Label>
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-9 text-xs font-mono font-semibold justify-start gap-2">
-                      <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground" />
-                      {dataProgramacaoFormatada}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={selectedDate}
-                      onSelect={d => { if (d) { setSelectedDate(d); setIsCalendarOpen(false); } }}
-                      locale={ptBR} />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
               {/* Equipe */}
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs">Equipe</Label>
@@ -534,6 +626,95 @@ export const AiPlanEditor = ({
               </div>
             </CardContent>
           </Card>
+
+          {/* Card Resumo Semanal da Equipe */}
+          <Card className="border border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-primary" /> Resumo da Semana ({equipe})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {(() => {
+                const totalDias = diasProgramacao.length;
+                const totalMetaSemana = metaEquipeInput * totalDias;
+                let totalTempoSemana = 0;
+                let totalValorSemana = 0;
+
+                diasProgramacao.forEach(dia => {
+                  const itemsSelecionadosDia = dia.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(i => i.selected));
+                  const tempoAtiv = itemsSelecionadosDia.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                  if (tempoAtiv > 0) {
+                    totalTempoSemana += tempoAtiv + tempoDeslocamento + tempoSaidaBase + tempoSeguranca;
+                  }
+                  totalValorSemana += itemsSelecionadosDia.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
+                });
+
+                const percSemana = totalMetaSemana > 0 ? (totalValorSemana / totalMetaSemana) * 100 : 0;
+
+                return (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] p-2">Dia</TableHead>
+                        <TableHead className="text-[10px] p-2">Tempo</TableHead>
+                        <TableHead className="text-[10px] p-2 text-right">V. Meta</TableHead>
+                        <TableHead className="text-[10px] p-2 text-right">V. Planejado</TableHead>
+                        <TableHead className="text-[10px] p-2 text-right">% Meta</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {diasProgramacao.map((dia, idx) => {
+                        const itemsSelecionadosDia = dia.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(i => i.selected));
+                        const tempoAtiv = itemsSelecionadosDia.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                        const tempoDia = tempoAtiv > 0 ? tempoAtiv + tempoDeslocamento + tempoSaidaBase + tempoSeguranca : 0;
+                        const valorDia = itemsSelecionadosDia.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
+                        const percDia = metaEquipeInput > 0 ? (valorDia / metaEquipeInput) * 100 : 0;
+                        
+                        return (
+                          <TableRow key={idx}>
+                            <TableCell className="p-2 text-[11px] font-medium">{dia.data.substring(0,5)}<br/><span className="text-[9px] text-muted-foreground">{dia.diaSemana.split('-')[0]}</span></TableCell>
+                            <TableCell className="p-2 text-[11px] font-mono">{Math.floor(tempoDia/60)}h {Math.floor(tempoDia%60)}m</TableCell>
+                            <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono">R$ {metaEquipeInput.toFixed(2)}</TableCell>
+                            <TableCell className="p-2 text-[11px] text-right text-emerald-600 font-mono font-semibold">R$ {valorDia.toFixed(2)}</TableCell>
+                            <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
+                              <span className={percDia >= 100 ? "text-emerald-600" : percDia >= 75 ? "text-amber-600" : "text-rose-600"}>
+                                {percDia.toFixed(1)}%
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {diasProgramacao.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-xs text-muted-foreground p-4">
+                            Nenhum dia programado.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                    {diasProgramacao.length > 0 && (
+                      <TableFooter className="bg-muted/50 border-t">
+                        <TableRow>
+                          <TableCell className="p-2 text-[10px] font-bold">TOTAL</TableCell>
+                          <TableCell className="p-2 text-[11px] font-mono font-bold">{Math.floor(totalTempoSemana/60)}h {Math.floor(totalTempoSemana%60)}m</TableCell>
+                          <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono font-bold">R$ {totalMetaSemana.toFixed(2)}</TableCell>
+                          <TableCell className="p-2 text-[11px] text-right text-emerald-600 font-mono font-bold">R$ {totalValorSemana.toFixed(2)}</TableCell>
+                          <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
+                            <span className={percSemana >= 100 ? "text-emerald-600" : percSemana >= 75 ? "text-amber-600" : "text-rose-600"}>
+                              {percSemana.toFixed(1)}%
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      </TableFooter>
+                    )}
+                  </Table>
+                );
+              })()}
+            </CardContent>
+          </Card>
         </div>
 
         {/* ── Coluna Direita: Obra Banner + Pontos + Atividades ── */}
@@ -582,194 +763,210 @@ export const AiPlanEditor = ({
                   </Badge>
                 </div>
               </div>
-
-              {/* Seleção de Pontos */}
-              <div className="pt-2.5 border-t border-primary/20 flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <PackageCheck className="w-4 h-4 text-primary" />
-                    C6 — Pontos para trabalhar:
-                  </span>
-                  <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
-                    <PontosMultiSelect
-                      pontos={pontosDisponiveis.length > 0 ? pontosDisponiveis : pontosIa}
-                      selected={selectedPontosLabels}
-                      orcamentoPorPontoMap={orcamentoPorPontoMap}
-                      onToggle={handleTogglePontoLabel}
-                      onSelectAll={handleSelectAllPontos}
-                      onDeselectAll={handleDeselectAllPontos}
-                    />
-                    <div className="flex items-center gap-1">
-                      <Input placeholder="Outro Ponto (P99)..." value={newCustomPontoInput}
-                        onChange={e => setNewCustomPontoInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleAddCustomPontoLabel()}
-                        className="h-8 text-xs w-[130px] font-mono" />
-                      <Button size="sm" variant="outline" onClick={handleAddCustomPontoLabel} className="h-8 text-xs px-2.5">
-                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Badges dos pontos */}
-                {selectedPontosLabels.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {selectedPontosLabels.map(p => (
-                      <Badge key={p} variant="secondary"
-                        className="font-mono text-[11px] px-2 py-0.5 cursor-pointer hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => handleTogglePontoLabel(p)}>
-                        {p} ✕
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+            </div>
+            ) : (
+              <div className="p-4 text-center text-muted-foreground italic border border-dashed rounded-xl border-border bg-muted/20">
+                Obra não encontrada ou não selecionada.
               </div>
-            </div>
-          ) : (
-            <div className="p-4 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 flex items-center gap-3 text-amber-600 text-xs font-medium">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Obra não encontrada. Selecione uma obra na lista acima.</span>
-            </div>
-          )}
+            )}
 
-          {/* Atividades por Ponto */}
-          <div className="flex flex-col gap-5">
-            {selectedPontosLabels.length === 0 ? (
-              <Card className="border border-border">
-                <CardContent className="py-10 text-center text-muted-foreground text-xs space-y-1">
-                  <p className="font-semibold text-foreground">Nenhum ponto marcado para execução.</p>
-                  <p>Selecione pontos no painel acima.</p>
-                </CardContent>
-              </Card>
-            ) : selectedPontosLabels.map(pLabel => {
-              const itemsDoPonto = pontosGroupedMap[pLabel] || [];
-              const itemsSelecionados = itemsDoPonto.filter(i => i.selected);
-              const subtotalMinutos = itemsSelecionados.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
-              const subtotalValor = itemsSelecionados.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
+            {/* Sequência Diária de Pontos e Atividades */}
+            <div className="flex flex-col gap-5 pt-2">
+                {diasProgramacao.map((dia, dayIdx) => {
+                  const itemsSelecionadosDia = dia.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(i => i.selected));
+                  const tempoDia = itemsSelecionadosDia.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                  const valorDia = itemsSelecionadosDia.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
 
-              return (
-                <Card key={pLabel} className="border border-border shadow-xs">
-                  <CardHeader className="pb-3 bg-muted/30 flex flex-row items-center justify-between border-b border-border/60">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-sm font-bold font-mono text-primary flex items-center gap-1.5">
-                          <Layers className="w-4 h-4" /> PONTO {pLabel}
-                        </CardTitle>
-                        <Badge variant="outline" className="text-[11px] font-mono">
-                          {itemsDoPonto.length} atividade(s)
-                        </Badge>
+                  return (
+                    <div key={dayIdx} className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                      <div className="bg-muted/30 border-b border-border p-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CalendarIcon className="w-4 h-4 text-primary" />
+                            <h3 className="font-bold text-sm text-foreground">{dia.data} — {dia.diaSemana}</h3>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs font-mono">
+                            <span className="text-muted-foreground">Tempo: <strong>{Math.floor(tempoDia/60)}h {tempoDia%60}m</strong></span>
+                            <span className="text-emerald-600 font-bold">R$ {valorDia.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        {/* Seleção de Pontos para este Dia */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap bg-background p-2 rounded-lg border border-border">
+                          <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
+                            <PackageCheck className="w-4 h-4" /> Pontos deste dia:
+                          </span>
+                          <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
+                            <PontosMultiSelect
+                              pontos={pontosDisponiveis.length > 0 ? pontosDisponiveis : pontosIa}
+                              selected={dia.pontos}
+                              orcamentoPorPontoMap={orcamentoPorPontoMap}
+                              onToggle={(p) => handleTogglePontoDia(dayIdx, p)}
+                              onSelectAll={() => handleSelectAllPontosDia(dayIdx)}
+                              onDeselectAll={() => handleDeselectAllPontosDia(dayIdx)}
+                            />
+                            <div className="flex items-center gap-1">
+                              <Input placeholder="Ponto extra..." value={newCustomPontoInput.dayIdx === dayIdx ? newCustomPontoInput.value : ''}
+                                onChange={e => setNewCustomPontoInput({ dayIdx, value: e.target.value })}
+                                onKeyDown={e => e.key === 'Enter' && handleAddCustomPontoLabel(dayIdx)}
+                                className="h-8 text-xs w-[120px] font-mono" />
+                              <Button size="sm" variant="outline" onClick={() => handleAddCustomPontoLabel(dayIdx)} className="h-8 text-xs px-2.5">
+                                <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Badges dos pontos do dia */}
+                        {dia.pontos.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {dia.pontos.map(p => (
+                              <Badge key={p} variant="secondary"
+                                className="font-mono text-[11px] px-2 py-0.5 cursor-pointer hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => handleTogglePontoDia(dayIdx, p)}>
+                                {p} ✕
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <CardDescription className="text-xs mt-0.5">
-                        Atividades para execução no ponto <strong className="font-mono text-foreground">{pLabel}</strong>
-                      </CardDescription>
-                    </div>
-                    <Button size="sm" variant="secondary" onClick={() => handleAddAtividadeNoPonto(pLabel)} className="h-8 gap-1 text-xs font-semibold">
-                      <Plus className="w-3.5 h-3.5" /> Adicionar Atividade
-                    </Button>
-                  </CardHeader>
 
-                  <CardContent className="pt-4 space-y-3">
-                    <div className="rounded-xl border border-border overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50 text-[11px]">
-                            <TableHead className="w-[36px] text-center">
-                              <Checkbox
-                                checked={itemsDoPonto.length > 0 && itemsDoPonto.every(i => i.selected)}
-                                onCheckedChange={c => {
-                                  const val = Boolean(c);
-                                  setPontosGroupedMap(prev => ({ ...prev, [pLabel]: (prev[pLabel] || []).map(item => ({ ...item, selected: val })) }));
-                                }}
-                              />
-                            </TableHead>
-                            <TableHead>Atividade / Serviço no Ponto {pLabel}</TableHead>
-                            <TableHead className="w-[85px] text-center">Qtd Prev. (Col F)</TableHead>
-                            <TableHead className="w-[140px]">Etapa (Col M)</TableHead>
-                            <TableHead className="w-[85px] text-center">Qtd Prog.</TableHead>
-                            <TableHead className="w-[95px]">Tempo</TableHead>
-                            <TableHead className="w-[100px]">Valor</TableHead>
-                            <TableHead className="w-[36px]" />
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody className="text-xs">
-                          {itemsDoPonto.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={8} className="text-center py-6 text-muted-foreground text-xs">
-                                Clique em "Adicionar Atividade" para incluir.
-                              </TableCell>
-                            </TableRow>
-                          ) : itemsDoPonto.map((item, itemIdx) => (
-                            <TableRow key={item.id || itemIdx} className={`hover:bg-accent/30 transition-colors ${!item.selected ? 'bg-muted/10 text-muted-foreground' : 'bg-background'}`}>
-                              <TableCell className="p-2 text-center">
-                                <Checkbox checked={item.selected} onCheckedChange={c => handleUpdateAtividade(pLabel, itemIdx, 'selected', Boolean(c))} />
-                              </TableCell>
-                              <TableCell className="p-2">
-                                {item.isBudgeted ? (
-                                  <span className="font-semibold text-xs text-foreground">{item.servico}</span>
-                                ) : (
-                                  <Select value={item.servico} onValueChange={v => handleUpdateAtividade(pLabel, itemIdx, 'servico', v)}>
-                                    <SelectTrigger className="h-7 text-xs font-semibold border-dashed">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="max-h-[200px]">
-                                      {SERVICOS_PADRAO.map(s => (
-                                        <SelectItem key={s.servico} value={s.servico} className="text-xs">{s.servico}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              </TableCell>
-                              <TableCell className="p-2 text-center">
-                                <Input type="number" min="0" value={item.qtdOrcadaPonto}
-                                  onChange={e => handleUpdateAtividade(pLabel, itemIdx, 'qtdOrcadaPonto', e.target.value)}
-                                  className="h-7 text-xs text-center font-mono w-full" />
-                              </TableCell>
-                              <TableCell className="p-2">
-                                <Select value={item.etapaPrevista} onValueChange={v => handleUpdateAtividade(pLabel, itemIdx, 'etapaPrevista', v)}>
-                                  <SelectTrigger className="h-7 text-xs">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {ETAPAS_PADRAO.map(e => (
-                                      <SelectItem key={e} value={e} className="text-xs">{e}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                              <TableCell className="p-2 text-center">
-                                <Input type="number" min="1" value={item.quantidade}
-                                  onChange={e => handleUpdateAtividade(pLabel, itemIdx, 'quantidade', e.target.value)}
-                                  className="h-7 text-xs text-center font-mono font-bold w-full" />
-                              </TableCell>
-                              <TableCell className="p-2 font-mono text-xs">
-                                {Math.floor(item.tempoEstimadoMinutos / 60)}h {item.tempoEstimadoMinutos % 60}m
-                              </TableCell>
-                              <TableCell className="p-2 font-mono text-xs text-emerald-600">
-                                R$ {(item.valorEstimado || 0).toFixed(2)}
-                              </TableCell>
-                              <TableCell className="p-2 text-right">
-                                <Button variant="ghost" size="icon" onClick={() => handleRemoveAtividade(pLabel, itemIdx)}
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                                  <Trash2 className="w-3.5 h-3.5" />
+                      {/* Atividades dos pontos do dia */}
+                      <div className="p-4 flex flex-col gap-4 bg-background">
+                        {dia.pontos.length === 0 ? (
+                           <div className="text-center py-4 text-muted-foreground text-xs italic border border-dashed border-border rounded-xl">
+                             Nenhum ponto alocado para este dia.
+                           </div>
+                        ) : dia.pontos.map(pLabel => {
+                          const itemsDoPonto = pontosGroupedMap[pLabel] || [];
+                          const itemsSelecionados = itemsDoPonto.filter(i => i.selected);
+                          const subtotalMinutos = itemsSelecionados.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                          const subtotalValor = itemsSelecionados.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
+            
+                          return (
+                            <div key={pLabel} className="border border-border/60 rounded-xl overflow-hidden shadow-xs">
+                              <div className="bg-muted/10 p-2 flex flex-row items-center justify-between border-b border-border/60">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-xs font-bold font-mono text-primary flex items-center gap-1.5">
+                                      <Layers className="w-3.5 h-3.5" /> PONTO {pLabel}
+                                    </h4>
+                                    <Badge variant="outline" className="text-[10px] font-mono">
+                                      {itemsDoPonto.length} ativ.
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <Button size="sm" variant="secondary" onClick={() => handleAddAtividadeNoPonto(pLabel)} className="h-7 gap-1 text-[10px] font-semibold">
+                                  <Plus className="w-3 h-3" /> Adicionar
                                 </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                      <span>Ponto {pLabel}: {itemsSelecionados.length} atividades marcadas</span>
-                      <div className="flex items-center gap-4 font-mono font-semibold">
-                        <span>Tempo: {Math.floor(subtotalMinutos / 60)}h {subtotalMinutos % 60}m</span>
-                        <span className="text-emerald-600">R$ {subtotalValor.toFixed(2)}</span>
+                              </div>
+            
+                              <div className="p-2 space-y-2">
+                                <div className="rounded-lg border border-border/60 overflow-hidden">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="bg-muted/30 text-[10px] [&>th]:h-8 [&>th]:px-2">
+                                        <TableHead className="w-[32px] text-center">
+                                          <Checkbox
+                                            checked={itemsDoPonto.length > 0 && itemsDoPonto.every(i => i.selected)}
+                                            onCheckedChange={c => {
+                                              const val = Boolean(c);
+                                              setPontosGroupedMap(prev => ({ ...prev, [pLabel]: (prev[pLabel] || []).map(item => ({ ...item, selected: val })) }));
+                                            }}
+                                          />
+                                        </TableHead>
+                                        <TableHead>Atividade / Serviço</TableHead>
+                                        <TableHead className="w-[70px] text-center">Qtd Prev.</TableHead>
+                                        <TableHead className="w-[120px]">Etapa</TableHead>
+                                        <TableHead className="w-[70px] text-center">Qtd Prog.</TableHead>
+                                        <TableHead className="w-[85px]">Tempo</TableHead>
+                                        <TableHead className="w-[90px]">Valor</TableHead>
+                                        <TableHead className="w-[32px]" />
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody className="text-[11px]">
+                                      {itemsDoPonto.length === 0 ? (
+                                        <TableRow>
+                                          <TableCell colSpan={8} className="text-center py-4 text-muted-foreground text-[10px]">
+                                            Adicione atividades...
+                                          </TableCell>
+                                        </TableRow>
+                                      ) : itemsDoPonto.map((item, itemIdx) => (
+                                        <TableRow key={item.id || itemIdx} className={`hover:bg-accent/30 transition-colors [&>td]:p-1.5 ${!item.selected ? 'bg-muted/5 text-muted-foreground' : 'bg-background'}`}>
+                                          <TableCell className="text-center">
+                                            <Checkbox checked={item.selected} onCheckedChange={c => handleUpdateAtividade(pLabel, itemIdx, 'selected', Boolean(c))} />
+                                          </TableCell>
+                                          <TableCell>
+                                            {item.isBudgeted ? (
+                                              <span className="font-semibold text-foreground">{item.servico}</span>
+                                            ) : (
+                                              <Select value={item.servico} onValueChange={v => handleUpdateAtividade(pLabel, itemIdx, 'servico', v)}>
+                                                <SelectTrigger className="h-6 text-[10px] font-semibold border-dashed">
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="max-h-[200px]">
+                                                  {servicosBase.map(s => (
+                                                    <SelectItem key={s.servico} value={s.servico} className="text-[10px]">{s.servico}</SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            )}
+                                          </TableCell>
+                                          <TableCell className="text-center">
+                                            <Input type="number" min="0" value={item.qtdOrcadaPonto}
+                                              onChange={e => handleUpdateAtividade(pLabel, itemIdx, 'qtdOrcadaPonto', e.target.value)}
+                                              className="h-6 text-[10px] text-center font-mono w-full px-1" />
+                                          </TableCell>
+                                          <TableCell>
+                                            <Select value={item.etapaPrevista} onValueChange={v => handleUpdateAtividade(pLabel, itemIdx, 'etapaPrevista', v)}>
+                                              <SelectTrigger className="h-6 text-[10px] px-2">
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {ETAPAS_PADRAO.map(e => (
+                                                  <SelectItem key={e} value={e} className="text-[10px]">{e}</SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </TableCell>
+                                          <TableCell className="text-center">
+                                            <Input type="number" min="1" value={item.quantidade}
+                                              onChange={e => handleUpdateAtividade(pLabel, itemIdx, 'quantidade', e.target.value)}
+                                              className="h-6 text-[10px] text-center font-mono font-bold w-full px-1" />
+                                          </TableCell>
+                                          <TableCell className="font-mono">
+                                            {Math.floor(item.tempoEstimadoMinutos / 60)}h {item.tempoEstimadoMinutos % 60}m
+                                          </TableCell>
+                                          <TableCell className="font-mono text-emerald-600">
+                                            R$ {(item.valorEstimado || 0).toFixed(2)}
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveAtividade(pLabel, itemIdx)}
+                                              className="h-6 w-6 text-muted-foreground hover:text-destructive">
+                                              <Trash2 className="w-3 h-3" />
+                                            </Button>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
+                                  <span>{itemsSelecionados.length} atividades</span>
+                                  <div className="flex items-center gap-3 font-mono font-semibold">
+                                    <span>{Math.floor(subtotalMinutos / 60)}h {subtotalMinutos % 60}m</span>
+                                    <span className="text-emerald-600">R$ {subtotalValor.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
 
           {/* Totais */}
           <div className="grid grid-cols-4 gap-3">
@@ -805,7 +1002,7 @@ export const AiPlanEditor = ({
               </div>
               <div className="flex items-center justify-between pt-2">
                 <div className="text-xs text-muted-foreground">
-                  Data: <strong>{dataProgramacaoFormatada}</strong> | Obra: <strong>{obraId}</strong> | Equipe: <strong>{equipe}</strong> | Meta: <strong>R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
+                  Semana: <strong>{plano.semana}</strong> | Obra: <strong>{obraId}</strong> | Equipe: <strong>{equipe}</strong> | Meta: <strong>R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
                 </div>
                 <Button onClick={handleEnviar} disabled={!obra || selectedItemsFlat.length === 0 || salvarProgramacao.isPending} className="gap-2 font-semibold">
                   {salvarProgramacao.isPending ? (

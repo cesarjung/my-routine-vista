@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavigationContext, ViewMode } from '@/types/navigation';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { DashboardView } from '@/components/views/DashboardView';
@@ -38,6 +38,16 @@ export interface ContentAreaProps {
 
 export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentAreaProps) => {
   const { data: sectors } = useSectors();
+  const [visitedViews, setVisitedViews] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setVisitedViews(prev => {
+      if (prev.has(context.type)) return prev;
+      const next = new Set(prev);
+      next.add(context.type);
+      return next;
+    });
+  }, [context.type]);
 
   const getTitle = () => {
     switch (context.type) {
@@ -193,8 +203,6 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     if (context.type === 'planejamento_semanal') return <PlanejamentoSemanalView />;
     if (context.type === 'planejamento_materiais') return <PlanejamentoMateriaisView />;
     if (context.type === 'planejamento_envios') return <PlanejamentoEnviosView />;
-    if (context.type === 'pcp_planejamento') return <PcpPlanejamentoView />;
-    if (context.type === 'pcp_planejamento_auto') return <PcpPlanejAutoView />;
     
     return null;
   };
@@ -302,7 +310,13 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <main className={cn("flex-1 flex flex-col", isGanttView ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>
         <div className={cn("mx-auto flex flex-col w-full min-h-full", isPlanejamento ? "max-w-none" : "max-w-7xl")}>
           <ErrorBoundary>
-            {renderContent()}
+            <div className={cn("w-full h-full", context.type === 'pcp_planejamento' ? "block" : "hidden")}>
+              {visitedViews.has('pcp_planejamento') && <PcpPlanejamentoView />}
+            </div>
+            <div className={cn("w-full h-full", context.type === 'pcp_planejamento_auto' ? "block" : "hidden")}>
+              {visitedViews.has('pcp_planejamento_auto') && <PcpPlanejAutoView />}
+            </div>
+            {context.type !== 'pcp_planejamento' && context.type !== 'pcp_planejamento_auto' && renderContent()}
           </ErrorBoundary>
         </div>
       </main>

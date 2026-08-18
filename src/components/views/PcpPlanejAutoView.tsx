@@ -125,15 +125,15 @@ const TabelaSemanal = ({ plano, onExportar }: { plano: PlanoEquipe; onExportar: 
 // ─── Main View ────────────────────────────────────────────────────────────────
 export const PcpPlanejAutoView = () => {
   // ── Filtros (persistentes) ────────────────────────────────────────────────
-  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState('pcp_auto_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI');
-  const [selectedSituacao, setSelectedSituacao] = useSessionState('pcp_auto_situacao', 'APTA');
-  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_auto_statuses', DEFAULT_SELECTED_STATUSES);
+  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState('pcp_shared_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI');
+  const [selectedSituacao, setSelectedSituacao] = useSessionState('pcp_shared_situacao', 'APTA');
+  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_shared_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState(false);
-  const [selectedMesFilter, setSelectedMesFilter] = useSessionState('pcp_auto_mes', 'TODOS');
-  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState('pcp_auto_municipio', 'TODOS');
-  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState('pcp_auto_prioridade', 'TODAS');
-  const [searchObra, setSearchObra] = useSessionState('pcp_auto_search', '');
-  const [selectedObraId, setSelectedObraId] = useSessionState('pcp_auto_obra', '');
+  const [selectedMesFilter, setSelectedMesFilter] = useSessionState('pcp_shared_mes', 'TODOS');
+  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState('pcp_shared_municipio', 'TODOS');
+  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState('pcp_shared_prioridade', 'TODAS');
+  const [searchObra, setSearchObra] = useSessionState('pcp_shared_search', '');
+  const [selectedObraId, setSelectedObraId] = useSessionState('pcp_shared_obra', '');
 
   // ── Parâmetros IA ─────────────────────────────────────────────────────────
   const [jornadaHoras, setJornadaHoras] = useState(9);
@@ -185,21 +185,8 @@ export const PcpPlanejAutoView = () => {
     setSearchObra('');
   };
 
-  // Atividades da obra selecionada
-  const atividadesQuery = useQuery({
-    queryKey: ['atividades_plano', selectedUnidadeId, selectedObraId],
-    queryFn: async () => {
-      if (!selectedObraId) return [];
-      const { data } = await supabase
-        .from('atividades_por_ponto' as any)
-        .select('obra_id, ponto_id, atividade, quantidade, tempo_minutos, valor_estimado')
-        .eq('obra_id', selectedObraId)
-        .limit(2000);
-      return (data ?? []) as any[];
-    },
-    enabled: !!selectedObraId,
-    staleTime: 5 * 60 * 1000,
-  });
+  const totalPontos = orcamentoPorPontoMap.size;
+  const totalAtividades = Array.from(orcamentoPorPontoMap.values()).reduce((acc, ativs) => acc + ativs.length, 0);
 
   // ── Filtros derivados ─────────────────────────────────────────────────────
   const filteredObras = useMemo(() => {
@@ -276,7 +263,7 @@ export const PcpPlanejAutoView = () => {
     const orcamentoDetalhado = selectedObraId ? Object.fromEntries(
       Array.from(orcamentoPorPontoMap.entries()).map(([ponto, ativs]) => [
         ponto,
-        ativs.map(a => ({ servico: a.servico, qtd: a.qtdOrcada, tempo_min: a.tempoEstimadoMinutos, valor: a.valorEstimado }))
+        ativs.map(a => ({ servico: a.servicoPrevisto, qtd: a.quantidade, tempo_min: a.tempoMinutos, valor: a.valorEstimado }))
       ])
     ) : undefined;
 
@@ -289,11 +276,11 @@ export const PcpPlanejAutoView = () => {
       })),
       equipes: equipesSelecionadas.length > 0 ? equipesSelecionadas : equipesDisponiveis.slice(0, 3),
       alojamentos: alojamentosUnidade.map(a => ({ nome: a.nome, latitude: a.latitude, longitude: a.longitude, unidadeNome: a.unidadeNome })),
-      atividades: atividadesQuery.data ?? [],
+      atividades: [],
       orcamentoDetalhado,
       parametros: { jornadaHoras, metaPercent, pontoSaida },
     };
-  }, [filteredObras, equipesSelecionadas, equipesDisponiveis, alojamentosUnidade, atividadesQuery.data, orcamentoPorPontoMap, pontosDisponiveisDoProjeto, selectedObraId, jornadaHoras, metaPercent, pontoSaida]);
+  }, [filteredObras, equipesSelecionadas, equipesDisponiveis, alojamentosUnidade, orcamentoPorPontoMap, pontosDisponiveisDoProjeto, selectedObraId, jornadaHoras, metaPercent, pontoSaida]);
 
   const handleSend = async () => {
     if (!chatInput.trim() || isLoading) return;
@@ -609,12 +596,12 @@ export const PcpPlanejAutoView = () => {
 
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
-                    <div className="font-bold text-foreground text-base">{atividadesQuery.data?.length ?? '—'}</div>
+                    <div className="font-bold text-foreground text-base">{totalAtividades || '—'}</div>
                     <div className="text-muted-foreground">Atividades</div>
                   </div>
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
                     <div className="font-bold text-foreground text-base">
-                      {new Set(atividadesQuery.data?.map((a: any) => a.ponto_id)).size || '—'}
+                      {totalPontos || '—'}
                     </div>
                     <div className="text-muted-foreground">Pontos</div>
                   </div>

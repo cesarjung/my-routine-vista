@@ -39,7 +39,6 @@ import {
   usePcpPlanejamentoData,
   UNIDADES_DISPONIVEIS,
   ETAPAS_PADRAO,
-  SERVICOS_PADRAO,
   ALL_STATUSES,
   DEFAULT_SELECTED_STATUSES,
   PcpObra,
@@ -169,15 +168,15 @@ const PontosMultiSelect = ({
 export const PcpPlanejamentoView = () => {
   // State
   // Selected Obra & Filters (Filtros da Carteira)
-  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_manual_obra', '');
-  const [searchObra, setSearchObra] = useSessionState<string>('pcp_manual_search', '');
-  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_manual_statuses', DEFAULT_SELECTED_STATUSES);
+  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_shared_obra', '');
+  const [searchObra, setSearchObra] = useSessionState<string>('pcp_shared_search', '');
+  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_shared_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState<boolean>(false);
-  const [selectedSituacao, setSelectedSituacao] = useSessionState<string>('pcp_manual_situacao', 'APTA');
-  const [selectedMesFilter, setSelectedMesFilter] = useSessionState<string>('pcp_manual_mes', 'TODOS');
-  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState<string>('pcp_manual_municipio', 'TODOS');
-  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_manual_prioridade', 'TODAS');
-  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_manual_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
+  const [selectedSituacao, setSelectedSituacao] = useSessionState<string>('pcp_shared_situacao', 'APTA');
+  const [selectedMesFilter, setSelectedMesFilter] = useSessionState<string>('pcp_shared_mes', 'TODOS');
+  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState<string>('pcp_shared_municipio', 'TODOS');
+  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_shared_prioridade', 'TODAS');
+  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_shared_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
 
   // Selected Pontos list for active Obra
   const [selectedPontosLabels, setSelectedPontosLabels] = useState<string[]>([]);
@@ -199,7 +198,8 @@ export const PcpPlanejamentoView = () => {
     orcamentoPontosQuery,
     orcamentoPorPontoMap,
     pontosDisponiveisDoProjeto,
-    salvarProgramacao
+    salvarProgramacao,
+    servicosBase
   } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId);
 
   const selectedObra = useMemo(() => obras.find(o => o.projeto === selectedObraId) || null, [obras, selectedObraId]);
@@ -337,7 +337,8 @@ export const PcpPlanejamentoView = () => {
               isBudgeted: true, // Marca que é atividade prevista do ponto
             }));
           } else {
-            const defaultServ = SERVICOS_PADRAO[0];
+            const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+            const defaultServ = fallback;
             nextMap[pLabelUpper] = [
               {
                 id: `${pLabelUpper}-default-${Date.now()}`,
@@ -480,7 +481,8 @@ export const PcpPlanejamentoView = () => {
   const handleAddAtividadeNoPonto = (pontoLabelTarget: string) => {
     const existing = pontosGroupedMap[pontoLabelTarget] || [];
     const existingServicos = new Set(existing.map(i => i.servico));
-    const nextAvailableServico = SERVICOS_PADRAO.find(s => !existingServicos.has(s.servico)) || SERVICOS_PADRAO[0];
+    const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+    const nextAvailableServico = servicosBase.find(s => !existingServicos.has(s.servico)) || fallback;
 
     const newActivity: PcpPontoItem = {
       id: `${pontoLabelTarget}-manual-${Date.now()}`,
@@ -510,7 +512,7 @@ export const PcpPlanejamentoView = () => {
       const target = { ...items[itemIndex] };
 
       if (field === 'servico') {
-        const found = SERVICOS_PADRAO.find(s => s.servico === value);
+        const found = servicosBase.find(s => s.servico === value);
         target.servico = value;
         target.etapaPrevista = inferEtapaFromServico(value);
         if (found) {
@@ -518,8 +520,9 @@ export const PcpPlanejamentoView = () => {
           target.valorEstimado = found.valorPorUnidade * target.quantidade;
         }
       } else if (field === 'quantidade') {
+        const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: target.servico, tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+        const found = servicosBase.find(s => s.servico === target.servico) || fallback;
         const qty = Math.max(1, Math.round(Number(value) || 1));
-        const found = SERVICOS_PADRAO.find(s => s.servico === target.servico) || SERVICOS_PADRAO[0];
         target.quantidade = qty;
         target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * qty);
         target.valorEstimado = found.valorPorUnidade * qty;
@@ -1572,9 +1575,9 @@ export const PcpPlanejamentoView = () => {
                                           <SelectTrigger className="h-8 text-xs font-semibold bg-background border-border">
                                             <SelectValue placeholder="Selecione a Atividade" />
                                           </SelectTrigger>
-                                          <SelectContent>
-                                            {SERVICOS_PADRAO.map(s => (
-                                              <SelectItem key={s.servico} value={s.servico} className="text-xs font-semibold">
+                                          <SelectContent className="max-h-[200px]">
+                                            {servicosBase.map(s => (
+                                              <SelectItem key={s.servico} value={s.servico} className="text-[10px]">
                                                 {s.servico}
                                               </SelectItem>
                                             ))}

@@ -164,16 +164,17 @@ async function generatePlan(apiKey: string, body: PlanRequest) {
   const sistemPrompt = `Você é um planejador especialista em obras de distribuição elétrica (COELBA/NEOENERGIA).
 Seu trabalho é gerar planejamentos semanais de execução para equipes de campo, considerando:
 - Jornada de trabalho de ${parametros.jornadaHoras}h por dia (mínimo)
-- Meta de faturamento de ${parametros.metaPercent}% por dia
+- Meta de faturamento DIÁRIA de ${parametros.metaPercent}% (alvo por dia)
 - Ponto de saída: ${parametros.pontoSaida}
 - Alojamentos disponíveis: ${alojamentos.map(a => `${a.nome} (${a.unidadeNome})`).join(", ") || "base da unidade"}
 
-REGRAS IMPORTANTES:
-1. Cada dia deve ter entre ${parametros.jornadaHoras}h e ${parametros.jornadaHoras + 1.5}h de atividades
-2. Otimize a ordem dos pontos para minimizar deslocamento
-3. A meta de ${parametros.metaPercent}% é o alvo — pode não ser atingida todos os dias por limitação de tempo
-4. Para múltiplas equipes, distribua os pontos sem conflito (cada ponto em apenas uma equipe)
-5. Considere que pontos P são postes, V são vãos de cabo — podem ser executados sequencialmente
+REGRAS IMPORTANTES E MATEMÁTICAS:
+1. Você DEVE distribuir TODOS os pontos do orçamento ao longo de VÁRIOS DIAS da semana, dividindo a carga de trabalho.
+2. Cada dia tem um limite ESTRITO de ${parametros.jornadaHoras * 60} a ${(parametros.jornadaHoras + 1.5) * 60} minutos de trabalho. 
+3. ATENÇÃO: Faça a soma do 'tempoEstimadoMinutos' de cada ponto que você colocar em um dia. A SOMA DOS MINUTOS NÃO PODE, EM HIPÓTESE ALGUMA, ULTRAPASSAR ${(parametros.jornadaHoras + 1) * 60} MINUTOS! Quando atingir o limite, passe para o próximo dia (Terça, Quarta, etc).
+4. A meta de ${parametros.metaPercent}% é DIÁRIA — pode não ser atingida todos os dias por limitação de tempo, a prioridade máxima é não estourar os minutos (Regra 3).
+5. Otimize a ordem dos pontos para minimizar deslocamento.
+6. Considere que pontos P são postes, V são vãos de cabo — podem ser executados sequencialmente.
 
 FORMATO DE RESPOSTA — retorne APENAS JSON válido:
 {

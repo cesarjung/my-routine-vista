@@ -190,34 +190,12 @@ const parseNumericCell = (val: any): number => {
   return isNaN(n) ? 0 : n;
 };
 
-// Complete Master Catalog of Activities / Services extracted directly from Sirtec Google Sheets Prog_TPM
-export const SERVICOS_PADRAO = [
-  { servico: 'INSTALAR POSTE 9 A 14 METROS', tempoMinutosPorUnidade: 15, valorPorUnidade: 280.0 },
-  { servico: 'INSTALAR POSTE 14 METROS OU SUPERIOR', tempoMinutosPorUnidade: 25, valorPorUnidade: 420.0 },
-  { servico: 'RETIRAR POSTE 9 A 14 METROS', tempoMinutosPorUnidade: 15, valorPorUnidade: 180.0 },
-  { servico: 'ESCAVAR SOLO NORMAL', tempoMinutosPorUnidade: 10, valorPorUnidade: 95.0 },
-  { servico: 'CAVA EM ROCHA', tempoMinutosPorUnidade: 30, valorPorUnidade: 320.0 },
-  { servico: 'DISTRIBUIÇÃO DE POSTES', tempoMinutosPorUnidade: 10, valorPorUnidade: 110.0 },
-  { servico: 'INSTALAR ESTAI EM SOLO', tempoMinutosPorUnidade: 12, valorPorUnidade: 130.0 },
-  { servico: 'INSTALAR ESTAI AEREO', tempoMinutosPorUnidade: 15, valorPorUnidade: 150.0 },
-  { servico: 'INSTALAR ESTRUTURA CE1, CE2 OU CE3', tempoMinutosPorUnidade: 12, valorPorUnidade: 140.0 },
-  { servico: 'INSTALAR EST CRUZ DUPLA 1 ANCORAGEM', tempoMinutosPorUnidade: 15, valorPorUnidade: 160.0 },
-  { servico: 'INSTALAR EST CRUZ DUPLA 2 ANCORAGENS', tempoMinutosPorUnidade: 20, valorPorUnidade: 210.0 },
-  { servico: 'INSTALAR TRAFO MONOFASICO', tempoMinutosPorUnidade: 30, valorPorUnidade: 550.0 },
-  { servico: 'INSTALAR TRAFO POLIFASICO', tempoMinutosPorUnidade: 40, valorPorUnidade: 750.0 },
-  { servico: 'RETIRAR TRAFO MONOFASICO', tempoMinutosPorUnidade: 25, valorPorUnidade: 380.0 },
-  { servico: 'INSTALAR CHAVE FUSIVEL', tempoMinutosPorUnidade: 15, valorPorUnidade: 180.0 },
-  { servico: 'INSTALAR CHAVE FUSIVEL LV', tempoMinutosPorUnidade: 20, valorPorUnidade: 230.0 },
-  { servico: 'RETIRAR CHAVE FUSIVEL', tempoMinutosPorUnidade: 10, valorPorUnidade: 110.0 },
-  { servico: 'INSTALAR CHAVE FACA', tempoMinutosPorUnidade: 15, valorPorUnidade: 190.0 },
-  { servico: 'INSTALAR RELIGADOR', tempoMinutosPorUnidade: 35, valorPorUnidade: 680.0 },
-  { servico: 'INSTALAR REGULADOR DE TENSAO', tempoMinutosPorUnidade: 40, valorPorUnidade: 780.0 },
-  { servico: 'INSTALAR ATERRAMENTO LINHA/EQUIPAMENTO', tempoMinutosPorUnidade: 10, valorPorUnidade: 120.0 },
-  { servico: 'LANÇAMENTO DE CABO MULTIPLEXADO', tempoMinutosPorUnidade: 5, valorPorUnidade: 45.0 },
-  { servico: 'INSTALAR CABO AL CAA 4', tempoMinutosPorUnidade: 8, valorPorUnidade: 65.0 },
-  { servico: 'REALOCAR RAMAL DE LIGACAO MONOFASICO', tempoMinutosPorUnidade: 12, valorPorUnidade: 130.0 },
-  { servico: 'TRANSP MAT OBRA', tempoMinutosPorUnidade: 10, valorPorUnidade: 90.0 },
-];
+export interface ServicoBase {
+  servico: string;
+  tempoMinutosPorUnidade: number;
+  valorPorUnidade: number;
+}
+
 
 // Status reais da aba Carteira_Planejador (coluna L / index 11)
 export const ALL_STATUSES = [
@@ -285,6 +263,62 @@ export const usePcpPlanejamentoData = (
     }
 
     return map;
+  }, [rawCacheQuery.data]);
+
+  // Parse BD_Config to extract official services catalog with correct times and values
+  const servicosBase = useMemo(() => {
+    const lista: ServicoBase[] = [];
+    if (!rawCacheQuery.data?.bd_metas) return lista;
+
+    try {
+      const rawStr = rawCacheQuery.data.bd_metas;
+      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      const bdConfigRows = parsed?.bd_config || [];
+
+      // Colunas: AK=36, AL=37(Atividade), AO=40(Tempo), AS=44(Valor)
+      for (let i = 1; i < bdConfigRows.length; i++) {
+        const row = bdConfigRows[i];
+        if (!row || row.length < 38) continue; // Pelo menos até AL (Atividade) tem que existir
+
+        const atividade = String(row[37] || '').trim().toUpperCase();
+        const tempoStr = String(row[40] || '').trim();
+        const valStr = String(row[44] || '').trim();
+        
+        if (!atividade) continue;
+
+        let tempoMinutos = 0;
+        if (tempoStr) {
+           const p = tempoStr.split(':');
+           if (p.length === 3) {
+             tempoMinutos = parseInt(p[0]||'0', 10) * 60 + parseInt(p[1]||'0', 10) + parseInt(p[2]||'0', 10) / 60;
+           } else if (p.length === 2) {
+             tempoMinutos = parseInt(p[0]||'0', 10) * 60 + parseInt(p[1]||'0', 10);
+           } else if (p.length === 1 && parseFloat(p[0])) {
+             tempoMinutos = parseFloat(p[0]);
+           }
+        }
+
+        let valor = 0;
+        if (valStr) {
+           valor = parseFloat(valStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+        }
+
+        lista.push({
+          servico: atividade,
+          tempoMinutosPorUnidade: tempoMinutos > 0 ? tempoMinutos : 15, // fallback only if strictly zero or NaN
+          valorPorUnidade: valor,
+        });
+      }
+    } catch (e) {
+      console.error('Erro ao parsear bd_config:', e);
+    }
+    
+    if (lista.length === 0) {
+      // Fallback in case of failure so UI doesn't crash completely
+      lista.push({ servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100.0 });
+    }
+    
+    return lista;
   }, [rawCacheQuery.data]);
 
   // Parse Carteira_Planejador (com Qtd Postes Col Y / Index 24, Qtd Cabos Col AE / Index 30, Mês Col G / Index 6)
@@ -563,12 +597,14 @@ export const usePcpPlanejamentoData = (
       pontoMap.forEach((atvsMap, pontoKey) => {
         const list: MaterialPontoBudget[] = [];
         atvsMap.forEach((info, descricao) => {
-          // Try to find matching service in SERVICOS_PADRAO by description match
-          const foundServ = SERVICOS_PADRAO.find(s =>
-            s.servico.toUpperCase() === descricao ||
-            descricao.includes(s.servico.toUpperCase()) ||
-            s.servico.toUpperCase().includes(descricao.split(' ').slice(0, 3).join(' '))
-          ) || SERVICOS_PADRAO[0];
+          // Tenta encontrar serviço exato primeiro
+          let foundServ = servicosBase.find(s => s.servico === descricao);
+          
+          if (!foundServ) {
+            // Fallback para contain
+            foundServ = servicosBase.find(s => descricao.includes(s.servico) || s.servico.includes(descricao)) 
+              || (servicosBase.length > 0 ? servicosBase[0] : { servico: descricao, tempoMinutosPorUnidade: 15, valorPorUnidade: 0 });
+          }
 
           const totalQty = Math.max(1, Math.round(info.qty));
           list.push({
@@ -580,7 +616,7 @@ export const usePcpPlanejamentoData = (
             unidade: 'UND',
             servicoPrevisto: descricao, // Use description directly from sheet
             etapaPrevista: info.etapa,  // Etapa directly from sheet (Col C)
-            tempoMinutos: foundServ.tempoMinutosPorUnidade,
+            tempoMinutos: foundServ.tempoMinutosPorUnidade * totalQty,
             valorEstimado: foundServ.valorPorUnidade * totalQty,
           });
         });
@@ -633,7 +669,7 @@ export const usePcpPlanejamentoData = (
       pontoAtividadesMap.forEach((ativsMap, pontoKey) => {
         const list: MaterialPontoBudget[] = [];
         ativsMap.forEach((quantities, servico) => {
-          const foundServ = SERVICOS_PADRAO.find(s => s.servico === servico) || SERVICOS_PADRAO[0];
+          const foundServ = servicosBase.find(s => s.servico === servico) || (servicosBase.length > 0 ? servicosBase[0] : { servico, tempoMinutosPorUnidade: 15, valorPorUnidade: 0 });
           const totalQty = Math.max(1, Math.round(quantities.reduce((a, b) => a + b, 0)));
           list.push({
             id: `${pontoKey}-${servico.replace(/\s+/g, '_')}`,
@@ -643,7 +679,7 @@ export const usePcpPlanejamentoData = (
             quantidade: totalQty,
             unidade: 'UNID',
             servicoPrevisto: servico,
-            tempoMinutos: foundServ.tempoMinutosPorUnidade,
+            tempoMinutos: foundServ.tempoMinutosPorUnidade * totalQty,
             valorEstimado: foundServ.valorPorUnidade * totalQty,
           });
         });
