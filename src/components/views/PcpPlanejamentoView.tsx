@@ -1192,31 +1192,48 @@ export const PcpPlanejamentoView = () => {
                     </p>
                   </div>
                 ) : riskForObra ? (
-                  <div className={`p-3 rounded-xl border text-xs flex flex-col gap-2 ${
+                  <div className={`p-3 rounded-xl border text-xs flex flex-col gap-2.5 ${
                     riskForObra.classificacao === 'Vermelho'
                       ? 'bg-rose-500/5 border-rose-500/30'
                       : 'bg-amber-500/5 border-amber-500/30'
                   }`}>
-                    <div className="flex items-center gap-1.5 font-bold">
-                      {riskForObra.classificacao === 'Vermelho' ? (
-                        <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                          <AlertTriangle className="w-4 h-4" /> Alertas Críticos de Segurança
-                        </span>
-                      ) : (
-                        <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          <ShieldAlert className="w-4 h-4" /> Pontos de Atenção / Restrições Operacionais
-                        </span>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        {riskForObra.classificacao === 'Vermelho' ? (
+                          <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                            <AlertTriangle className="w-4 h-4" /> Alertas Críticos de Segurança
+                          </span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <ShieldAlert className="w-4 h-4" /> Pontos Específicos da Vistoria
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Resumo em tópicos das observações lidas pela IA */}
-                    {riskForObra.pontosAtencao && riskForObra.pontosAtencao.length > 0 ? (
+                    {/* Resumo Específico em Tópicos Categorizados com Ícones */}
+                    {riskForObra.pontosDetalhados && riskForObra.pontosDetalhados.length > 0 ? (
+                      <div className="space-y-2 text-[11px]">
+                        {riskForObra.pontosDetalhados.map((item, pIdx) => (
+                          <div
+                            key={pIdx}
+                            className="flex items-start gap-2 p-1.5 rounded-md bg-background/60 border border-border/50 shadow-2xs leading-snug"
+                          >
+                            <span className="text-sm shrink-0 mt-0.5">{item.icone}</span>
+                            <div className="flex-1">
+                              <span className="font-semibold text-foreground mr-1.5 text-[10px] uppercase tracking-wider opacity-80">
+                                [{item.categoria}]
+                              </span>
+                              <span className="text-foreground/90 font-medium">{item.texto}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : riskForObra.pontosEspecificos && riskForObra.pontosEspecificos.length > 0 ? (
                       <ul className="space-y-1.5 text-[11px] text-foreground/90 pl-1">
-                        {riskForObra.pontosAtencao.map((pt, pIdx) => (
+                        {riskForObra.pontosEspecificos.map((pt, pIdx) => (
                           <li key={pIdx} className="flex items-start gap-1.5 leading-snug">
-                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                              riskForObra.classificacao === 'Vermelho' ? 'bg-rose-500' : 'bg-amber-500'
-                            }`} />
+                            <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
                             <span>{pt}</span>
                           </li>
                         ))}
@@ -1225,6 +1242,18 @@ export const PcpPlanejamentoView = () => {
                       <p className="text-[11px] text-muted-foreground leading-snug">
                         {riskForObra.alerta}
                       </p>
+                    )}
+
+                    {/* Observação Original Completa retrátil */}
+                    {riskForObra.observacoesOriginais && (
+                      <details className="mt-1 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5 cursor-pointer">
+                        <summary className="font-semibold text-primary/80 hover:text-primary transition-colors">
+                          Ver anotação completa de campo da vistoria
+                        </summary>
+                        <p className="mt-1 p-2 rounded bg-muted/40 text-foreground font-mono text-[10px] leading-relaxed select-text">
+                          {riskForObra.observacoesOriginais}
+                        </p>
+                      </details>
                     )}
                   </div>
                 ) : null}

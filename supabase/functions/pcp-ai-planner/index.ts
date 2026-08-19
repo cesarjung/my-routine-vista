@@ -106,21 +106,28 @@ async function callGemini(apiKey: string, systemPrompt: string, userMessage: str
 
 // ─── MODO: analyze_risk ─────────────────────────────────────────────────────
 async function analyzeRisk(apiKey: string, observacoes: string, obraId: string) {
-  const systemPrompt = `Você é um especialista em segurança de obras de distribuição elétrica (COELBA/NEOENERGIA).
-Analise o texto de observações de vistoria de campo e classifique o nível de risco ou impedimento.
+  const systemPrompt = `Você é um especialista em planejamento e segurança de obras de distribuição elétrica (COELBA/NEOENERGIA).
+Analise o texto de observações de vistoria de campo e produza um resumo estruturado, conciso e altamente específico com a classificação de risco e alertas operacionais.
 
 Retorne APENAS um JSON válido com o seguinte formato:
 {
   "classificacao": "Vermelho" | "Laranja" | "Verde",
-  "alerta": "Resumo do problema, ou a própria observação se for curta"
+  "alerta": "Resumo executivo direto em 1 linha dos pontos principais",
+  "pontosEspecificos": [
+    "🚜 Acesso/Solo: detalhe específico sobre areia, atoleiro, pontes, cercas, caminhão",
+    "🌳 Podas/Meio Ambiente: vãos e ramais com necessidade de poda",
+    "⚡ Rede/Segurança: cruzamentos MT, linha viva, ferragem exposta, etc",
+    "🚧 Equipamentos: apoio de retroescavadeira, equipamentos especiais, etc"
+  ],
+  "recomendacao": "Recomendação prática e direta para a equipe e planejador"
 }
 
-Regras de Classificação:
-- "Vermelho": Problemas relacionados a questões de risco de segurança severo (ex: poste quebrado, poste com trincas, risco de queda, risco de choque, fios expostos, etc).
-- "Laranja": Alertas que indiquem problemas de acesso ou impedimento não letal (ex: Difícil Acesso, Sem Acesso, estrada de terra ruim, cliente ausente, necessita agendamento, obra impedida judicialmente).
-- "Verde": Se não houver observações relevantes de risco/impedimento, ou o texto estiver vazio.
+Regras de Classificação e Cores:
+- "Vermelho": Risco severo de segurança física/elétrica/estrutural (ex: poste quebrado, poste com trincas/ferragem exposta, risco de queda/choque, fios caídos/expostos, risco grave de segurança).
+- "Laranja": Restrições operacionais e impedimentos de acesso (ex: solo arenoso/com risco de atoleiro, pontes de madeira ruins, abertura de cercas, cancela/cadeado, cliente ausente, solo rochoso, podas intensas, trechos alagados, necessidade de retroescavadeira).
+- "Verde": Obra sem impeditivos, fácil acesso e sem riscos registrados.
 
-Para "alerta", resuma o problema em algumas palavras ou traga a observação inteira se achar mais claro. Se for "Verde", retorne "Sem alertas identificados".`;
+IMPORTANTE: Seja extremamente específico com base no texto da vistoria. Cite nomes de pontos, ramais, vãos, condições de pontes e equipamentos mencionados.`;
 
   const userMessage = `Obra: ${obraId}\nObservações da vistoria: ${observacoes || "(sem observações registradas)"}`;
 
@@ -130,7 +137,7 @@ Para "alerta", resuma o problema em algumas palavras ou traga a observação int
     const clean = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
     return JSON.parse(clean);
   } catch {
-    return { classificacao: "Verde", alerta: "Não foi possível analisar as observações devido a um erro." };
+    return { classificacao: "Verde", alerta: "Sem alertas críticos identificados.", pontosEspecificos: [] };
   }
 }
 

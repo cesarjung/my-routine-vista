@@ -5,12 +5,20 @@ import { useSessionState } from '@/hooks/useSessionState';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export interface VistoriaPontoDetalhe {
+  categoria: 'Segurança' | 'Acesso' | 'Podas' | 'Solo/Equipamentos' | 'Cliente' | 'Geral';
+  icone: string;
+  texto: string;
+}
+
 export interface RiskResult {
   classificacao: 'Verde' | 'Laranja' | 'Vermelho';
   alerta: string;
   resumoIa?: string;
-  pontosAtencao?: string[];
+  pontosEspecificos?: string[];
+  pontosDetalhados?: VistoriaPontoDetalhe[];
   observacoesOriginais?: string;
+  recomendacao?: string;
 }
 
 // ─── Local Rule-Based NLP Analyzer for Vistoria Observations ──────────────────
@@ -20,7 +28,8 @@ export function parseVistoriaObservations(obs?: string | null, tags?: string[]):
       classificacao: 'Verde',
       alerta: 'Sem observações registradas na vistoria.',
       resumoIa: 'Nenhum alerta de risco ou impedimento operacional registrado.',
-      pontosAtencao: [],
+      pontosEspecificos: ['Obra liberada sem impeditivos de campo.'],
+      pontosDetalhados: [],
       observacoesOriginais: '',
     };
   }
@@ -36,7 +45,7 @@ export function parseVistoriaObservations(obs?: string | null, tags?: string[]):
 
   // Regras de Risco Laranja (Acesso / Operacional / Restrições / Meio Ambiente)
   const orangeKeywords = [
-    'DIFÍCIL ACESSO', 'DIFICIL ACESSO', 'SEM ACESSO', 'ACESSO COMPROMETIDO', 
+    'DIFÍCIL ACESSO', 'DIFICIL ACESSO', 'SEM ACESSO', 'ACESSO COMPROMETIDO', 'ACESSO GERAL',
     'CHUVA', 'CHUVAS', 'CHUVOSOS', 'ATOLAMENTO', 'ATOLAR', 'ATOLEIRO', 'ABRIR CERCA', 'CERCA',
     'CANCELA', 'CADEADO', 'SOLICITANTE AUSENTE', 'CLIENTE AUSENTE', 'ROCHA', 'PEDRA', 'PEDRAS',
     'PODA', 'PODAS', 'ALAGADO', 'ALAGADOS', 'ALAGAMENTOS', 'AUTORIZAÇÃO', 'AGENDAMENTO', 
@@ -54,37 +63,51 @@ export function parseVistoriaObservations(obs?: string | null, tags?: string[]):
   }
 
   // Divide as observações por // ou quebras de linha
-  const parts = obs
+  const rawParts = obs
     .split(/\/\/|\n|\r/)
     .map(p => p.trim())
-    .filter(p => p.length > 2);
+    .filter(p => p.length > 3 && !p.toUpperCase().startsWith('OBRA APTA') && !p.toUpperCase().startsWith('OBRA OK'));
 
-  // Extrai trechos que contêm alertas críticos
-  const pontosCriticos: string[] = [];
-  parts.forEach(p => {
-    const pUpper = p.toUpperCase();
-    const isRed = redKeywords.some(k => pUpper.includes(k));
-    const isOrange = orangeKeywords.some(k => pUpper.includes(k));
-    if (isRed || isOrange) {
-      pontosCriticos.push(p);
+  const pontosDetalhados: VistoriaPontoDetalhe[] = [];
+  const pontosEspecificos: string[] = [];
+
+  rawParts.forEach(part => {
+    const pUpper = part.toUpperCase();
+
+    let categoria: VistoriaPontoDetalhe['categoria'] = 'Geral';
+    let icone = '📌';
+
+    if (pUpper.includes('POSTE QUEBRADO') || pUpper.includes('FERRAGEM EXPOSTA') || pUpper.includes('RISCO DE CHOQUE') || pUpper.includes('FIO') || pUpper.includes('CRUZANDO') || pUpper.includes('LINHA VIVA') || pUpper.includes('LV')) {
+      categoria = 'Segurança';
+      icone = '⚡';
+    } else if (pUpper.includes('PODA') || pUpper.includes('VEGETAÇÃO') || pUpper.includes('ÁRVORE')) {
+      categoria = 'Podas';
+      icone = '🌳';
+    } else if (pUpper.includes('ROCHA') || pUpper.includes('PEDRA') || pUpper.includes('RETROESCAVADEIRA') || pUpper.includes('AREIA') || pUpper.includes('ARENOSO') || pUpper.includes('ESCAVAÇÃO')) {
+      categoria = 'Solo/Equipamentos';
+      icone = '🚜';
+    } else if (pUpper.includes('ACESSO') || pUpper.includes('PONTE') || pUpper.includes('CERCA') || pUpper.includes('CANCELA') || pUpper.includes('CAMINHÃO') || pUpper.includes('CARRETA') || pUpper.includes('CHUVA') || pUpper.includes('ALAGAM')) {
+      categoria = 'Acesso';
+      icone = '🛣️';
+    } else if (pUpper.includes('SOLICITANTE') || pUpper.includes('CLIENTE') || pUpper.includes('AUTORIZAÇÃO') || pUpper.includes('AGENDAMENTO')) {
+      categoria = 'Cliente';
+      icone = '👤';
     }
+
+    pontosDetalhados.push({ categoria, icone, texto: part });
+    pontosEspecificos.push(`${icone} ${categoria}: ${part}`);
   });
 
-  const alertaPrincipal = pontosCriticos.length > 0
-    ? pontosCriticos.slice(0, 2).join(' • ')
-    : (parts.length > 0 && !parts[0].toUpperCase().includes('OBRA OK') && !parts[0].toUpperCase().includes('SEM OBS')
-        ? parts[0]
-        : 'Sem alertas de risco ou impedimento.');
-
-  const resumoGeral = pontosCriticos.length > 0
-    ? pontosCriticos.join(' • ')
-    : parts.filter(p => !p.toUpperCase().startsWith('OBRA APTA')).join(' • ') || 'Obra sem impeditivos de campo.';
+  const alertaPrincipal = pontosDetalhados.length > 0
+    ? pontosDetalhados.map(p => p.texto).slice(0, 2).join(' • ')
+    : 'Sem alertas de risco ou impedimento.';
 
   return {
     classificacao,
     alerta: alertaPrincipal,
-    resumoIa: resumoGeral,
-    pontosAtencao: pontosCriticos.length > 0 ? pontosCriticos : parts.slice(0, 3),
+    resumoIa: rawParts.join(' • ') || 'Obra sem impeditivos de campo.',
+    pontosEspecificos: pontosEspecificos.length > 0 ? pontosEspecificos : ['Obra liberada sem impeditivos de campo.'],
+    pontosDetalhados,
     observacoesOriginais: obs,
   };
 }
@@ -150,8 +173,12 @@ export function useVistoriaRisk(obraId: string | null) {
           classificacao: data.classificacao,
           alerta: data.alerta || localResult.alerta,
           resumoIa: data.alerta || localResult.resumoIa,
-          pontosAtencao: localResult.pontosAtencao,
+          pontosEspecificos: Array.isArray(data.pontosEspecificos) && data.pontosEspecificos.length > 0
+            ? data.pontosEspecificos
+            : localResult.pontosEspecificos,
+          pontosDetalhados: localResult.pontosDetalhados,
           observacoesOriginais: obs,
+          recomendacao: data.recomendacao,
         };
         setRiskCache(prev => ({ ...prev, [cleanId]: enriched }));
         return enriched;
