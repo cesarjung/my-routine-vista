@@ -13,7 +13,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import { DatePicker } from '@/components/ui/date-picker';
+import { useAlojamentos } from '@/hooks/useAlojamentos';
+
+// --- Helper Haversine ---
+function calcDistanceKM(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
@@ -118,6 +129,10 @@ export const AiPlanEditor = ({
   const [supervisor, setSupervisor] = useState(supervisoresDisponiveis[0] ?? 'SUPERVISOR');
   const [selectedEtapas, setSelectedEtapas] = useState<string[]>([]);
   const [isEtapasPopoverOpen, setIsEtapasPopoverOpen] = useState(false);
+  const [filtroLv, setFiltroLv] = useState<'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>('COMPLETO');
+
+  const { alojamentos } = useAlojamentos();
+  const [globalAlojamentoId, setGlobalAlojamentoId] = useState<string>('nenhum');
 
   const [tempoDeslocamento, setTempoDeslocamento] = useState(30);
   const [tempoSaidaBase, setTempoSaidaBase] = useState(15);
@@ -174,6 +189,43 @@ export const AiPlanEditor = ({
     });
     return map;
   });
+  const filteredServicosBase = useMemo(() => {
+    if (filtroLv === 'SOMENTE_LV') return servicosBase.filter(s => s.servico.includes(' LV'));
+    if (filtroLv === 'SEM_LV') return servicosBase.filter(s => !s.servico.includes(' LV'));
+    return servicosBase;
+  }, [servicosBase, filtroLv]);
+
+  const handleGlobalAlojamentoChange = (alojId: string) => {
+    setGlobalAlojamentoId(alojId);
+    if (alojId !== 'nenhum' && obra?.latitude && obra?.longitude) {
+      const aloj = alojamentos.find(a => a.id === alojId);
+      if (aloj?.latitude && aloj?.longitude) {
+        const distKm = calcDistanceKM(obra.latitude, obra.longitude, aloj.latitude, aloj.longitude);
+        setTempoDeslocamento(Math.round(distKm * 1.5)); // avg 40km/h = 1.5 min/km
+      }
+    }
+  };
+
+  const handleDayOverride = (dayIdx: number, field: 'alojamentoId'|'tempoDeslocamentoOverride'|'tempoSaidaBaseOverride'|'tempoSegurancaOverride', value: any) => {
+    setDiasProgramacao(prev => {
+      const next = [...prev];
+      const dia = { ...next[dayIdx] };
+      (dia as any)[field] = value;
+
+      if (field === 'alojamentoId') {
+        if (value === 'nenhum') {
+          dia.tempoDeslocamentoOverride = undefined;
+        } else if (obra?.latitude && obra?.longitude) {
+          const aloj = alojamentos.find(a => a.id === value);
+          if (aloj?.latitude && aloj?.longitude) {
+            dia.tempoDeslocamentoOverride = Math.round(calcDistanceKM(obra.latitude, obra.longitude, aloj.latitude, aloj.longitude) * 1.5);
+          }
+        }
+      }
+      next[dayIdx] = dia;
+      return next;
+    });
+  };
 
   useEffect(() => {
     setDiasProgramacao(plano.dias || []);
@@ -564,6 +616,24 @@ export const AiPlanEditor = ({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
+              {/* GLOBAL ALOJAMENTO */}
+              <div className="flex flex-col gap-1.5 border-b border-border/80 pb-3">
+                <Label className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500" /> Alojamento / Base de Referência
+                </Label>
+                <Select value={globalAlojamentoId} onValueChange={handleGlobalAlojamentoChange}>
+                  <SelectTrigger className="h-8 text-xs font-medium">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[250px]">
+                    <SelectItem value="nenhum" className="text-xs">Nenhum / Manual</SelectItem>
+                    {alojamentos.map(a => (
+                      <SelectItem key={a.id} value={a.id} className="text-xs">{a.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: 'Deslocamento', icon: <Navigation className="w-3 h-3 text-blue-500" />, value: tempoDeslocamento, set: setTempoDeslocamento },
@@ -646,8 +716,13 @@ export const AiPlanEditor = ({
                 diasProgramacao.forEach(dia => {
                   const itemsSelecionadosDia = dia.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(i => i.selected));
                   const tempoAtiv = itemsSelecionadosDia.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                  
+                  const dDesloc = dia.tempoDeslocamentoOverride ?? tempoDeslocamento;
+                  const dSaida = dia.tempoSaidaBaseOverride ?? tempoSaidaBase;
+                  const dSeg = dia.tempoSegurancaOverride ?? tempoSeguranca;
+                  
                   if (tempoAtiv > 0) {
-                    totalTempoSemana += tempoAtiv + tempoDeslocamento + tempoSaidaBase + tempoSeguranca;
+                    totalTempoSemana += tempoAtiv + dDesloc + dSaida + dSeg;
                   }
                   totalValorSemana += itemsSelecionadosDia.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
                 });
@@ -659,6 +734,7 @@ export const AiPlanEditor = ({
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-[10px] p-2">Dia</TableHead>
+                        <TableHead className="text-[10px] p-2">Equipe</TableHead>
                         <TableHead className="text-[10px] p-2">Tempo</TableHead>
                         <TableHead className="text-[10px] p-2 text-right">V. Meta</TableHead>
                         <TableHead className="text-[10px] p-2 text-right">V. Planejado</TableHead>
@@ -669,14 +745,23 @@ export const AiPlanEditor = ({
                       {diasProgramacao.map((dia, idx) => {
                         const itemsSelecionadosDia = dia.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(i => i.selected));
                         const tempoAtiv = itemsSelecionadosDia.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
-                        const tempoDia = tempoAtiv > 0 ? tempoAtiv + tempoDeslocamento + tempoSaidaBase + tempoSeguranca : 0;
+                        
+                        const dDesloc = dia.tempoDeslocamentoOverride ?? tempoDeslocamento;
+                        const dSaida = dia.tempoSaidaBaseOverride ?? tempoSaidaBase;
+                        const dSeg = dia.tempoSegurancaOverride ?? tempoSeguranca;
+                        
+                        const tempoDia = tempoAtiv > 0 ? tempoAtiv + dDesloc + dSaida + dSeg : 0;
                         const valorDia = itemsSelecionadosDia.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
                         const percDia = metaEquipeInput > 0 ? (valorDia / metaEquipeInput) * 100 : 0;
                         
                         return (
                           <TableRow key={idx}>
                             <TableCell className="p-2 text-[11px] font-medium">{dia.data.substring(0,5)}<br/><span className="text-[9px] text-muted-foreground">{dia.diaSemana.split('-')[0]}</span></TableCell>
-                            <TableCell className="p-2 text-[11px] font-mono">{Math.floor(tempoDia/60)}h {Math.floor(tempoDia%60)}m</TableCell>
+                            <TableCell className="p-2 text-[11px] font-medium text-primary">{equipe}</TableCell>
+                            <TableCell className={`p-2 text-[11px] font-mono ${tempoDia > 540 ? 'text-red-500 font-bold' : ''}`}>
+                              {Math.floor(tempoDia/60)}h {Math.floor(tempoDia%60)}m
+                              {tempoDia > 540 && <span className="text-[9px] ml-1">(Excede 9h)</span>}
+                            </TableCell>
                             <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono">R$ {metaEquipeInput.toFixed(2)}</TableCell>
                             <TableCell className="p-2 text-[11px] text-right text-emerald-600 font-mono font-semibold">R$ {valorDia.toFixed(2)}</TableCell>
                             <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
@@ -689,7 +774,7 @@ export const AiPlanEditor = ({
                       })}
                       {diasProgramacao.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-xs text-muted-foreground p-4">
+                          <TableCell colSpan={6} className="text-center text-xs text-muted-foreground p-4">
                             Nenhum dia programado.
                           </TableCell>
                         </TableRow>
@@ -698,7 +783,7 @@ export const AiPlanEditor = ({
                     {diasProgramacao.length > 0 && (
                       <TableFooter className="bg-muted/50 border-t">
                         <TableRow>
-                          <TableCell className="p-2 text-[10px] font-bold">TOTAL</TableCell>
+                          <TableCell colSpan={2} className="p-2 text-[10px] font-bold">TOTAL</TableCell>
                           <TableCell className="p-2 text-[11px] font-mono font-bold">{Math.floor(totalTempoSemana/60)}h {Math.floor(totalTempoSemana%60)}m</TableCell>
                           <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono font-bold">R$ {totalMetaSemana.toFixed(2)}</TableCell>
                           <TableCell className="p-2 text-[11px] text-right text-emerald-600 font-mono font-bold">R$ {totalValorSemana.toFixed(2)}</TableCell>
@@ -770,11 +855,36 @@ export const AiPlanEditor = ({
               </div>
             )}
 
+            {/* FILTRO LV */}
+            <div className="flex items-center justify-between gap-4 bg-muted/20 p-2 rounded-xl border border-border mt-4">
+              <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                <Filter className="w-3.5 h-3.5" /> Exibir Serviços (Filtro LV):
+              </span>
+              <div className="w-[180px]">
+                <Select value={filtroLv} onValueChange={(v: any) => setFiltroLv(v)}>
+                  <SelectTrigger className="h-8 text-[11px] font-medium bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="COMPLETO" className="text-[11px]">Todas as Atividades</SelectItem>
+                    <SelectItem value="SOMENTE_LV" className="text-[11px]">Somente LV</SelectItem>
+                    <SelectItem value="SEM_LV" className="text-[11px]">Sem LV</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             {/* Sequência Diária de Pontos e Atividades */}
             <div className="flex flex-col gap-5 pt-2">
                 {diasProgramacao.map((dia, dayIdx) => {
                   const itemsSelecionadosDia = dia.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(i => i.selected));
-                  const tempoDia = itemsSelecionadosDia.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                  const tempoAtiv = itemsSelecionadosDia.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                  
+                  const dDesloc = dia.tempoDeslocamentoOverride ?? tempoDeslocamento;
+                  const dSaida = dia.tempoSaidaBaseOverride ?? tempoSaidaBase;
+                  const dSeg = dia.tempoSegurancaOverride ?? tempoSeguranca;
+                  
+                  const tempoDia = tempoAtiv + dDesloc + dSaida + dSeg;
                   const valorDia = itemsSelecionadosDia.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
 
                   return (
@@ -786,8 +896,54 @@ export const AiPlanEditor = ({
                             <h3 className="font-bold text-sm text-foreground">{dia.data} — {dia.diaSemana}</h3>
                           </div>
                           <div className="flex items-center gap-4 text-xs font-mono">
-                            <span className="text-muted-foreground">Tempo: <strong>{Math.floor(tempoDia/60)}h {tempoDia%60}m</strong></span>
+                            <span className="text-muted-foreground">Tempo Total: <strong className={tempoDia > 540 ? "text-rose-600" : ""}>{Math.floor(tempoDia/60)}h {tempoDia%60}m</strong></span>
                             <span className="text-emerald-600 font-bold">R$ {valorDia.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        {/* DIA OVERRIDES */}
+                        <div className="bg-background border border-border/60 rounded-lg p-2.5 flex flex-col gap-2 shadow-xs">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex-1 w-full sm:w-auto">
+                              <Label className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1 mb-1">
+                                <MapPin className="w-3 h-3 text-rose-500" /> Alojamento Local do Dia
+                              </Label>
+                              <Select value={dia.alojamentoId || 'nenhum'} onValueChange={v => handleDayOverride(dayIdx, 'alojamentoId', v)}>
+                                <SelectTrigger className="h-7 text-[11px]">
+                                  <SelectValue placeholder="Usar Global" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px]">
+                                  <SelectItem value="nenhum" className="text-[11px]">Usar Global / Padrão</SelectItem>
+                                  {alojamentos.map(a => (
+                                    <SelectItem key={a.id} value={a.id} className="text-[11px]">{a.nome}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <div className="flex flex-col gap-1 w-[90px]">
+                                <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><Navigation className="w-2.5 h-2.5 text-blue-500"/> Desl. (m)</Label>
+                                <Input type="number" min="0" className="h-7 text-[11px] font-mono px-2"
+                                  placeholder={String(tempoDeslocamento)}
+                                  value={dia.tempoDeslocamentoOverride ?? ''}
+                                  onChange={e => handleDayOverride(dayIdx, 'tempoDeslocamentoOverride', e.target.value === '' ? undefined : Number(e.target.value))} />
+                              </div>
+                              <div className="flex flex-col gap-1 w-[90px]">
+                                <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><LogOut className="w-2.5 h-2.5 text-amber-500"/> Saída (m)</Label>
+                                <Input type="number" min="0" className="h-7 text-[11px] font-mono px-2"
+                                  placeholder={String(tempoSaidaBase)}
+                                  value={dia.tempoSaidaBaseOverride ?? ''}
+                                  onChange={e => handleDayOverride(dayIdx, 'tempoSaidaBaseOverride', e.target.value === '' ? undefined : Number(e.target.value))} />
+                              </div>
+                              <div className="flex flex-col gap-1 w-[90px]">
+                                <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><ShieldCheck className="w-2.5 h-2.5 text-emerald-500"/> Seg. (m)</Label>
+                                <Input type="number" min="0" className="h-7 text-[11px] font-mono px-2"
+                                  placeholder={String(tempoSeguranca)}
+                                  value={dia.tempoSegurancaOverride ?? ''}
+                                  onChange={e => handleDayOverride(dayIdx, 'tempoSegurancaOverride', e.target.value === '' ? undefined : Number(e.target.value))} />
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -905,7 +1061,7 @@ export const AiPlanEditor = ({
                                                   <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent className="max-h-[200px]">
-                                                  {servicosBase.map(s => (
+                                                  {filteredServicosBase.map(s => (
                                                     <SelectItem key={s.servico} value={s.servico} className="text-[10px]">{s.servico}</SelectItem>
                                                   ))}
                                                 </SelectContent>
