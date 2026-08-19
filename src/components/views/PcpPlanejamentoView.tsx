@@ -368,68 +368,72 @@ export const PcpPlanejamentoView = () => {
     if (!selectedObra) return;
 
     setPontosGroupedMap(prevMap => {
+      const currentPrevMap = prevMap || {};
       const nextMap: Record<string, PcpPontoItem[]> = {};
+      const currentLabels = Array.isArray(selectedPontosLabels) ? selectedPontosLabels : [];
 
-      selectedPontosLabels.forEach(pLabel => {
+      currentLabels.forEach(pLabel => {
+        if (!pLabel) return;
         const pLabelUpper = pLabel.toUpperCase();
-        const budgetItems = orcamentoPorPontoMap.get(pLabelUpper);
+        const budgetItems = orcamentoPorPontoMap?.get ? orcamentoPorPontoMap.get(pLabelUpper) : undefined;
 
-        if (prevMap[pLabelUpper] && prevMap[pLabelUpper].length > 0) {
+        if (currentPrevMap[pLabelUpper] && Array.isArray(currentPrevMap[pLabelUpper]) && currentPrevMap[pLabelUpper].length > 0) {
           // Ponto já existe — atualiza tempo/valor vindo do orçamento, mas preserva seleções manuais
-          if (budgetItems && budgetItems.length > 0) {
+          if (budgetItems && Array.isArray(budgetItems) && budgetItems.length > 0) {
             const budgetByDescricao = new Map(budgetItems.map(b => [b.servicoPrevisto, b]));
             const budgetByCode = new Map(budgetItems.filter(b => b.codigo).map(b => [b.codigo, b]));
 
-            nextMap[pLabelUpper] = prevMap[pLabelUpper].map(item => {
-              const match = (item.codigoMaterial ? budgetByCode.get(item.codigoMaterial) : undefined) || budgetByDescricao.get(item.servico);
+            nextMap[pLabelUpper] = currentPrevMap[pLabelUpper].map(item => {
+              if (!item) return item;
+              const match = (item.codigoMaterial ? budgetByCode.get(item.codigoMaterial) : undefined) || (item.servico ? budgetByDescricao.get(item.servico) : undefined);
               if (match) {
                 return {
                   ...item,
                   codigoMaterial: item.codigoMaterial || match.codigo,
                   descricaoMaterial: item.descricaoMaterial || match.descricao,
-                  tempoEstimadoMinutos: match.tempoMinutos > 0 ? match.tempoMinutos : item.tempoEstimadoMinutos,
-                  valorEstimado: match.valorEstimado > 0 ? match.valorEstimado : item.valorEstimado,
+                  tempoEstimadoMinutos: match.tempoMinutos > 0 ? match.tempoMinutos : (item.tempoEstimadoMinutos || 0),
+                  valorEstimado: match.valorEstimado > 0 ? match.valorEstimado : (item.valorEstimado || 0),
                   isBudgeted: true,
                 };
               }
               return item;
             });
           } else {
-            nextMap[pLabelUpper] = prevMap[pLabelUpper];
+            nextMap[pLabelUpper] = currentPrevMap[pLabelUpper];
           }
-        } else if (budgetItems && budgetItems.length > 0) {
+        } else if (budgetItems && Array.isArray(budgetItems) && budgetItems.length > 0) {
           // Novo ponto — cria a partir do orçamento
           nextMap[pLabelUpper] = budgetItems.map((bItem, bIdx) => ({
-            id: `${pLabelUpper}-${bItem.servicoPrevisto.replace(/\s+/g, '_')}-${bIdx}`,
+            id: `${pLabelUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
             ponto: pLabelUpper,
-            servico: bItem.servicoPrevisto,
+            servico: bItem.servicoPrevisto || 'SERVIÇO',
             codigoMaterial: bItem.codigo,
             descricaoMaterial: bItem.descricao,
-            qtdOrcadaPonto: bItem.quantidade,
-            etapaPrevista: inferEtapaFromServico(bItem.servicoPrevisto),
-            quantidade: bItem.quantidade,
-            tempoEstimadoMinutos: bItem.tempoMinutos,
-            valorEstimado: bItem.valorEstimado,
+            qtdOrcadaPonto: bItem.quantidade || 1,
+            etapaPrevista: inferEtapaFromServico(bItem.servicoPrevisto || ''),
+            quantidade: bItem.quantidade || 1,
+            tempoEstimadoMinutos: bItem.tempoMinutos || 15,
+            valorEstimado: bItem.valorEstimado || 0,
             selected: false,
             isBudgeted: true,
           }));
         } else {
           // Sem orçamento — cria linha em branco com fallback
-          const fallback = filteredServicosBase.length > 0
+          const fallback = (Array.isArray(filteredServicosBase) && filteredServicosBase.length > 0)
             ? filteredServicosBase[0]
-            : (servicosBase.length > 0
+            : (Array.isArray(servicosBase) && servicosBase.length > 0
               ? servicosBase[0]
               : { codigo: 'SIR0000001', servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
           nextMap[pLabelUpper] = [{
             id: `${pLabelUpper}-default-${Date.now()}`,
             ponto: pLabelUpper,
-            servico: fallback.servico,
+            servico: fallback.servico || 'SERVIÇO PADRÃO',
             codigoMaterial: fallback.codigo,
             qtdOrcadaPonto: 1,
-            etapaPrevista: inferEtapaFromServico(fallback.servico),
+            etapaPrevista: inferEtapaFromServico(fallback.servico || ''),
             quantidade: 1,
-            tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade,
-            valorEstimado: fallback.valorPorUnidade,
+            tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade || 60,
+            valorEstimado: fallback.valorPorUnidade || 100,
             selected: false,
             isBudgeted: false,
           }];
@@ -438,15 +442,16 @@ export const PcpPlanejamentoView = () => {
 
       return nextMap;
     });
-  }, [selectedPontosLabels, orcamentoPorPontoMap, selectedObra, servicosBase]);
+  }, [selectedPontosLabels, orcamentoPorPontoMap, selectedObra, servicosBase, filteredServicosBase]);
 
   // Toggle multi-select status filter
   const handleToggleStatus = (statusName: string) => {
     setSelectedStatuses(prev => {
-      if (prev.includes(statusName)) {
-        return prev.filter(s => s !== statusName);
+      const arr = Array.isArray(prev) ? prev : [];
+      if (arr.includes(statusName)) {
+        return arr.filter(s => s !== statusName);
       } else {
-        return [...prev, statusName];
+        return [...arr, statusName];
       }
     });
   };
@@ -454,11 +459,12 @@ export const PcpPlanejamentoView = () => {
   // Toggle multi-select etapas filter
   const handleToggleEtapa = (etapaName: string) => {
     setSelectedEtapas(prev => {
-      if (prev.includes(etapaName)) {
-        if (prev.length === 1) return prev;
-        return prev.filter(e => e !== etapaName);
+      const arr = Array.isArray(prev) ? prev : [];
+      if (arr.includes(etapaName)) {
+        if (arr.length === 1) return arr;
+        return arr.filter(e => e !== etapaName);
       } else {
-        return [...prev, etapaName];
+        return [...arr, etapaName];
       }
     });
   };
@@ -466,9 +472,10 @@ export const PcpPlanejamentoView = () => {
   // Count of obras per month tag
   const obrasCountByMonth = useMemo(() => {
     const map = new Map<string, number>();
-    obras.forEach(o => {
-      o.meses.forEach(m => {
-        const k = m.trim();
+    (obras || []).forEach(o => {
+      if (!o) return;
+      (o.meses || []).forEach(m => {
+        const k = (m || '').trim();
         if (k) map.set(k, (map.get(k) || 0) + 1);
       });
     });
@@ -477,35 +484,38 @@ export const PcpPlanejamentoView = () => {
 
   // Filtered Obras list matching selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter
   const filteredObras = useMemo(() => {
-    return obras.filter(o => {
+    const list = Array.isArray(obras) ? obras : [];
+    const statuses = Array.isArray(selectedStatuses) ? selectedStatuses : [];
+    return list.filter(o => {
+      if (!o) return false;
       // 1. Situação filter (APTA / INAPTA)
       if (selectedSituacao !== 'TODAS' && o.situacao !== selectedSituacao) {
         return false;
       }
 
       // 2. Status Execução filter — correspondência exata (case-insensitive)
-      if (selectedStatuses.length > 0) {
+      if (statuses.length > 0) {
         const statusUpper = (o.statusExecucao || '').trim().toUpperCase();
-        const matchesStatus = selectedStatuses.some(st => statusUpper === st.toUpperCase());
+        const matchesStatus = statuses.some(st => statusUpper === (st || '').toUpperCase());
         if (!matchesStatus) return false;
       }
       // Se selectedStatuses.length === 0 → sem filtro de status (mostra todas)
 
       // 3. Mês / Carteira filter (Coluna G)
       if (selectedMesFilter !== 'TODOS') {
-        const targetM = selectedMesFilter.trim().toLowerCase();
-        const hasMonth = o.meses.some(m => m.trim().toLowerCase() === targetM) ||
-                         o.carteirasStr.trim().toLowerCase().includes(targetM);
+        const targetM = (selectedMesFilter || '').trim().toLowerCase();
+        const hasMonth = (o.meses || []).some(m => (m || '').trim().toLowerCase() === targetM) ||
+                         (o.carteirasStr || '').trim().toLowerCase().includes(targetM);
         if (!hasMonth) return false;
       }
 
       // 4. Município filter
-      if (selectedMunicipioFilter !== 'TODOS' && o.municipio.toUpperCase() !== selectedMunicipioFilter.toUpperCase()) {
+      if (selectedMunicipioFilter !== 'TODOS' && (o.municipio || '').toUpperCase() !== (selectedMunicipioFilter || '').toUpperCase()) {
         return false;
       }
 
       // 5. Prioridade filter
-      if (selectedPrioridadeFilter !== 'TODAS' && o.prioridade.toUpperCase() !== selectedPrioridadeFilter.toUpperCase()) {
+      if (selectedPrioridadeFilter !== 'TODAS' && (o.prioridade || '').toUpperCase() !== (selectedPrioridadeFilter || '').toUpperCase()) {
         return false;
       }
 
@@ -513,10 +523,10 @@ export const PcpPlanejamentoView = () => {
       if (!searchObra.trim()) return true;
       const q = searchObra.toLowerCase().trim();
       return (
-        o.projeto.toLowerCase().includes(q) ||
-        o.nomeProjeto.toLowerCase().includes(q) ||
-        o.municipio.toLowerCase().includes(q) ||
-        o.donoDaObra.toLowerCase().includes(q)
+        (o.projeto || '').toLowerCase().includes(q) ||
+        (o.nomeProjeto || '').toLowerCase().includes(q) ||
+        (o.municipio || '').toLowerCase().includes(q) ||
+        (o.donoDaObra || '').toLowerCase().includes(q)
       );
     });
   }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter]);
@@ -645,9 +655,12 @@ export const PcpPlanejamentoView = () => {
   // Flattened list of ALL items across all selected point cards
   const allPontosListFlat = useMemo(() => {
     const list: PcpPontoItem[] = [];
-    selectedPontosLabels.forEach(pLabel => {
-      const items = pontosGroupedMap[pLabel] || [];
-      list.push(...items);
+    const labels = Array.isArray(selectedPontosLabels) ? selectedPontosLabels : [];
+    const grouped = pontosGroupedMap || {};
+    labels.forEach(pLabel => {
+      if (pLabel && Array.isArray(grouped[pLabel])) {
+        list.push(...grouped[pLabel]);
+      }
     });
     return list;
   }, [selectedPontosLabels, pontosGroupedMap]);
