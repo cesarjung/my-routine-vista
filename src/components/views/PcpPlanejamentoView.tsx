@@ -65,6 +65,19 @@ import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MaterialPontoBudget } from '@/hooks/usePcpPlanejamentoData';
+import { useAlojamentos } from '@/hooks/useAlojamentos';
+import { useVistoriaRisk } from '@/hooks/usePcpAiPlanner';
+
+function calcDistanceKM(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
 
 // ─── PontosMultiSelect — Popover compacto de seleção múltipla de pontos ───
 interface PontosMultiSelectProps {
@@ -179,8 +192,12 @@ export const PcpPlanejamentoView = () => {
   const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_shared_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
 
   // Selected Pontos list for active Obra
-  const [selectedPontosLabels, setSelectedPontosLabels] = useState<string[]>([]);
+  const [selectedPontosLabels, setSelectedPontosLabels] = useSessionState<string[]>('pcp_shared_selected_pontos', []);
   const [newCustomPontoInput, setNewCustomPontoInput] = useState<string>('');
+
+  // Alojamentos
+  const { alojamentos } = useAlojamentos();
+  const [selectedAlojamentoId, setSelectedAlojamentoId] = useState<string>('nenhum');
 
   // Hook with data
   const {
@@ -217,9 +234,26 @@ export const PcpPlanejamentoView = () => {
   // MULTI-SELECT ETAPAS FILTER (Tudo desmarcado pré-definido por padrão)
   const [selectedEtapas, setSelectedEtapas] = useState<string[]>([]);
   const [isEtapasPopoverOpen, setIsEtapasPopoverOpen] = useState<boolean>(false);
+  
+  const [filtroLv, setFiltroLv] = useSessionState<'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>('pcp_shared_filtro_lv', 'COMPLETO');
+
+  const filteredServicosBase = useMemo(() => {
+    if (filtroLv === 'SOMENTE_LV') return servicosBase.filter(s => s.servico.includes(' LV'));
+    if (filtroLv === 'SEM_LV') return servicosBase.filter(s => !s.servico.includes(' LV'));
+    return servicosBase;
+  }, [servicosBase, filtroLv]);
 
   // ZOOM — igual padrão das outras seções do Módulo Planejamento
   const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_pcpplanejamento', 1);
+
+  // Risk AI
+  const { analyzeRisk, riskCache, loadingRisk } = useVistoriaRisk(selectedObraId || null);
+
+  useEffect(() => {
+    if (selectedObraId) analyzeRisk(selectedObraId);
+  }, [selectedObraId, analyzeRisk]);
+
+  const riskForObra = selectedObraId ? riskCache[selectedObraId] : null;
 
   // RESIZE da lista de obras (drag-to-resize na borda inferior)
   const [obrasListHeight, setObrasListHeight] = useState<number>(350);
@@ -253,6 +287,20 @@ export const PcpPlanejamentoView = () => {
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   }, [obrasListHeight]);
+
+  // Alojamento Handler
+  const handleAlojamentoChange = (alojId: string) => {
+    setSelectedAlojamentoId(alojId);
+    if (alojId !== 'nenhum' && selectedObra?.latitude && selectedObra?.longitude) {
+      const aloj = alojamentos.find(a => a.id === alojId);
+      if (aloj?.latitude && aloj?.longitude) {
+        const distKm = calcDistanceKM(selectedObra.latitude, selectedObra.longitude, aloj.latitude, aloj.longitude);
+        setTempoDeslocamento(Math.round(distKm * 1.5)); // avg 40km/h = 1.5 min/km
+      }
+    } else if (alojId === 'nenhum') {
+      setTempoDeslocamento(30);
+    }
+  };
 
   // Formatted date string for submission & display
   const dataProgramacaoFormatada = useMemo(() => {
@@ -289,7 +337,7 @@ export const PcpPlanejamentoView = () => {
   }, [equipe, metasPorEquipeMap]);
 
   // Map of PcpPontoItem[] grouped by Ponto Label (e.g., 'P71' -> items[], 'P72' -> items[])
-  const [pontosGroupedMap, setPontosGroupedMap] = useState<Record<string, PcpPontoItem[]>>({});
+  const [pontosGroupedMap, setPontosGroupedMap] = useSessionState<Record<string, PcpPontoItem[]>>('pcp_shared_pontos_grouped', {});
 
   // Helper for "Limpar Filtros"
   const handleClearFilters = () => {
@@ -337,7 +385,7 @@ export const PcpPlanejamentoView = () => {
               isBudgeted: true, // Marca que é atividade prevista do ponto
             }));
           } else {
-            const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+            const fallback = filteredServicosBase.length > 0 ? filteredServicosBase[0] : (servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
             const defaultServ = fallback;
             nextMap[pLabelUpper] = [
               {
@@ -481,8 +529,8 @@ export const PcpPlanejamentoView = () => {
   const handleAddAtividadeNoPonto = (pontoLabelTarget: string) => {
     const existing = pontosGroupedMap[pontoLabelTarget] || [];
     const existingServicos = new Set(existing.map(i => i.servico));
-    const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
-    const nextAvailableServico = servicosBase.find(s => !existingServicos.has(s.servico)) || fallback;
+    const fallback = filteredServicosBase.length > 0 ? filteredServicosBase[0] : (servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
+    const nextAvailableServico = filteredServicosBase.find(s => !existingServicos.has(s.servico)) || fallback;
 
     const newActivity: PcpPontoItem = {
       id: `${pontoLabelTarget}-manual-${Date.now()}`,
@@ -1174,15 +1222,45 @@ export const PcpPlanejamentoView = () => {
                   <Clock className="w-4 h-4 text-primary" />
                   Tempos Complementares & Meta da Equipe
                 </span>
-                <Badge variant="secondary" className="font-mono text-[11px] bg-primary/10 text-primary">
-                  {equipe}
-                </Badge>
+                <div className="flex items-center gap-3">
+                  <Select value={filtroLv} onValueChange={(v: any) => setFiltroLv(v)}>
+                    <SelectTrigger className="h-7 text-[10px] w-[140px] font-mono">
+                      <SelectValue placeholder="Filtro LV" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="COMPLETO">COMPLETO</SelectItem>
+                      <SelectItem value="SOMENTE_LV">SOMENTE LV</SelectItem>
+                      <SelectItem value="SEM_LV">SEM LV</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="secondary" className="font-mono text-[11px] bg-primary/10 text-primary">
+                    {equipe}
+                  </Badge>
+                </div>
               </CardTitle>
             </CardHeader>
 
             <CardContent className="space-y-4 text-xs">
-              {/* Grid 3 Campos de Tempo Complementares */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Grid Campos de Tempo Complementares */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <Truck className="w-3 h-3 text-blue-500" /> Base
+                  </Label>
+                  <Select value={selectedAlojamentoId} onValueChange={handleAlojamentoChange}>
+                    <SelectTrigger className="h-8 text-[10px] font-mono pr-2">
+                      <SelectValue placeholder="Padrão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nenhum">Nenhum / Padrão</SelectItem>
+                      {alojamentos.map(a => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.nome} {a.cidade ? `(${a.cidade})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex flex-col gap-1">
                   <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
                     <Navigation className="w-3 h-3 text-blue-500" /> Deslocamento
@@ -1453,6 +1531,21 @@ export const PcpPlanejamentoView = () => {
                     ))}
                   </div>
                 )}
+                {/* RISK BADGE */}
+                {riskForObra && (
+                  <div className="mt-2 flex items-center justify-between gap-2 p-2 rounded-md bg-muted/30 border">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        riskForObra.classificacao === 'Vermelho' ? 'bg-red-500' :
+                        riskForObra.classificacao === 'Laranja' ? 'bg-orange-500' : 'bg-emerald-500'
+                      }`} />
+                      <span className="text-[10px] font-semibold text-muted-foreground">IA</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground truncate" title={riskForObra.alerta}>
+                      {riskForObra.alerta}
+                    </span>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -1576,7 +1669,7 @@ export const PcpPlanejamentoView = () => {
                                             <SelectValue placeholder="Selecione a Atividade" />
                                           </SelectTrigger>
                                           <SelectContent className="max-h-[200px]">
-                                            {servicosBase.map(s => (
+                                            {filteredServicosBase.map(s => (
                                               <SelectItem key={s.servico} value={s.servico} className="text-[10px]">
                                                 {s.servico}
                                               </SelectItem>
