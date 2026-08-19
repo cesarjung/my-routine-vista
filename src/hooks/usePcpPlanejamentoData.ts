@@ -282,7 +282,8 @@ export const usePcpPlanejamentoData = (
 
         const atividade = String(row[37] || '').trim().toUpperCase();
         const tempoStr = String(row[40] || '').trim();
-        const valStr = String(row[44] || '').trim();
+        const valMoStr = String(row[42] || '').trim();
+        const valMatStr = String(row[44] || '').trim();
         
         if (!atividade) continue;
 
@@ -299,8 +300,11 @@ export const usePcpPlanejamentoData = (
         }
 
         let valor = 0;
-        if (valStr) {
-           valor = parseFloat(valStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+        if (valMoStr) {
+           valor += parseFloat(valMoStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+        }
+        if (valMatStr) {
+           valor += parseFloat(valMatStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
         }
 
         lista.push({
@@ -688,7 +692,7 @@ export const usePcpPlanejamentoData = (
     }
 
     return map;
-  }, [orcamentoPontosQuery.data]);
+  }, [orcamentoPontosQuery.data, servicosBase]);
 
   // Unique budgeted point labels for the selected project (e.g. ['P1', 'P2', 'P3', 'P71'])
   const pontosDisponiveisDoProjeto = useMemo(() => {

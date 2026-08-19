@@ -365,44 +365,62 @@ export const PcpPlanejamentoView = () => {
 
       selectedPontosLabels.forEach(pLabel => {
         const pLabelUpper = pLabel.toUpperCase();
+        const budgetItems = orcamentoPorPontoMap.get(pLabelUpper);
+
         if (prevMap[pLabelUpper]) {
-          nextMap[pLabelUpper] = prevMap[pLabelUpper];
-        } else {
-          const budgetItems = orcamentoPorPontoMap.get(pLabelUpper);
+          // Ponto já existe — atualiza tempo/valor vindo do orçamento, mas preserva seleções manuais
           if (budgetItems && budgetItems.length > 0) {
-            // Unique Atividades PREVISTAS do orçamento (isBudgeted: true) -> Vêm DESMARCADAS por padrão
-            nextMap[pLabelUpper] = budgetItems.map((bItem, bIdx) => ({
-              id: `${pLabelUpper}-${bItem.servicoPrevisto.replace(/\s+/g, '_')}-${bIdx}`,
-              ponto: pLabelUpper,
-              servico: bItem.servicoPrevisto,
-              codigoMaterial: bItem.codigo,
-              descricaoMaterial: bItem.descricao,
-              qtdOrcadaPonto: bItem.quantidade, // Coluna F: Qtd Prevista
-              etapaPrevista: inferEtapaFromServico(bItem.servicoPrevista), // Coluna M: Etapa Prevista
-              quantidade: bItem.quantidade,
-              tempoEstimadoMinutos: bItem.tempoMinutos,
-              valorEstimado: bItem.valorEstimado,
-              selected: false,
-              isBudgeted: true, // Marca que é atividade prevista do ponto
-            }));
-          } else {
-            const fallback = filteredServicosBase.length > 0 ? filteredServicosBase[0] : (servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
-            const defaultServ = fallback;
-            nextMap[pLabelUpper] = [
-              {
-                id: `${pLabelUpper}-default-${Date.now()}`,
-                ponto: pLabelUpper,
-                servico: defaultServ.servico,
-                qtdOrcadaPonto: 1, // Coluna F: Qtd Prevista
-                etapaPrevista: inferEtapaFromServico(defaultServ.servico), // Coluna M: Etapa Prevista
-                quantidade: 1,
-                tempoEstimadoMinutos: defaultServ.tempoMinutosPorUnidade,
-                valorEstimado: defaultServ.valorPorUnidade,
-                selected: false,
-                isBudgeted: false,
+            const budgetByDescricao = new Map(budgetItems.map(b => [b.servicoPrevisto, b]));
+            nextMap[pLabelUpper] = prevMap[pLabelUpper].map(item => {
+              const match = budgetByDescricao.get(item.servico);
+              if (match && (item.tempoEstimadoMinutos === 0 || item.valorEstimado === 0)) {
+                // Só aplica patch se os valores ainda estão zerados (evita sobrescrever edição manual)
+                return {
+                  ...item,
+                  tempoEstimadoMinutos: match.tempoMinutos > 0 ? match.tempoMinutos : item.tempoEstimadoMinutos,
+                  valorEstimado: match.valorEstimado > 0 ? match.valorEstimado : item.valorEstimado,
+                };
               }
-            ];
+              return item;
+            });
+          } else {
+            nextMap[pLabelUpper] = prevMap[pLabelUpper];
           }
+        } else if (budgetItems && budgetItems.length > 0) {
+          // Novo ponto — cria a partir do orçamento
+          nextMap[pLabelUpper] = budgetItems.map((bItem, bIdx) => ({
+            id: `${pLabelUpper}-${bItem.servicoPrevisto.replace(/\s+/g, '_')}-${bIdx}`,
+            ponto: pLabelUpper,
+            servico: bItem.servicoPrevisto,
+            codigoMaterial: bItem.codigo,
+            descricaoMaterial: bItem.descricao,
+            qtdOrcadaPonto: bItem.quantidade,
+            etapaPrevista: inferEtapaFromServico(bItem.servicoPrevisto),
+            quantidade: bItem.quantidade,
+            tempoEstimadoMinutos: bItem.tempoMinutos,
+            valorEstimado: bItem.valorEstimado,
+            selected: false,
+            isBudgeted: true,
+          }));
+        } else {
+          // Sem orçamento — cria linha em branco com fallback
+          const fallback = filteredServicosBase.length > 0
+            ? filteredServicosBase[0]
+            : (servicosBase.length > 0
+              ? servicosBase[0]
+              : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
+          nextMap[pLabelUpper] = [{
+            id: `${pLabelUpper}-default-${Date.now()}`,
+            ponto: pLabelUpper,
+            servico: fallback.servico,
+            qtdOrcadaPonto: 1,
+            etapaPrevista: inferEtapaFromServico(fallback.servico),
+            quantidade: 1,
+            tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade,
+            valorEstimado: fallback.valorPorUnidade,
+            selected: false,
+            isBudgeted: false,
+          }];
         }
       });
 
