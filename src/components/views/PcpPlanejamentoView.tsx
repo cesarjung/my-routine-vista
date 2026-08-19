@@ -241,9 +241,14 @@ export const PcpPlanejamentoView = () => {
   const [filtroLv, setFiltroLv] = useSessionState<'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>('pcp_shared_filtro_lv', 'COMPLETO');
 
   const filteredServicosBase = useMemo(() => {
-    if (filtroLv === 'SOMENTE_LV') return servicosBase.filter(s => s.servico.includes(' LV'));
-    if (filtroLv === 'SEM_LV') return servicosBase.filter(s => !s.servico.includes(' LV'));
-    return servicosBase;
+    const base = Array.isArray(servicosBase) ? servicosBase : [];
+    if (filtroLv === 'SOMENTE_LV') {
+      return base.filter(s => s && s.servico && (s.servico.toUpperCase().includes(' LV') || s.servico.toUpperCase().includes('LINHA VIVA')));
+    }
+    if (filtroLv === 'SEM_LV') {
+      return base.filter(s => s && s.servico && !s.servico.toUpperCase().includes(' LV') && !s.servico.toUpperCase().includes('LINHA VIVA'));
+    }
+    return base;
   }, [servicosBase, filtroLv]);
 
   // ZOOM — igual padrão das outras seções do Módulo Planejamento
@@ -259,10 +264,10 @@ export const PcpPlanejamentoView = () => {
   const riskForObra = selectedObraId ? riskCache[selectedObraId] : null;
 
   // RESIZE da lista de obras (drag-to-resize na borda inferior)
-  const [obrasListHeight, setObrasListHeight] = useState<number>(350);
+  const [obrasListHeight, setObrasListHeight] = useState<number>(260);
   const isDraggingRef = useRef<boolean>(false);
   const dragStartYRef = useRef<number>(0);
-  const dragStartHeightRef = useRef<number>(350);
+  const dragStartHeightRef = useRef<number>(260);
 
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -354,7 +359,7 @@ export const PcpPlanejamentoView = () => {
 
   const handleSelectObra = (obra: PcpObra) => {
     setSelectedObraId(obra.projeto);
-    setSelectedPontosLabels([]);
+    setSelectedPontosLabels(['P1']);
     setPontosGroupedMap({});
   };
 

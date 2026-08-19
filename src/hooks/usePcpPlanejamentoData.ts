@@ -710,14 +710,23 @@ export const usePcpPlanejamentoData = (
     return map;
   }, [orcamentoPontosQuery.data, servicosBase]);
 
-  // Unique budgeted point labels for the selected project (e.g. ['P1', 'P2', 'P3', 'P71'])
+  // Unique budgeted point labels for the selected project (e.g. ['P1', 'P2', 'P3', 'P4', 'P5'])
   const pontosDisponiveisDoProjeto = useMemo(() => {
-    return Array.from(orcamentoPorPontoMap.keys()).sort((a, b) => {
+    const setPontos = new Set<string>(orcamentoPorPontoMap.keys());
+
+    // Se a obra tem X postes na carteira (ex: 5 postes), garante que P1..P5 existam na lista de opções
+    const selectedObra = obras.find(o => o.projeto === selectedProjetoCode);
+    const qtdPostes = Math.min(50, Math.max(1, selectedObra?.qtdPostesDisponiveis || 1));
+    for (let i = 1; i <= qtdPostes; i++) {
+      setPontos.add(`P${i}`);
+    }
+
+    return Array.from(setPontos).sort((a, b) => {
       const numA = parseInt(a.replace(/\D/g, '')) || 0;
       const numB = parseInt(b.replace(/\D/g, '')) || 0;
       return numA - numB;
     });
-  }, [orcamentoPorPontoMap]);
+  }, [orcamentoPorPontoMap, obras, selectedProjetoCode]);
 
   // Function to generate filename timestamp format: UNIDADE_ddmmhhmm.csv (ex: BJL_16081403.csv)
   const generateCsvFilename = (unidadeId: string) => {
