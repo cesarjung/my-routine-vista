@@ -1134,61 +1134,111 @@ export const PcpPlanejamentoView = () => {
           {selectedObra && (
             <Card className="border border-border shadow-xs">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-primary" />
-                  Análise de Risco — Vistoria
-                  {loadingRisk && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />}
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-primary" />
+                    Análise de Risco — Vistoria
+                  </CardTitle>
+                  {loadingRisk && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+                </div>
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
-                <div>
-                  <p className="font-mono font-bold text-primary text-sm">{selectedObra.projeto}</p>
-                  <p className="text-xs text-muted-foreground">{selectedObra.nomeProjeto}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3" /> {selectedObra.municipio}
-                  </p>
+                <div className="flex items-start justify-between gap-2 border-b border-border/40 pb-2">
+                  <div>
+                    <p className="font-mono font-bold text-primary text-sm">{selectedObra.projeto}</p>
+                    <p className="text-xs text-muted-foreground">{selectedObra.nomeProjeto}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3 text-muted-foreground" /> {selectedObra.municipio}
+                    </p>
+                  </div>
+
+                  {/* Badge de Risco com Cores conforme orientação */}
+                  {riskForObra && (
+                    <Badge
+                      variant="outline"
+                      className={`text-xs px-2.5 py-1 font-bold font-mono shrink-0 flex items-center gap-1.5 ${
+                        riskForObra.classificacao === 'Vermelho'
+                          ? 'bg-rose-500/15 text-rose-600 border-rose-500/40 dark:text-rose-400'
+                          : riskForObra.classificacao === 'Laranja'
+                          ? 'bg-amber-500/15 text-amber-600 border-amber-500/40 dark:text-amber-400'
+                          : 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40 dark:text-emerald-400'
+                      }`}
+                    >
+                      {riskForObra.classificacao === 'Vermelho' ? (
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                      ) : riskForObra.classificacao === 'Laranja' ? (
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      Risco {riskForObra.classificacao}
+                    </Badge>
+                  )}
                 </div>
 
+                {/* Resumo das Observações pela IA */}
                 {!riskForObra && !loadingRisk ? (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    Análise pendente ou sem dados
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-1">
+                    Análise pendente ou sem dados de vistoria.
                   </div>
                 ) : riskForObra?.classificacao === 'Verde' ? (
-                  <div className="flex flex-col gap-1.5 text-xs text-emerald-600">
-                    <div className="flex items-center gap-1.5 font-semibold">
-                      <CheckCircle2 className="w-4 h-4" /> Sem alertas de risco ou impedimento
+                  <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-xs flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>Sem alertas de risco ou impedimento</span>
                     </div>
-                    {riskForObra.alerta && riskForObra.alerta !== "Sem alertas identificados" && (
-                      <p className="text-muted-foreground leading-snug border-l-2 pl-2 mt-1 border-emerald-500/30 ml-2">
+                    <p className="text-muted-foreground text-[11px] leading-relaxed pl-5">
+                      {riskForObra.alerta || 'Obra liberada e com fácil acesso para execução.'}
+                    </p>
+                  </div>
+                ) : riskForObra ? (
+                  <div className={`p-3 rounded-xl border text-xs flex flex-col gap-2 ${
+                    riskForObra.classificacao === 'Vermelho'
+                      ? 'bg-rose-500/5 border-rose-500/30'
+                      : 'bg-amber-500/5 border-amber-500/30'
+                  }`}>
+                    <div className="flex items-center gap-1.5 font-bold">
+                      {riskForObra.classificacao === 'Vermelho' ? (
+                        <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertTriangle className="w-4 h-4" /> Alertas Críticos de Segurança
+                        </span>
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <ShieldAlert className="w-4 h-4" /> Pontos de Atenção / Restrições Operacionais
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Resumo em tópicos das observações lidas pela IA */}
+                    {riskForObra.pontosAtencao && riskForObra.pontosAtencao.length > 0 ? (
+                      <ul className="space-y-1.5 text-[11px] text-foreground/90 pl-1">
+                        {riskForObra.pontosAtencao.map((pt, pIdx) => (
+                          <li key={pIdx} className="flex items-start gap-1.5 leading-snug">
+                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                              riskForObra.classificacao === 'Vermelho' ? 'bg-rose-500' : 'bg-amber-500'
+                            }`} />
+                            <span>{pt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground leading-snug">
                         {riskForObra.alerta}
                       </p>
                     )}
-                  </div>
-                ) : riskForObra ? (
-                  <div className="flex flex-col gap-1.5">
-                    <Badge variant="outline" className={`text-[11px] px-2 py-1 font-semibold w-fit ${
-                      riskForObra.classificacao === 'Vermelho' ? 'bg-rose-500/10 text-rose-600 border-rose-500/30' :
-                      'bg-orange-500/10 text-orange-600 border-orange-500/30'
-                    }`}>
-                      {riskForObra.classificacao === 'Vermelho' ? <AlertTriangle className="w-3.5 h-3.5 mr-1" /> : <ShieldAlert className="w-3.5 h-3.5 mr-1" />}
-                      Risco {riskForObra.classificacao}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground leading-snug border-l-2 pl-2 mt-1 border-muted">
-                      {riskForObra.alerta}
-                    </p>
                   </div>
                 ) : null}
 
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
                     <div className="font-bold text-foreground text-base">{allPontosListFlat.length || '—'}</div>
-                    <div className="text-muted-foreground">Atividades</div>
+                    <div className="text-muted-foreground text-[10px]">Atividades Previstas</div>
                   </div>
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
                     <div className="font-bold text-foreground text-base">
                       {selectedPontosLabels.length || '—'}
                     </div>
-                    <div className="text-muted-foreground">Pontos Selecionados</div>
+                    <div className="text-muted-foreground text-[10px]">Pontos Selecionados</div>
                   </div>
                 </div>
               </CardContent>

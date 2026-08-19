@@ -8,49 +8,85 @@ import { useSessionState } from '@/hooks/useSessionState';
 export interface RiskResult {
   classificacao: 'Verde' | 'Laranja' | 'Vermelho';
   alerta: string;
+  resumoIa?: string;
+  pontosAtencao?: string[];
+  observacoesOriginais?: string;
 }
 
-export interface DiaPlano {
-  data: string;
-  diaSemana: string;
-  pontos: string[];
-  alojamentoId?: string;
-  tempoDeslocamentoOverride?: number;
-  tempoSaidaBaseOverride?: number;
-  tempoSegurancaOverride?: number;
-  tempoTotalMinutos: number;
-  tempoTotalFormatado: string;
-  valorEstimado: number;
-  percentualMeta: number;
-  observacao?: string;
-}
+// ─── Local Rule-Based NLP Analyzer for Vistoria Observations ──────────────────
+export function parseVistoriaObservations(obs?: string | null, tags?: string[]): RiskResult {
+  if (!obs || !obs.trim()) {
+    return {
+      classificacao: 'Verde',
+      alerta: 'Sem observações registradas na vistoria.',
+      resumoIa: 'Nenhum alerta de risco ou impedimento operacional registrado.',
+      pontosAtencao: [],
+      observacoesOriginais: '',
+    };
+  }
 
-export interface PlanoEquipe {
-  equipe: string;
-  semana: string;
-  obra: string;
-  dias: DiaPlano[];
-  totalSemana: {
-    pontos: number;
-    tempoFormatado: string;
-    valorTotal: number;
-    mediaPercentualMeta: number;
+  const textUpper = obs.toUpperCase();
+
+  // Regras de Risco Vermelho (Segurança / Estrutural / Elétrico Grave)
+  const redKeywords = [
+    'POSTE QUEBRADO', 'TRINCA', 'FERRAGEM EXPOSTA', 'RISCO DE QUEDA', 
+    'RISCO DE CHOQUE', 'FIO PARTIDO', 'FIOS EXPOSTOS', 'FIO CAÍDO', 'FIO NO CHÃO',
+    'FAÍSCA', 'FAISCAMENTO', 'ESTRUTURA CONDENADA', 'CRÍTICO', 'PERIGO', 'EMERGENCIAL'
+  ];
+
+  // Regras de Risco Laranja (Acesso / Operacional / Restrições / Meio Ambiente)
+  const orangeKeywords = [
+    'DIFÍCIL ACESSO', 'DIFICIL ACESSO', 'SEM ACESSO', 'ACESSO COMPROMETIDO', 
+    'CHUVA', 'CHUVAS', 'CHUVOSOS', 'ATOLAMENTO', 'ATOLAR', 'ATOLEIRO', 'ABRIR CERCA', 'CERCA',
+    'CANCELA', 'CADEADO', 'SOLICITANTE AUSENTE', 'CLIENTE AUSENTE', 'ROCHA', 'PEDRA', 'PEDRAS',
+    'PODA', 'PODAS', 'ALAGADO', 'ALAGADOS', 'ALAGAMENTOS', 'AUTORIZAÇÃO', 'AGENDAMENTO', 
+    'IMPEDIMENTO', 'IMPEDIDA', 'DIVERGÊNCIA', 'DIVERGENCIA', 'AREIA', 'ARENOSO', 'PONTE', 'RETROESCAVADEIRA'
+  ];
+
+  const matchedRed = redKeywords.filter(k => textUpper.includes(k));
+  const matchedOrange = orangeKeywords.filter(k => textUpper.includes(k));
+
+  let classificacao: 'Verde' | 'Laranja' | 'Vermelho' = 'Verde';
+  if (matchedRed.length > 0) {
+    classificacao = 'Vermelho';
+  } else if (matchedOrange.length > 0 || (Array.isArray(tags) && tags.length > 0)) {
+    classificacao = 'Laranja';
+  }
+
+  // Divide as observações por // ou quebras de linha
+  const parts = obs
+    .split(/\/\/|\n|\r/)
+    .map(p => p.trim())
+    .filter(p => p.length > 2);
+
+  // Extrai trechos que contêm alertas críticos
+  const pontosCriticos: string[] = [];
+  parts.forEach(p => {
+    const pUpper = p.toUpperCase();
+    const isRed = redKeywords.some(k => pUpper.includes(k));
+    const isOrange = orangeKeywords.some(k => pUpper.includes(k));
+    if (isRed || isOrange) {
+      pontosCriticos.push(p);
+    }
+  });
+
+  const alertaPrincipal = pontosCriticos.length > 0
+    ? pontosCriticos.slice(0, 2).join(' • ')
+    : (parts.length > 0 && !parts[0].toUpperCase().includes('OBRA OK') && !parts[0].toUpperCase().includes('SEM OBS')
+        ? parts[0]
+        : 'Sem alertas de risco ou impedimento.');
+
+  const resumoGeral = pontosCriticos.length > 0
+    ? pontosCriticos.join(' • ')
+    : parts.filter(p => !p.toUpperCase().startsWith('OBRA APTA')).join(' • ') || 'Obra sem impeditivos de campo.';
+
+  return {
+    classificacao,
+    alerta: alertaPrincipal,
+    resumoIa: resumoGeral,
+    pontosAtencao: pontosCriticos.length > 0 ? pontosCriticos : parts.slice(0, 3),
+    observacoesOriginais: obs,
   };
-}
-
-export interface PlanResponse {
-  planejamento: PlanoEquipe[];
-  alertas: string[];
-  resumoTextual: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  planData?: PlanResponse;
-  timestamp: Date;
-  loading?: boolean;
 }
 
 // ─── Hook: Vistoria Risks ─────────────────────────────────────────────────────
@@ -64,10 +100,13 @@ export function useVistoriaRisk(obraId: string | null) {
     queryKey: ['realizadas_vistoria', obraId],
     queryFn: async () => {
       if (!obraId) return null;
+      const cleanId = String(obraId).trim();
+      const numId = cleanId.replace(/\D/g, '');
       const { data } = await supabase
         .from('realizadas_vistoria' as any)
         .select('observacoes_vistoria, risk_tags')
-        .eq('obra_id', obraId)
+        .or(`obra_id.eq.${cleanId},obra_id.eq.${numId},obra_id.eq.B-${numId}`)
+        .limit(1)
         .maybeSingle();
       return data as { observacoes_vistoria: string; risk_tags: any } | null;
     },
@@ -76,37 +115,55 @@ export function useVistoriaRisk(obraId: string | null) {
   });
 
   const analyzeRisk = useCallback(async (obraIdToAnalyze: string): Promise<RiskResult | null> => {
-    if (riskCache[obraIdToAnalyze]) return riskCache[obraIdToAnalyze];
+    const cleanId = String(obraIdToAnalyze).trim();
+    if (riskCache[cleanId]) return riskCache[cleanId];
 
-    const obs = vistoriaQuery.data?.observacoes_vistoria;
-    if (!obs) return null;
+    // Consulta direta para garantir dados atualizados
+    let obs = vistoriaQuery.data?.observacoes_vistoria;
+    let tags = vistoriaQuery.data?.risk_tags;
 
-    // TODO: In the future, cache the RiskResult directly in Supabase instead of risk_tags array.
-    // For now we will always fetch from Edge Function if we don't have it in local riskCache.
+    if (!obs) {
+      const numId = cleanId.replace(/\D/g, '');
+      const { data } = await supabase
+        .from('realizadas_vistoria' as any)
+        .select('observacoes_vistoria, risk_tags')
+        .or(`obra_id.eq.${cleanId},obra_id.eq.${numId},obra_id.eq.B-${numId}`)
+        .limit(1)
+        .maybeSingle();
+      obs = data?.observacoes_vistoria;
+      tags = data?.risk_tags;
+    }
 
-    setLoading(true);
+    // Calcula resultado local instantaneamente
+    const localResult = parseVistoriaObservations(obs, tags);
+    setRiskCache(prev => ({ ...prev, [cleanId]: localResult }));
+
+    if (!obs) return localResult;
+
+    // Opcionalmente aciona Edge Function para enriquecer
     try {
       const { data, error } = await supabase.functions.invoke('pcp-ai-planner', {
-        body: { mode: 'analyze_risk', observacoes: obs, obraId: obraIdToAnalyze },
+        body: { mode: 'analyze_risk', observacoes: obs, obraId: cleanId },
       });
-      if (error) throw error;
-
-      const result = data as RiskResult;
-
-      setRiskCache(prev => ({ ...prev, [obraIdToAnalyze]: result }));
-
-      return result;
-    } catch (err) {
-      console.error('Erro ao analisar risco:', err);
-      const fallback: RiskResult = { classificacao: 'Verde', alerta: 'Erro ao classificar.' };
-      setRiskCache(prev => ({ ...prev, [obraIdToAnalyze]: fallback }));
-      return fallback;
-    } finally {
-      setLoading(false);
+      if (!error && data && data.classificacao) {
+        const enriched: RiskResult = {
+          classificacao: data.classificacao,
+          alerta: data.alerta || localResult.alerta,
+          resumoIa: data.alerta || localResult.resumoIa,
+          pontosAtencao: localResult.pontosAtencao,
+          observacoesOriginais: obs,
+        };
+        setRiskCache(prev => ({ ...prev, [cleanId]: enriched }));
+        return enriched;
+      }
+    } catch {
+      // Usa resultado local se edge function falhar
     }
+
+    return localResult;
   }, [riskCache, vistoriaQuery.data]);
 
-  return { analyzeRisk, riskCache, loadingRisk: loading };
+  return { analyzeRisk, riskCache, loadingRisk: loading || vistoriaQuery.isLoading };
 }
 
 // ─── Hook: AI Planner Chat ────────────────────────────────────────────────────
