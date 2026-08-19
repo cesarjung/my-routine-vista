@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock,
   DollarSign,
+  Truck,
   Send,
   Loader2,
   RefreshCw,
