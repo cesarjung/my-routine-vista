@@ -32,6 +32,11 @@ export const ALMOXARIFADO_SECTIONS = [
   { id: 'planejamento_materiais', label: 'Materiais' }
 ];
 
+export const PCP_SECTIONS = [
+  { id: 'pcp_planejamento', label: 'Planejamento' },
+  { id: 'pcp_planej_auto', label: 'Planej. Automático' }
+];
+
 export const CONFIGURACOES_SECTIONS = [
   { id: 'config_users', label: 'Criar Usuário' },
   { id: 'config_sectors', label: 'Espaços' },
@@ -49,15 +54,17 @@ const ROLE_OPTIONS = [
   { value: 'leitor', label: 'Leitor / Consulta' }
 ];
 
-const ROLE_PRESETS: Record<string, { planejamento: string[]; almoxarifado: string[]; configuracoes: string[] }> = {
+const ROLE_PRESETS: Record<string, { planejamento: string[]; almoxarifado: string[]; pcp: string[]; configuracoes: string[] }> = {
   admin: {
     planejamento: PLANEJAMENTO_SECTIONS.map(s => s.id),
     almoxarifado: ALMOXARIFADO_SECTIONS.map(s => s.id),
+    pcp: PCP_SECTIONS.map(s => s.id),
     configuracoes: CONFIGURACOES_SECTIONS.map(s => s.id)
   },
   gestor: {
     planejamento: PLANEJAMENTO_SECTIONS.map(s => s.id),
     almoxarifado: ALMOXARIFADO_SECTIONS.map(s => s.id),
+    pcp: PCP_SECTIONS.map(s => s.id),
     configuracoes: ['config_units', 'config_integrations', 'config_list']
   },
   usuario: {
@@ -69,6 +76,7 @@ const ROLE_PRESETS: Record<string, { planejamento: string[]; almoxarifado: strin
       'planejamento_semanal'
     ],
     almoxarifado: ['planejamento_envios', 'planejamento_materiais'],
+    pcp: ['pcp_planejamento'],
     configuracoes: ['config_integrations']
   },
   leitor: {
@@ -79,6 +87,7 @@ const ROLE_PRESETS: Record<string, { planejamento: string[]; almoxarifado: strin
       'planejado_meta'
     ],
     almoxarifado: [],
+    pcp: [],
     configuracoes: []
   }
 };
@@ -92,11 +101,13 @@ export const UserPermissionsTab = () => {
   const [newPassword, setNewPassword] = useState<string>('');
   const [planejamentoPermissions, setPlanejamentoPermissions] = useState<string[]>([]);
   const [almoxarifadoPermissions, setAlmoxarifadoPermissions] = useState<string[]>([]);
+  const [pcpPermissions, setPcpPermissions] = useState<string[]>([]);
   const [configuracoesPermissions, setConfiguracoesPermissions] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const { data: planData, isLoading: isLoadingPlan } = useModulePermissions('PLANEJAMENTO', selectedUserId);
   const { data: almoxData, isLoading: isLoadingAlmox } = useModulePermissions('ALMOXARIFADO', selectedUserId);
+  const { data: pcpData, isLoading: isLoadingPcp } = useModulePermissions('PCP', selectedUserId);
   const { data: configData, isLoading: isLoadingConfig } = useModulePermissions('CONFIGURACOES', selectedUserId);
   const updatePermissions = useUpdateModulePermissions();
   const updatePasswordMutation = useAdminUpdatePassword();
@@ -121,6 +132,12 @@ export const UserPermissionsTab = () => {
         setAlmoxarifadoPermissions(ROLE_PRESETS[userRole]?.almoxarifado || ROLE_PRESETS.usuario.almoxarifado);
       }
 
+      if (pcpData && Array.isArray(pcpData.permissions)) {
+        setPcpPermissions(pcpData.permissions);
+      } else {
+        setPcpPermissions(ROLE_PRESETS[userRole]?.pcp || ROLE_PRESETS.usuario.pcp);
+      }
+
       if (configData && Array.isArray(configData.permissions)) {
         setConfiguracoesPermissions(configData.permissions);
       } else {
@@ -131,15 +148,17 @@ export const UserPermissionsTab = () => {
       setNewPassword('');
       setPlanejamentoPermissions([]);
       setAlmoxarifadoPermissions([]);
+      setPcpPermissions([]);
       setConfiguracoesPermissions([]);
     }
-  }, [selectedUserId, selectedProfile, planData, almoxData, configData]);
+  }, [selectedUserId, selectedProfile, planData, almoxData, pcpData, configData]);
 
   const handleRoleChange = (newRole: string) => {
     setSelectedRole(newRole);
     const preset = ROLE_PRESETS[newRole] || ROLE_PRESETS.usuario;
     setPlanejamentoPermissions(preset.planejamento);
     setAlmoxarifadoPermissions(preset.almoxarifado);
+    setPcpPermissions(preset.pcp);
     setConfiguracoesPermissions(preset.configuracoes);
     const roleLabel = ROLE_OPTIONS.find(r => r.value === newRole)?.label || newRole;
     toast.info(`Permissões preenchidas automaticamente para o nível: ${roleLabel}`);
@@ -153,6 +172,12 @@ export const UserPermissionsTab = () => {
 
   const toggleAlmoxarifadoItem = (id: string) => {
     setAlmoxarifadoPermissions(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const togglePcpItem = (id: string) => {
+    setPcpPermissions(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
@@ -182,6 +207,17 @@ export const UserPermissionsTab = () => {
       setAlmoxarifadoPermissions([]);
     } else {
       setAlmoxarifadoPermissions(ALMOXARIFADO_SECTIONS.map(s => s.id));
+    }
+  };
+
+  const isAllPcpChecked = PCP_SECTIONS.length > 0 &&
+    PCP_SECTIONS.every(s => pcpPermissions.includes(s.id));
+
+  const toggleAllPcp = () => {
+    if (isAllPcpChecked) {
+      setPcpPermissions([]);
+    } else {
+      setPcpPermissions(PCP_SECTIONS.map(s => s.id));
     }
   };
 
@@ -227,14 +263,21 @@ export const UserPermissionsTab = () => {
         permissions: almoxarifadoPermissions
       });
 
-      // 4. Atualizar Permissões do Módulo Configurações
+      // 4. Atualizar Permissões do Módulo PCP
+      await updatePermissions.mutateAsync({
+        userId: selectedUserId,
+        moduleName: 'PCP',
+        permissions: pcpPermissions
+      });
+
+      // 5. Atualizar Permissões do Módulo Configurações
       await updatePermissions.mutateAsync({
         userId: selectedUserId,
         moduleName: 'CONFIGURACOES',
         permissions: configuracoesPermissions
       });
 
-      // 5. Atualizar Senha se preenchida
+      // 6. Atualizar Senha se preenchida
       if (newPassword.trim()) {
         await updatePasswordMutation.mutateAsync({
           userId: selectedUserId,
@@ -430,6 +473,43 @@ export const UserPermissionsTab = () => {
                         <Checkbox
                           checked={isChecked}
                           onCheckedChange={() => selectedUserId && toggleAlmoxarifadoItem(section.id)}
+                          disabled={!selectedUserId}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Módulo PCP */}
+              <div className="flex-1 min-w-[280px] max-w-sm border rounded-md overflow-hidden shadow-sm bg-card">
+                {/* Header do Módulo */}
+                <div className="bg-neutral-800 text-white px-4 py-2.5 flex items-center justify-between">
+                  <span className="font-bold text-xs uppercase tracking-wider">MÓDULO PCP</span>
+                  <Checkbox
+                    checked={isAllPcpChecked}
+                    onCheckedChange={toggleAllPcp}
+                    disabled={!selectedUserId}
+                    className="bg-white border-white data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                  />
+                </div>
+                {/* Lista de Seções */}
+                <div className="divide-y divide-border">
+                  {PCP_SECTIONS.map(section => {
+                    const isChecked = pcpPermissions.includes(section.id);
+                    return (
+                      <div
+                        key={section.id}
+                        onClick={() => selectedUserId && togglePcpItem(section.id)}
+                        className={`flex items-center justify-between px-4 py-2.5 transition-colors ${
+                          selectedUserId ? 'hover:bg-muted/50 cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="text-sm font-medium text-foreground">{section.label}</span>
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => selectedUserId && togglePcpItem(section.id)}
                           disabled={!selectedUserId}
                           onClick={(e) => e.stopPropagation()}
                         />

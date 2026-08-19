@@ -86,6 +86,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
   const { isGestorOrAdmin } = useIsGestorOrAdmin();
   const { data: planejamentoPermissionsData } = useModulePermissions('PLANEJAMENTO');
   const { data: almoxarifadoPermissionsData } = useModulePermissions('ALMOXARIFADO');
+  const { data: pcpPermissionsData } = useModulePermissions('PCP');
 
   const hasPlanejamentoAccess = (sectionId: string) => {
     if (isAdmin || isGestorOrAdmin) return true;
@@ -99,8 +100,15 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
     return almoxarifadoPermissionsData.permissions.includes(sectionId);
   };
 
+  const hasPcpAccess = (sectionId: string) => {
+    if (isAdmin || isGestorOrAdmin) return true;
+    if (!pcpPermissionsData || !Array.isArray(pcpPermissionsData.permissions)) return true;
+    return pcpPermissionsData.permissions.includes(sectionId);
+  };
+
   const hasAnyPlanejamentoAccess = isAdmin || isGestorOrAdmin || !planejamentoPermissionsData || (Array.isArray(planejamentoPermissionsData.permissions) && planejamentoPermissionsData.permissions.length > 0);
   const hasAnyAlmoxarifadoAccess = isAdmin || isGestorOrAdmin || !almoxarifadoPermissionsData || (Array.isArray(almoxarifadoPermissionsData.permissions) && almoxarifadoPermissionsData.permissions.length > 0);
+  const hasAnyPcpAccess = isAdmin || isGestorOrAdmin || !pcpPermissionsData || (Array.isArray(pcpPermissionsData.permissions) && pcpPermissionsData.permissions.length > 0);
 
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -773,7 +781,7 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         )}
 
         {/* Módulo PCP Header */}
-        {!collapsed && (
+        {hasAnyPcpAccess && !collapsed && (
           <div className="px-3 pt-4 pb-2">
             <button
               onClick={() => setIsPcpExpanded(!isPcpExpanded)}
@@ -784,29 +792,33 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
             </button>
           </div>
         )}
-        {(!collapsed ? isPcpExpanded : true) && (
+        {hasAnyPcpAccess && (!collapsed ? isPcpExpanded : true) && (
           <div className="space-y-0.5 px-3">
-            <button
-              onClick={() => onNavigate({ type: 'pcp_planejamento', section: 'planejamento' })}
+            {hasPcpAccess('pcp_planejamento') && (
+              <button
+                onClick={() => onNavigate({ type: 'pcp_planejamento', section: 'planejamento' })}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
                 context.type === 'pcp_planejamento' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <ClipboardCheck className="w-4 h-4 shrink-0 text-amber-400" />
-              {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Planejamento</span>}
-            </button>
+                <Activity className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Planejamento</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => onNavigate({ type: 'pcp_planejamento_auto', section: 'planejamento' })}
+            {hasPcpAccess('pcp_planej_auto') && (
+              <button
+                onClick={() => onNavigate({ type: 'pcp_planejamento_auto', section: 'planejamento' })}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
                 context.type === 'pcp_planejamento_auto' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )}
             >
-              <Bot className="w-4 h-4 shrink-0 text-violet-400" />
-              {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Planej. Automático</span>}
-            </button>
+                <Bot className="w-4 h-4 shrink-0 text-amber-500" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Planej. Automático</span>}
+              </button>
+            )}
           </div>
         )}
 

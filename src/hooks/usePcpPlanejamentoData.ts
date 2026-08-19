@@ -21,6 +21,8 @@ export interface PcpObra {
   qtdCabosDisponiveis: number;  // Coluna AE (index 30 em Carteira_Planejador)
   carteirasStr: string;         // Coluna G (index 6 em Carteira_Planejador, ex: "mai./25, jun./25")
   meses: string[];              // Lista dos meses/carteira da obra
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface PcpPontoItem {
@@ -191,6 +193,7 @@ const parseNumericCell = (val: any): number => {
 };
 
 export interface ServicoBase {
+  codigo?: string;
   servico: string;
   tempoMinutosPorUnidade: number;
   valorPorUnidade: number;
@@ -275,23 +278,24 @@ export const usePcpPlanejamentoData = (
       const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
       const bdConfigRows = parsed?.bd_config || [];
 
-      // Colunas: AK=36, AL=37(Atividade), AO=40(Tempo), AS=44(Valor)
+      // Colunas: AK=36 (Código), AL=37 (Atividade), AO=40 (Tempo), AS=44 (Valor), AT=45 (Valor + Fator K)
       for (let i = 1; i < bdConfigRows.length; i++) {
         const row = bdConfigRows[i];
-        if (!row || row.length < 38) continue; // Pelo menos até AL (Atividade) tem que existir
+        if (!row || row.length < 38) continue;
 
+        const codigo = String(row[36] || '').trim();
         const atividade = String(row[37] || '').trim().toUpperCase();
         const tempoStr = String(row[40] || '').trim();
-        const valMoStr = String(row[42] || '').trim();
-        const valMatStr = String(row[44] || '').trim();
+        const valStr = String(row[44] || '').trim();
+        const valKStr = String(row[45] || '').trim();
         
-        if (!atividade) continue;
+        if (!atividade || atividade === 'DESCRIÇÃO ATIVIDADE') continue;
 
         let tempoMinutos = 0;
         if (tempoStr) {
            const p = tempoStr.split(':');
            if (p.length === 3) {
-             tempoMinutos = parseInt(p[0]||'0', 10) * 60 + parseInt(p[1]||'0', 10) + parseInt(p[2]||'0', 10) / 60;
+             tempoMinutos = parseInt(p[0]||'0', 10) * 60 + parseInt(p[1]||'0', 10) + parseFloat(p[2]||'0') / 60;
            } else if (p.length === 2) {
              tempoMinutos = parseInt(p[0]||'0', 10) * 60 + parseInt(p[1]||'0', 10);
            } else if (p.length === 1 && parseFloat(p[0])) {
@@ -300,16 +304,17 @@ export const usePcpPlanejamentoData = (
         }
 
         let valor = 0;
-        if (valMoStr) {
-           valor += parseFloat(valMoStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+        if (valStr) {
+           valor = parseFloat(valStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
         }
-        if (valMatStr) {
-           valor += parseFloat(valMatStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+        if (valor === 0 && valKStr) {
+           valor = parseFloat(valKStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
         }
 
         lista.push({
+          codigo,
           servico: atividade,
-          tempoMinutosPorUnidade: tempoMinutos > 0 ? tempoMinutos : 15, // fallback only if strictly zero or NaN
+          tempoMinutosPorUnidade: tempoMinutos > 0 ? tempoMinutos : 15,
           valorPorUnidade: valor,
         });
       }
@@ -318,8 +323,7 @@ export const usePcpPlanejamentoData = (
     }
     
     if (lista.length === 0) {
-      // Fallback in case of failure so UI doesn't crash completely
-      lista.push({ servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100.0 });
+      lista.push({ codigo: 'SIR0000001', servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100.0 });
     }
     
     return lista;
@@ -355,6 +359,9 @@ export const usePcpPlanejamentoData = (
           ? carteirasStr.split(',').map(m => m.trim()).filter(Boolean)
           : [];
 
+        let lat = Number(String(row[46] || '').replace(',', '.'));
+        let lng = Number(String(row[47] || '').replace(',', '.'));
+
         result.push({
           projeto,
           nomeProjeto: String(row[13] || row[14] || '').trim(),
@@ -371,6 +378,8 @@ export const usePcpPlanejamentoData = (
           qtdCabosDisponiveis: parseNumericCell(row[30]),  // Coluna AE (CABO DISP.)
           carteirasStr,
           meses,
+          latitude: !isNaN(lat) && lat !== 0 ? lat : null,
+          longitude: !isNaN(lng) && lng !== 0 ? lng : null,
         });
       }
       return result;
@@ -601,13 +610,20 @@ export const usePcpPlanejamentoData = (
       pontoMap.forEach((atvsMap, pontoKey) => {
         const list: MaterialPontoBudget[] = [];
         atvsMap.forEach((info, descricao) => {
-          // Tenta encontrar serviço exato primeiro
-          let foundServ = servicosBase.find(s => s.servico === descricao);
+          const cod = String(info.codigo || '').trim();
+
+          // 1. Match por código da atividade (ex: SIR0000001, SDEMU1004II)
+          let foundServ = cod ? servicosBase.find(s => s.codigo && s.codigo === cod) : undefined;
           
+          // 2. Match por descrição exata
           if (!foundServ) {
-            // Fallback para contain
+            foundServ = servicosBase.find(s => s.servico === descricao);
+          }
+          
+          // 3. Match por aproximação / substring
+          if (!foundServ) {
             foundServ = servicosBase.find(s => descricao.includes(s.servico) || s.servico.includes(descricao)) 
-              || (servicosBase.length > 0 ? servicosBase[0] : { servico: descricao, tempoMinutosPorUnidade: 15, valorPorUnidade: 0 });
+              || (servicosBase.length > 0 ? servicosBase[0] : { codigo: cod, servico: descricao, tempoMinutosPorUnidade: 15, valorPorUnidade: 0 });
           }
 
           const totalQty = Math.max(1, Math.round(info.qty));
@@ -620,8 +636,8 @@ export const usePcpPlanejamentoData = (
             unidade: 'UND',
             servicoPrevisto: descricao, // Use description directly from sheet
             etapaPrevista: info.etapa,  // Etapa directly from sheet (Col C)
-            tempoMinutos: foundServ.tempoMinutosPorUnidade * totalQty,
-            valorEstimado: foundServ.valorPorUnidade * totalQty,
+            tempoMinutos: Math.round(foundServ.tempoMinutosPorUnidade * totalQty),
+            valorEstimado: Math.round(foundServ.valorPorUnidade * totalQty * 100) / 100,
           });
         });
         if (list.length > 0) map.set(pontoKey, list);

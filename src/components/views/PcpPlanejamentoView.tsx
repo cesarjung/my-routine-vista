@@ -27,6 +27,8 @@ import {
   Target,
   Navigation,
   ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
   LogOut,
   TrendingUp,
   Percent,
@@ -58,7 +60,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -367,18 +369,22 @@ export const PcpPlanejamentoView = () => {
         const pLabelUpper = pLabel.toUpperCase();
         const budgetItems = orcamentoPorPontoMap.get(pLabelUpper);
 
-        if (prevMap[pLabelUpper]) {
+        if (prevMap[pLabelUpper] && prevMap[pLabelUpper].length > 0) {
           // Ponto já existe — atualiza tempo/valor vindo do orçamento, mas preserva seleções manuais
           if (budgetItems && budgetItems.length > 0) {
             const budgetByDescricao = new Map(budgetItems.map(b => [b.servicoPrevisto, b]));
+            const budgetByCode = new Map(budgetItems.filter(b => b.codigo).map(b => [b.codigo, b]));
+
             nextMap[pLabelUpper] = prevMap[pLabelUpper].map(item => {
-              const match = budgetByDescricao.get(item.servico);
-              if (match && (item.tempoEstimadoMinutos === 0 || item.valorEstimado === 0)) {
-                // Só aplica patch se os valores ainda estão zerados (evita sobrescrever edição manual)
+              const match = (item.codigoMaterial ? budgetByCode.get(item.codigoMaterial) : undefined) || budgetByDescricao.get(item.servico);
+              if (match) {
                 return {
                   ...item,
+                  codigoMaterial: item.codigoMaterial || match.codigo,
+                  descricaoMaterial: item.descricaoMaterial || match.descricao,
                   tempoEstimadoMinutos: match.tempoMinutos > 0 ? match.tempoMinutos : item.tempoEstimadoMinutos,
                   valorEstimado: match.valorEstimado > 0 ? match.valorEstimado : item.valorEstimado,
+                  isBudgeted: true,
                 };
               }
               return item;
@@ -408,11 +414,12 @@ export const PcpPlanejamentoView = () => {
             ? filteredServicosBase[0]
             : (servicosBase.length > 0
               ? servicosBase[0]
-              : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
+              : { codigo: 'SIR0000001', servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
           nextMap[pLabelUpper] = [{
             id: `${pLabelUpper}-default-${Date.now()}`,
             ponto: pLabelUpper,
             servico: fallback.servico,
+            codigoMaterial: fallback.codigo,
             qtdOrcadaPonto: 1,
             etapaPrevista: inferEtapaFromServico(fallback.servico),
             quantidade: 1,
@@ -426,7 +433,7 @@ export const PcpPlanejamentoView = () => {
 
       return nextMap;
     });
-  }, [selectedPontosLabels, orcamentoPorPontoMap, selectedObra]);
+  }, [selectedPontosLabels, orcamentoPorPontoMap, selectedObra, servicosBase]);
 
   // Toggle multi-select status filter
   const handleToggleStatus = (statusName: string) => {
@@ -571,10 +578,14 @@ export const PcpPlanejamentoView = () => {
   };
 
   // Handle updating an activity row in a specific Ponto Card
-  const handleUpdateAtividade = (pontoLabelTarget: string, itemIndex: number, field: keyof PcpPontoItem, value: any) => {
+  const handleUpdateAtividade = (pontoLabelTarget: string, itemIdOrIndex: string | number, field: keyof PcpPontoItem, value: any) => {
     setPontosGroupedMap(prev => {
       const items = prev[pontoLabelTarget] ? [...prev[pontoLabelTarget]] : [];
-      if (!items[itemIndex]) return prev;
+      const itemIndex = typeof itemIdOrIndex === 'number'
+        ? itemIdOrIndex
+        : items.findIndex(i => i.id === itemIdOrIndex);
+
+      if (itemIndex === -1 || !items[itemIndex]) return prev;
 
       const target = { ...items[itemIndex] };
 
@@ -584,7 +595,7 @@ export const PcpPlanejamentoView = () => {
         target.etapaPrevista = inferEtapaFromServico(value);
         if (found) {
           target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * target.quantidade);
-          target.valorEstimado = found.valorPorUnidade * target.quantidade;
+          target.valorEstimado = Math.round(found.valorPorUnidade * target.quantidade * 100) / 100;
         }
       } else if (field === 'quantidade') {
         const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: target.servico, tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
@@ -592,7 +603,7 @@ export const PcpPlanejamentoView = () => {
         const qty = Math.max(1, Math.round(Number(value) || 1));
         target.quantidade = qty;
         target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * qty);
-        target.valorEstimado = found.valorPorUnidade * qty;
+        target.valorEstimado = Math.round(found.valorPorUnidade * qty * 100) / 100;
       } else if (field === 'qtdOrcadaPonto') {
         target.qtdOrcadaPonto = Math.max(0.1, Number(value) || 1);
       } else if (field === 'etapaPrevista') {
@@ -610,9 +621,15 @@ export const PcpPlanejamentoView = () => {
   };
 
   // Handle removing an activity row from a Ponto Card
-  const handleRemoveAtividade = (pontoLabelTarget: string, itemIndex: number) => {
+  const handleRemoveAtividade = (pontoLabelTarget: string, itemIdOrIndex: string | number) => {
     setPontosGroupedMap(prev => {
-      const items = prev[pontoLabelTarget] ? prev[pontoLabelTarget].filter((_, i) => i !== itemIndex) : [];
+      const items = prev[pontoLabelTarget] ? [...prev[pontoLabelTarget]] : [];
+      const itemIndex = typeof itemIdOrIndex === 'number'
+        ? itemIdOrIndex
+        : items.findIndex(i => i.id === itemIdOrIndex);
+
+      if (itemIndex === -1) return prev;
+      items.splice(itemIndex, 1);
       return {
         ...prev,
         [pontoLabelTarget]: items
@@ -1095,7 +1112,72 @@ export const PcpPlanejamentoView = () => {
             </CardContent>
           </Card>
 
-          {/* 2. Card Parâmetros Principais */}
+          {/* 2. CARD ANÁLISE DE RISCO — VISTORIA */}
+          {selectedObra && (
+            <Card className="border border-border shadow-xs">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-primary" />
+                  Análise de Risco — Vistoria
+                  {loadingRisk && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                <div>
+                  <p className="font-mono font-bold text-primary text-sm">{selectedObra.projeto}</p>
+                  <p className="text-xs text-muted-foreground">{selectedObra.nomeProjeto}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3" /> {selectedObra.municipio}
+                  </p>
+                </div>
+
+                {!riskForObra && !loadingRisk ? (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    Análise pendente ou sem dados
+                  </div>
+                ) : riskForObra?.classificacao === 'Verde' ? (
+                  <div className="flex flex-col gap-1.5 text-xs text-emerald-600">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <CheckCircle2 className="w-4 h-4" /> Sem alertas de risco ou impedimento
+                    </div>
+                    {riskForObra.alerta && riskForObra.alerta !== "Sem alertas identificados" && (
+                      <p className="text-muted-foreground leading-snug border-l-2 pl-2 mt-1 border-emerald-500/30 ml-2">
+                        {riskForObra.alerta}
+                      </p>
+                    )}
+                  </div>
+                ) : riskForObra ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Badge variant="outline" className={`text-[11px] px-2 py-1 font-semibold w-fit ${
+                      riskForObra.classificacao === 'Vermelho' ? 'bg-rose-500/10 text-rose-600 border-rose-500/30' :
+                      'bg-orange-500/10 text-orange-600 border-orange-500/30'
+                    }`}>
+                      {riskForObra.classificacao === 'Vermelho' ? <AlertTriangle className="w-3.5 h-3.5 mr-1" /> : <ShieldAlert className="w-3.5 h-3.5 mr-1" />}
+                      Risco {riskForObra.classificacao}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground leading-snug border-l-2 pl-2 mt-1 border-muted">
+                      {riskForObra.alerta}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                  <div className="bg-muted/40 rounded-lg p-2 text-center">
+                    <div className="font-bold text-foreground text-base">{allPontosListFlat.length || '—'}</div>
+                    <div className="text-muted-foreground">Atividades</div>
+                  </div>
+                  <div className="bg-muted/40 rounded-lg p-2 text-center">
+                    <div className="font-bold text-foreground text-base">
+                      {selectedPontosLabels.length || '—'}
+                    </div>
+                    <div className="text-muted-foreground">Pontos Selecionados</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 3. Card Parâmetros Principais */}
           <Card className="border border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -1233,7 +1315,7 @@ export const PcpPlanejamentoView = () => {
             </CardContent>
           </Card>
 
-          {/* 3. CARD DE TEMPOS COMPLEMENTARES E META DA EQUIPE */}
+          {/* 4. CARD DE TEMPOS COMPLEMENTARES E META DA EQUIPE */}
           <Card className="border border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center justify-between">
@@ -1241,21 +1323,9 @@ export const PcpPlanejamentoView = () => {
                   <Clock className="w-4 h-4 text-primary" />
                   Tempos Complementares & Meta da Equipe
                 </span>
-                <div className="flex items-center gap-3">
-                  <Select value={filtroLv} onValueChange={(v: any) => setFiltroLv(v)}>
-                    <SelectTrigger className="h-7 text-[10px] w-[140px] font-mono">
-                      <SelectValue placeholder="Filtro LV" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="COMPLETO">COMPLETO</SelectItem>
-                      <SelectItem value="SOMENTE_LV">SOMENTE LV</SelectItem>
-                      <SelectItem value="SEM_LV">SEM LV</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Badge variant="secondary" className="font-mono text-[11px] bg-primary/10 text-primary">
-                    {equipe}
-                  </Badge>
-                </div>
+                <Badge variant="secondary" className="font-mono text-[11px] bg-primary/10 text-primary">
+                  {equipe}
+                </Badge>
               </CardTitle>
             </CardHeader>
 
@@ -1404,6 +1474,80 @@ export const PcpPlanejamentoView = () => {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* 5. CARD RESUMO DA PROGRAMAÇÃO COM VALORES E METAS */}
+          <Card className="border border-border shadow-xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-primary" /> Resumo da Programação ({equipe})
+                </span>
+                {tempoTotalGeralMinutos > 540 && (
+                  <Badge variant="destructive" className="text-[10px] px-2 py-0.5 font-bold">
+                    ⚠️ Excede 9h diárias
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-[10px] p-2">Dia</TableHead>
+                    <TableHead className="text-[10px] p-2">Equipe</TableHead>
+                    <TableHead className="text-[10px] p-2">Tempo</TableHead>
+                    <TableHead className="text-[10px] p-2 text-right">V. Meta</TableHead>
+                    <TableHead className="text-[10px] p-2 text-right">V. Planejado</TableHead>
+                    <TableHead className="text-[10px] p-2 text-right">% Meta</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="p-2 text-[11px] font-medium">
+                      {dataProgramacaoFormatada}
+                    </TableCell>
+                    <TableCell className="p-2 text-[11px] font-medium text-primary">
+                      {equipe}
+                    </TableCell>
+                    <TableCell className={`p-2 text-[11px] font-mono ${tempoTotalGeralMinutos > 540 ? 'text-red-500 font-bold' : ''}`}>
+                      {Math.floor(tempoTotalGeralMinutos / 60)}h {tempoTotalGeralMinutos % 60}m
+                      {tempoTotalGeralMinutos > 540 && <span className="text-[9px] ml-1 text-red-500 font-bold">(Excede 9h)</span>}
+                    </TableCell>
+                    <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono">
+                      R$ {metaEquipeInput.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="p-2 text-[11px] text-right text-emerald-600 dark:text-emerald-400 font-mono font-semibold">
+                      R$ {totalValor.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
+                      <span className={percentualMeta >= 100 ? "text-emerald-600 dark:text-emerald-400" : percentualMeta >= 75 ? "text-amber-600" : "text-rose-600"}>
+                        {percentualMeta}%
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+                <TableFooter className="bg-muted/50 border-t">
+                  <TableRow>
+                    <TableCell colSpan={2} className="p-2 text-[10px] font-bold">TOTAL</TableCell>
+                    <TableCell className={`p-2 text-[11px] font-mono font-bold ${tempoTotalGeralMinutos > 540 ? 'text-red-500' : ''}`}>
+                      {Math.floor(tempoTotalGeralMinutos / 60)}h {tempoTotalGeralMinutos % 60}m
+                    </TableCell>
+                    <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono font-bold">
+                      R$ {metaEquipeInput.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="p-2 text-[11px] text-right text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                      R$ {totalValor.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
+                      <span className={percentualMeta >= 100 ? "text-emerald-600 dark:text-emerald-400" : percentualMeta >= 75 ? "text-amber-600" : "text-rose-600"}>
+                        {percentualMeta}%
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
             </CardContent>
           </Card>
         </div>
@@ -1575,8 +1719,49 @@ export const PcpPlanejamentoView = () => {
             </div>
           )}
 
-          {/* LISTAGEM DOS PONTOS SELECIONADOS COM COLUNA F (Qtd Prevista) E COLUNA M (Etapa Prevista) */}
-          <div className="flex flex-col gap-6">
+          {/* LISTAGEM DOS PONTOS SELECIONADOS COM FILTRO LV NO TOPO DIREITO */}
+          <div className="flex flex-col gap-4">
+            {/* Header Bar com Título e Botões de Seleção LV (SOMENTE LV / SEM LV / COMPLETO) */}
+            <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-primary" />
+                  Planejamento das Atividades por Ponto
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {selectedPontosLabels.length} {selectedPontosLabels.length === 1 ? 'ponto selecionado' : 'pontos selecionados'} para execução
+                </p>
+              </div>
+
+              {/* Botão Seletor de LV: SOMENTE LV | SEM LV | COMPLETO */}
+              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
+                <Button
+                  size="sm"
+                  variant={filtroLv === 'COMPLETO' ? 'default' : 'ghost'}
+                  onClick={() => setFiltroLv('COMPLETO')}
+                  className="h-7 text-xs font-semibold px-3"
+                >
+                  COMPLETO
+                </Button>
+                <Button
+                  size="sm"
+                  variant={filtroLv === 'SOMENTE_LV' ? 'default' : 'ghost'}
+                  onClick={() => setFiltroLv('SOMENTE_LV')}
+                  className="h-7 text-xs font-semibold px-3"
+                >
+                  SOMENTE LV
+                </Button>
+                <Button
+                  size="sm"
+                  variant={filtroLv === 'SEM_LV' ? 'default' : 'ghost'}
+                  onClick={() => setFiltroLv('SEM_LV')}
+                  className="h-7 text-xs font-semibold px-3"
+                >
+                  SEM LV
+                </Button>
+              </div>
+            </div>
+
             {selectedPontosLabels.length === 0 ? (
               <Card className="border border-border">
                 <CardContent className="py-12 text-center text-muted-foreground text-xs space-y-1">
@@ -1586,7 +1771,13 @@ export const PcpPlanejamentoView = () => {
               </Card>
             ) : (
               selectedPontosLabels.map(pLabel => {
-                const itemsDoPonto = pontosGroupedMap[pLabel] || [];
+                const itemsDoPontoRaw = pontosGroupedMap[pLabel] || [];
+                const itemsDoPonto = itemsDoPontoRaw.filter(i => {
+                  const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.servico || '').toUpperCase().includes('LINHA VIVA');
+                  if (filtroLv === 'SOMENTE_LV') return isLv;
+                  if (filtroLv === 'SEM_LV') return !isLv;
+                  return true;
+                });
                 const itemsSelecionados = itemsDoPonto.filter(i => i.selected);
                 const subtotalMinutos = itemsSelecionados.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
                 const subtotalValor = itemsSelecionados.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
@@ -1602,7 +1793,7 @@ export const PcpPlanejamentoView = () => {
                             PONTO {pLabel}
                           </CardTitle>
                           <Badge variant="outline" className="text-[11px] font-mono">
-                            {itemsDoPonto.length} {itemsDoPonto.length === 1 ? 'atividade previst.' : 'atividades previst.'}
+                            {itemsDoPonto.length} {itemsDoPonto.length === 1 ? 'atividade' : 'atividades'} {filtroLv !== 'COMPLETO' ? `(${filtroLv.replace('_', ' ')})` : 'previst.'}
                           </Badge>
                         </div>
                         <CardDescription className="text-xs mt-0.5">
@@ -1631,9 +1822,10 @@ export const PcpPlanejamentoView = () => {
                                   checked={itemsDoPonto.length > 0 && itemsDoPonto.every(i => i.selected)}
                                   onCheckedChange={c => {
                                     const val = Boolean(c);
+                                    const idsInFilter = new Set(itemsDoPonto.map(i => i.id));
                                     setPontosGroupedMap(prev => ({
                                       ...prev,
-                                      [pLabel]: (prev[pLabel] || []).map(item => ({ ...item, selected: val }))
+                                      [pLabel]: (prev[pLabel] || []).map(item => idsInFilter.has(item.id) ? { ...item, selected: val } : item)
                                     }));
                                   }}
                                 />
@@ -1656,7 +1848,9 @@ export const PcpPlanejamentoView = () => {
                             {itemsDoPonto.length === 0 ? (
                               <TableRow>
                                 <TableCell colSpan={8} className="text-center py-6 text-muted-foreground text-xs">
-                                  Nenhuma atividade cadastrada para o Ponto {pLabel}. Clique em "+ Adicionar Atividade no Ponto {pLabel}".
+                                  {filtroLv !== 'COMPLETO' 
+                                    ? `Nenhuma atividade encontrada com o filtro "${filtroLv.replace('_', ' ')}" no Ponto ${pLabel}.`
+                                    : `Nenhuma atividade cadastrada para o Ponto ${pLabel}. Clique em "+ Adicionar Atividade no Ponto ${pLabel}".`}
                                 </TableCell>
                               </TableRow>
                             ) : (
@@ -1666,7 +1860,7 @@ export const PcpPlanejamentoView = () => {
                                   <TableCell className="p-2 text-center">
                                     <Checkbox
                                       checked={item.selected}
-                                      onCheckedChange={c => handleUpdateAtividade(pLabel, itemIdx, 'selected', Boolean(c))}
+                                      onCheckedChange={c => handleUpdateAtividade(pLabel, item.id, 'selected', Boolean(c))}
                                     />
                                   </TableCell>
 
@@ -1682,7 +1876,7 @@ export const PcpPlanejamentoView = () => {
                                         /* Atividade Inserida pelo Botão: Exibe Seletor com o Catálogo Completo */
                                         <Select
                                           value={item.servico}
-                                          onValueChange={val => handleUpdateAtividade(pLabel, itemIdx, 'servico', val)}
+                                          onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'servico', val)}
                                         >
                                           <SelectTrigger className="h-8 text-xs font-semibold bg-background border-border">
                                             <SelectValue placeholder="Selecione a Atividade" />
@@ -1710,7 +1904,7 @@ export const PcpPlanejamentoView = () => {
                                   <TableCell className="p-2">
                                     <Select
                                       value={item.etapaPrevista}
-                                      onValueChange={val => handleUpdateAtividade(pLabel, itemIdx, 'etapaPrevista', val)}
+                                      onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'etapaPrevista', val)}
                                     >
                                       <SelectTrigger className="h-7 text-[11px] font-medium bg-background px-2">
                                         <SelectValue placeholder="Selecione a Etapa" />
@@ -1732,7 +1926,7 @@ export const PcpPlanejamentoView = () => {
                                       step="1"
                                       min="1"
                                       value={item.quantidade}
-                                      onChange={e => handleUpdateAtividade(pLabel, itemIdx, 'quantidade', e.target.value)}
+                                      onChange={e => handleUpdateAtividade(pLabel, item.id, 'quantidade', e.target.value)}
                                       className="h-8 text-xs text-center font-mono font-bold w-16"
                                     />
                                   </TableCell>
@@ -1752,7 +1946,7 @@ export const PcpPlanejamentoView = () => {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      onClick={() => handleRemoveAtividade(pLabel, itemIdx)}
+                                      onClick={() => handleRemoveAtividade(pLabel, item.id)}
                                       className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />

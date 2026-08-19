@@ -107,24 +107,20 @@ async function callGemini(apiKey: string, systemPrompt: string, userMessage: str
 // ─── MODO: analyze_risk ─────────────────────────────────────────────────────
 async function analyzeRisk(apiKey: string, observacoes: string, obraId: string) {
   const systemPrompt = `Você é um especialista em segurança de obras de distribuição elétrica (COELBA/NEOENERGIA).
-Analise o texto de observações de vistoria de campo e identifique alertas de risco ou impedimentos.
+Analise o texto de observações de vistoria de campo e classifique o nível de risco ou impedimento.
 
 Retorne APENAS um JSON válido com o seguinte formato:
 {
-  "tags": ["tag1", "tag2"],
-  "resumo": "Uma frase curta descrevendo a situação"
+  "classificacao": "Vermelho" | "Laranja" | "Verde",
+  "alerta": "Resumo do problema, ou a própria observação se for curta"
 }
 
-Tags possíveis (use EXATAMENTE esses nomes quando aplicável):
-- "Poste a Trocar" — se mencionar poste podre, danificado, a substituir ou trocar
-- "Risco de Segurança" — se mencionar fio exposto, risco elétrico, perigo, acidente potencial
-- "Difícil Acesso" — se mencionar estrada de terra, acesso difícil, área rural de difícil acesso, necessita de caminhonete
-- "Cliente Ausente" — se mencionar cliente não estava, sem contato, ausente, retornar
-- "Sem Prédio" — se mencionar prédio demolido, não existe, endereço errado
-- "Obra Impedida" — se mencionar impedimento legal, ordem judicial, proibição, disputa
-- "Necessita Agendamento" — se mencionar necessidade de agendar com cliente ou prefeitura
+Regras de Classificação:
+- "Vermelho": Problemas relacionados a questões de risco de segurança severo (ex: poste quebrado, poste com trincas, risco de queda, risco de choque, fios expostos, etc).
+- "Laranja": Alertas que indiquem problemas de acesso ou impedimento não letal (ex: Difícil Acesso, Sem Acesso, estrada de terra ruim, cliente ausente, necessita agendamento, obra impedida judicialmente).
+- "Verde": Se não houver observações relevantes de risco/impedimento, ou o texto estiver vazio.
 
-Se não houver observações relevantes ou o texto estiver vazio, retorne: {"tags": [], "resumo": "Sem alertas identificados"}`;
+Para "alerta", resuma o problema em algumas palavras ou traga a observação inteira se achar mais claro. Se for "Verde", retorne "Sem alertas identificados".`;
 
   const userMessage = `Obra: ${obraId}\nObservações da vistoria: ${observacoes || "(sem observações registradas)"}`;
 
@@ -134,7 +130,7 @@ Se não houver observações relevantes ou o texto estiver vazio, retorne: {"tag
     const clean = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
     return JSON.parse(clean);
   } catch {
-    return { tags: [], resumo: "Não foi possível analisar as observações." };
+    return { classificacao: "Verde", alerta: "Não foi possível analisar as observações devido a um erro." };
   }
 }
 
@@ -169,14 +165,14 @@ Seu trabalho é gerar planejamentos semanais de execução para equipes de campo
 - Alojamentos disponíveis: ${alojamentos.map(a => `${a.nome} (${a.unidadeNome})`).join(", ") || "base da unidade"}
 
 REGRAS IMPORTANTES E MATEMÁTICAS:
-1. Você DEVE distribuir TODOS os pontos do orçamento ao longo de VÁRIOS DIAS da semana, dividindo a carga de trabalho.
+1. Você DEVE distribuir TODOS os pontos do orçamento ao longo de VÁRIOS DIAS da semana, dividindo a carga de trabalho. Crie vários objetos na lista "dias", um para cada dia necessário até esgotar os pontos.
 2. Cada dia tem um limite ESTRITO de ${parametros.jornadaHoras * 60} a ${(parametros.jornadaHoras + 1.5) * 60} minutos de trabalho. 
-3. ATENÇÃO: Faça a soma do 'tempoEstimadoMinutos' de cada ponto que você colocar em um dia. A SOMA DOS MINUTOS NÃO PODE, EM HIPÓTESE ALGUMA, ULTRAPASSAR ${(parametros.jornadaHoras + 1) * 60} MINUTOS! Quando atingir o limite, passe para o próximo dia (Terça, Quarta, etc).
-4. A meta de ${parametros.metaPercent}% é DIÁRIA — pode não ser atingida todos os dias por limitação de tempo, a prioridade máxima é não estourar os minutos (Regra 3).
+3. ATENÇÃO: Faça a soma do 'tempoEstimadoMinutos' de cada ponto que você colocar em um dia. A SOMA DOS MINUTOS NÃO PODE, EM HIPÓTESE ALGUMA, ULTRAPASSAR ${(parametros.jornadaHoras + 1) * 60} MINUTOS! Quando atingir o limite, crie um novo objeto na lista "dias" para o próximo dia (Terça, Quarta, etc).
+4. A meta de ${parametros.metaPercent}% é DIÁRIA — pode não ser atingida todos os dias por limitação de tempo, a prioridade máxima é não estourar os minutos (Regra 3). Mas lembre-se: a meta é por dia!
 5. Otimize a ordem dos pontos para minimizar deslocamento.
 6. Considere que pontos P são postes, V são vãos de cabo — podem ser executados sequencialmente.
 
-FORMATO DE RESPOSTA — retorne APENAS JSON válido:
+FORMATO DE RESPOSTA — retorne APENAS JSON válido, com a lista "dias" contendo múltiplos dias:
 {
   "planejamento": [
     {
@@ -187,12 +183,22 @@ FORMATO DE RESPOSTA — retorne APENAS JSON válido:
         {
           "data": "18/08/2026",
           "diaSemana": "Segunda-feira",
-          "pontos": ["P1", "P2", "P3", "P4"],
-          "tempoTotalMinutos": 492,
-          "tempoTotalFormatado": "8h 12min",
+          "pontos": ["P1", "P2"],
+          "tempoTotalMinutos": 450,
+          "tempoTotalFormatado": "7h 30min",
           "valorEstimado": 4890.50,
           "percentualMeta": 110.1,
           "observacao": "Rota otimizada partindo de P1"
+        },
+        {
+          "data": "19/08/2026",
+          "diaSemana": "Terça-feira",
+          "pontos": ["P3", "P4"],
+          "tempoTotalMinutos": 420,
+          "tempoTotalFormatado": "7h 00min",
+          "valorEstimado": 4100.00,
+          "percentualMeta": 95.0,
+          "observacao": "Continuação da rota"
         }
       ],
       "totalSemana": {

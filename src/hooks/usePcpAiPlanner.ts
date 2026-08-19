@@ -1,18 +1,23 @@
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useSessionState } from '@/hooks/useSessionState';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export interface RiskTag {
-  tag: string;
-  color: 'red' | 'yellow' | 'orange' | 'gray' | 'purple';
+export interface RiskResult {
+  classificacao: 'Verde' | 'Laranja' | 'Vermelho';
+  alerta: string;
 }
 
 export interface DiaPlano {
   data: string;
   diaSemana: string;
   pontos: string[];
+  alojamentoId?: string;
+  tempoDeslocamentoOverride?: number;
+  tempoSaidaBaseOverride?: number;
+  tempoSegurancaOverride?: number;
   tempoTotalMinutos: number;
   tempoTotalFormatado: string;
   valorEstimado: number;
@@ -51,18 +56,8 @@ export interface ChatMessage {
 // ─── Hook: Vistoria Risks ─────────────────────────────────────────────────────
 
 export function useVistoriaRisk(obraId: string | null) {
-  const [riskCache, setRiskCache] = useState<Record<string, RiskTag[]>>({});
+  const [riskCache, setRiskCache] = useState<Record<string, RiskResult>>({});
   const [loading, setLoading] = useState(false);
-
-  const RISK_COLORS: Record<string, RiskTag['color']> = {
-    'Poste a Trocar': 'orange',
-    'Risco de Segurança': 'red',
-    'Difícil Acesso': 'yellow',
-    'Cliente Ausente': 'gray',
-    'Sem Prédio': 'purple',
-    'Obra Impedida': 'red',
-    'Necessita Agendamento': 'yellow',
-  };
 
   // Busca observações do Supabase
   const vistoriaQuery = useQuery({
@@ -74,25 +69,20 @@ export function useVistoriaRisk(obraId: string | null) {
         .select('observacoes_vistoria, risk_tags')
         .eq('obra_id', obraId)
         .maybeSingle();
-      return data as { observacoes_vistoria: string; risk_tags: string[] } | null;
+      return data as { observacoes_vistoria: string; risk_tags: any } | null;
     },
     enabled: !!obraId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const analyzeRisk = useCallback(async (obraIdToAnalyze: string): Promise<RiskTag[]> => {
+  const analyzeRisk = useCallback(async (obraIdToAnalyze: string): Promise<RiskResult | null> => {
     if (riskCache[obraIdToAnalyze]) return riskCache[obraIdToAnalyze];
 
     const obs = vistoriaQuery.data?.observacoes_vistoria;
-    if (!obs) return [];
+    if (!obs) return null;
 
-    // Se já tem tags em cache no Supabase, usa elas
-    const cachedTags = vistoriaQuery.data?.risk_tags;
-    if (cachedTags && cachedTags.length > 0) {
-      const tags = cachedTags.map(t => ({ tag: t, color: RISK_COLORS[t] ?? 'gray' })) as RiskTag[];
-      setRiskCache(prev => ({ ...prev, [obraIdToAnalyze]: tags }));
-      return tags;
-    }
+    // TODO: In the future, cache the RiskResult directly in Supabase instead of risk_tags array.
+    // For now we will always fetch from Edge Function if we don't have it in local riskCache.
 
     setLoading(true);
     try {
@@ -101,23 +91,16 @@ export function useVistoriaRisk(obraId: string | null) {
       });
       if (error) throw error;
 
-      const tags = (data.tags ?? []).map((t: string) => ({
-        tag: t,
-        color: RISK_COLORS[t] ?? 'gray',
-      })) as RiskTag[];
+      const result = data as RiskResult;
 
-      setRiskCache(prev => ({ ...prev, [obraIdToAnalyze]: tags }));
+      setRiskCache(prev => ({ ...prev, [obraIdToAnalyze]: result }));
 
-      // Salva tags no Supabase para cache futuro
-      await supabase
-        .from('realizadas_vistoria' as any)
-        .update({ risk_tags: data.tags ?? [] })
-        .eq('obra_id', obraIdToAnalyze);
-
-      return tags;
-    } catch (e) {
-      console.error('analyzeRisk error:', e);
-      return [];
+      return result;
+    } catch (err) {
+      console.error('Erro ao analisar risco:', err);
+      const fallback: RiskResult = { classificacao: 'Verde', alerta: 'Erro ao classificar.' };
+      setRiskCache(prev => ({ ...prev, [obraIdToAnalyze]: fallback }));
+      return fallback;
     } finally {
       setLoading(false);
     }
@@ -129,7 +112,7 @@ export function useVistoriaRisk(obraId: string | null) {
 // ─── Hook: AI Planner Chat ────────────────────────────────────────────────────
 
 export function usePcpAiPlanner() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useSessionState<ChatMessage[]>('pcp_ai_chat_messages', [
     {
       id: 'welcome',
       role: 'assistant',
@@ -145,6 +128,17 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const clearMessages = useCallback(() => {
+    setMessages([
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: `Olá! Sou o assistente de planejamento automático de obras...`,
+        timestamp: new Date(),
+      }
+    ]);
+  }, [setMessages]);
 
   const sendMessage = useCallback(async (
     userPrompt: string,
@@ -227,9 +221,7 @@ Posso ajudar você a montar planejamentos semanais considerando jornada, meta e 
 
 
 
-  const clearMessages = useCallback(() => {
-    setMessages(prev => prev.slice(0, 1)); // Mantém apenas a mensagem de boas-vindas
-  }, []);
+  // clearMessages removed from here, since it is defined above
 
   return { messages, sendMessage, isLoading, clearMessages };
 }

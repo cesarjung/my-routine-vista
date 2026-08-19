@@ -40,16 +40,6 @@ const DEFAULT_SELECTED_STATUSES = [
   'PENDENCIA SUPRIMENTOS',
 ];
 
-const RISK_STYLE: Record<string, string> = {
-  red:    'bg-red-500/15 text-red-600 border-red-500/30',
-  yellow: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
-  orange: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
-  gray:   'bg-muted text-muted-foreground border-border',
-  purple: 'bg-purple-500/15 text-purple-600 border-purple-500/30',
-};
-const RISK_ICON: Record<string, string> = {
-  red: '🔴', yellow: '🟡', orange: '🟠', gray: '⚫', purple: '🟣',
-};
 
 // ─── Tabela Semanal ───────────────────────────────────────────────────────────
 const TabelaSemanal = ({ plano, onExportar }: { plano: PlanoEquipe; onExportar: (p: PlanoEquipe) => void }) => (
@@ -309,7 +299,7 @@ export const PcpPlanejAutoView = () => {
     URL.revokeObjectURL(url);
   };
 
-  const risksForObra = selectedObraId ? (riskCache[selectedObraId] ?? []) : [];
+  const riskForObra = selectedObraId ? riskCache[selectedObraId] : null;
 
   const SUGESTOES = [
     selectedObraId
@@ -580,19 +570,35 @@ export const PcpPlanejAutoView = () => {
                   </p>
                 </div>
 
-                {risksForObra.length === 0 && !loadingRisk ? (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Nenhum alerta de vistoria
+                {!riskForObra && !loadingRisk ? (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    Análise pendente ou sem dados
                   </div>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {risksForObra.map(r => (
-                      <Badge key={r.tag} variant="outline" className={`text-[11px] px-2 py-0.5 font-semibold ${RISK_STYLE[r.color]}`}>
-                        {RISK_ICON[r.color]} {r.tag}
-                      </Badge>
-                    ))}
+                ) : riskForObra?.classificacao === 'Verde' ? (
+                  <div className="flex flex-col gap-1.5 text-xs text-emerald-600">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <CheckCircle2 className="w-4 h-4" /> Sem alertas de risco ou impedimento
+                    </div>
+                    {riskForObra.alerta && riskForObra.alerta !== "Sem alertas identificados" && (
+                      <p className="text-muted-foreground leading-snug border-l-2 pl-2 mt-1 border-emerald-500/30 ml-2">
+                        {riskForObra.alerta}
+                      </p>
+                    )}
                   </div>
-                )}
+                ) : riskForObra ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Badge variant="outline" className={`text-[11px] px-2 py-1 font-semibold w-fit ${
+                      riskForObra.classificacao === 'Vermelho' ? 'bg-rose-500/10 text-rose-600 border-rose-500/30' :
+                      'bg-orange-500/10 text-orange-600 border-orange-500/30'
+                    }`}>
+                      {riskForObra.classificacao === 'Vermelho' ? <AlertTriangle className="w-3.5 h-3.5 mr-1" /> : <ShieldAlert className="w-3.5 h-3.5 mr-1" />}
+                      Risco {riskForObra.classificacao}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground leading-snug border-l-2 pl-2 mt-1 border-muted">
+                      {riskForObra.alerta}
+                    </p>
+                  </div>
+                ) : null}
 
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
