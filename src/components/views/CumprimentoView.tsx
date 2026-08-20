@@ -34,6 +34,11 @@ import {
 
 const META_CUMPRIMENTO = 100; // Meta: 100% de Cumprimento
 
+// Unidades ativas na visualização de Cumprimento (sem Brumado e Livramento)
+const UNIDADES_ATIVAS_CUMPRIMENTO = UNIDADES_PLANEJAMENTO.filter(
+  u => !['BRUMADO', 'LIVRAMENTO'].includes(u.nome.toUpperCase())
+);
+
 // Componente Sparkline SVG para a tabela
 const Sparkline = ({ data, width = 96, height = 24 }: { data: (number | null)[]; width?: number; height?: number }) => {
   const validData = data.map(v => (v === null || v === undefined ? null : v));
@@ -162,6 +167,10 @@ export const CumprimentoView = () => {
   // Aplicar Filtros Locais
   const filteredData = useMemo(() => {
     return data.filter(row => {
+      // Excluir Brumado e Livramento
+      const uNomeClean = (row.unidadeNome || '').replace('UNIDADE ', '').trim().toUpperCase();
+      if (uNomeClean === 'BRUMADO' || uNomeClean === 'LIVRAMENTO') return false;
+
       if (bdMetasData.length > 0 && selectedTiposEquipe.length > 0) {
         const tipoEquipe = equipeToTipo.get(row.equipe.trim().toUpperCase());
         if (!tipoEquipe || !selectedTiposEquipe.includes(tipoEquipe)) return false;
@@ -617,10 +626,10 @@ export const CumprimentoView = () => {
               <button className="h-[30px] px-3 rounded-full border border-border bg-card hover:bg-accent flex items-center gap-1.5 transition-colors shrink-0">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">UNIDADE</span>
                 <span className="font-semibold text-foreground truncate max-w-[110px]">
-                  {draftUnidadesIds.length === 0 || draftUnidadesIds.length === UNIDADES_PLANEJAMENTO.length
+                  {draftUnidadesIds.length === 0 || draftUnidadesIds.length === UNIDADES_ATIVAS_CUMPRIMENTO.length
                     ? 'Todas' 
                     : draftUnidadesIds.length === 1 
-                      ? UNIDADES_PLANEJAMENTO.find(u => u.id === draftUnidadesIds[0])?.nome 
+                      ? UNIDADES_ATIVAS_CUMPRIMENTO.find(u => u.id === draftUnidadesIds[0])?.nome 
                       : `${draftUnidadesIds.length} selec.`}
                 </span>
                 <Filter className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -628,10 +637,10 @@ export const CumprimentoView = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="start">
               <div className="p-2 border-b border-border flex gap-2 sticky top-0 bg-popover z-10">
-                <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_PLANEJAMENTO.map(u => u.id))}>Selecionar todos</Button>
+                <Button variant="secondary" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds(UNIDADES_ATIVAS_CUMPRIMENTO.map(u => u.id))}>Selecionar todas</Button>
                 <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setDraftUnidadesIds([])}>Limpar</Button>
               </div>
-              {UNIDADES_PLANEJAMENTO.map(u => (
+              {UNIDADES_ATIVAS_CUMPRIMENTO.map(u => (
                 <DropdownMenuCheckboxItem key={u.id} checked={draftUnidadesIds.includes(u.id)} onCheckedChange={(checked) => {
                   if (checked) setDraftUnidadesIds([...draftUnidadesIds.filter(id => id !== u.id), u.id]);
                   else setDraftUnidadesIds(draftUnidadesIds.filter(id => id !== u.id));
@@ -810,10 +819,10 @@ export const CumprimentoView = () => {
         </div>
 
         {/* GRÁFICO PRINCIPAL + PAINEL DE RANKING */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full items-start">
           
-          {/* GRÁFICO PRINCIPAL */}
-          <div className="lg:col-span-8 border border-border rounded-xl bg-card p-4 shadow-[var(--shadow-card)] flex flex-col gap-4">
+          {/* GRÁFICO PRINCIPAL (Mais espaçoso: 9 colunas) */}
+          <div className="lg:col-span-9 border border-border rounded-xl bg-card p-4 shadow-[var(--shadow-card)] flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div>
@@ -855,9 +864,9 @@ export const CumprimentoView = () => {
               </div>
             </div>
 
-            {/* MODO A: PAINEL POR UNIDADE */}
+            {/* MODO A: PAINEL POR UNIDADE (Grid otimizada) */}
             {chartMode === 'grid' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5 w-full">
                 {chartData.map(unit => {
                   const isSelected = unidadeAtiva === unit.name;
                   const latestVal = unit._latestVal;
@@ -1063,8 +1072,8 @@ export const CumprimentoView = () => {
             )}
           </div>
 
-          {/* PAINEL DE RANKING */}
-          <div className="lg:col-span-4 border border-border rounded-xl bg-card p-4 shadow-[var(--shadow-card)] flex flex-col justify-between">
+          {/* PAINEL DE RANKING (Mais compacto: 3 colunas) */}
+          <div className="lg:col-span-3 border border-border rounded-xl bg-card p-3.5 shadow-[var(--shadow-card)] flex flex-col justify-between">
             <div>
               <div className="border-b border-border pb-3 mb-3">
                 <h2 className="text-base font-bold text-foreground">Ranking por Unidade</h2>
