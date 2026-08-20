@@ -49,7 +49,8 @@ export const usePostesTurnoData = (selectedUnidadesIds: string[]) => {
         const rowsCentral = (bdMetasObj && bdMetasObj.central_postes) ? bdMetasObj.central_postes : [];
 
         const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
-        const unidadeNome = unidadeInfo?.nome || unidadeData.unidadeId;
+        if (!unidadeInfo) return;
+        const unidadeNome = unidadeInfo.nome;
 
         // 1. Processa a aba individual (para Prod% - valProdTurno e valProgTurno)
         for (let i = 4; i < rowsIndividual.length; i++) {

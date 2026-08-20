@@ -49,7 +49,8 @@ export const useCumprimentoData = (selectedUnidadesIds: string[]) => {
       rawQuery.data.forEach(unidadeData => {
         const rows = unidadeData.principal;
         const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
-        const unidadeNome = unidadeInfo?.nome || unidadeData.unidadeId;
+        if (!unidadeInfo) return; // Ignora unidades que não estão na lista oficial
+        const unidadeNome = unidadeInfo.nome;
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];

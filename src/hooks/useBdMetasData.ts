@@ -41,7 +41,8 @@ export const useBdMetasData = (selectedUnidadesIds: string[]) => {
       if (!bdMetasArray || bdMetasArray.length === 0) return;
 
       const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeId);
-      const unidadeNome = unidadeInfo ? unidadeInfo.nome : `UNIDADE ${unidadeId}`;
+      if (!unidadeInfo) return;
+      const unidadeNome = unidadeInfo.nome;
 
       // Pula cabeçalho
       for (let i = 1; i < bdMetasArray.length; i++) {

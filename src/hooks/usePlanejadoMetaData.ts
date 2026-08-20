@@ -48,7 +48,8 @@ export const usePlanejadoMetaData = (selectedUnidadesIds: string[]) => {
         const rows = unidadeData.principal;
         if (!rows || !Array.isArray(rows)) return;
         const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
-        const unidadeNome = unidadeInfo?.nome || unidadeData.unidadeId;
+        if (!unidadeInfo) return;
+        const unidadeNome = unidadeInfo.nome;
 
         // Pré-processar a aba Reprogramadas para a lógica Mista
         const reprogMap = new Map<string, number>();

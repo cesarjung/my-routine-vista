@@ -58,7 +58,8 @@ export const useEtapasData = (selectedUnidadesIds: string[]) => {
       rawQuery.data.forEach(unidadeData => {
         const rows = unidadeData.principal;
         const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
-        const unidadeNome = unidadeInfo?.nome || unidadeData.unidadeId;
+        if (!unidadeInfo) return;
+        const unidadeNome = unidadeInfo.nome;
 
         for (let i = 7; i < rows.length; i++) {
           const row = rows[i];

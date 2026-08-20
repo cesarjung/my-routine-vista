@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { toast } from 'sonner';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbxn-YpuZZsNsdGT_FxQdhUwLE5KUIuXvo7Ffad03x80LByig3qneNe7-hy9PUZYS8-bDg/exec';
@@ -29,11 +30,11 @@ export const usePlanejamentoRaw = (selectedUnidadesIds: string[]) => {
       return data;
     },
     select: (data) => {
-      // Se não tem unidades selecionadas (array vazio), significa "todas as unidades"
-      // Então extraímos todos os IDs disponíveis no cache
+      // Considera apenas as unidades presentes em UNIDADES_PLANEJAMENTO
+      const officialIds = UNIDADES_PLANEJAMENTO.map(u => u.id);
       const idsToFetch = (!selectedUnidadesIds || selectedUnidadesIds.length === 0) 
-        ? data?.map(d => d.unidade_id) || []
-        : selectedUnidadesIds;
+        ? officialIds
+        : selectedUnidadesIds.filter(id => officialIds.includes(id));
       
       return idsToFetch.map(unidadeId => {
         const row = data?.find(d => d.unidade_id === unidadeId);

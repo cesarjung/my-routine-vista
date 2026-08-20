@@ -101,7 +101,8 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       
       const carteiraRows = unidadeData.carteira;
       const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
-      const unidadeNome = unidadeInfo ? unidadeInfo.nome : `UNIDADE ${unidadeData.unidadeId}`;
+      if (!unidadeInfo) return;
+      const unidadeNome = unidadeInfo.nome;
 
       // Nova lógica de Recursos Aplicados via base Global
       let usouBaseGlobal = false;

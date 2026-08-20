@@ -40,7 +40,8 @@ export const useReprogramadasData = (selectedUnidadesIds: string[]) => {
       rawQuery.data.forEach(unidadeData => {
         const reprogRows = unidadeData.reprogramadas || [];
         const unidadeInfo = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeData.unidadeId);
-        const unidadeNome = unidadeInfo?.nome || unidadeData.unidadeId;
+        if (!unidadeInfo) return;
+        const unidadeNome = unidadeInfo.nome;
 
         for (let i = 7; i < reprogRows.length; i++) {
           const row = reprogRows[i];
