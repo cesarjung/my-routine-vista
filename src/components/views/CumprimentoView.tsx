@@ -893,9 +893,9 @@ export const CumprimentoView = () => {
                       </div>
 
                       {/* Mini ComposedChart com Cumprimento, Produção, Faixa de % e Labels em cada mês */}
-                      <div className="h-[125px] w-full mt-1">
+                      <div className="h-[135px] w-full mt-1">
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={miniData} margin={{ top: 14, right: 6, left: -24, bottom: 2 }}>
+                          <ComposedChart data={miniData} margin={{ top: 14, right: 6, left: -24, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="2 2" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
                             <YAxis 
                               domain={[yMin, yMax]} 
@@ -955,10 +955,10 @@ export const CumprimentoView = () => {
                             >
                               <LabelList 
                                 dataKey="val" 
-                                position="top"
-                                offset={4}
+                                position="bottom"
+                                offset={6}
                                 formatter={(v: any) => v !== null && v !== undefined ? `${Number(v).toFixed(0)}%` : ''}
-                                style={{ fontSize: '8.5px', fontWeight: '700', fill: 'hsl(var(--foreground))' }}
+                                style={{ fontSize: '8.5px', fontWeight: '700', fill: '#ea580c' }}
                               />
                             </Area>
                             <Line
@@ -971,7 +971,15 @@ export const CumprimentoView = () => {
                               dot={{ r: 2.5, strokeWidth: 1, fill: '#ef4444' }}
                               activeDot={{ r: 4.5 }}
                               connectNulls
-                            />
+                            >
+                              <LabelList 
+                                dataKey="prod" 
+                                position="top"
+                                offset={6}
+                                formatter={(v: any) => v !== null && v !== undefined && Number(v) > 0 ? `${Number(v).toFixed(0)}%` : ''}
+                                style={{ fontSize: '8.5px', fontWeight: '700', fill: '#ef4444' }}
+                              />
+                            </Line>
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
