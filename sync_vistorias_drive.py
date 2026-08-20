@@ -216,6 +216,27 @@ def get_drive_access_token(credentials):
         logging.error(f"Erro ao obter access token do Google: {e}")
         return None
 
+def check_folder_access(credentials, folder_id):
+    try:
+        token = get_drive_access_token(credentials)
+        if not token:
+            return None
+        headers = {"Authorization": f"Bearer {token}"}
+        url = f"https://www.googleapis.com/drive/v3/files/{folder_id}"
+        params = {
+            "supportsAllDrives": "true",
+            "fields": "id,name,mimeType,owners"
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            logging.warning(f"Metadados da pasta {folder_id} (HTTP {resp.status_code}): {resp.text[:200]}")
+            return None
+    except Exception as e:
+        logging.warning(f"Aviso ao consultar metadados da pasta: {e}")
+        return None
+
 def list_files_in_drive_folder(credentials, folder_id):
     """Lista todos os arquivos do Google Drive contidos na pasta especificada."""
     try:
@@ -223,16 +244,43 @@ def list_files_in_drive_folder(credentials, folder_id):
         if not token:
             logging.error("Token de acesso inválido para o Google Drive.")
             return []
+
+        service_email = getattr(credentials, 'service_account_email', None) or getattr(credentials, '_service_account_email', 'desconhecido')
+        logging.info(f"Service Account autenticada: {service_email}")
+
+        folder_meta = check_folder_access(credentials, folder_id)
+        if folder_meta:
+            logging.info(f"Pasta encontrada no Drive: '{folder_meta.get('name')}' (ID: {folder_id})")
+
         headers = {"Authorization": f"Bearer {token}"}
         url = "https://www.googleapis.com/drive/v3/files"
+
+        # 1. Tentativa com supportsAllDrives + includeItemsFromAllDrives
         params = {
             "q": f"'{folder_id}' in parents and trashed = false",
             "fields": "files(id, name, mimeType, modifiedTime, createdTime)",
-            "pageSize": 100
+            "pageSize": 100,
+            "supportsAllDrives": "true",
+            "includeItemsFromAllDrives": "true"
         }
         resp = requests.get(url, headers=headers, params=params, timeout=30)
+
         if resp.status_code == 200:
-            return resp.json().get('files', [])
+            files = resp.json().get('files', [])
+            if files:
+                return files
+
+            # 2. Tentativa sem filtro trashed
+            params["q"] = f"'{folder_id}' in parents"
+            resp2 = requests.get(url, headers=headers, params=params, timeout=30)
+            if resp2.status_code == 200:
+                files2 = resp2.json().get('files', [])
+                if files2:
+                    return files2
+
+            logging.warning(f"A pasta {folder_id} retornou 0 arquivos.")
+            logging.warning(f"DICA: Certifique-se de que a pasta no Google Drive foi compartilhada como 'Leitor' com o email da Service Account: {service_email}")
+            return []
         else:
             logging.error(f"Erro ao listar arquivos da pasta {folder_id} ({resp.status_code}): {resp.text[:200]}")
             return []
