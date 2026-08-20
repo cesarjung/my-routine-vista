@@ -100,8 +100,8 @@ export const CumprimentoView = () => {
   const [equipesDropdownOpen, setEquipesDropdownOpen] = useState(false);
   const [selectedProjetos, setSelectedProjetos] = useSessionState<string[]>('filter_projetos_cumprimento', []);
   
-  // Toggle "Somente Disponíveis"
-  const [somenteDisponiveis, setSomenteDisponiveis] = useState(false);
+  // Toggle "Eq. Produtivas" (Disponibilidade 0,5 ou 1)
+  const [somenteEqProdutivas, setSomenteEqProdutivas] = useSessionState<boolean>('filter_eq_produtivas_cumprimento', false);
 
   // Filtro "Tipo de Equipe"
   const [selectedTiposEquipe, setSelectedTiposEquipe] = useState<string[]>(['CONSTRUÇÃO', 'LINHA VIVA']);
@@ -171,6 +171,13 @@ export const CumprimentoView = () => {
       const uNomeClean = (row.unidadeNome || '').replace('UNIDADE ', '').trim().toUpperCase();
       if (uNomeClean === 'BRUMADO' || uNomeClean === 'LIVRAMENTO') return false;
 
+      // Filtro Eq. Produtivas: Disponibilidade 0,5 ou 1 (50% ou 100%)
+      if (somenteEqProdutivas) {
+        const disp = Number(row.valDisponivel) || 0;
+        const isProdutiva = Math.abs(disp - 1) < 0.01 || Math.abs(disp - 0.5) < 0.01 || Math.abs(disp - 100) < 0.1 || Math.abs(disp - 50) < 0.1;
+        if (!isProdutiva) return false;
+      }
+
       if (bdMetasData.length > 0 && selectedTiposEquipe.length > 0) {
         const tipoEquipe = equipeToTipo.get(row.equipe.trim().toUpperCase());
         if (!tipoEquipe || !selectedTiposEquipe.includes(tipoEquipe)) return false;
@@ -194,7 +201,7 @@ export const CumprimentoView = () => {
 
       return true;
     });
-  }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos, selectedTiposEquipe, equipeToTipo, bdMetasData]);
+  }, [data, selectedMeses, filterStart, filterEnd, selectedSupervisores, selectedEquipes, selectedProjetos, selectedTiposEquipe, equipeToTipo, bdMetasData, somenteEqProdutivas]);
 
   // Meses exibidos em ordem cronológica crescente
   const mesesExibidos = useMemo(() => {
@@ -234,8 +241,6 @@ export const CumprimentoView = () => {
     const agrupado: Record<string, any> = {};
 
     filteredData.forEach(row => {
-      if (somenteDisponiveis && row.valDisponivel !== 1) return;
-
       const uNome = row.unidadeNome.replace('UNIDADE ', '');
       if (!agrupado[uNome]) {
         agrupado[uNome] = {
@@ -312,7 +317,7 @@ export const CumprimentoView = () => {
 
     resultadoFinal.sort((a, b) => a.name.localeCompare(b.name));
     return resultadoFinal;
-  }, [filteredData, somenteDisponiveis, mesesExibidos]);
+  }, [filteredData, mesesExibidos]);
 
   // Cálculo do Domínio Y Compartilhado (inclui valores de Produção)
   const { yMin, yMax } = useMemo(() => {
@@ -552,28 +557,21 @@ export const CumprimentoView = () => {
           <div className="flex items-center gap-4 shrink-0">
             <SyncIndicator />
 
-            {/* Switch para Somente Disponíveis */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-medium">Somente Disponíveis</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={somenteDisponiveis}
-                onClick={() => setSomenteDisponiveis(!somenteDisponiveis)}
-                className={cn(
-                  "w-[26px] h-[15px] rounded-full transition-colors relative focus:outline-none",
-                  somenteDisponiveis ? "bg-primary" : "bg-muted-foreground/30"
-                )}
-                title="Considerar apenas linhas onde a coluna BB (Disponível) é igual a 1"
-              >
-                <span
-                  className={cn(
-                    "w-[11px] h-[11px] rounded-full bg-white transition-transform absolute top-[2px] left-[2px]",
-                    somenteDisponiveis ? "translate-x-[11px]" : "translate-x-0"
-                  )}
-                />
-              </button>
-            </div>
+            {/* Filtro Eq. Produtivas (Disponibilidade 0,5 ou 1) */}
+            <button
+              type="button"
+              onClick={() => setSomenteEqProdutivas(!somenteEqProdutivas)}
+              className={cn(
+                "h-[30px] px-3.5 rounded-full border text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm",
+                somenteEqProdutivas 
+                  ? "bg-primary text-primary-foreground border-primary" 
+                  : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent"
+              )}
+              title="Considerar apenas equipes com disponibilidade de 50% ou 100% (0,5 ou 1 na coluna de disponibilidade)"
+            >
+              <span className={cn("w-2 h-2 rounded-full", somenteEqProdutivas ? "bg-primary-foreground" : "bg-emerald-500")} />
+              Eq. Produtivas (50%/100%)
+            </button>
           </div>
         </div>
 
@@ -864,9 +862,9 @@ export const CumprimentoView = () => {
               </div>
             </div>
 
-            {/* MODO A: PAINEL POR UNIDADE (Grid otimizada) */}
+            {/* MODO A: PAINEL POR UNIDADE (Fixado estritamente em 3 por fileira e com altura ampliada) */}
             {chartMode === 'grid' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
                 {chartData.map(unit => {
                   const isSelected = unidadeAtiva === unit.name;
                   const latestVal = unit._latestVal;
@@ -889,18 +887,18 @@ export const CumprimentoView = () => {
                       key={unit.name}
                       onClick={() => setUnidadeAtiva(isSelected ? null : unit.name)}
                       className={cn(
-                        "p-3 rounded-xl border transition-all duration-180 cursor-pointer flex flex-col justify-between",
+                        "p-4 rounded-xl border transition-all duration-180 cursor-pointer flex flex-col justify-between",
                         isSelected 
                           ? "border-primary bg-primary/[0.06] shadow-sm" 
                           : "border-border bg-card hover:border-primary/50"
                       )}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-xs text-foreground truncate">{unit.name}</span>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-sm text-foreground truncate">{unit.name}</span>
                         {variation !== 0 && (
                           <span 
                             className={cn(
-                              "text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums",
+                              "text-[11px] font-bold px-2 py-0.5 rounded-md tabular-nums",
                               variation > 0 
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
                                 : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
@@ -912,10 +910,10 @@ export const CumprimentoView = () => {
                         )}
                       </div>
 
-                      {/* Mini ComposedChart com Cumprimento, Produção, Faixa de % e Labels em cada mês */}
-                      <div className="h-[135px] w-full mt-1">
+                      {/* Mini ComposedChart com Cumprimento, Produção, Faixa de % e Labels ampliadas em cada mês */}
+                      <div className="h-[175px] w-full mt-1">
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={miniData} margin={{ top: 14, right: 6, left: -24, bottom: 10 }}>
+                          <ComposedChart data={miniData} margin={{ top: 18, right: 8, left: -20, bottom: 12 }}>
                             <CartesianGrid strokeDasharray="2 2" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
                             <YAxis 
                               domain={[yMin, yMax]} 
@@ -923,15 +921,15 @@ export const CumprimentoView = () => {
                               tickFormatter={(v) => `${v}%`}
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }}
+                              tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }}
                             />
                             <XAxis 
                               dataKey="mes" 
                               axisLine={false} 
                               tickLine={false} 
-                              tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))', fontWeight: 600 }}
+                              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontWeight: 600 }}
                               interval={0}
-                              dy={2}
+                              dy={4}
                             />
                             <Tooltip 
                               contentStyle={{ 
@@ -976,9 +974,9 @@ export const CumprimentoView = () => {
                               <LabelList 
                                 dataKey="val" 
                                 position="bottom"
-                                offset={6}
+                                offset={8}
                                 formatter={(v: any) => v !== null && v !== undefined ? `${Number(v).toFixed(0)}%` : ''}
-                                style={{ fontSize: '8.5px', fontWeight: '700', fill: '#ea580c' }}
+                                style={{ fontSize: '9.5px', fontWeight: '700', fill: '#ea580c' }}
                               />
                             </Area>
                             <Line
@@ -986,18 +984,18 @@ export const CumprimentoView = () => {
                               dataKey="prod"
                               name="Produção"
                               stroke="#ef4444"
-                              strokeWidth={1.8}
+                              strokeWidth={2}
                               strokeDasharray="4 3"
-                              dot={{ r: 2.5, strokeWidth: 1, fill: '#ef4444' }}
-                              activeDot={{ r: 4.5 }}
+                              dot={{ r: 3, strokeWidth: 1, fill: '#ef4444' }}
+                              activeDot={{ r: 5 }}
                               connectNulls
                             >
                               <LabelList 
                                 dataKey="prod" 
                                 position="top"
-                                offset={6}
+                                offset={8}
                                 formatter={(v: any) => v !== null && v !== undefined && Number(v) > 0 ? `${Number(v).toFixed(0)}%` : ''}
-                                style={{ fontSize: '8.5px', fontWeight: '700', fill: '#ef4444' }}
+                                style={{ fontSize: '9.5px', fontWeight: '700', fill: '#ef4444' }}
                               />
                             </Line>
                           </ComposedChart>

@@ -83,8 +83,6 @@ export const UNIDADES_DISPONIVEIS = [
   { id: '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI', name: 'BOM JESUS DA LAPA', sigla: 'BJL' },
   { id: '1OTHF2ytEOjGgfE49paARXkz9GjaklOQC_UhiXwUjC2E', name: 'BARREIRAS', sigla: 'BAR' },
   { id: '1FO5tyhXygbbzSmmTGdnm45j4DD_rRFQgEheN8T8Wy70', name: 'GUANAMBI', sigla: 'GNB' },
-  { id: '1oS619l3x_D1mXkvDpw8vs91G6ipZmsK83JqEIwPj7Uk', name: 'BRUMADO', sigla: 'BRU' },
-  { id: '1gN2tR_LCuRnVCQ9tm2UURnVuMlJPVNEjvmo02TwFQCI', name: 'LIVRAMENTO', sigla: 'LIV' },
   { id: '1dNwj8qWTl1k92PxI9iXwaNZYITnxuKP-kOF1QnZK3Iw', name: 'IBOTIRAMA', sigla: 'IBO' },
   { id: '1sGHf-zWXoxjnO20QBw2KWX39BSCzT8rzHdEz1hL7jyU', name: 'JEQUIÉ', sigla: 'JEQ' },
   { id: '1XmpY8mqkRou-CRY68j1ljHH8W8zcROy7wnwMMSfbV7o', name: 'VITÓRIA DA CONQUISTA', sigla: 'VDC' },
