@@ -877,28 +877,19 @@ export const CumprimentoView = () => {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-xs text-foreground truncate">{unit.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-bold text-[#ea580c] dark:text-[#f97316] tabular-nums" title="Cumprimento">
-                            C: {latestVal !== null ? `${latestVal.toFixed(1).replace('.', ',')}%` : '-'}
+                        {variation !== 0 && (
+                          <span 
+                            className={cn(
+                              "text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums",
+                              variation > 0 
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
+                                : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                            )}
+                            title="Variação em relação ao mês anterior"
+                          >
+                            {variation > 0 ? `+${variation.toFixed(1).replace('.', ',')}%` : `${variation.toFixed(1).replace('.', ',')}%`}
                           </span>
-                          {latestProdVal !== null && (
-                            <span className="text-[11px] font-bold text-[#ef4444] tabular-nums" title="Produção">
-                              P: {latestProdVal.toFixed(1).replace('.', ',')}%
-                            </span>
-                          )}
-                          {variation !== 0 && (
-                            <span 
-                              className={cn(
-                                "text-[10px] font-bold px-1 py-0.5 rounded tabular-nums",
-                                variation > 0 
-                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
-                                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                              )}
-                            >
-                              {variation > 0 ? `+${variation.toFixed(1).replace('.', ',')}%` : `${variation.toFixed(1).replace('.', ',')}%`}
-                            </span>
-                          )}
-                        </div>
+                        )}
                       </div>
 
                       {/* Mini ComposedChart com Cumprimento, Produção, Faixa de % e Labels em cada mês */}
