@@ -288,16 +288,66 @@ def list_files_in_drive_folder(credentials, folder_id):
         logging.error(f"Erro ao listar arquivos da pasta {folder_id}: {e}")
         return []
 
-def extract_rows_from_spreadsheet(gc, file_id, file_name):
-    """Abre a planilha e extrai as linhas com mapeamento dinâmico de cabeçalho."""
+def download_csv_from_drive(credentials, file_id, file_name):
+    """Baixa o conteúdo de um arquivo CSV do Google Drive via REST API."""
+    try:
+        token = get_drive_access_token(credentials)
+        if not token:
+            return None
+        headers = {"Authorization": f"Bearer {token}"}
+        url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
+        params = {"alt": "media", "supportsAllDrives": "true"}
+        resp = requests.get(url, headers=headers, params=params, timeout=60)
+        if resp.status_code == 200:
+            return resp.text
+        else:
+            logging.error(f"Erro ao baixar CSV '{file_name}' (HTTP {resp.status_code}): {resp.text[:200]}")
+            return None
+    except Exception as e:
+        logging.error(f"Erro ao baixar CSV '{file_name}': {e}")
+        return None
+
+def extract_rows_from_file(gc, credentials, file_id, file_name, mime_type=''):
+    """Extrai as linhas de um arquivo CSV ou Google Sheet com mapeamento dinâmico de cabeçalho."""
     logging.info(f"Processando arquivo: '{file_name}' (ID: {file_id})...")
     try:
-        sh = gc.open_by_key(file_id)
-        ws = sh.get_worksheet(0)
-        all_values = ws.get_all_values()
+        all_values = []
+        is_csv = file_name.lower().endswith('.csv') or 'text/csv' in mime_type.lower()
+
+        if is_csv:
+            # Baixa o CSV via Drive REST API
+            csv_text = download_csv_from_drive(credentials, file_id, file_name)
+            if not csv_text:
+                logging.warning(f"Arquivo CSV '{file_name}' vazio ou inacessível.")
+                return []
+
+            import csv as csv_mod
+            import io
+
+            # Detectar delimitador (vírgula, ponto-e-vírgula ou tab)
+            first_lines = csv_text[:2000]
+            semicolons = first_lines.count(';')
+            commas = first_lines.count(',')
+            tabs = first_lines.count('\t')
+            if semicolons > commas and semicolons > tabs:
+                delimiter = ';'
+            elif tabs > commas:
+                delimiter = '\t'
+            else:
+                delimiter = ','
+
+            logging.info(f"Arquivo '{file_name}': delimitador detectado = '{delimiter}'")
+
+            reader = csv_mod.reader(io.StringIO(csv_text), delimiter=delimiter)
+            all_values = [row for row in reader]
+        else:
+            # Google Sheets nativo
+            sh = gc.open_by_key(file_id)
+            ws = sh.get_worksheet(0)
+            all_values = ws.get_all_values()
 
         if len(all_values) < 2:
-            logging.warning(f"Planilha '{file_name}' está vazia ou sem cabeçalho.")
+            logging.warning(f"Arquivo '{file_name}' está vazio ou sem cabeçalho.")
             return []
 
         # Tenta achar o cabeçalho nas primeiras 5 linhas
@@ -382,7 +432,7 @@ def extract_rows_from_spreadsheet(gc, file_id, file_name):
         return parsed_records
 
     except Exception as e:
-        logging.error(f"Erro ao processar planilha '{file_name}': {e}")
+        logging.error(f"Erro ao processar arquivo '{file_name}': {e}")
         return []
 
 # ─── Deduplicação e Consolidação da Vistoria Mais Recente ──────────────────
@@ -493,11 +543,13 @@ def run_vistorias_sync(gc=None, env_vars=None, credentials=None):
     # Ordena para processar primeiro os históricos (2023, 2024, 2025) e depois os mensais (01.2026, 02.2026...)
     def file_sort_key(f):
         name = f.get('name', '')
+        # Remove extensão .csv para matching correto
+        name_clean = re.sub(r'\.(csv|xlsx?)$', '', name, flags=re.IGNORECASE).strip()
         # Se for só ano, prioridade baixa (2023, 2024, 2025)
-        if re.match(r'^\d{4}$', name):
-            return (1, int(name))
+        if re.match(r'^\d{4}$', name_clean):
+            return (1, int(name_clean))
         # Se for mm.aaaa
-        m = re.match(r'^(\d{2})[.\-_](\d{4})', name)
+        m = re.match(r'^(\d{2})[.\-_](\d{4})', name_clean)
         if m:
             mes, ano = int(m.group(1)), int(m.group(2))
             return (2, ano * 100 + mes)
@@ -509,7 +561,8 @@ def run_vistorias_sync(gc=None, env_vars=None, credentials=None):
     for f in sorted_files:
         f_id = f.get('id')
         f_name = f.get('name')
-        records = extract_rows_from_spreadsheet(gc, f_id, f_name)
+        f_mime = f.get('mimeType', '')
+        records = extract_rows_from_file(gc, credentials, f_id, f_name, mime_type=f_mime)
         all_extracted_records.extend(records)
 
     logging.info(f"Total bruto de registros extraídos: {len(all_extracted_records)}")
