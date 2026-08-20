@@ -197,9 +197,20 @@ export const CumprimentoView = () => {
     } else {
       const meses = new Set<string>();
       filteredData.forEach(row => {
-        if (row.mesCurto) meses.add(row.mesCurto);
+        if (row.mesCurto && (row.valPlanejado > 0 || row.valRealizado > 0 || row.valProdTurno > 0)) {
+          meses.add(row.mesCurto);
+        }
       });
       list = Array.from(meses).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+
+      // Se o último mês da lista não tiver nenhuma realização em nenhuma unidade (apenas planejamento futuro), descarta da visualização padrão
+      if (list.length > 1) {
+        const ultimoMes = list[list.length - 1];
+        const temRealizacaoNoUltimoMes = filteredData.some(row => row.mesCurto === ultimoMes && (row.valRealizado > 0 || row.valProdTurno > 0));
+        if (!temRealizacaoNoUltimoMes) {
+          list.pop();
+        }
+      }
     }
 
     if (janela > 0 && list.length > janela) {
@@ -251,6 +262,9 @@ export const CumprimentoView = () => {
       gm.sumAM += row.valProdTurno;
     });
 
+    const mesReferencia = mesesExibidos[mesesExibidos.length - 1];
+    const mesAnterior = mesesExibidos[mesesExibidos.length - 2];
+
     const resultadoFinal = Object.values(agrupado).map(u => {
       const item: any = { 
         name: u.name,
@@ -269,12 +283,17 @@ export const CumprimentoView = () => {
         }
       });
 
-      const validMonths = mesesExibidos.filter(m => item[m] !== null && item[m] !== undefined);
-      const latestMonth = validMonths[validMonths.length - 1] || mesesExibidos[mesesExibidos.length - 1];
-      const prevMonth = validMonths[validMonths.length - 2] || mesesExibidos[mesesExibidos.length - 2];
+      // Validações de mês corrente e anterior para o ranking e badges
+      const valMesRef = mesReferencia && item[mesReferencia] !== null && item[mesReferencia] !== undefined ? item[mesReferencia] : null;
+      const valMesAnt = mesAnterior && item[mesAnterior] !== null && item[mesAnterior] !== undefined ? item[mesAnterior] : null;
 
-      item._latestVal = latestMonth && item[latestMonth] !== null && item[latestMonth] !== undefined ? item[latestMonth] : null;
-      item._prevVal = prevMonth && item[prevMonth] !== null && item[prevMonth] !== undefined ? item[prevMonth] : null;
+      // Fallback: se a unidade não tem dados no mês de referência, busca o último mês válido dela
+      const validMonths = mesesExibidos.filter(m => item[m] !== null && item[m] !== undefined);
+      const fallbackLatestMonth = validMonths[validMonths.length - 1];
+      const fallbackPrevMonth = validMonths[validMonths.length - 2];
+
+      item._latestVal = valMesRef !== null ? valMesRef : (fallbackLatestMonth ? item[fallbackLatestMonth] : null);
+      item._prevVal = valMesRef !== null ? valMesAnt : (fallbackPrevMonth ? item[fallbackPrevMonth] : null);
       item._variation = (item._latestVal !== null && item._prevVal !== null) ? (item._latestVal - item._prevVal) : 0;
 
       item._sparklineData = mesesExibidos.map(m => item[m]);
@@ -323,15 +342,7 @@ export const CumprimentoView = () => {
 
   // KPIs
   const kpis = useMemo(() => {
-    let latestMonth = '';
-    for (let i = mesesExibidos.length - 1; i >= 0; i--) {
-      const m = mesesExibidos[i];
-      if (chartData.some(u => u[m] !== null && u[m] !== undefined)) {
-        latestMonth = m;
-        break;
-      }
-    }
-    if (!latestMonth) latestMonth = mesesExibidos[mesesExibidos.length - 1] || '';
+    const latestMonth = mesesExibidos[mesesExibidos.length - 1] || '';
     const totalUnits = chartData.length;
     
     const validLatestVals = chartData
