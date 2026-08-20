@@ -807,14 +807,14 @@ export const CumprimentoView = () => {
                   <h2 className="text-base font-bold text-foreground">Evolução do Cumprimento & Produção</h2>
                   <p className="text-xs text-muted-foreground">Comparativo temporal por unidade</p>
                 </div>
-                {/* Legenda clara de cores */}
-                <div className="hidden sm:flex items-center gap-3 px-2.5 py-1 rounded-md bg-muted/40 border border-border/60 text-[11px] font-semibold">
-                  <span className="flex items-center gap-1.5 text-primary">
-                    <span className="w-2.5 h-2.5 rounded-full bg-primary" />
+                {/* Legenda visual com estilo das linhas */}
+                <div className="hidden sm:flex items-center gap-4 px-3 py-1 rounded-lg bg-secondary/50 border border-border text-xs font-semibold">
+                  <span className="flex items-center gap-2 text-foreground">
+                    <span className="w-4 h-1 bg-[#ea580c] dark:bg-[#f97316] rounded-full inline-block" />
                     Cumprimento
                   </span>
-                  <span className="flex items-center gap-1.5 text-rose-500">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                  <span className="flex items-center gap-2 text-foreground">
+                    <span className="w-4 h-0.5 border-b-2 border-dashed border-[#ef4444] inline-block" />
                     Produção
                   </span>
                 </div>
@@ -876,11 +876,11 @@ export const CumprimentoView = () => {
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-xs text-foreground truncate">{unit.name}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-bold text-primary tabular-nums" title="Cumprimento do mês mais recente">
-                            {latestVal !== null ? `${latestVal.toFixed(1).replace('.', ',')}%` : '-'}
+                          <span className="text-[11px] font-bold text-[#ea580c] dark:text-[#f97316] tabular-nums" title="Cumprimento">
+                            C: {latestVal !== null ? `${latestVal.toFixed(1).replace('.', ',')}%` : '-'}
                           </span>
                           {latestProdVal !== null && (
-                            <span className="text-[11px] font-bold text-rose-500 tabular-nums" title="Produção do mês mais recente">
+                            <span className="text-[11px] font-bold text-[#ef4444] tabular-nums" title="Produção">
                               P: {latestProdVal.toFixed(1).replace('.', ',')}%
                             </span>
                           )}
@@ -890,7 +890,7 @@ export const CumprimentoView = () => {
                                 "text-[10px] font-bold px-1 py-0.5 rounded tabular-nums",
                                 variation > 0 
                                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
-                                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
                               )}
                             >
                               {variation > 0 ? `+${variation.toFixed(1).replace('.', ',')}%` : `${variation.toFixed(1).replace('.', ',')}%`}
@@ -918,11 +918,12 @@ export const CumprimentoView = () => {
                                 borderColor: 'hsl(var(--border))', 
                                 borderRadius: '8px',
                                 fontSize: '11px',
-                                padding: '4px 8px',
+                                padding: '6px 10px',
                                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                               }}
-                              formatter={(val: any, name: any) => {
-                                const label = name === 'prod' ? 'Produção' : 'Cumprimento';
+                              formatter={(val: any, name: any, item: any) => {
+                                const isProd = name === 'Produção' || name === 'prod' || item?.dataKey === 'prod';
+                                const label = isProd ? 'Produção' : 'Cumprimento';
                                 return [val !== null && val !== undefined ? `${Number(val).toFixed(1).replace('.', ',')}%` : '-', label];
                               }}
                               labelFormatter={(label: any) => `Mês: ${label}`}
@@ -1021,10 +1022,10 @@ export const CumprimentoView = () => {
                       type="monotone"
                       dataKey="_mediaProd"
                       name="Produção (média)"
-                      stroke="hsl(38, 92%, 50%)"
+                      stroke="#ef4444"
                       strokeWidth={2}
                       strokeDasharray="6 3"
-                      dot={{ r: 3.5, strokeWidth: 1.5, fill: 'hsl(var(--card))' }}
+                      dot={{ r: 3.5, strokeWidth: 1.5, fill: '#ef4444' }}
                       activeDot={{ r: 5 }}
                       connectNulls
                     />
