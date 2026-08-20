@@ -283,7 +283,7 @@ export const CumprimentoView = () => {
     return resultadoFinal;
   }, [filteredData, somenteDisponiveis, mesesExibidos]);
 
-  // Cálculo do Domínio Y Compartilhado
+  // Cálculo do Domínio Y Compartilhado (inclui valores de Produção)
   const { yMin, yMax } = useMemo(() => {
     let min = 999;
     let max = 0;
@@ -294,6 +294,11 @@ export const CumprimentoView = () => {
         if (val !== null && val !== undefined && typeof val === 'number') {
           if (val < min) min = val;
           if (val > max) max = val;
+        }
+        const prodVal = unit[`${m}_prod`];
+        if (prodVal !== null && prodVal !== undefined && typeof prodVal === 'number' && prodVal > 0) {
+          if (prodVal < min) min = prodVal;
+          if (prodVal > max) max = prodVal;
         }
       });
     });
@@ -382,7 +387,11 @@ export const CumprimentoView = () => {
       const entry: any = { mes: m };
       chartData.forEach(unit => {
         entry[unit.name] = unit[m];
+        entry[`${unit.name}_prod`] = unit[`${m}_prod`];
       });
+      // Média de produção ponderada entre unidades para a linha consolidada
+      const prodVals = chartData.map(u => u[`${m}_prod`]).filter((v): v is number => v !== null && v !== undefined && v > 0);
+      entry['_mediaProd'] = prodVals.length > 0 ? Number((prodVals.reduce((a, b) => a + b, 0) / prodVals.length).toFixed(1)) : null;
       return entry;
     });
   }, [mesesExibidos, chartData]);
@@ -830,7 +839,8 @@ export const CumprimentoView = () => {
 
                   const miniData = mesesExibidos.map(m => ({
                     mes: m,
-                    val: unit[m]
+                    val: unit[m],
+                    prod: unit[`${m}_prod`]
                   }));
 
                   return (
@@ -887,7 +897,10 @@ export const CumprimentoView = () => {
                                 padding: '4px 8px',
                                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                               }}
-                              formatter={(val: any) => [val !== null && val !== undefined ? `${Number(val).toFixed(1).replace('.', ',')}%` : '-', 'Cumprimento']}
+                              formatter={(val: any, name: any) => {
+                                const label = name === 'prod' ? 'Produção' : 'Cumprimento';
+                                return [val !== null && val !== undefined ? `${Number(val).toFixed(1).replace('.', ',')}%` : '-', label];
+                              }}
                               labelFormatter={(label: any) => `Mês: ${label}`}
                             />
                             <ReferenceArea y1={META_CUMPRIMENTO} y2={yMax} fill="hsl(var(--success))" fillOpacity={0.06} />
@@ -912,6 +925,16 @@ export const CumprimentoView = () => {
                               strokeWidth={2}
                               dot={{ r: 3, strokeWidth: 1.5, fill: 'hsl(var(--card))' }}
                               activeDot={{ r: 5, strokeWidth: 2 }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="prod"
+                              stroke="hsl(var(--warning, 38 92% 50%))"
+                              strokeWidth={1.5}
+                              strokeDasharray="4 3"
+                              dot={{ r: 2, strokeWidth: 1, fill: 'hsl(var(--card))' }}
+                              activeDot={{ r: 4 }}
+                              connectNulls
                             />
                           </AreaChart>
                         </ResponsiveContainer>
@@ -967,6 +990,18 @@ export const CumprimentoView = () => {
                         />
                       );
                     })}
+                    {/* Linha de Produção Consolidada (média entre unidades) */}
+                    <Line
+                      type="monotone"
+                      dataKey="_mediaProd"
+                      name="Produção (média)"
+                      stroke="hsl(38, 92%, 50%)"
+                      strokeWidth={2}
+                      strokeDasharray="6 3"
+                      dot={{ r: 3.5, strokeWidth: 1.5, fill: 'hsl(var(--card))' }}
+                      activeDot={{ r: 5 }}
+                      connectNulls
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
