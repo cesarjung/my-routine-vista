@@ -873,7 +873,7 @@ def run_sync_cycle():
         sync_realizadas_vistoria(gc, env_vars)   # Obs. vistoria para análise de risco por IA
         try:
             from sync_vistorias_drive import run_vistorias_sync
-            run_vistorias_sync(gc=gc, env_vars=env_vars)
+            run_vistorias_sync(gc=gc, env_vars=env_vars, credentials=getattr(gc, 'auth', None))
         except Exception as e_vis:
             logging.error(f"Erro no sync_vistorias_drive: {e_vis}")
     except Exception as e:

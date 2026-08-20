@@ -60,7 +60,7 @@ def load_env():
 
     return env_vars
 
-def get_gspread_and_drive_clients():
+def get_gspread_and_credentials():
     creds_json_str = os.environ.get("GOOGLE_CREDENTIALS")
     credentials = None
     if creds_json_str:
@@ -77,9 +77,7 @@ def get_gspread_and_drive_clients():
         return None, None
 
     gc = gspread.authorize(credentials)
-    from googleapiclient.discovery import build
-    drive_service = build('drive', 'v3', credentials=credentials)
-    return gc, drive_service
+    return gc, credentials
 
 # ─── Utilitários de Parsing de Cabeçalhos e Tipos ───────────────────────────
 
@@ -207,18 +205,37 @@ def build_header_map(header_row):
 
     return col_map
 
-# ─── Processamento das Planilhas da Pasta do Drive ──────────────────────────
+def get_drive_access_token(credentials):
+    try:
+        if not credentials.valid or not credentials.token:
+            import google.auth.transport.requests
+            req = google.auth.transport.requests.Request()
+            credentials.refresh(req)
+        return credentials.token
+    except Exception as e:
+        logging.error(f"Erro ao obter access token do Google: {e}")
+        return None
 
-def list_files_in_drive_folder(drive_service, folder_id):
+def list_files_in_drive_folder(credentials, folder_id):
     """Lista todos os arquivos do Google Drive contidos na pasta especificada."""
     try:
-        query = f"'{folder_id}' in parents and trashed = false"
-        results = drive_service.files().list(
-            q=query,
-            fields="files(id, name, mimeType, modifiedTime, createdTime)",
-            pageSize=100
-        ).execute()
-        return results.get('files', [])
+        token = get_drive_access_token(credentials)
+        if not token:
+            logging.error("Token de acesso inválido para o Google Drive.")
+            return []
+        headers = {"Authorization": f"Bearer {token}"}
+        url = "https://www.googleapis.com/drive/v3/files"
+        params = {
+            "q": f"'{folder_id}' in parents and trashed = false",
+            "fields": "files(id, name, mimeType, modifiedTime, createdTime)",
+            "pageSize": 100
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        if resp.status_code == 200:
+            return resp.json().get('files', [])
+        else:
+            logging.error(f"Erro ao listar arquivos da pasta {folder_id} ({resp.status_code}): {resp.text[:200]}")
+            return []
     except Exception as e:
         logging.error(f"Erro ao listar arquivos da pasta {folder_id}: {e}")
         return []
@@ -398,14 +415,18 @@ def upsert_to_supabase(vistorias_list, env_vars):
 
 # ─── Função Principal ───────────────────────────────────────────────────────
 
-def run_vistorias_sync(gc=None, drive_service=None, env_vars=None):
+def run_vistorias_sync(gc=None, env_vars=None, credentials=None):
     if env_vars is None:
         env_vars = load_env()
 
-    if gc is None or drive_service is None:
-        gc, drive_service = get_gspread_and_drive_clients()
+    if gc is None or credentials is None:
+        gc_new, creds_new = get_gspread_and_credentials()
+        if gc is None:
+            gc = gc_new
+        if credentials is None:
+            credentials = creds_new
 
-    if not gc or not drive_service:
+    if not gc or not credentials:
         logging.error("Não foi possível inicializar os clientes do Google. Abortando sync de vistorias.")
         return
 
@@ -414,7 +435,7 @@ def run_vistorias_sync(gc=None, drive_service=None, env_vars=None):
     logging.info(f"Pasta Alvo: {DRIVE_VISTORIAS_FOLDER_ID}")
     logging.info("==================================================================")
 
-    files = list_files_in_drive_folder(drive_service, DRIVE_VISTORIAS_FOLDER_ID)
+    files = list_files_in_drive_folder(credentials, DRIVE_VISTORIAS_FOLDER_ID)
     if not files:
         logging.warning("Nenhum arquivo encontrado na pasta de vistorias.")
         return
