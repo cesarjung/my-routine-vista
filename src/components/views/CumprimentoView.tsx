@@ -27,7 +27,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  ReferenceArea
+  ReferenceArea,
+  LabelList,
+  CartesianGrid
 } from 'recharts';
 
 const META_CUMPRIMENTO = 100; // Meta: 100% de Cumprimento
@@ -899,11 +901,19 @@ export const CumprimentoView = () => {
                         </div>
                       </div>
 
-                      {/* Mini ComposedChart com Cumprimento e Linha de Produção */}
-                      <div className="h-[100px] w-full mt-1">
+                      {/* Mini ComposedChart com Cumprimento, Produção, Faixa de % e Labels em cada mês */}
+                      <div className="h-[125px] w-full mt-1">
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={miniData} margin={{ top: 6, right: 6, left: 6, bottom: 2 }}>
-                            <YAxis hide domain={[yMin, yMax]} />
+                          <ComposedChart data={miniData} margin={{ top: 14, right: 6, left: -24, bottom: 2 }}>
+                            <CartesianGrid strokeDasharray="2 2" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
+                            <YAxis 
+                              domain={[yMin, yMax]} 
+                              ticks={[0, 50, 100]}
+                              tickFormatter={(v) => `${v}%`}
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }}
+                            />
                             <XAxis 
                               dataKey="mes" 
                               axisLine={false} 
@@ -929,7 +939,7 @@ export const CumprimentoView = () => {
                               labelFormatter={(label: any) => `Mês: ${label}`}
                             />
                             <ReferenceArea y1={META_CUMPRIMENTO} y2={yMax} fill="hsl(var(--success))" fillOpacity={0.06} />
-                            <ReferenceLine y={META_CUMPRIMENTO} strokeDasharray="4 4" stroke="hsl(var(--muted-foreground))" />
+                            <ReferenceLine y={META_CUMPRIMENTO} strokeDasharray="3 3" stroke="hsl(var(--muted-foreground))" opacity={0.5} />
                             <Area
                               type="monotone"
                               dataKey="val"
@@ -951,13 +961,21 @@ export const CumprimentoView = () => {
                               strokeWidth={2}
                               dot={{ r: 3, strokeWidth: 1.5, fill: 'hsl(var(--card))' }}
                               activeDot={{ r: 5, strokeWidth: 2 }}
-                            />
+                            >
+                              <LabelList 
+                                dataKey="val" 
+                                position="top"
+                                offset={4}
+                                formatter={(v: any) => v !== null && v !== undefined ? `${Number(v).toFixed(0)}%` : ''}
+                                style={{ fontSize: '8.5px', fontWeight: '700', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Area>
                             <Line
                               type="monotone"
                               dataKey="prod"
                               name="Produção"
                               stroke="#ef4444"
-                              strokeWidth={2}
+                              strokeWidth={1.8}
                               strokeDasharray="4 3"
                               dot={{ r: 2.5, strokeWidth: 1, fill: '#ef4444' }}
                               activeDot={{ r: 4.5 }}
