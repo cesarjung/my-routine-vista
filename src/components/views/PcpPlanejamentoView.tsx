@@ -1217,14 +1217,22 @@ export const PcpPlanejamentoView = () => {
                         {riskForObra.pontosDetalhados.map((item, pIdx) => (
                           <div
                             key={pIdx}
-                            className="flex items-start gap-2 p-1.5 rounded-md bg-background/60 border border-border/50 shadow-2xs leading-snug"
+                            className={`flex items-start gap-2 p-1.5 rounded-md border shadow-2xs leading-snug ${
+                              item.isCritico
+                                ? 'bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300 font-semibold'
+                                : 'bg-background/60 border-border/50'
+                            }`}
                           >
                             <span className="text-sm shrink-0 mt-0.5">{item.icone}</span>
                             <div className="flex-1">
-                              <span className="font-semibold text-foreground mr-1.5 text-[10px] uppercase tracking-wider opacity-80">
+                              <span className={`mr-1.5 text-[10px] uppercase tracking-wider ${
+                                item.isCritico ? 'font-bold text-rose-600 dark:text-rose-400' : 'font-semibold text-foreground opacity-80'
+                              }`}>
                                 [{item.categoria}]
                               </span>
-                              <span className="text-foreground/90 font-medium">{item.texto}</span>
+                              <span className={item.isCritico ? 'text-rose-950 dark:text-rose-100 font-bold' : 'text-foreground/90 font-medium'}>
+                                {item.texto}
+                              </span>
                             </div>
                           </div>
                         ))}
