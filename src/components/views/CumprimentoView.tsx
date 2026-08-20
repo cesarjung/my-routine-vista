@@ -17,6 +17,7 @@ import { parse, startOfDay, endOfDay, isValid } from 'date-fns';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { cn } from '@/lib/utils';
 import {
+  ComposedChart,
   AreaChart,
   Area,
   LineChart,
@@ -259,7 +260,7 @@ export const CumprimentoView = () => {
       mesesExibidos.forEach(m => {
         if (u.meses[m]) {
           item[m] = u.meses[m].sumAL > 0 ? Number(((u.meses[m].sumAO / u.meses[m].sumAL) * 100).toFixed(1)) : null;
-          item[`${m}_prod`] = u.meses[m].sumAM > 0 ? Number(((u.meses[m].sumAQ / u.meses[m].sumAM) * 100).toFixed(1)) : 0;
+          item[`${m}_prod`] = u.meses[m].sumAM > 0 ? Number(((u.meses[m].sumAQ / u.meses[m].sumAM) * 100).toFixed(1)) : null;
         } else {
           item[m] = null;
           item[`${m}_prod`] = null;
@@ -801,9 +802,22 @@ export const CumprimentoView = () => {
           {/* GRÁFICO PRINCIPAL */}
           <div className="lg:col-span-8 border border-border rounded-xl bg-card p-4 shadow-[var(--shadow-card)] flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-foreground">Evolução do Cumprimento</h2>
-                <p className="text-xs text-muted-foreground">Visão temporal por unidade</p>
+              <div className="flex items-center gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-foreground">Evolução do Cumprimento & Produção</h2>
+                  <p className="text-xs text-muted-foreground">Comparativo temporal por unidade</p>
+                </div>
+                {/* Legenda clara de cores */}
+                <div className="hidden sm:flex items-center gap-3 px-2.5 py-1 rounded-md bg-muted/40 border border-border/60 text-[11px] font-semibold">
+                  <span className="flex items-center gap-1.5 text-primary">
+                    <span className="w-2.5 h-2.5 rounded-full bg-primary" />
+                    Cumprimento
+                  </span>
+                  <span className="flex items-center gap-1.5 text-rose-500">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    Produção
+                  </span>
+                </div>
               </div>
 
               <div className="inline-flex p-0.5 rounded-lg bg-muted/50 border border-border">
@@ -837,6 +851,11 @@ export const CumprimentoView = () => {
                   const variation = unit._variation;
                   const isAboveMeta = latestVal !== null && latestVal >= META_CUMPRIMENTO;
 
+                  // Último valor de produção disponível
+                  const validProdMonths = mesesExibidos.filter(m => unit[`${m}_prod`] !== null && unit[`${m}_prod`] !== undefined && unit[`${m}_prod`] > 0);
+                  const latestProdMonth = validProdMonths[validProdMonths.length - 1];
+                  const latestProdVal = latestProdMonth ? unit[`${latestProdMonth}_prod`] : null;
+
                   const miniData = mesesExibidos.map(m => ({
                     mes: m,
                     val: unit[m],
@@ -856,10 +875,15 @@ export const CumprimentoView = () => {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-xs text-foreground truncate">{unit.name}</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-sm text-foreground tabular-nums">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-primary tabular-nums" title="Cumprimento do mês mais recente">
                             {latestVal !== null ? `${latestVal.toFixed(1).replace('.', ',')}%` : '-'}
                           </span>
+                          {latestProdVal !== null && (
+                            <span className="text-[11px] font-bold text-rose-500 tabular-nums" title="Produção do mês mais recente">
+                              P: {latestProdVal.toFixed(1).replace('.', ',')}%
+                            </span>
+                          )}
                           {variation !== 0 && (
                             <span 
                               className={cn(
@@ -875,10 +899,10 @@ export const CumprimentoView = () => {
                         </div>
                       </div>
 
-                      {/* Mini AreaChart com meses visíveis */}
-                      <div className="h-[96px] w-full mt-1">
+                      {/* Mini ComposedChart com Cumprimento e Linha de Produção */}
+                      <div className="h-[100px] w-full mt-1">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={miniData} margin={{ top: 6, right: 6, left: 6, bottom: 2 }}>
+                          <ComposedChart data={miniData} margin={{ top: 6, right: 6, left: 6, bottom: 2 }}>
                             <YAxis hide domain={[yMin, yMax]} />
                             <XAxis 
                               dataKey="mes" 
@@ -908,6 +932,7 @@ export const CumprimentoView = () => {
                             <Area
                               type="monotone"
                               dataKey="val"
+                              name="Cumprimento"
                               stroke={
                                 isSelected 
                                   ? 'hsl(var(--primary))' 
@@ -929,14 +954,15 @@ export const CumprimentoView = () => {
                             <Line
                               type="monotone"
                               dataKey="prod"
-                              stroke="hsl(var(--warning, 38 92% 50%))"
-                              strokeWidth={1.5}
+                              name="Produção"
+                              stroke="#ef4444"
+                              strokeWidth={2}
                               strokeDasharray="4 3"
-                              dot={{ r: 2, strokeWidth: 1, fill: 'hsl(var(--card))' }}
-                              activeDot={{ r: 4 }}
+                              dot={{ r: 2.5, strokeWidth: 1, fill: '#ef4444' }}
+                              activeDot={{ r: 4.5 }}
                               connectNulls
                             />
-                          </AreaChart>
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
