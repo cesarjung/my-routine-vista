@@ -211,6 +211,12 @@ export function parseVistoriaData(
       const pUpper = part.toUpperCase();
       let categoria: VistoriaPontoDetalhe['categoria'] = 'Geral';
       let icone = '📌';
+      let isCritico = false;
+
+      // Se esta observação específica contém gatilho de risco vermelho
+      if (redKeywords.some(k => pUpper.includes(k))) {
+        isCritico = true;
+      }
 
       if (
         pUpper.includes('POSTE') && (pUpper.includes('DANIFICADO') || pUpper.includes('QUEBRADO') || pUpper.includes('SUBSTITU') || pUpper.includes('TRINCA') || pUpper.includes('RACHAD') || pUpper.includes('ABALRO') || pUpper.includes('CAID') || pUpper.includes('CAÍD') || pUpper.includes('INCLINAD')) ||
@@ -219,7 +225,7 @@ export function parseVistoriaData(
         pUpper.includes('CRUZANDO') || pUpper.includes('LINHA VIVA') || pUpper.includes('LV') || pUpper.includes('PERIGO') || pUpper.includes('CRITIC')
       ) {
         categoria = 'Segurança';
-        icone = '⚡';
+        icone = isCritico ? '🔴' : '⚡';
       } else if (pUpper.includes('PODA') || pUpper.includes('VEGETAÇÃO') || pUpper.includes('ÁRVORE')) {
         categoria = 'Podas';
         icone = '🌳';
@@ -231,7 +237,7 @@ export function parseVistoriaData(
         icone = '🛣️';
       }
 
-      pontosDetalhados.push({ categoria, icone, texto: part });
+      pontosDetalhados.push({ categoria, icone, texto: part, isCritico });
       pontosEspecificos.push(`${icone} ${categoria}: ${part}`);
     });
   }

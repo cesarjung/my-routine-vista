@@ -1217,20 +1217,20 @@ export const PcpPlanejamentoView = () => {
                         {riskForObra.pontosDetalhados.map((item, pIdx) => (
                           <div
                             key={pIdx}
-                            className={`flex items-start gap-2 p-1.5 rounded-md border shadow-2xs leading-snug ${
+                            className={`flex items-start gap-2 p-2 rounded-lg border leading-snug transition-all ${
                               item.isCritico
-                                ? 'bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300 font-semibold'
-                                : 'bg-background/60 border-border/50'
+                                ? 'bg-red-800 dark:bg-red-950 border-red-950 text-white shadow-md ring-1 ring-red-600/50'
+                                : 'bg-background/80 border-border/60 text-foreground'
                             }`}
                           >
                             <span className="text-sm shrink-0 mt-0.5">{item.icone}</span>
                             <div className="flex-1">
                               <span className={`mr-1.5 text-[10px] uppercase tracking-wider ${
-                                item.isCritico ? 'font-bold text-rose-600 dark:text-rose-400' : 'font-semibold text-foreground opacity-80'
+                                item.isCritico ? 'font-black text-red-200' : 'font-semibold text-muted-foreground'
                               }`}>
                                 [{item.categoria}]
                               </span>
-                              <span className={item.isCritico ? 'text-rose-950 dark:text-rose-100 font-bold' : 'text-foreground/90 font-medium'}>
+                              <span className={item.isCritico ? 'text-white font-bold' : 'text-foreground/90 font-medium'}>
                                 {item.texto}
                               </span>
                             </div>
