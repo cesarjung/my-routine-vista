@@ -165,9 +165,30 @@ export function parseVistoriaData(
     const textUpper = fullObs.toUpperCase();
 
     const redKeywords = [
-      'POSTE QUEBRADO', 'TRINCA', 'FERRAGEM EXPOSTA', 'RISCO DE QUEDA', 
-      'RISCO DE CHOQUE', 'FIO PARTIDO', 'FIOS EXPOSTOS', 'FIO CAÍDO', 'FIO NO CHÃO',
-      'FAÍSCA', 'FAISCAMENTO', 'ESTRUTURA CONDENADA', 'CRÍTICO', 'PERIGO', 'EMERGENCIAL'
+      // Postes e Integridade Estrutural
+      'POSTE QUEBRADO', 'POSTES QUEBRADOS', 'POSTE DANIFICADO', 'POSTES DANIFICADOS',
+      'POSTE RACHADO', 'POSTES RACHADOS', 'POSTE PODRE', 'POSTES PODRES',
+      'POSTE TRINCADO', 'POSTES TRINCADOS', 'POSTE ABALROADO', 'POSTES ABALROADOS',
+      'POSTE INCLINADO', 'POSTES INCLINADOS', 'POSTE TOMBADO', 'POSTES TOMBADOS',
+      'POSTE CAÍDO', 'POSTE CAIDO', 'POSTES CAÍDOS', 'POSTES CAIDOS',
+      'SUBSTITUIÇÃO DE POSTE', 'SUBSTITUICAO DE POSTE', 'SUBSTITUIÇÃO DOS POSTES', 'SUBSTITUICAO DOS POSTES',
+      'SUBSTITUIR POSTE', 'SUBSTITUIR POSTES', 'TROCA DE POSTE', 'TROCA DOS POSTES',
+      'TRINCA', 'TRINCADO', 'FERRAGEM EXPOSTA', 'FERRAGENS EXPOSTAS',
+      'ESTRUTURA CONDENADA', 'ESTRUTURA DANIFICADA', 'ESTRUTURAS DANIFICADAS', 'ESTRUTURA ABALROADA',
+      'RISCO DE QUEDA', 'QUEDA DE POSTE', 'QUEDA DE ESTRUTURA',
+
+      // Elétrica e Segurança Crítica
+      'REDE ENERGIZADA', 'REDE DE ALTA TENSÃO', 'REDE DE ALTA TENSAO', 'ALTA TENSÃO', 'ALTA TENSAO',
+      'MÉDIA TENSÃO', 'MEDIA TENSAO', 'CRUZAMENTO DE REDE', 'CRUZANDO REDE',
+      'FIO PARTIDO', 'FIOS PARTIDOS', 'FIO EXPOSTO', 'FIOS EXPOSTOS', 'FIO CAÍDO', 'FIO CAIDO', 'FIO NO CHÃO', 'FIO NO CHAO',
+      'CABO PARTIDO', 'CABOS PARTIDOS', 'CABO CAÍDO', 'CABO CAIDO', 'CABO NO CHÃO', 'CABO NO CHAO',
+      'CABO ROMPIDO', 'CABOS ROMPIDOS', 'ROMPIMENTO DE CABO', 'ROMPIMENTO DE CABOS',
+      'RISCO DE CHOQUE', 'CHOQUE ELÉTRICO', 'CHOQUE ELETRICO', 'FAÍSCA', 'FAISCA', 'FAISCAMENTO',
+      'CURTO-CIRCUITO', 'CURTO CIRCUITO',
+
+      // Emergência / Gravidade Extrema
+      'CRÍTICO', 'CRITICO', 'PERIGO', 'PERIGOSO', 'EMERGENCIAL', 'EMERGÊNCIA', 'EMERGENCIA',
+      'INTERDITADO', 'INTERDITADA', 'ÁREA DE RISCO', 'AREA DE RISCO'
     ];
 
     const orangeKeywords = [
@@ -191,7 +212,12 @@ export function parseVistoriaData(
       let categoria: VistoriaPontoDetalhe['categoria'] = 'Geral';
       let icone = '📌';
 
-      if (pUpper.includes('POSTE QUEBRADO') || pUpper.includes('FERRAGEM EXPOSTA') || pUpper.includes('RISCO DE CHOQUE') || pUpper.includes('FIO') || pUpper.includes('CRUZANDO') || pUpper.includes('LINHA VIVA') || pUpper.includes('LV')) {
+      if (
+        pUpper.includes('POSTE') && (pUpper.includes('DANIFICADO') || pUpper.includes('QUEBRADO') || pUpper.includes('SUBSTITU') || pUpper.includes('TRINCA') || pUpper.includes('RACHAD') || pUpper.includes('ABALRO') || pUpper.includes('CAID') || pUpper.includes('CAÍD') || pUpper.includes('INCLINAD')) ||
+        pUpper.includes('FERRAGEM EXPOSTA') || pUpper.includes('RISCO DE CHOQUE') || pUpper.includes('CHOQUE') || 
+        pUpper.includes('FIO') || pUpper.includes('CABO PARTIDO') || pUpper.includes('CABO ROMPIDO') || pUpper.includes('ENERGIZAD') || 
+        pUpper.includes('CRUZANDO') || pUpper.includes('LINHA VIVA') || pUpper.includes('LV') || pUpper.includes('PERIGO') || pUpper.includes('CRITIC')
+      ) {
         categoria = 'Segurança';
         icone = '⚡';
       } else if (pUpper.includes('PODA') || pUpper.includes('VEGETAÇÃO') || pUpper.includes('ÁRVORE')) {
