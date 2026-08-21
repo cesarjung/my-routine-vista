@@ -32,6 +32,8 @@ logging.basicConfig(
     force=True
 )
 
+import unicodedata
+
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
@@ -118,90 +120,108 @@ def normalize_obra_id(val):
     s = re.sub(r'^OBRA\s*', '', s).strip()
     return s
 
+def clean_str(s):
+    if not s:
+        return ''
+    # Remove acentos e normaliza para minúsculas
+    nfkd = unicodedata.normalize('NFKD', str(s))
+    ascii_str = ''.join([c for c in nfkd if not unicodedata.combining(c)])
+    return ascii_str.lower().strip()
+
 def build_header_map(header_row):
     """
-    Localiza os índices das colunas relevantes usando correspondência por regex nos nomes.
-    Evita quebra por reposicionamento de colunas.
+    Localiza os índices das colunas relevantes usando correspondência por regex e texto limpo.
+    Suporta variações de acentuação, maiúsculas/minúsculas e posições flexíveis.
     """
     col_map = {}
     for idx, raw_h in enumerate(header_row):
-        h = str(raw_h).strip().lower()
+        h = clean_str(raw_h)
         if not h:
             continue
 
-        # Obra / Projeto ID
-        if ('número' in h or 'numero' in h or 'código' in h or 'codigo' in h or 'projeto' in h) and 'obra' in h:
-            col_map['obra_id'] = idx
-        elif h in ('obra', 'projeto', 'num_obra', 'cod_obra') and 'obra_id' not in col_map:
+        # Obra / Projeto ID (suporta "número da obra", "código da obra", "obra", "projeto", "identificação", "0.0", "0.3", "nota", "os")
+        if ('obra_id' not in col_map) and any(k in h for k in ['obra', 'projeto', 'num_obra', 'cod_obra', 'codigo_obra', 'numero_obra', '0.0', '0.3', 'ordem', 'nota', 'os']):
             col_map['obra_id'] = idx
 
-        # Data / Carimbo
-        if 'carimbo' in h or 'data da vistoria' in h or 'data vistoria' in h or (h == 'data' and 'data_vistoria' not in col_map):
+        # Data / Carimbo (suporta "carimbo", "timestamp", "data da vistoria", "data vistoria", "data/hora", "data")
+        if ('data_vistoria' not in col_map) and any(k in h for k in ['carimbo', 'timestamp', 'data da vistoria', 'data vistoria', 'data/hora', 'data_hora', 'data', 'hora']):
             col_map['data_vistoria'] = idx
 
         # 0.1 - Observações importantes para planejamento
-        if '0.1' in h or ('observações importantes' in h and 'planejamento' in h):
+        if '0.1' in h or ('observacoes' in h and 'planejamento' in h):
             col_map['obs_planejamento'] = idx
 
         # 0.2 - Apta ou Inapta
-        if '0.2' in h or ('apta ou inapta' in h or 'apta/inapta' in h):
+        if '0.2' in h or ('apta' in h and 'inapta' in h) or (h.startswith('apta') or h.startswith('inapta')):
             col_map['apta_inapta'] = idx
 
         # 0.4 - Desligamento BT
-        if '0.4' in h or ('desligamento bt' in h or 'desligamento b.t' in h):
+        if '0.4' in h or 'desligamento bt' in h or 'desligamento b.t' in h:
             col_map['desligamento_bt'] = idx
 
         # 0.5 - Desligamento MT
-        if '0.5' in h or ('desligamento mt' in h or 'desligamento m.t' in h):
+        if '0.5' in h or 'desligamento mt' in h or 'desligamento m.t' in h:
             col_map['desligamento_mt'] = idx
 
         # 0.6 - Atuação de equipe LV
-        if '0.6' in h or ('atuação' in h and 'equipe lv' in h) or ('atuacao' in h and 'lv' in h):
+        if '0.6' in h or ('atuacao' in h and 'lv' in h) or ('equipe lv' in h):
             col_map['equipe_lv'] = idx
 
         # 1.4 - Terreno molhado / chuva
-        if '1.4' in h or ('terreno molhado' in h and 'acesso' in h) or ('chuva' in h and 'acesso' in h):
+        if '1.4' in h or ('chuva' in h and 'acesso' in h) or ('terreno molhado' in h):
             col_map['acesso_chuva'] = idx
 
         # 1.6 - Autorização de passagem
-        if '1.6' in h or ('autorização de passagem' in h or 'autorizacao de passagem' in h):
+        if '1.6' in h or 'autorizacao de passagem' in h or 'autorizacao passagem' in h:
             col_map['autorizacao_passagem'] = idx
 
         # 1.7 - Alojamento próximo
-        if '1.7' in h or ('alojamento' in h and 'próximo' in h) or ('alojamento' in h and 'proximo' in h):
+        if '1.7' in h or 'alojamento' in h:
             col_map['alojamento_proximo'] = idx
 
         # 1.10 - Observações gerais de acesso
-        if '1.10' in h or ('observações gerais' in h and 'acesso' in h) or ('observacoes gerais' in h and 'acesso' in h):
+        if '1.10' in h or ('observacoes gerais' in h and 'acesso' in h) or ('obs' in h and 'acesso' in h):
             col_map['obs_acesso'] = idx
 
         # 2.1 - Equipamentos de manobra
-        if '2.1' in h or ('equipamentos de manobra' in h or 'equipamento de manobra' in h):
+        if '2.1' in h or ('equipamento' in h and 'manobra' in h):
             col_map['equipamentos_manobra'] = idx
 
         # 4.5 - Estado das estruturas permite Linha Viva
-        if '4.5' in h or ('estado de conservação' in h and 'linha viva' in h) or ('conservacao' in h and 'lv' in h):
+        if '4.5' in h or ('conservacao' in h and 'linha viva' in h) or ('conservacao' in h and 'lv' in h):
             col_map['conservacao_lv'] = idx
 
         # 5.1 - Manejo de vegetação (poda)
-        if '5.1' in h or ('manejo da vegetação' in h or 'manejo de vegetacao' in h or 'poda' in h):
+        if '5.1' in h or 'poda' in h or 'vegetacao' in h:
             col_map['necessita_poda'] = idx
 
         # 6.2 - Solo rochoso (Solo C)
-        if '6.2' in h or ('solo rochoso' in h or 'solo c' in h):
+        if '6.2' in h or 'solo rochoso' in h or 'solo c' in h:
             col_map['solo_rochoso'] = idx
 
         # 6.4 - Postes e estruturas em boas condições permitindo manobra (ALERTA VERMELHO)
-        if '6.4' in h or ('boas condições' in h and 'manobra' in h) or ('boas condicoes' in h and 'manobra' in h):
+        if '6.4' in h or ('boas condicoes' in h and 'manobra' in h):
             col_map['condicoes_manobra_seguras'] = idx
 
         # 6.5 - Risco de queda de poste ou rompimento de cabos (ALERTA VERMELHO)
-        if '6.5' in h or ('risco de queda' in h or 'rompimento de cabos' in h):
+        if '6.5' in h or 'risco de queda' in h or 'rompimento de cabos' in h or 'rompimento cabos' in h:
             col_map['risco_queda_cabos'] = idx
 
         # 6.10 - Auxílio de linha viva
-        if '6.10' in h or ('auxilio de linha viva' in h or 'auxílio de linha viva' in h or 'auxilio linha viva' in h):
+        if '6.10' in h or ('auxilio' in h and 'linha viva' in h) or ('auxilio' in h and 'lv' in h):
             col_map['auxilio_lv'] = idx
+
+    # Fallback para data_vistoria: coluna 0 é o padrão padrão absoluto do Google Forms (Carimbo de data/hora)
+    if 'data_vistoria' not in col_map and len(header_row) > 0:
+        col_map['data_vistoria'] = 0
+
+    # Fallback para obra_id: procura nas primeiras 10 colunas
+    if 'obra_id' not in col_map:
+        for idx in range(min(10, len(header_row))):
+            h_clean = clean_str(header_row[idx])
+            if any(term in h_clean for term in ['projeto', 'obra', 'os', 'nota', 'codigo', 'numero', 'identificacao']):
+                col_map['obra_id'] = idx
+                break
 
     return col_map
 
@@ -299,7 +319,14 @@ def download_csv_from_drive(credentials, file_id, file_name):
         params = {"alt": "media", "supportsAllDrives": "true"}
         resp = requests.get(url, headers=headers, params=params, timeout=60)
         if resp.status_code == 200:
-            return resp.text
+            # Tenta decodificar UTF-8 (com suporte a BOM utf-8-sig)
+            try:
+                return resp.content.decode('utf-8-sig')
+            except Exception:
+                try:
+                    return resp.content.decode('utf-8', errors='replace')
+                except Exception:
+                    return resp.text
         else:
             logging.error(f"Erro ao baixar CSV '{file_name}' (HTTP {resp.status_code}): {resp.text[:200]}")
             return None
@@ -361,11 +388,15 @@ def extract_rows_from_file(gc, credentials, file_id, file_name, mime_type=''):
                 break
 
         if 'obra_id' not in header_map:
-            # Fallback: assume primeira linha
-            header_map = build_header_map(all_values[0])
-            header_idx = 0
+            # Se ainda não achou obra_id, procura na primeira linha por qualquer coluna que contenha 'obra' ou 'projeto'
+            first_row_clean = [clean_str(c) for c in all_values[0]]
+            for c_idx, c_val in enumerate(first_row_clean):
+                if any(k in c_val for k in ['obra', 'projeto', 'nota', 'os', 'codigo', 'numero']):
+                    header_map['obra_id'] = c_idx
+                    break
 
         logging.info(f"Arquivo '{file_name}': Cabeçalho linha {header_idx + 1}, colunas mapeadas: {list(header_map.keys())}")
+        logging.info(f"Arquivo '{file_name}': Primeiras colunas do arquivo: {[f'{i}:{h[:20]}' for i, h in enumerate(all_values[header_idx])[:10]]}")
 
         parsed_records = []
         for row in all_values[header_idx + 1:]:
