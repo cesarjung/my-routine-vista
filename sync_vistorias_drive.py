@@ -396,7 +396,7 @@ def extract_rows_from_file(gc, credentials, file_id, file_name, mime_type=''):
                     break
 
         logging.info(f"Arquivo '{file_name}': Cabeçalho linha {header_idx + 1}, colunas mapeadas: {list(header_map.keys())}")
-        logging.info(f"Arquivo '{file_name}': Primeiras colunas do arquivo: {[f'{i}:{h[:20]}' for i, h in enumerate(all_values[header_idx])[:10]]}")
+        logging.info(f"Arquivo '{file_name}': Primeiras colunas do arquivo: {[f'{i}:{h[:20]}' for i, h in enumerate(all_values[header_idx][:10])]}")
 
         parsed_records = []
         for row in all_values[header_idx + 1:]:
