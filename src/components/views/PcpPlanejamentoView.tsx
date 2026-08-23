@@ -524,7 +524,13 @@ export const PcpPlanejamentoView = () => {
 
   // Alojamento Padrão da Semana (Filtro Geral: 'BASE' ou ID de Alojamento)
   const [selectedAlojamentoPadraoId, setSelectedAlojamentoPadraoId] = useSessionState<string>('pcp_shared_aloj_padrao_v2', 'BASE');
-  const [diasCustomAlojMap, setDiasCustomAlojMap] = useSessionState<Record<string, { origemId?: string; destinoId?: string }>>('pcp_shared_dias_custom_aloj_v2', {});
+  const [acrescimoVeiculoPct, setAcrescimoVeiculoPct] = useSessionState<number>('pcp_shared_acrescimo_caminhao_pct_v2', 30);
+  const [diasCustomAlojMap, setDiasCustomAlojMap] = useSessionState<Record<string, {
+    origemId?: string;
+    destinoId?: string;
+    manualTempoIdaMin?: number;
+    manualTempoVoltaMin?: number;
+  }>>('pcp_shared_dias_custom_aloj_v2', {});
 
   // Atualizar quando o Alojamento Padrão mudar
   const handleAlojamentoPadraoChange = (alojId: string) => {
@@ -541,7 +547,23 @@ export const PcpPlanejamentoView = () => {
         ...prev,
         [diaId]: {
           ...existing,
-          [field]: val
+          [field]: val,
+          // Se trocou de alojamento/base, reseta o tempo manual correspondente para recalcular pelas coordenadas
+          ...(field === 'origemId' ? { manualTempoIdaMin: undefined } : { manualTempoVoltaMin: undefined })
+        }
+      };
+    });
+  };
+
+  // Atualizar tempo de ida ou volta manualmente (em minutos)
+  const handleUpdateDiaTempo = (diaId: string, field: 'manualTempoIdaMin' | 'manualTempoVoltaMin', minutes: number) => {
+    setDiasCustomAlojMap(prev => {
+      const existing = prev[diaId] || {};
+      return {
+        ...prev,
+        [diaId]: {
+          ...existing,
+          [field]: Math.max(0, Math.round(minutes))
         }
       };
     });
@@ -616,19 +638,33 @@ export const PcpPlanejamentoView = () => {
         ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
         : (alojList.find(a => a.id === finalDestinoId) || { id: finalDestinoId, nome: 'Alojamento', latitude: null, longitude: null });
 
+      // Fator de estradas (1.25x sobre linha reta para representar percurso real em rodovias e estradas vicinais)
+      const FATOR_ESTRADA = 1.25;
+      // Fator de caminhão pesado: velocidade média de caminhão (~45 km/h -> 1.33 min/km) acrescido do percentual configurado
+      const fatorCaminhaoMult = 1 + (Number(acrescimoVeiculoPct) || 0) / 100;
+
       let distIdaKm = 0;
-      let tempoIdaMin = 15;
+      let calcTempoIdaMin = 15;
       if (origemObj.latitude && origemObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
-        distIdaKm = Math.round(calcDistanceKM(origemObj.latitude, origemObj.longitude, selectedObra.latitude, selectedObra.longitude) * 10) / 10;
-        tempoIdaMin = Math.max(5, Math.round(distIdaKm * 1.5));
+        distIdaKm = Math.round(calcDistanceKM(origemObj.latitude, origemObj.longitude, selectedObra.latitude, selectedObra.longitude) * FATOR_ESTRADA * 10) / 10;
+        calcTempoIdaMin = Math.max(5, Math.round(distIdaKm * 1.33 * fatorCaminhaoMult));
       }
 
       let distVoltaKm = 0;
-      let tempoVoltaMin = 15;
+      let calcTempoVoltaMin = 15;
       if (destinoObj.latitude && destinoObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
-        distVoltaKm = Math.round(calcDistanceKM(selectedObra.latitude, selectedObra.longitude, destinoObj.latitude, destinoObj.longitude) * 10) / 10;
-        tempoVoltaMin = Math.max(5, Math.round(distVoltaKm * 1.5));
+        distVoltaKm = Math.round(calcDistanceKM(selectedObra.latitude, selectedObra.longitude, destinoObj.latitude, destinoObj.longitude) * FATOR_ESTRADA * 10) / 10;
+        calcTempoVoltaMin = Math.max(5, Math.round(distVoltaKm * 1.33 * fatorCaminhaoMult));
       }
+
+      // Utiliza tempo manual se configurado pelo usuário, senão utiliza o cálculo estimado de estradas
+      const tempoIdaMin = (customAloj.manualTempoIdaMin !== undefined && customAloj.manualTempoIdaMin > 0)
+        ? customAloj.manualTempoIdaMin
+        : calcTempoIdaMin;
+
+      const tempoVoltaMin = (customAloj.manualTempoVoltaMin !== undefined && customAloj.manualTempoVoltaMin > 0)
+        ? customAloj.manualTempoVoltaMin
+        : calcTempoVoltaMin;
 
       const tempoTotalDeslocamentoMin = tempoIdaMin + tempoVoltaMin;
       const pontosDoDia = (diasPontosMap && Array.isArray(diasPontosMap[id])) ? diasPontosMap[id] : [];
@@ -649,10 +685,12 @@ export const PcpPlanejamentoView = () => {
         tempoIdaMin,
         distVoltaKm,
         tempoVoltaMin,
-        tempoTotalDeslocamentoMin
+        tempoTotalDeslocamentoMin,
+        isManualIda: customAloj.manualTempoIdaMin !== undefined && customAloj.manualTempoIdaMin > 0,
+        isManualVolta: customAloj.manualTempoVoltaMin !== undefined && customAloj.manualTempoVoltaMin > 0
       };
     });
-  }, [dataInicio, dataFim, diasCustomAlojMap, selectedAlojamentoPadraoId, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra, diasPontosMap]);
+  }, [dataInicio, dataFim, diasCustomAlojMap, selectedAlojamentoPadraoId, acrescimoVeiculoPct, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra, diasPontosMap]);
 
   // Dia ativo selecionado para visualização/edição
   const activeDia = useMemo(() => {
@@ -2138,6 +2176,54 @@ export const PcpPlanejamentoView = () => {
                   </Select>
                 </div>
 
+                {/* FATOR DE ACRÉSCIMO CAMINHÃO PESADO / ESTRADAS */}
+                <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1">
+                        🚚 Fator de Acréscimo Caminhão Pesado:
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        (+{acrescimoVeiculoPct}% sobre o tempo base de estradas)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          step="5"
+                          min="0"
+                          max="200"
+                          value={acrescimoVeiculoPct}
+                          onChange={e => setAcrescimoVeiculoPct(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="h-7 w-16 text-center font-mono font-bold text-xs bg-background"
+                        />
+                        <span className="text-xs font-bold text-muted-foreground">%</span>
+                      </div>
+
+                      {/* Botões Rápidos */}
+                      <div className="flex items-center gap-1">
+                        {[0, 20, 30, 50].map(pct => (
+                          <Button
+                            key={pct}
+                            size="sm"
+                            type="button"
+                            variant={acrescimoVeiculoPct === pct ? 'default' : 'outline'}
+                            onClick={() => setAcrescimoVeiculoPct(pct)}
+                            className="h-6 text-[10px] px-1.5 font-mono font-semibold"
+                          >
+                            +{pct}%
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Calcula a distância estimada por estradas (fator 1.25x) e aplica velocidade reduzida de caminhão com a % acima. Você também pode digitar o tempo exato em cada linha abaixo.
+                  </p>
+                </div>
+
                 {/* Banner de Tempos do Dia Ativo da Programação (Ida + Volta) */}
                 <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
@@ -2151,8 +2237,9 @@ export const PcpPlanejamentoView = () => {
 
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
                     <div className="p-2 rounded bg-background/80 border border-border/50 flex flex-col">
-                      <span className="text-muted-foreground text-[10px] uppercase font-bold">
-                        🛫 Tempo de Ida (Partida ➔ Obra)
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold flex items-center justify-between">
+                        <span>🛫 Tempo de Ida (Partida ➔ Obra)</span>
+                        {activeDia?.isManualIda && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 py-0 bg-amber-500/10 text-amber-600 border border-amber-500/20">Manual</Badge>}
                       </span>
                       <span className="font-bold text-foreground mt-0.5 truncate" title={activeDia?.origemNome}>
                         {activeDia?.origemNome}
@@ -2163,8 +2250,9 @@ export const PcpPlanejamentoView = () => {
                     </div>
 
                     <div className="p-2 rounded bg-background/80 border border-border/50 flex flex-col">
-                      <span className="text-muted-foreground text-[10px] uppercase font-bold">
-                        🛬 Tempo de Volta (Obra ➔ Retorno)
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold flex items-center justify-between">
+                        <span>🛬 Tempo de Volta (Obra ➔ Retorno)</span>
+                        {activeDia?.isManualVolta && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 py-0 bg-amber-500/10 text-amber-600 border border-amber-500/20">Manual</Badge>}
                       </span>
                       <span className="font-bold text-foreground mt-0.5 truncate" title={activeDia?.destinoNome}>
                         {activeDia?.destinoNome}
@@ -2183,7 +2271,7 @@ export const PcpPlanejamentoView = () => {
                       Cronograma dos Dias Programados ({diasProgramados.length} dias)
                     </span>
                     <span className="text-[10px] text-muted-foreground font-medium">
-                      *1º dia sai da Base, último dia retorna à Base
+                      *1º dia sai da Base, último dia retorna à Base (tempos ajustáveis)
                     </span>
                   </div>
 
@@ -2191,10 +2279,10 @@ export const PcpPlanejamentoView = () => {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/40 text-[10px] font-bold">
-                          <TableHead className="py-1 px-2">Dia</TableHead>
-                          <TableHead className="py-1 px-2">Saída (Ida)</TableHead>
-                          <TableHead className="py-1 px-2">Retorno (Volta)</TableHead>
-                          <TableHead className="py-1 px-2 text-right">Deslocamento (Horas)</TableHead>
+                          <TableHead className="py-1 px-2 w-[110px]">Dia</TableHead>
+                          <TableHead className="py-1 px-2">Saída (Ida) & Tempo</TableHead>
+                          <TableHead className="py-1 px-2">Retorno (Volta) & Tempo</TableHead>
+                          <TableHead className="py-1 px-2 text-right w-[110px]">Total (Horas)</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -2219,32 +2307,78 @@ export const PcpPlanejamentoView = () => {
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="py-0.5 px-1.5" onClick={e => e.stopPropagation()}>
-                              <select
-                                value={d.origemId}
-                                onChange={e => handleUpdateDiaAlojamento(d.id, 'origemId', e.target.value)}
-                                className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
-                              >
-                                <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
-                                {alojamentosDaUnidade.map(a => (
-                                  <option key={a.id} value={a.id}>🏠 {a.nome}</option>
-                                ))}
-                              </select>
+
+                            {/* Saída (Ida) com Select + Distância + Input Horas Editável */}
+                            <TableCell className="py-1 px-1.5" onClick={e => e.stopPropagation()}>
+                              <div className="flex flex-col gap-1">
+                                <select
+                                  value={d.origemId}
+                                  onChange={e => handleUpdateDiaAlojamento(d.id, 'origemId', e.target.value)}
+                                  className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
+                                >
+                                  <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
+                                  {alojamentosDaUnidade.map(a => (
+                                    <option key={a.id} value={a.id}>🏠 {a.nome}</option>
+                                  ))}
+                                </select>
+                                <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono">
+                                  <span title="Distância estimada por estradas">{d.distIdaKm > 0 ? `${d.distIdaKm} km` : '0 km'}</span>
+                                  <div className="flex items-center gap-0.5">
+                                    <Input
+                                      type="number"
+                                      step="0.05"
+                                      min="0"
+                                      value={Math.round((d.tempoIdaMin / 60) * 100) / 100}
+                                      onChange={e => {
+                                        const h = parseFloat(e.target.value) || 0;
+                                        handleUpdateDiaTempo(d.id, 'manualTempoIdaMin', Math.round(h * 60));
+                                      }}
+                                      className="h-5 w-14 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
+                                      title="Tempo de ida em horas decimais (ajustável manualmente)"
+                                    />
+                                    <span className="text-[9px] font-bold">h</span>
+                                  </div>
+                                </div>
+                              </div>
                             </TableCell>
-                            <TableCell className="py-0.5 px-1.5" onClick={e => e.stopPropagation()}>
-                              <select
-                                value={d.destinoId}
-                                onChange={e => handleUpdateDiaAlojamento(d.id, 'destinoId', e.target.value)}
-                                className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
-                              >
-                                <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
-                                {alojamentosDaUnidade.map(a => (
-                                  <option key={a.id} value={a.id}>🏠 {a.nome}</option>
-                                ))}
-                              </select>
+
+                            {/* Retorno (Volta) com Select + Distância + Input Horas Editável */}
+                            <TableCell className="py-1 px-1.5" onClick={e => e.stopPropagation()}>
+                              <div className="flex flex-col gap-1">
+                                <select
+                                  value={d.destinoId}
+                                  onChange={e => handleUpdateDiaAlojamento(d.id, 'destinoId', e.target.value)}
+                                  className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
+                                >
+                                  <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
+                                  {alojamentosDaUnidade.map(a => (
+                                    <option key={a.id} value={a.id}>🏠 {a.nome}</option>
+                                  ))}
+                                </select>
+                                <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono">
+                                  <span title="Distância estimada por estradas">{d.distVoltaKm > 0 ? `${d.distVoltaKm} km` : '0 km'}</span>
+                                  <div className="flex items-center gap-0.5">
+                                    <Input
+                                      type="number"
+                                      step="0.05"
+                                      min="0"
+                                      value={Math.round((d.tempoVoltaMin / 60) * 100) / 100}
+                                      onChange={e => {
+                                        const h = parseFloat(e.target.value) || 0;
+                                        handleUpdateDiaTempo(d.id, 'manualTempoVoltaMin', Math.round(h * 60));
+                                      }}
+                                      className="h-5 w-14 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
+                                      title="Tempo de volta em horas decimais (ajustável manualmente)"
+                                    />
+                                    <span className="text-[9px] font-bold">h</span>
+                                  </div>
+                                </div>
+                              </div>
                             </TableCell>
+
+                            {/* Total Deslocamento */}
                             <TableCell className="py-1 px-2 text-right font-mono font-bold text-primary whitespace-nowrap text-[10px]">
-                              {formatHoursDecimal(d.tempoIdaMin)} + {formatHoursDecimal(d.tempoVoltaMin)} = <strong className="text-foreground">{formatHoursDecimal(d.tempoTotalDeslocamentoMin)}</strong>
+                              {formatHoursDecimal(d.tempoIdaMin)} + {formatHoursDecimal(d.tempoVoltaMin)} = <strong className="text-foreground text-xs">{formatHoursDecimal(d.tempoTotalDeslocamentoMin)}</strong>
                             </TableCell>
                           </TableRow>
                         ))}
