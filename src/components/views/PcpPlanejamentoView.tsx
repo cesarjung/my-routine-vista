@@ -134,7 +134,6 @@ interface PontosMultiSelectProps {
   pontos: string[];
   selected: string[];
   orcamentoPorPontoMap: Map<string, MaterialPontoBudget[]>;
-  pontosAlocadosEmOutrosDiasMap?: Record<string, string>;
   onToggle: (p: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
@@ -144,7 +143,6 @@ const PontosMultiSelect = ({
   pontos,
   selected,
   orcamentoPorPontoMap,
-  pontosAlocadosEmOutrosDiasMap = {},
   onToggle,
   onSelectAll,
   onDeselectAll,
@@ -152,30 +150,15 @@ const PontosMultiSelect = ({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Pontos disponíveis = livres ou já alocados neste dia ativo
-  const pontosDisponiveis = useMemo(() => {
-    return pontos.filter(p => !pontosAlocadosEmOutrosDiasMap[p.toUpperCase()] || selected.includes(p.toUpperCase()));
-  }, [pontos, pontosAlocadosEmOutrosDiasMap, selected]);
-
-  // Pontos bloqueados = alocados em outros dias
-  const pontosBloqueadosOutrosDias = useMemo(() => {
-    return pontos.filter(p => pontosAlocadosEmOutrosDiasMap[p.toUpperCase()] && !selected.includes(p.toUpperCase()));
-  }, [pontos, pontosAlocadosEmOutrosDiasMap, selected]);
-
-  const filteredDisponiveis = useMemo(() => {
-    if (!search.trim()) return pontosDisponiveis;
-    return pontosDisponiveis.filter(p => p.toLowerCase().includes(search.toLowerCase().trim()));
-  }, [pontosDisponiveis, search]);
-
-  const filteredBloqueados = useMemo(() => {
-    if (!search.trim()) return pontosBloqueadosOutrosDias;
-    return pontosBloqueadosOutrosDias.filter(p => p.toLowerCase().includes(search.toLowerCase().trim()));
-  }, [pontosBloqueadosOutrosDias, search]);
+  const filteredPontos = useMemo(() => {
+    if (!search.trim()) return pontos;
+    return pontos.filter(p => p.toLowerCase().includes(search.toLowerCase().trim()));
+  }, [pontos, search]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="h-8 text-xs font-semibold px-3 bg-background min-w-[210px] justify-between">
+        <Button variant="outline" className="h-8 text-xs font-semibold px-3 bg-background min-w-[210px] justify-between shadow-2xs">
           <span className="flex items-center gap-1.5">
             <PackageCheck className="w-3.5 h-3.5 text-primary" />
             {selected.length === 0
@@ -203,29 +186,29 @@ const PontosMultiSelect = ({
         {/* Ações rápidas */}
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-border text-[10px] bg-muted/30">
           <button onClick={onSelectAll} className="text-primary hover:underline font-semibold">
-            Selecionar todos disponíveis ({pontosDisponiveis.length})
+            Selecionar todos ({pontos.length})
           </button>
           <button onClick={onDeselectAll} className="text-muted-foreground hover:underline">
             Limpar deste dia
           </button>
         </div>
 
-        {/* Lista de pontos disponíveis com scroll */}
+        {/* Lista de pontos da obra com scroll */}
         <div className="overflow-y-auto max-h-[260px] p-1.5 space-y-1
           [&::-webkit-scrollbar]:w-1.5
           [&::-webkit-scrollbar-thumb]:bg-border
           [&::-webkit-scrollbar-thumb]:rounded-full">
           
           <div className="px-1.5 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            Pontos Disponíveis ({filteredDisponiveis.length})
+            Pontos da Obra ({filteredPontos.length})
           </div>
 
-          {filteredDisponiveis.length === 0 ? (
+          {filteredPontos.length === 0 ? (
             <p className="text-[11px] text-center text-muted-foreground py-3 italic">
-              Nenhum ponto disponível para seleção neste dia
+              Nenhum ponto encontrado
             </p>
           ) : (
-            filteredDisponiveis.map(p => {
+            filteredPontos.map(p => {
               const isChecked = selected.includes(p);
               const count = (orcamentoPorPontoMap.get(p) || []).length;
               return (
@@ -242,32 +225,6 @@ const PontosMultiSelect = ({
                 </div>
               );
             })
-          )}
-
-          {/* Seção de pontos já alocados em outros dias (Bloqueados) */}
-          {filteredBloqueados.length > 0 && (
-            <div className="pt-2 mt-2 border-t border-border/60">
-              <div className="px-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> Já Marcados em Outros Dias ({filteredBloqueados.length})
-              </div>
-              <div className="space-y-0.5 opacity-60">
-                {filteredBloqueados.map(p => {
-                  const outroDia = pontosAlocadosEmOutrosDiasMap[p.toUpperCase()];
-                  return (
-                    <div
-                      key={p}
-                      className="flex items-center justify-between px-2 py-1 rounded bg-muted/40 text-[11px] cursor-not-allowed"
-                      title={`Ponto ${p} já alocado em ${outroDia}`}
-                    >
-                      <span className="font-mono font-medium text-muted-foreground">{p}</span>
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 bg-muted text-muted-foreground font-mono">
-                        {outroDia}
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           )}
         </div>
 
@@ -446,11 +403,22 @@ export const PcpPlanejamentoView = () => {
 
   // Outros states fixos
   const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
-  const [equipe, setEquipe] = useState<string>('EH156');
+  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('pcp_shared_selected_equipes_v3', ['EH156']);
   const [tempoDeslocamento, setTempoDeslocamento] = useState<number>(30);
   const [tempoSaidaBase, setTempoSaidaBase] = useState<number>(15);
   const [tempoSeguranca, setTempoSeguranca] = useState<number>(15);
   const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
+
+  const handleToggleEquipe = (eqName: string) => {
+    setSelectedEquipes(prev => {
+      const list = Array.isArray(prev) ? prev : [];
+      if (list.includes(eqName)) {
+        return list.filter(e => e !== eqName);
+      } else {
+        return [...list, eqName];
+      }
+    });
+  };
   // Per-day Etapas & LV Filters maps: Record<dayId, string[]> and Record<dayId, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>
   const [diasEtapasMap, setDiasEtapasMap] = useSessionState<Record<string, string[]>>('pcp_shared_dias_etapas_map_v2', {});
   const [diasFiltroLvMap, setDiasFiltroLvMap] = useSessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_shared_dias_filtro_lv_map_v2', {});
@@ -831,18 +799,26 @@ export const PcpPlanejamentoView = () => {
     if (supervisoresDisponiveis.length > 0 && !supervisoresDisponiveis.includes(supervisor)) {
       setSupervisor(supervisoresDisponiveis[0]);
     }
-    if (equipesDisponiveis.length > 0 && !equipesDisponiveis.includes(equipe)) {
-      setEquipe(equipesDisponiveis[0]);
+    if (equipesDisponiveis.length > 0 && selectedEquipes.length === 0) {
+      setSelectedEquipes([equipesDisponiveis[0]]);
     }
   }, [selectedUnidadeId, supervisoresDisponiveis, equipesDisponiveis]);
 
-  // Auto-sync team goal (Meta da Equipe R$) whenever team changes
+  // Auto-sync team goal (Meta da Equipe R$) whenever selectedEquipes change
   useEffect(() => {
-    const metaVal = metasPorEquipeMap.get(equipe.toUpperCase());
-    if (metaVal && metaVal > 0) {
-      setMetaEquipeInput(metaVal);
+    if (selectedEquipes.length > 0) {
+      let totalMeta = 0;
+      selectedEquipes.forEach(eq => {
+        const metaVal = metasPorEquipeMap.get(eq.toUpperCase());
+        if (metaVal && metaVal > 0) {
+          totalMeta += metaVal;
+        }
+      });
+      if (totalMeta > 0) {
+        setMetaEquipeInput(totalMeta);
+      }
     }
-  }, [equipe, metasPorEquipeMap]);
+  }, [selectedEquipes, metasPorEquipeMap]);
 
   // Map of PcpPontoItem[] grouped by Ponto Label (e.g., 'P71' -> items[], 'P72' -> items[])
   const [pontosGroupedMap, setPontosGroupedMap] = useSessionState<Record<string, PcpPontoItem[]>>('pcp_shared_pontos_grouped_v4', {});
@@ -1032,32 +1008,14 @@ export const PcpPlanejamentoView = () => {
     });
   }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter, selectedDonoFilter, selectedSupervisorFilter]);
 
-  // Custom Ponto input map per day
-  const [customPontoInputMap, setCustomPontoInputMap] = useState<Record<string, string>>({});
-
-  // Toggle point label selection em um dia específico com bloqueio de duplicidade entre dias
-  const handleTogglePontoNoDia = (diaId: string, pLabel: string) => {
-    const upper = pLabel.toUpperCase().trim();
+  // Custom Ponto i  // Adicionar ou remover ponto em um dia específico (sem restrição entre dias)
+  const handleTogglePontoNoDia = (diaId: string, pontoLabel: string) => {
+    const upper = pontoLabel.toUpperCase().trim();
     if (!upper || !diaId) return;
-
-    let alocadoEmOutroDia = '';
-    diasProgramados.forEach(d => {
-      if (d.id !== diaId && (diasPontosMap[d.id] || []).includes(upper)) {
-        alocadoEmOutroDia = `${d.nomeDia.slice(0, 3)} (${d.dataStr})`;
-      }
-    });
-
-    const currentPoints = diasPontosMap[diaId] || [];
-    const isAlreadyInThisDay = currentPoints.includes(upper);
-
-    if (!isAlreadyInThisDay && alocadoEmOutroDia) {
-      toast.error(`O ponto ${upper} já está alocado em ${alocadoEmOutroDia}. Desmarque-o daquele dia antes de alocar aqui.`);
-      return;
-    }
 
     setDiasPontosMap(prev => {
       const cur = prev[diaId] || [];
-      const updated = isAlreadyInThisDay
+      const updated = cur.includes(upper)
         ? cur.filter(p => p !== upper)
         : [...cur, upper];
       return {
@@ -1067,23 +1025,12 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Selecionar todos os pontos disponíveis para um dia específico
+  // Selecionar todos os pontos da obra para um dia específico
   const handleSelectAllPontosNoDia = (diaId: string) => {
     if (pontosDisponiveisDoProjeto.length > 0 && diaId) {
-      const pontosEmOutrosDias = new Set<string>();
-      diasProgramados.forEach(d => {
-        if (d.id !== diaId) {
-          (diasPontosMap[d.id] || []).forEach(p => pontosEmOutrosDias.add(p.toUpperCase()));
-        }
-      });
-
-      const pontosLivres = pontosDisponiveisDoProjeto.filter(
-        p => !pontosEmOutrosDias.has(p.toUpperCase()) || (diasPontosMap[diaId] || []).includes(p.toUpperCase())
-      );
-
       setDiasPontosMap(prev => ({
         ...prev,
-        [diaId]: pontosLivres
+        [diaId]: [...pontosDisponiveisDoProjeto]
       }));
     }
   };
@@ -1372,23 +1319,28 @@ export const PcpPlanejamentoView = () => {
       ? diasEtapasMap[dia.id].join(', ')
       : Array.from(new Set(itensSelecionados.map(i => i.etapaPrevista).filter(Boolean))).join(', ');
 
-    await salvarProgramacao.mutateAsync({
-      unidadeId: selectedUnidadeId,
-      dataProgramacao: dia.dataCompleta,
-      dateObj: dia.dayDate,
-      supervisor,
-      equipe,
-      etapa: etapasDoDia,
-      obra: selectedObra,
-      pontos: itensDoDia,
-      tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
-      tempoSaidaBaseMinutos: tempoSaidaBase,
-      tempoSegurancaMinutos: tempoSeguranca,
-      metaEquipeValor: metaEquipeInput,
-    });
+    const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
+
+    for (const eq of equipesToSend) {
+      await salvarProgramacao.mutateAsync({
+        unidadeId: selectedUnidadeId,
+        dataProgramacao: dia.dataCompleta,
+        dateObj: dia.dayDate,
+        supervisor,
+        equipe: eq,
+        etapa: etapasDoDia,
+        obra: selectedObra,
+        pontos: itensDoDia,
+        tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
+        tempoSaidaBaseMinutos: tempoSaidaBase,
+        tempoSegurancaMinutos: tempoSeguranca,
+        metaEquipeValor: metaEquipeInput,
+      });
+    }
+    toast.success(`Programação de ${dia.nomeDia} enviada para ${equipesToSend.length} equipe(s)!`);
   };
 
-  // Handle submit ALL programmed days to Plan_Principal
+  // Handle submit ALL programmed days to Plan_Principal (gera uma linha por equipe por dia)
   const [isSavingAll, setIsSavingAll] = useState(false);
   const handleEnviarTodosOsDias = async () => {
     if (!selectedObra) {
@@ -1401,6 +1353,8 @@ export const PcpPlanejamentoView = () => {
       alert('Nenhum ponto alocado nos dias programados.');
       return;
     }
+
+    const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
 
     try {
       setIsSavingAll(true);
@@ -1418,22 +1372,24 @@ export const PcpPlanejamentoView = () => {
           ? diasEtapasMap[d.id].join(', ')
           : Array.from(new Set(itensDoDia.filter(i => i.selected).map(i => i.etapaPrevista).filter(Boolean))).join(', ');
 
-        await salvarProgramacao.mutateAsync({
-          unidadeId: selectedUnidadeId,
-          dataProgramacao: d.dataCompleta,
-          dateObj: d.dayDate,
-          supervisor,
-          equipe,
-          etapa: etapasDoDia,
-          obra: selectedObra,
-          pontos: itensDoDia,
-          tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
-          tempoSaidaBaseMinutos: tempoSaidaBase,
-          tempoSegurancaMinutos: tempoSeguranca,
-          metaEquipeValor: metaEquipeInput,
-        });
+        for (const eq of equipesToSend) {
+          await salvarProgramacao.mutateAsync({
+            unidadeId: selectedUnidadeId,
+            dataProgramacao: d.dataCompleta,
+            dateObj: d.dayDate,
+            supervisor,
+            equipe: eq,
+            etapa: etapasDoDia,
+            obra: selectedObra,
+            pontos: itensDoDia,
+            tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
+            tempoSaidaBaseMinutos: tempoSaidaBase,
+            tempoSegurancaMinutos: tempoSeguranca,
+            metaEquipeValor: metaEquipeInput,
+          });
+        }
       }
-      alert(`Programação de todos os ${diasComPontos.length} dias enviada com sucesso para a Plan_Principal!`);
+      alert(`Programação de todos os ${diasComPontos.length} dias enviada com sucesso para ${equipesToSend.length} equipe(s) na Plan_Principal!`);
     } catch (e) {
       console.error(e);
       alert('Ocorreu um erro ao salvar todos os dias.');
@@ -2133,21 +2089,63 @@ export const PcpPlanejamentoView = () => {
 
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs flex items-center justify-between">
-                    <span>Equipe</span>
-                    <span className="text-[10px] text-muted-foreground">({equipesDisponiveis.length})</span>
+                    <span>Equipes</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {selectedEquipes.length > 0 ? `${selectedEquipes.length} sel.` : `(${equipesDisponiveis.length})`}
+                    </span>
                   </Label>
-                  <Select value={equipe} onValueChange={setEquipe}>
-                    <SelectTrigger className="h-8 text-xs font-mono font-semibold">
-                      <SelectValue placeholder="Selecione a equipe" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {equipesDisponiveis.map(eq => (
-                        <SelectItem key={eq} value={eq} className="text-xs font-mono">
-                          {eq}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="h-8 text-xs font-mono font-semibold justify-between px-2.5 bg-background truncate shadow-2xs"
+                        title={selectedEquipes.join(', ')}
+                      >
+                        <span className="truncate">
+                          {selectedEquipes.length === 0
+                            ? 'Selecione a(s) equipe(s)...'
+                            : selectedEquipes.length === 1
+                            ? selectedEquipes[0]
+                            : `${selectedEquipes[0]} +${selectedEquipes.length - 1} (${selectedEquipes.length})`}
+                        </span>
+                        <ChevronDown className="w-3 h-3 opacity-50 ml-1 shrink-0" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[220px] p-2" align="start">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-border mb-1.5 text-xs font-bold">
+                        <span>Equipes</span>
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <button
+                            onClick={() => setSelectedEquipes([])}
+                            className="text-muted-foreground hover:underline"
+                          >
+                            Limpar
+                          </button>
+                          <button
+                            onClick={() => setSelectedEquipes([...equipesDisponiveis])}
+                            className="text-primary hover:underline font-bold"
+                          >
+                            Todas
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
+                        {equipesDisponiveis.map(eq => {
+                          const isChecked = selectedEquipes.includes(eq);
+                          return (
+                            <div
+                              key={eq}
+                              onClick={() => handleToggleEquipe(eq)}
+                              className="flex items-center gap-2 cursor-pointer hover:bg-accent/40 p-1.5 rounded text-xs"
+                            >
+                              <Checkbox checked={isChecked} onCheckedChange={() => handleToggleEquipe(eq)} />
+                              <span className="font-mono font-medium">{eq}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             </CardContent>
@@ -2162,7 +2160,7 @@ export const PcpPlanejamentoView = () => {
                   Tempos Complementares & Meta da Equipe
                 </span>
                 <Badge variant="secondary" className="font-mono text-[11px] bg-primary/10 text-primary">
-                  {equipe}
+                  {selectedEquipes.length > 0 ? selectedEquipes.join(', ') : 'EH156'}
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -2930,7 +2928,6 @@ export const PcpPlanejamentoView = () => {
                             pontos={pontosDisponiveisDoProjeto}
                             selected={pontosDoDia}
                             orcamentoPorPontoMap={orcamentoPorPontoMap}
-                            pontosAlocadosEmOutrosDiasMap={outrosDiasMap}
                             onToggle={p => handleTogglePontoNoDia(dia.id, p)}
                             onSelectAll={() => handleSelectAllPontosNoDia(dia.id)}
                             onDeselectAll={() => handleDeselectAllPontosNoDia(dia.id)}
