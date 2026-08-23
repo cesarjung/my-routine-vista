@@ -2482,7 +2482,7 @@ export const PcpPlanejamentoView = () => {
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <Target className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    Valor da Meta da Equipe {equipe} (R$):
+                    Valor da Meta da(s) Equipe(s) {selectedEquipes.length > 0 ? selectedEquipes.join(', ') : 'EH156'} (R$):
                   </Label>
 
                   {/* Input de Valor da Meta */}
@@ -2550,7 +2550,7 @@ export const PcpPlanejamentoView = () => {
             <CardHeader className="py-2 px-3">
               <CardTitle className="text-xs font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <CalendarIcon className="w-3.5 h-3.5 text-primary" /> Resumo do Período ({diasProgramados.length} dias — {equipe})
+                  <CalendarIcon className="w-3.5 h-3.5 text-primary" /> Resumo do Período ({diasProgramados.length} dias — {selectedEquipes.length > 0 ? selectedEquipes.join(', ') : 'EH156'})
                 </span>
                 {tempoTotalGeralMinutos > 540 && (
                   <Badge variant="destructive" className="text-[9px] px-1.5 py-0 font-bold">
@@ -3222,7 +3222,7 @@ export const PcpPlanejamentoView = () => {
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                 <div className="text-xs text-muted-foreground">
-                  Obra: <strong className="text-foreground">{selectedObra?.projeto || 'Nenhuma'}</strong> | Equipe: <strong className="text-foreground">{equipe}</strong> | Meta Diária: <strong className="text-foreground">R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
+                  Obra: <strong className="text-foreground">{selectedObra?.projeto || 'Nenhuma'}</strong> | Equipe(s): <strong className="text-foreground">{selectedEquipes.length > 0 ? selectedEquipes.join(', ') : 'Nenhuma'}</strong> | Meta Diária: <strong className="text-foreground">R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
                 </div>
 
                 <Button
