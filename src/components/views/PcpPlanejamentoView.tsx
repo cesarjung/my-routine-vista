@@ -38,7 +38,8 @@ import {
   ZoomIn,
   ZoomOut,
   ChevronsUpDown,
-  Home
+  Home,
+  SlidersHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
@@ -420,8 +421,19 @@ export const PcpPlanejamentoView = () => {
     });
   };
   // Per-day Etapas & LV Filters maps: Record<dayId, string[]> and Record<dayId, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>
+  const [filtroLvPadraoGlobal, setFiltroLvPadraoGlobal] = useSessionState<'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>('pcp_shared_filtro_lv_padrao_global_v1', 'COMPLETO');
   const [diasEtapasMap, setDiasEtapasMap] = useSessionState<Record<string, string[]>>('pcp_shared_dias_etapas_map_v2', {});
   const [diasFiltroLvMap, setDiasFiltroLvMap] = useSessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_shared_dias_filtro_lv_map_v2', {});
+
+  const handleSetGlobalFiltroLv = (filtro: 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV') => {
+    setFiltroLvPadraoGlobal(filtro);
+    const newMap: Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'> = {};
+    diasProgramados.forEach(d => {
+      newMap[d.id] = filtro;
+    });
+    setDiasFiltroLvMap(newMap);
+    toast.success(`Filtro pré-definido "${filtro === 'SOMENTE_LV' ? 'Somente LV' : filtro === 'SEM_LV' ? 'Sem LV' : 'Completo'}" aplicado a todos os dias!`);
+  };
 
   const handleToggleEtapaNoDia = (diaId: string, etapa: string) => {
     setDiasEtapasMap(prev => {
@@ -596,6 +608,7 @@ export const PcpPlanejamentoView = () => {
       const lastDateStr = prev[prev.length - 1] || dataFim || format(new Date(), 'yyyy-MM-dd');
       const nextDate = addDays(safeParseDate(lastDateStr), 1);
       const nextDateStr = safeFormatDate(nextDate, 'yyyy-MM-dd');
+      setDiasFiltroLvMap(m => ({ ...m, [nextDateStr]: filtroLvPadraoGlobal }));
       return [...prev, nextDateStr];
     });
   };
@@ -2713,8 +2726,48 @@ export const PcpPlanejamentoView = () => {
                 </div>
               </div>
 
-              {/* Botão de Distribuição Automática Global */}
-              <div className="flex items-center justify-end pt-2 border-t border-primary/20">
+              {/* Barra de Ferramentas do Topo: Pré-definição de Filtros & Distribuição Automática */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-primary/20 bg-muted/10 p-2.5 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-primary" />
+                    Filtro Pré-definido dos Dias:
+                  </span>
+                  <div className="inline-flex rounded-lg border border-border bg-background p-0.5 text-xs shadow-2xs">
+                    <button
+                      onClick={() => handleSetGlobalFiltroLv('COMPLETO')}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                        filtroLvPadraoGlobal === 'COMPLETO'
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      COMPLETO
+                    </button>
+                    <button
+                      onClick={() => handleSetGlobalFiltroLv('SOMENTE_LV')}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                        filtroLvPadraoGlobal === 'SOMENTE_LV'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      SOMENTE LV
+                    </button>
+                    <button
+                      onClick={() => handleSetGlobalFiltroLv('SEM_LV')}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                        filtroLvPadraoGlobal === 'SEM_LV'
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      SEM LV
+                    </button>
+                  </div>
+                </div>
+
+                {/* Botão de Distribuição Automática Global */}
                 <Button
                   size="sm"
                   variant="outline"
@@ -2738,7 +2791,7 @@ export const PcpPlanejamentoView = () => {
             const pontosDoDia = dia.pontos || [];
             const outrosDiasMap = getPontosAlocadosEmOutrosDias(dia.id);
             const etapasDoDia = diasEtapasMap[dia.id] || [];
-            const filtroLvDoDia = diasFiltroLvMap[dia.id] || 'COMPLETO';
+            const filtroLvDoDia = diasFiltroLvMap[dia.id] || filtroLvPadraoGlobal || 'COMPLETO';
 
             const itensDoDiaFlat = pontosDoDia.flatMap(p => pontosGroupedMap[p] || []);
             const itensDoDiaSelecionados = itensDoDiaFlat.filter(item => item.selected);
