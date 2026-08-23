@@ -70,7 +70,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, startOfWeek, addDays, isSameDay, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MaterialPontoBudget } from '@/hooks/usePcpPlanejamentoData';
 import { useAlojamentos } from '@/hooks/useAlojamentos';
@@ -92,6 +92,7 @@ interface PontosMultiSelectProps {
   pontos: string[];
   selected: string[];
   orcamentoPorPontoMap: Map<string, MaterialPontoBudget[]>;
+  pontosAlocadosEmOutrosDiasMap?: Record<string, string>;
   onToggle: (p: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
@@ -101,6 +102,7 @@ const PontosMultiSelect = ({
   pontos,
   selected,
   orcamentoPorPontoMap,
+  pontosAlocadosEmOutrosDiasMap = {},
   onToggle,
   onSelectAll,
   onDeselectAll,
@@ -117,8 +119,8 @@ const PontosMultiSelect = ({
           <span className="flex items-center gap-1.5">
             <PackageCheck className="w-3.5 h-3.5 text-primary" />
             {selected.length === 0
-              ? 'Selecionar Pontos...'
-              : `${selected.length} de ${pontos.length} pontos`}
+              ? 'Selecionar Pontos do Dia...'
+              : `${selected.length} ponto(s) neste dia`}
           </span>
           <ChevronDown className="w-3 h-3 opacity-50 ml-2 shrink-0" />
         </Button>
@@ -159,6 +161,7 @@ const PontosMultiSelect = ({
             filtered.map(p => {
               const isChecked = selected.includes(p);
               const count = (orcamentoPorPontoMap.get(p) || []).length;
+              const outroDia = pontosAlocadosEmOutrosDiasMap[p];
               return (
                 <div
                   key={p}
@@ -169,6 +172,11 @@ const PontosMultiSelect = ({
                 >
                   <Checkbox checked={isChecked} onCheckedChange={() => onToggle(p)} className="h-3.5 w-3.5 shrink-0" />
                   <span className="font-mono font-bold">{p}</span>
+                  {outroDia && !isChecked && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 bg-muted text-muted-foreground font-mono">
+                      {outroDia}
+                    </Badge>
+                  )}
                   <span className="text-[10px] text-muted-foreground ml-auto">{count} ativ.</span>
                 </div>
               );
@@ -342,9 +350,17 @@ export const PcpPlanejamentoView = () => {
 
   const selectedObra = useMemo(() => obras.find(o => o.projeto === selectedObraId) || null, [obras, selectedObraId]);
 
+  // Date Range state: Data Início e Data Fim da Programação
+  const [dataInicio, setDataInicio] = useSessionState<string>('pcp_shared_data_inicio', format(new Date(), 'yyyy-MM-dd'));
+  const [dataFim, setDataFim] = useSessionState<string>('pcp_shared_data_fim', format(addDays(new Date(), 2), 'yyyy-MM-dd'));
+  const [isDataInicioOpen, setIsDataInicioOpen] = useState<boolean>(false);
+  const [isDataFimOpen, setIsDataFimOpen] = useState<boolean>(false);
+
+  // Map of points allocated by day: Record<dayId, string[]>
+  const [diasPontosMap, setDiasPontosMap] = useSessionState<Record<string, string[]>>('pcp_shared_dias_pontos_map', {});
+  const [activeDayId, setActiveDayId] = useSessionState<string>('pcp_shared_active_day_id', '');
+
   // Outros states fixos
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
   const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
   const [equipe, setEquipe] = useState<string>('EH156');
   const [tempoDeslocamento, setTempoDeslocamento] = useState<number>(30);
@@ -461,25 +477,45 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Cálculo Semanal de Deslocamentos (Segunda a Sábado) com Ida e Volta
-  const diasDaSemana = useMemo(() => {
-    const monday = startOfWeek(selectedDate, { weekStartsOn: 1 });
-    const nomesDias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  // Cálculo dos Dias Programados no Período (Data Início até Data Fim)
+  const diasProgramados = useMemo(() => {
+    let dStart = new Date();
+    try {
+      const parts = dataInicio.split('-');
+      if (parts.length === 3) dStart = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    } catch {}
 
-    return nomesDias.map((nomeDia, idx) => {
-      const dayDate = addDays(monday, idx);
-      const custom = diasSemanaCustom[idx] || {
+    let dEnd = new Date();
+    try {
+      const parts = dataFim.split('-');
+      if (parts.length === 3) dEnd = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    } catch {}
+
+    if (dEnd < dStart) dEnd = dStart;
+
+    const days = eachDayOfInterval({ start: dStart, end: dEnd });
+    const totalDias = days.length;
+    const nomesSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+    return days.map((dayDate, idx) => {
+      const id = format(dayDate, 'yyyy-MM-dd');
+      const diaSemanaIndex = dayDate.getDay();
+      const nomeDia = nomesSemana[diaSemanaIndex];
+      const dataStr = format(dayDate, 'dd/MM');
+      const dataCompleta = format(dayDate, 'dd/MM/yyyy');
+
+      const customAloj = diasSemanaCustom[idx] || {
         origemId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === 0 ? 'BASE' : selectedAlojamentoPadraoId),
-        destinoId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === 5 ? 'BASE' : selectedAlojamentoPadraoId)
+        destinoId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === totalDias - 1 ? 'BASE' : selectedAlojamentoPadraoId)
       };
 
-      const origemObj = custom.origemId === 'BASE'
-        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude, isBase: true }
-        : (alojamentosDaUnidade.find(a => a.id === custom.origemId) || { id: custom.origemId, nome: 'Alojamento', latitude: null, longitude: null, isBase: false });
+      const origemObj = customAloj.origemId === 'BASE'
+        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude }
+        : (alojamentosDaUnidade.find(a => a.id === customAloj.origemId) || { id: customAloj.origemId, nome: 'Alojamento', latitude: null, longitude: null });
 
-      const destinoObj = custom.destinoId === 'BASE'
-        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude, isBase: true }
-        : (alojamentosDaUnidade.find(a => a.id === custom.destinoId) || { id: custom.destinoId, nome: 'Alojamento', latitude: null, longitude: null, isBase: false });
+      const destinoObj = customAloj.destinoId === 'BASE'
+        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude }
+        : (alojamentosDaUnidade.find(a => a.id === customAloj.destinoId) || { id: customAloj.destinoId, nome: 'Alojamento', latitude: null, longitude: null });
 
       let distIdaKm = 0;
       let tempoIdaMin = 15;
@@ -496,18 +532,19 @@ export const PcpPlanejamentoView = () => {
       }
 
       const tempoTotalDeslocamentoMin = tempoIdaMin + tempoVoltaMin;
-      const isCurrentSelectedDate = isSameDay(dayDate, selectedDate);
+      const pontosDoDia = diasPontosMap[id] || [];
 
       return {
         idx,
-        nomeDia,
-        dataStr: format(dayDate, 'dd/MM'),
-        dataCompleta: format(dayDate, 'dd/MM/yyyy'),
+        id,
         dayDate,
-        isCurrentSelectedDate,
-        origemId: custom.origemId,
+        dataStr,
+        dataCompleta,
+        nomeDia,
+        pontos: pontosDoDia,
+        origemId: customAloj.origemId,
         origemNome: origemObj.nome,
-        destinoId: custom.destinoId,
+        destinoId: customAloj.destinoId,
         destinoNome: destinoObj.nome,
         distIdaKm,
         tempoIdaMin,
@@ -516,23 +553,39 @@ export const PcpPlanejamentoView = () => {
         tempoTotalDeslocamentoMin
       };
     });
-  }, [selectedDate, diasSemanaCustom, selectedAlojamentoPadraoId, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra]);
+  }, [dataInicio, dataFim, diasSemanaCustom, selectedAlojamentoPadraoId, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra, diasPontosMap]);
 
-  const diaSelecionadoInfo = useMemo(() => {
-    return diasDaSemana.find(d => d.isCurrentSelectedDate) || diasDaSemana[0];
-  }, [diasDaSemana]);
+  // Dia ativo selecionado para visualização/edição
+  const activeDia = useMemo(() => {
+    return diasProgramados.find(d => d.id === activeDayId) || diasProgramados[0];
+  }, [diasProgramados, activeDayId]);
+
+  // Garantir que activeDayId aponta para um dia existente
+  useEffect(() => {
+    if (diasProgramados.length > 0 && (!activeDayId || !diasProgramados.some(d => d.id === activeDayId))) {
+      setActiveDayId(diasProgramados[0].id);
+    }
+  }, [diasProgramados, activeDayId, setActiveDayId]);
 
   // Sincroniza o tempo total de deslocamento do dia selecionado
   useEffect(() => {
-    if (diaSelecionadoInfo) {
-      setTempoDeslocamento(diaSelecionadoInfo.tempoTotalDeslocamentoMin);
+    if (activeDia) {
+      setTempoDeslocamento(activeDia.tempoTotalDeslocamentoMin);
     }
-  }, [diaSelecionadoInfo?.tempoTotalDeslocamentoMin]);
+  }, [activeDia?.tempoTotalDeslocamentoMin]);
 
-  // Formatted date string for submission & display
-  const dataProgramacaoFormatada = useMemo(() => {
-    return format(selectedDate, 'dd/MM/yyyy');
-  }, [selectedDate]);
+  // Pontos alocados em outros dias (para badges no dropdown)
+  const pontosAlocadosEmOutrosDiasMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    diasProgramados.forEach(d => {
+      if (d.id !== activeDia?.id) {
+        d.pontos.forEach(p => {
+          map[p] = `${d.nomeDia.slice(0, 3)} (${d.dataStr})`;
+        });
+      }
+    });
+    return map;
+  }, [diasProgramados, activeDia?.id]);
 
   // ── Auto-selecionar status dinâmicos (menos os concluídos) ────────────────
   useEffect(() => {
@@ -763,38 +816,74 @@ export const PcpPlanejamentoView = () => {
     });
   }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter, selectedDonoFilter, selectedSupervisorFilter]);
 
-  // Toggle point label selection in C6 (multi-select points)
+  // Toggle point label selection no dia ativo
   const handleTogglePontoLabel = (pLabel: string) => {
     const upper = pLabel.toUpperCase().trim();
-    if (!upper) return;
-    setSelectedPontosLabels(prev => {
-      if (prev.includes(upper)) {
-        return prev.filter(p => p !== upper);
-      } else {
-        return [...prev, upper];
-      }
+    if (!upper || !activeDia) return;
+    setDiasPontosMap(prev => {
+      const current = prev[activeDia.id] || [];
+      const updated = current.includes(upper)
+        ? current.filter(p => p !== upper)
+        : [...current, upper];
+      return {
+        ...prev,
+        [activeDia.id]: updated
+      };
     });
   };
 
-  // Select all points of the current Obra
+  // Selecionar todos os pontos disponíveis da obra para o dia ativo
   const handleSelectAllPontosDaObra = () => {
-    if (pontosDisponiveisDoProjeto.length > 0) {
-      setSelectedPontosLabels([...pontosDisponiveisDoProjeto]);
+    if (pontosDisponiveisDoProjeto.length > 0 && activeDia) {
+      setDiasPontosMap(prev => ({
+        ...prev,
+        [activeDia.id]: [...pontosDisponiveisDoProjeto]
+      }));
     }
   };
 
-  // Deselect all points
+  // Limpar pontos do dia ativo
   const handleDeselectAllPontos = () => {
-    setSelectedPontosLabels([]);
+    if (activeDia) {
+      setDiasPontosMap(prev => ({
+        ...prev,
+        [activeDia.id]: []
+      }));
+    }
   };
 
-  // Add custom point to active points
+  // Distribuir pontos da obra automaticamente entre os dias programados
+  const handleDistribuirPontosAuto = () => {
+    if (diasProgramados.length === 0 || pontosDisponiveisDoProjeto.length === 0) return;
+    const newMap: Record<string, string[]> = {};
+    diasProgramados.forEach(d => {
+      newMap[d.id] = [];
+    });
+
+    pontosDisponiveisDoProjeto.forEach((p, idx) => {
+      const dayTarget = diasProgramados[idx % diasProgramados.length];
+      if (dayTarget) {
+        newMap[dayTarget.id].push(p);
+      }
+    });
+
+    setDiasPontosMap(newMap);
+  };
+
+  // Adicionar ponto customizado no dia ativo
   const handleAddCustomPontoLabel = () => {
-    if (!newCustomPontoInput.trim()) return;
+    if (!newCustomPontoInput.trim() || !activeDia) return;
     const clean = newCustomPontoInput.toUpperCase().trim();
-    if (!selectedPontosLabels.includes(clean)) {
-      setSelectedPontosLabels(prev => [...prev, clean]);
-    }
+    setDiasPontosMap(prev => {
+      const current = prev[activeDia.id] || [];
+      if (!current.includes(clean)) {
+        return {
+          ...prev,
+          [activeDia.id]: [...current, clean]
+        };
+      }
+      return prev;
+    });
     setNewCustomPontoInput('');
   };
 
@@ -903,7 +992,12 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Flattened list of ALL items across all selected point cards
+  // Pontos selecionados no dia ativo
+  const selectedPontosLabels = useMemo(() => {
+    return activeDia?.pontos || [];
+  }, [activeDia?.pontos]);
+
+  // Flattened list of ALL items across all selected point cards in the ACTIVE DAY
   const allPontosListFlat = useMemo(() => {
     const list: PcpPontoItem[] = [];
     const labels = Array.isArray(selectedPontosLabels) ? selectedPontosLabels : [];
@@ -989,32 +1083,82 @@ export const PcpPlanejamentoView = () => {
     }).join(' | ');
   }, [selectedItemsFlat]);
 
-  // Handle submit to Plan_Principal
-  const handleEnviarPlanPrincipal = () => {
+  // Handle submit single active day to Plan_Principal
+  const handleEnviarPlanPrincipalDiaAtivo = async () => {
     if (!selectedObra) {
       alert('Por favor, selecione uma Obra da carteira antes de enviar.');
       return;
     }
 
-    if (selectedItemsFlat.length === 0) {
-      alert('Selecione pelo menos uma atividade marcada na tabela para enviar.');
+    if (!activeDia || selectedItemsFlat.length === 0) {
+      alert('Selecione pelo menos uma atividade marcada no dia ativo para enviar.');
       return;
     }
 
-    salvarProgramacao.mutate({
+    await salvarProgramacao.mutateAsync({
       unidadeId: selectedUnidadeId,
-      dataProgramacao: dataProgramacaoFormatada,
-      dateObj: selectedDate,
+      dataProgramacao: activeDia.dataCompleta,
+      dateObj: activeDia.dayDate,
       supervisor,
       equipe,
       etapa: selectedEtapas.join(', '),
       obra: selectedObra,
       pontos: allPontosListFlat,
-      tempoDeslocamentoMinutos: tempoDeslocamento,
+      tempoDeslocamentoMinutos: activeDia.tempoTotalDeslocamentoMin,
       tempoSaidaBaseMinutos: tempoSaidaBase,
       tempoSegurancaMinutos: tempoSeguranca,
       metaEquipeValor: metaEquipeInput,
     });
+  };
+
+  // Handle submit ALL programmed days to Plan_Principal
+  const [isSavingAll, setIsSavingAll] = useState(false);
+  const handleEnviarTodosOsDias = async () => {
+    if (!selectedObra) {
+      alert('Por favor, selecione uma Obra da carteira antes de enviar.');
+      return;
+    }
+
+    const diasComPontos = diasProgramados.filter(d => d.pontos.length > 0);
+    if (diasComPontos.length === 0) {
+      alert('Nenhum ponto alocado nos dias programados.');
+      return;
+    }
+
+    try {
+      setIsSavingAll(true);
+      for (const d of diasComPontos) {
+        const itensDoDia: PcpPontoItem[] = [];
+        d.pontos.forEach(p => {
+          if (pontosGroupedMap[p]) {
+            itensDoDia.push(...pontosGroupedMap[p]);
+          }
+        });
+
+        if (itensDoDia.length === 0) continue;
+
+        await salvarProgramacao.mutateAsync({
+          unidadeId: selectedUnidadeId,
+          dataProgramacao: d.dataCompleta,
+          dateObj: d.dayDate,
+          supervisor,
+          equipe,
+          etapa: selectedEtapas.join(', '),
+          obra: selectedObra,
+          pontos: itensDoDia,
+          tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
+          tempoSaidaBaseMinutos: tempoSaidaBase,
+          tempoSegurancaMinutos: tempoSeguranca,
+          metaEquipeValor: metaEquipeInput,
+        });
+      }
+      alert(`Programação de todos os ${diasComPontos.length} dias enviada com sucesso para a Plan_Principal!`);
+    } catch (e) {
+      console.error(e);
+      alert('Ocorreu um erro ao salvar todos os dias.');
+    } finally {
+      setIsSavingAll(false);
+    }
   };
 
   return (
@@ -1587,57 +1731,122 @@ export const PcpPlanejamentoView = () => {
             </Card>
           )}
 
-          {/* 3. Card Parâmetros Principais */}
+          {/* 3. Card Parâmetros Principais & Período de Programação */}
           <Card className="border border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <CalendarIcon className="w-4 h-4 text-primary" />
-                Parâmetros da Programação
+                Período da Programação da Obra
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4 text-xs">
-              {/* Calendário Date Picker */}
+            <CardContent className="space-y-4 text-xs">
+              {/* Calendários Date Range: Data Início e Data Fim */}
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs">Data da Programação</Label>
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full h-9 text-xs justify-start font-mono text-left font-semibold"
-                    >
-                      <CalendarIcon className="mr-2 h-3.5 w-3.5 text-primary" />
-                      {dataProgramacaoFormatada}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={d => {
-                        if (d) {
-                          setSelectedDate(d);
-                          setIsCalendarOpen(false);
-                        }
-                      }}
-                      locale={ptBR}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground">Intervalo de Datas Previsto</Label>
+                  <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/30">
+                    {diasProgramados.length} dia(s) programado(s)
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Data Início */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-muted-foreground font-semibold">Data Início:</span>
+                    <Popover open={isDataInicioOpen} onOpenChange={setIsDataInicioOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="h-8 text-xs font-mono font-semibold justify-start">
+                          <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                          {format(new Date(dataInicio + 'T12:00:00'), 'dd/MM/yyyy')}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={new Date(dataInicio + 'T12:00:00')}
+                          onSelect={d => {
+                            if (d) {
+                              const s = format(d, 'yyyy-MM-dd');
+                              setDataInicio(s);
+                              if (s > dataFim) setDataFim(s);
+                              setIsDataInicioOpen(false);
+                            }
+                          }}
+                          locale={ptBR}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Data Fim */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-muted-foreground font-semibold">Data Fim:</span>
+                    <Popover open={isDataFimOpen} onOpenChange={setIsDataFimOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="h-8 text-xs font-mono font-semibold justify-start">
+                          <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                          {format(new Date(dataFim + 'T12:00:00'), 'dd/MM/yyyy')}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={new Date(dataFim + 'T12:00:00')}
+                          onSelect={d => {
+                            if (d) {
+                              const s = format(d, 'yyyy-MM-dd');
+                              setDataFim(s);
+                              if (s < dataInicio) setDataInicio(s);
+                              setIsDataFimOpen(false);
+                            }
+                          }}
+                          locale={ptBR}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
               </div>
 
-              {/* Dropdown de Equipes */}
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs flex items-center justify-between">
-                  <span>Equipe</span>
-                  <span className="text-[10px] text-muted-foreground">({equipesDisponiveis.length})</span>
-                </Label>
-                <Select value={equipe} onValueChange={setEquipe}>
-                  <SelectTrigger className="h-9 text-xs font-mono font-semibold">
-                    <SelectValue placeholder="Selecione a equipe" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {equipesDisponiveis.map(eq => (
+              {/* Dropdown de Supervisor e Equipes */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">Supervisor</Label>
+                  <Select value={supervisor} onValueChange={setSupervisor}>
+                    <SelectTrigger className="h-8 text-xs font-mono font-semibold">
+                      <SelectValue placeholder="Supervisor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {supervisoresDisponiveis.map(sup => (
+                        <SelectItem key={sup} value={sup} className="text-xs font-mono">
+                          {sup}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs flex items-center justify-between">
+                    <span>Equipe</span>
+                    <span className="text-[10px] text-muted-foreground">({equipesDisponiveis.length})</span>
+                  </Label>
+                  <Select value={equipe} onValueChange={setEquipe}>
+                    <SelectTrigger className="h-8 text-xs font-mono font-semibold">
+                      <SelectValue placeholder="Selecione a equipe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {equipesDisponiveis.map(eq => (
+                        <SelectItem key={eq} value={eq} className="text-xs font-mono">
+                          {eq}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
                       <SelectItem key={eq} value={eq} className="text-xs font-mono">
                         {eq}
                       </SelectItem>
@@ -1769,14 +1978,14 @@ export const PcpPlanejamentoView = () => {
                   </Select>
                 </div>
 
-                {/* Banner de Tempos do Dia Selecionado da Programação (Ida + Volta) */}
+                {/* Banner de Tempos do Dia Ativo da Programação (Ida + Volta) */}
                 <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-primary flex items-center gap-1.5">
-                      <Navigation className="w-3.5 h-3.5" /> Deslocamento Previsto ({diaSelecionadoInfo.nomeDia} - {diaSelecionadoInfo.dataStr}):
+                      <Navigation className="w-3.5 h-3.5" /> Deslocamento Previsto no Dia Ativo ({activeDia?.nomeDia} - {activeDia?.dataStr}):
                     </span>
                     <Badge variant="outline" className="text-xs font-mono font-bold bg-background text-primary border-primary/30">
-                      Total: {diaSelecionadoInfo.tempoTotalDeslocamentoMin} min
+                      Total: {activeDia?.tempoTotalDeslocamentoMin || 30} min
                     </Badge>
                   </div>
 
@@ -1785,11 +1994,11 @@ export const PcpPlanejamentoView = () => {
                       <span className="text-muted-foreground text-[10px] uppercase font-bold">
                         🛫 Tempo de Ida (Partida ➔ Obra)
                       </span>
-                      <span className="font-bold text-foreground mt-0.5 truncate" title={diaSelecionadoInfo.origemNome}>
-                        {diaSelecionadoInfo.origemNome}
+                      <span className="font-bold text-foreground mt-0.5 truncate" title={activeDia?.origemNome}>
+                        {activeDia?.origemNome}
                       </span>
                       <span className="font-mono text-primary font-semibold text-[11px] mt-0.5">
-                        {diaSelecionadoInfo.tempoIdaMin} min {diaSelecionadoInfo.distIdaKm > 0 ? `(${diaSelecionadoInfo.distIdaKm} km)` : ''}
+                        {activeDia?.tempoIdaMin} min {activeDia && activeDia.distIdaKm > 0 ? `(${activeDia.distIdaKm} km)` : ''}
                       </span>
                     </div>
 
@@ -1797,21 +2006,21 @@ export const PcpPlanejamentoView = () => {
                       <span className="text-muted-foreground text-[10px] uppercase font-bold">
                         🛬 Tempo de Volta (Obra ➔ Retorno)
                       </span>
-                      <span className="font-bold text-foreground mt-0.5 truncate" title={diaSelecionadoInfo.destinoNome}>
-                        {diaSelecionadoInfo.destinoNome}
+                      <span className="font-bold text-foreground mt-0.5 truncate" title={activeDia?.destinoNome}>
+                        {activeDia?.destinoNome}
                       </span>
                       <span className="font-mono text-primary font-semibold text-[11px] mt-0.5">
-                        {diaSelecionadoInfo.tempoVoltaMin} min {diaSelecionadoInfo.distVoltaKm > 0 ? `(${diaSelecionadoInfo.distVoltaKm} km)` : ''}
+                        {activeDia?.tempoVoltaMin} min {activeDia && activeDia.distVoltaKm > 0 ? `(${activeDia.distVoltaKm} km)` : ''}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Grade Semanal de Alojamento e Deslocamento (Segunda a Sábado) */}
+                {/* Grade dos Dias Programados de Alojamento e Deslocamento */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      Cronograma Semanal de Alojamentos & Deslocamento
+                      Cronograma dos Dias Programados ({diasProgramados.length} dias)
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       *1º dia sai da Base, último dia retorna à Base
@@ -1829,13 +2038,13 @@ export const PcpPlanejamentoView = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {diasDaSemana.map(d => (
+                        {diasProgramados.map(d => (
                           <TableRow
-                            key={d.idx}
-                            onClick={() => setSelectedDate(d.dayDate)}
+                            key={d.id}
+                            onClick={() => setActiveDayId(d.id)}
                             className={cn(
                               "text-[11px] cursor-pointer transition-colors",
-                              d.isCurrentSelectedDate 
+                              d.id === activeDia?.id
                                 ? "bg-primary/10 font-semibold border-l-2 border-l-primary" 
                                 : "hover:bg-accent/40"
                             )}
@@ -1843,7 +2052,7 @@ export const PcpPlanejamentoView = () => {
                             <TableCell className="py-1 px-2 font-mono">
                               <div className="flex items-center gap-1">
                                 <span>{d.nomeDia.slice(0, 3)} ({d.dataStr})</span>
-                                {d.isCurrentSelectedDate && (
+                                {d.id === activeDia?.id && (
                                   <Badge className="text-[8px] px-1 py-0 h-3.5 bg-primary text-primary-foreground font-bold">
                                     Ativo
                                   </Badge>
@@ -2019,16 +2228,16 @@ export const PcpPlanejamentoView = () => {
             </CardContent>
           </Card>
 
-          {/* 5. CARD RESUMO DA PROGRAMAÇÃO COM VALORES E METAS */}
+          {/* 5. CARD RESUMO DOS DIAS DA PROGRAMAÇÃO COM METAS */}
           <Card className="border border-border shadow-xs">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-primary" /> Resumo da Programação ({equipe})
+                  <CalendarIcon className="w-4 h-4 text-primary" /> Resumo do Período ({diasProgramados.length} dias — {equipe})
                 </span>
                 {tempoTotalGeralMinutos > 540 && (
                   <Badge variant="destructive" className="text-[10px] px-2 py-0.5 font-bold">
-                    ⚠️ Excede 9h diárias
+                    ⚠️ Dia ativo excede 9h
                   </Badge>
                 )}
               </CardTitle>
@@ -2038,57 +2247,53 @@ export const PcpPlanejamentoView = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-[10px] p-2">Dia</TableHead>
-                    <TableHead className="text-[10px] p-2">Equipe</TableHead>
-                    <TableHead className="text-[10px] p-2">Tempo</TableHead>
+                    <TableHead className="text-[10px] p-2">Pontos</TableHead>
+                    <TableHead className="text-[10px] p-2">Tempo Total</TableHead>
                     <TableHead className="text-[10px] p-2 text-right">V. Meta</TableHead>
                     <TableHead className="text-[10px] p-2 text-right">V. Planejado</TableHead>
                     <TableHead className="text-[10px] p-2 text-right">% Meta</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell className="p-2 text-[11px] font-medium">
-                      {dataProgramacaoFormatada}
-                    </TableCell>
-                    <TableCell className="p-2 text-[11px] font-medium text-primary">
-                      {equipe}
-                    </TableCell>
-                    <TableCell className={`p-2 text-[11px] font-mono ${tempoTotalGeralMinutos > 540 ? 'text-red-500 font-bold' : ''}`}>
-                      {Math.floor(tempoTotalGeralMinutos / 60)}h {tempoTotalGeralMinutos % 60}m
-                      {tempoTotalGeralMinutos > 540 && <span className="text-[9px] ml-1 text-red-500 font-bold">(Excede 9h)</span>}
-                    </TableCell>
-                    <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono">
-                      R$ {metaEquipeInput.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="p-2 text-[11px] text-right text-emerald-600 dark:text-emerald-400 font-mono font-semibold">
-                      R$ {totalValor.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
-                      <span className={percentualMeta >= 100 ? "text-emerald-600 dark:text-emerald-400" : percentualMeta >= 75 ? "text-amber-600" : "text-rose-600"}>
-                        {percentualMeta}%
-                      </span>
-                    </TableCell>
-                  </TableRow>
+                  {diasProgramados.map(d => {
+                    const isActive = d.id === activeDia?.id;
+                    const itensDoDia = d.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(item => item.selected));
+                    const tempoAtiv = itensDoDia.reduce((acc, item) => acc + (item.tempoEstimadoMinutos || 0), 0);
+                    const tempoTotalDia = tempoAtiv + d.tempoTotalDeslocamentoMin + tempoSaidaBase + tempoSeguranca;
+                    const valPlanejado = itensDoDia.reduce((acc, item) => acc + (item.valorEstimado || 0), 0);
+                    const pctMetaDia = metaEquipeInput > 0 ? Math.round((valPlanejado / metaEquipeInput) * 1000) / 10 : 0;
+
+                    return (
+                      <TableRow
+                        key={d.id}
+                        onClick={() => setActiveDayId(d.id)}
+                        className={cn("cursor-pointer transition-colors", isActive ? "bg-primary/10 font-bold" : "hover:bg-accent/40")}
+                      >
+                        <TableCell className="p-2 text-[11px] font-medium font-mono">
+                          {d.nomeDia.slice(0, 3)} ({d.dataStr})
+                          {isActive && <Badge className="ml-1 text-[8px] px-1 py-0 bg-primary text-primary-foreground">Ativo</Badge>}
+                        </TableCell>
+                        <TableCell className="p-2 text-[11px] font-mono text-primary font-bold">
+                          {d.pontos.length > 0 ? d.pontos.join(', ') : <span className="text-muted-foreground font-normal">Nenhum</span>}
+                        </TableCell>
+                        <TableCell className={`p-2 text-[11px] font-mono ${tempoTotalDia > 540 ? 'text-red-500 font-bold' : ''}`}>
+                          {Math.floor(tempoTotalDia / 60)}h {tempoTotalDia % 60}m
+                        </TableCell>
+                        <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono">
+                          R$ {metaEquipeInput.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="p-2 text-[11px] text-right text-emerald-600 dark:text-emerald-400 font-mono font-semibold">
+                          R$ {valPlanejado.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
+                          <span className={pctMetaDia >= 100 ? "text-emerald-600 dark:text-emerald-400" : pctMetaDia >= 75 ? "text-amber-600" : "text-rose-600"}>
+                            {pctMetaDia}%
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
-                <TableFooter className="bg-muted/50 border-t">
-                  <TableRow>
-                    <TableCell colSpan={2} className="p-2 text-[10px] font-bold">TOTAL</TableCell>
-                    <TableCell className={`p-2 text-[11px] font-mono font-bold ${tempoTotalGeralMinutos > 540 ? 'text-red-500' : ''}`}>
-                      {Math.floor(tempoTotalGeralMinutos / 60)}h {tempoTotalGeralMinutos % 60}m
-                    </TableCell>
-                    <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono font-bold">
-                      R$ {metaEquipeInput.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="p-2 text-[11px] text-right text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                      R$ {totalValor.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
-                      <span className={percentualMeta >= 100 ? "text-emerald-600 dark:text-emerald-400" : percentualMeta >= 75 ? "text-amber-600" : "text-rose-600"}>
-                        {percentualMeta}%
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                </TableFooter>
               </Table>
             </CardContent>
           </Card>
@@ -2179,15 +2384,63 @@ export const PcpPlanejamentoView = () => {
                 </div>
               </div>
 
-              {/* C6 — SELEÇÃO DOS PONTOS: Popover multi-select compacto */}
-              <div className="pt-2.5 border-t border-primary/20 flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
+              {/* C6 — SELEÇÃO DOS PONTOS DO DIA ATIVO COM ABAS DE NAVEGAÇÃO */}
+              <div className="pt-2.5 border-t border-primary/20 flex flex-col gap-3">
+                {/* Abas dos Dias Programados */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase whitespace-nowrap mr-1">
+                    Dias:
+                  </span>
+                  {diasProgramados.map((d, idx) => {
+                    const isActive = d.id === activeDia?.id;
+                    const ptsCount = d.pontos.length;
+                    return (
+                      <button
+                        key={d.id}
+                        onClick={() => setActiveDayId(d.id)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 border",
+                          isActive
+                            ? "bg-primary text-primary-foreground border-primary shadow-xs ring-1 ring-primary/40"
+                            : "bg-card hover:bg-accent text-foreground border-border/70"
+                        )}
+                      >
+                        <span className="font-mono">Dia {idx + 1} ({d.nomeDia.slice(0, 3)} {d.dataStr})</span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px] px-1 py-0 h-4 font-mono font-bold",
+                            isActive
+                              ? "bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30"
+                              : ptsCount > 0
+                              ? "bg-primary/10 text-primary border-primary/20"
+                              : "bg-muted text-muted-foreground border-border"
+                          )}
+                        >
+                          {ptsCount} {ptsCount === 1 ? 'pt' : 'pts'}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleDistribuirPontosAuto}
+                    className="h-7 text-[10px] ml-auto shrink-0 font-semibold bg-background"
+                    title="Distribuir pontos da obra igualmente entre os dias do período"
+                  >
+                    ⚡ Distribuir Pontos Auto
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 flex-wrap bg-card/60 p-2.5 rounded-lg border border-border/60">
                   <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <PackageCheck className="w-4 h-4 text-primary" />
-                    C6 — Pontos para trabalhar hoje:
+                    C6 — Pontos para trabalhar em <strong className="text-primary">{activeDia?.nomeDia} ({activeDia?.dataStr})</strong>:
                   </span>
 
-                  {/* Popover multi-select de Pontos */}
+                  {/* Popover multi-select de Pontos para o dia ativo */}
                   <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
                     {orcamentoPontosQuery.isLoading ? (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -2198,6 +2451,7 @@ export const PcpPlanejamentoView = () => {
                         pontos={pontosDisponiveisDoProjeto}
                         selected={selectedPontosLabels}
                         orcamentoPorPontoMap={orcamentoPorPontoMap}
+                        pontosAlocadosEmOutrosDiasMap={pontosAlocadosEmOutrosDiasMap}
                         onToggle={handleTogglePontoLabel}
                         onSelectAll={handleSelectAllPontosDaObra}
                         onDeselectAll={handleDeselectAllPontos}
@@ -2220,8 +2474,8 @@ export const PcpPlanejamentoView = () => {
                   </div>
                 </div>
 
-                {/* Badges dos pontos selecionados */}
-                {selectedPontosLabels.length > 0 && (
+                {/* Badges dos pontos selecionados no dia ativo */}
+                {selectedPontosLabels.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {selectedPontosLabels.map(p => (
                       <Badge
@@ -2229,16 +2483,20 @@ export const PcpPlanejamentoView = () => {
                         variant="secondary"
                         className="font-mono text-[11px] px-2 py-0.5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
                         onClick={() => handleTogglePontoLabel(p)}
-                        title="Clique para remover"
+                        title="Clique para remover deste dia"
                       >
                         {p} ✕
                       </Badge>
                     ))}
                   </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground italic py-1">
+                    Nenhum ponto alocado para {activeDia?.nomeDia} ({activeDia?.dataStr}). Selecione os pontos acima.
+                  </p>
                 )}
                 {/* RISK BADGE */}
                 {riskForObra && (
-                  <div className="mt-2 flex items-center justify-between gap-2 p-2 rounded-md bg-muted/30 border">
+                  <div className="mt-1 flex items-center justify-between gap-2 p-2 rounded-md bg-muted/30 border">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${
                         riskForObra.classificacao === 'Vermelho' ? 'bg-red-500' :
@@ -2584,26 +2842,45 @@ export const PcpPlanejamentoView = () => {
                 {compiledPreview || <span className="text-muted-foreground italic">Nenhuma atividade selecionada para envio...</span>}
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                 <div className="text-xs text-muted-foreground">
-                  Data: <strong>{dataProgramacaoFormatada}</strong> | Obra: <strong>{selectedObra?.projeto || 'Nenhuma'}</strong> | Equipe: <strong>{equipe}</strong> | Meta: <strong>R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
+                  Dia Ativo: <strong className="text-foreground">{activeDia?.nomeDia} ({activeDia?.dataCompleta})</strong> | Obra: <strong className="text-foreground">{selectedObra?.projeto || 'Nenhuma'}</strong> | Equipe: <strong className="text-foreground">{equipe}</strong> | Meta: <strong className="text-foreground">R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
                 </div>
 
-                <Button
-                  onClick={handleEnviarPlanPrincipal}
-                  disabled={!selectedObra || selectedItemsFlat.length === 0 || salvarProgramacao.isPending}
-                  className="gap-2 font-semibold"
-                >
-                  {salvarProgramacao.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" /> Gravar Programação na Plan_Principal
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleEnviarPlanPrincipalDiaAtivo}
+                    disabled={!selectedObra || selectedItemsFlat.length === 0 || salvarProgramacao.isPending || isSavingAll}
+                    className="gap-1.5 font-semibold text-xs h-9 bg-background"
+                  >
+                    {salvarProgramacao.isPending && !isSavingAll ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5 text-primary" /> Gravar Dia Ativo ({activeDia?.dataStr})
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    onClick={handleEnviarTodosOsDias}
+                    disabled={!selectedObra || diasProgramados.every(d => d.pontos.length === 0) || salvarProgramacao.isPending || isSavingAll}
+                    className="gap-1.5 font-semibold text-xs h-9 bg-primary text-primary-foreground shadow-sm"
+                  >
+                    {isSavingAll ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando {diasProgramados.length} Dias...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" /> Gravar Todos os {diasProgramados.length} Dias
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
