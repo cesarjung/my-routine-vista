@@ -1443,246 +1443,252 @@ export const PcpPlanejamentoView = () => {
         </div>
       </div>
 
-      {/* BARRA DE FILTROS SUPERIOR (Padrão das seções do Planejamento) */}
-      <Card className="border border-border p-2.5 sm:p-3 bg-card shadow-2xs rounded-xl">
-        <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs">
-          <div className="flex flex-wrap items-center gap-2 flex-1">
-            <div className="flex items-center gap-1.5 font-bold text-foreground pr-2 border-r border-border">
-              <Filter className="w-3.5 h-3.5 text-primary" />
-              <span>Filtros</span>
-            </div>
+      {/* BARRA DE FILTROS SUPERIOR (100% Em uma única linha) */}
+      <Card className="border border-border p-2 bg-card shadow-2xs rounded-xl overflow-x-auto">
+        <div className="flex items-end gap-1.5 min-w-[1150px] w-full flex-nowrap text-xs">
+          {/* Tag Filtros */}
+          <div className="flex items-center gap-1 font-bold text-foreground pr-1.5 pb-1 border-r border-border shrink-0 text-[11px]">
+            <Filter className="w-3.5 h-3.5 text-primary" />
+            <span>Filtros</span>
+          </div>
 
-            {/* Unidade */}
-            <div className="flex flex-col gap-1 min-w-[180px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Unidade</span>
-              <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-background">
-                  <Building2 className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="Unidade" />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNIDADES_DISPONIVEIS.map(u => (
-                    <SelectItem key={u.id} value={u.id} className="text-xs">
-                      {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Unidade */}
+          <div className="flex flex-col gap-0.5 w-[140px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Unidade</span>
+            <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
+              <SelectTrigger className="h-7 text-[11px] font-semibold bg-background px-2">
+                <Building2 className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
+                <SelectValue placeholder="Unidade" />
+              </SelectTrigger>
+              <SelectContent>
+                {UNIDADES_DISPONIVEIS.map(u => (
+                  <SelectItem key={u.id} value={u.id} className="text-xs">
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Situação (Apta / Inapta / Todas) */}
-            <div className="flex flex-col gap-1 min-w-[110px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Situação</span>
-              <Select value={selectedSituacao} onValueChange={setSelectedSituacao}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-background">
-                  <SelectValue placeholder="Situação" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="APTA" className="text-xs font-medium text-emerald-600">Aptas</SelectItem>
-                  <SelectItem value="INAPTA" className="text-xs font-medium text-rose-600">Inaptas</SelectItem>
-                  <SelectItem value="TODAS" className="text-xs font-medium">Todas</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Situação */}
+          <div className="flex flex-col gap-0.5 w-[85px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Situação</span>
+            <Select value={selectedSituacao} onValueChange={setSelectedSituacao}>
+              <SelectTrigger className="h-7 text-[11px] font-semibold bg-background px-2">
+                <SelectValue placeholder="Situação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="APTA" className="text-xs font-medium text-emerald-600">Aptas</SelectItem>
+                <SelectItem value="INAPTA" className="text-xs font-medium text-rose-600">Inaptas</SelectItem>
+                <SelectItem value="TODAS" className="text-xs font-medium">Todas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Status da Obra (Popover Multiseleção — usa lista DINÂMICA statusesCarteira) */}
-            <div className="flex flex-col gap-1 min-w-[140px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Status ({selectedStatuses.length})</span>
-              <Popover open={isStatusPopoverOpen} onOpenChange={setIsStatusPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-8 text-xs justify-between px-2.5 font-semibold bg-background">
-                    <span className="truncate">
-                      {selectedStatuses.length === statusesCarteira.length && statusesCarteira.length > 0
-                        ? 'Todos Status'
-                        : `${selectedStatuses.length} selecionados`}
-                    </span>
-                    <ChevronDown className="w-3 h-3 opacity-50 shrink-0 ml-1" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[230px] p-3 text-xs" align="start">
-                  <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold text-xs">
-                    <span>Status das Obras</span>
-                    <button
-                      onClick={() => setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')))}
-                      className="text-[10px] text-primary hover:underline"
-                    >
-                      Sem Concluídas
-                    </button>
-                  </div>
+          {/* Status da Obra */}
+          <div className="flex flex-col gap-0.5 w-[105px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Status ({selectedStatuses.length})</span>
+            <Popover open={isStatusPopoverOpen} onOpenChange={setIsStatusPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-7 text-[11px] justify-between px-2 font-semibold bg-background">
+                  <span className="truncate">
+                    {selectedStatuses.length === statusesCarteira.length && statusesCarteira.length > 0
+                      ? 'Todos Status'
+                      : `${selectedStatuses.length} selec.`}
+                  </span>
+                  <ChevronDown className="w-3 h-3 opacity-50 shrink-0 ml-0.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[230px] p-3 text-xs" align="start">
+                <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold text-xs">
+                  <span>Status das Obras</span>
+                  <button
+                    onClick={() => setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')))}
+                    className="text-[10px] text-primary hover:underline"
+                  >
+                    Sem Concluídas
+                  </button>
+                </div>
 
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                    {(statusesCarteira.length > 0 ? statusesCarteira : ALL_STATUSES).map(st => {
-                      const isChecked = selectedStatuses.includes(st);
-                      const isConcluida = st.toUpperCase().includes('CONCLU');
-                      return (
-                        <div
-                          key={st}
-                          onClick={() => handleToggleStatus(st)}
-                          className="flex items-center gap-2 cursor-pointer hover:bg-accent/40 p-1 rounded"
-                        >
-                          <Checkbox checked={isChecked} onCheckedChange={() => handleToggleStatus(st)} />
-                          <span className={`text-xs ${isConcluida ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
-                            {st}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
-                    <button
-                      onClick={() => setSelectedStatuses([...(statusesCarteira.length > 0 ? statusesCarteira : ALL_STATUSES)])}
-                      className="text-[10px] text-muted-foreground hover:underline"
-                    >
-                      Marcar Todas
-                    </button>
-                    <span className="text-[10px] text-muted-foreground">
-                      {selectedStatuses.length} de {statusesCarteira.length > 0 ? statusesCarteira.length : ALL_STATUSES.length}
-                    </span>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Mês / Carteira (Coluna G) — apenas meses da unidade selecionada */}
-            <div className="flex flex-col gap-1 min-w-[150px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Mês da Carteira</span>
-              <Select value={selectedMesFilter} onValueChange={v => {
-                setSelectedMesFilter(v);
-                setSelectedMunicipioFilter('TODOS');
-                setSelectedPrioridadeFilter('TODAS');
-                setSelectedDonoFilter('TODOS');
-                setSelectedSupervisorFilter('TODOS');
-              }}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate font-mono">
-                  <SelectValue placeholder="Mês" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[240px]">
-                  <SelectItem value="TODOS" className="text-xs font-semibold">Todos os Meses ({obras.length})</SelectItem>
-                  {mesesCarteira.map(m => {
-                    const count = obrasCountByMonth.get(m) || 0;
+                <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                  {(statusesCarteira.length > 0 ? statusesCarteira : ALL_STATUSES).map(st => {
+                    const isChecked = selectedStatuses.includes(st);
+                    const isConcluida = st.toUpperCase().includes('CONCLU');
                     return (
-                      <SelectItem key={m} value={m} className="text-xs font-mono">
-                        {m} ({count})
-                      </SelectItem>
+                      <div
+                        key={st}
+                        onClick={() => handleToggleStatus(st)}
+                        className="flex items-center gap-2 cursor-pointer hover:bg-accent/40 p-1 rounded"
+                      >
+                        <Checkbox checked={isChecked} onCheckedChange={() => handleToggleStatus(st)} />
+                        <span className={`text-xs ${isConcluida ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
+                          {st}
+                        </span>
+                      </div>
                     );
                   })}
-                </SelectContent>
-              </Select>
-            </div>
+                </div>
 
-            {/* Município — apenas municípios das obras filtradas pelo mês atual */}
-            <div className="flex flex-col gap-1 min-w-[140px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Município</span>
-              <Select value={selectedMunicipioFilter} onValueChange={setSelectedMunicipioFilter}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
-                  <SelectValue placeholder="Município" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[240px]">
-                  <SelectItem value="TODOS" className="text-xs font-semibold">Todos Municípios</SelectItem>
-                  {/* Apenas municípios que existem no mês selecionado */}
-                  {[...new Set(obras.filter(o =>
-                    selectedMesFilter === 'TODOS' ||
-                    o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase())
-                  ).map(o => o.municipio).filter(Boolean))].sort().map(m => (
-                    <SelectItem key={m} value={m} className="text-xs">
-                      {m}
+                <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
+                  <button
+                    onClick={() => setSelectedStatuses([...(statusesCarteira.length > 0 ? statusesCarteira : ALL_STATUSES)])}
+                    className="text-[10px] text-muted-foreground hover:underline"
+                  >
+                    Marcar Todas
+                  </button>
+                  <span className="text-[10px] text-muted-foreground">
+                    {selectedStatuses.length} de {statusesCarteira.length > 0 ? statusesCarteira.length : ALL_STATUSES.length}
+                  </span>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Mês da Carteira */}
+          <div className="flex flex-col gap-0.5 w-[125px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Mês Carteira</span>
+            <Select value={selectedMesFilter} onValueChange={v => {
+              setSelectedMesFilter(v);
+              setSelectedMunicipioFilter('TODOS');
+              setSelectedPrioridadeFilter('TODAS');
+              setSelectedDonoFilter('TODOS');
+              setSelectedSupervisorFilter('TODOS');
+            }}>
+              <SelectTrigger className="h-7 text-[11px] font-semibold bg-background truncate font-mono px-2">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[240px]">
+                <SelectItem value="TODOS" className="text-xs font-semibold">Todos os Meses ({obras.length})</SelectItem>
+                {mesesCarteira.map(m => {
+                  const count = obrasCountByMonth.get(m) || 0;
+                  return (
+                    <SelectItem key={m} value={m} className="text-xs font-mono">
+                      {m} ({count})
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Prioridade — apenas prioridades das obras visíveis (mês + município selecionados) */}
-            <div className="flex flex-col gap-1 min-w-[130px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Prioridade</span>
-              <Select value={selectedPrioridadeFilter} onValueChange={setSelectedPrioridadeFilter}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
-                  <SelectValue placeholder="Prioridade" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[240px]">
-                  <SelectItem value="TODAS" className="text-xs font-semibold">Todas Prioridades</SelectItem>
-                  {[...new Set(obras.filter(o => {
-                    const matchMes = selectedMesFilter === 'TODOS' ||
-                      o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
-                    const matchMun = selectedMunicipioFilter === 'TODOS' ||
-                      o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
-                    return matchMes && matchMun;
-                  }).map(o => o.prioridade).filter(Boolean))].sort().map(p => (
-                    <SelectItem key={p} value={p} className="text-xs">
-                      {p}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Município */}
+          <div className="flex flex-col gap-0.5 w-[115px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Município</span>
+            <Select value={selectedMunicipioFilter} onValueChange={setSelectedMunicipioFilter}>
+              <SelectTrigger className="h-7 text-[11px] font-semibold bg-background truncate px-2">
+                <SelectValue placeholder="Município" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[240px]">
+                <SelectItem value="TODOS" className="text-xs font-semibold">Todos Municípios</SelectItem>
+                {[...new Set(obras.filter(o =>
+                  selectedMesFilter === 'TODOS' ||
+                  o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase())
+                ).map(o => o.municipio).filter(Boolean))].sort().map(m => (
+                  <SelectItem key={m} value={m} className="text-xs">
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Dono da Obra (Coluna BG) */}
-            <div className="flex flex-col gap-1 min-w-[130px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Dono da Obra</span>
-              <Select value={selectedDonoFilter} onValueChange={setSelectedDonoFilter}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
-                  <SelectValue placeholder="Dono" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[240px]">
-                  <SelectItem value="TODOS" className="text-xs font-semibold">Todos os Donos</SelectItem>
-                  {[...new Set(obras.filter(o => {
-                    const matchMes = selectedMesFilter === 'TODOS' ||
-                      o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
-                    const matchMun = selectedMunicipioFilter === 'TODOS' ||
-                      o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
-                    return matchMes && matchMun;
-                  }).map(o => o.donoDaObra).filter(d => d && d !== 'NÃO INFORMADO'))].sort().map(d => (
-                    <SelectItem key={d} value={d} className="text-xs">
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Prioridade */}
+          <div className="flex flex-col gap-0.5 w-[105px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Prioridade</span>
+            <Select value={selectedPrioridadeFilter} onValueChange={setSelectedPrioridadeFilter}>
+              <SelectTrigger className="h-7 text-[11px] font-semibold bg-background truncate px-2">
+                <SelectValue placeholder="Prioridade" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[240px]">
+                <SelectItem value="TODAS" className="text-xs font-semibold">Todas</SelectItem>
+                {[...new Set(obras.filter(o => {
+                  const matchMes = selectedMesFilter === 'TODOS' ||
+                    o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
+                  const matchMun = selectedMunicipioFilter === 'TODOS' ||
+                    o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
+                  return matchMes && matchMun;
+                }).map(o => o.prioridade).filter(Boolean))].sort().map(p => (
+                  <SelectItem key={p} value={p} className="text-xs">
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Supervisor */}
-            <div className="flex flex-col gap-1 min-w-[130px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Supervisor</span>
-              <Select value={selectedSupervisorFilter} onValueChange={setSelectedSupervisorFilter}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
-                  <SelectValue placeholder="Supervisor" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[240px]">
-                  <SelectItem value="TODOS" className="text-xs font-semibold">Todos Supervisores</SelectItem>
-                  {[...new Set(obras.filter(o => {
-                    const matchMes = selectedMesFilter === 'TODOS' ||
-                      o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
-                    const matchMun = selectedMunicipioFilter === 'TODOS' ||
-                      o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
-                    return matchMes && matchMun;
-                  }).map(o => o.supervisor).filter(Boolean))].sort().map(s => (
-                    <SelectItem key={s} value={s} className="text-xs">
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Dono da Obra */}
+          <div className="flex flex-col gap-0.5 w-[110px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Dono da Obra</span>
+            <Select value={selectedDonoFilter} onValueChange={setSelectedDonoFilter}>
+              <SelectTrigger className="h-7 text-[11px] font-semibold bg-background truncate px-2">
+                <SelectValue placeholder="Dono" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[240px]">
+                <SelectItem value="TODOS" className="text-xs font-semibold">Todos Donos</SelectItem>
+                {[...new Set(obras.filter(o => {
+                  const matchMes = selectedMesFilter === 'TODOS' ||
+                    o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
+                  const matchMun = selectedMunicipioFilter === 'TODOS' ||
+                    o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
+                  return matchMes && matchMun;
+                }).map(o => o.donoDaObra).filter(d => d && d !== 'NÃO INFORMADO'))].sort().map(d => (
+                  <SelectItem key={d} value={d} className="text-xs">
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Busca por Obra */}
-            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground font-semibold">Pesquisar Obra</span>
-                <button onClick={handleClearFilters} className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-1">
-                  <Filter className="w-3 h-3" /> Limpar Filtros
-                </button>
-              </div>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar projeto B-XXXXX, título..."
-                  value={searchObra}
-                  onChange={e => setSearchObra(e.target.value)}
-                  className="pl-8 h-8 text-xs bg-background"
-                />
-              </div>
+          {/* Supervisor */}
+          <div className="flex flex-col gap-0.5 w-[110px] shrink-0">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Supervisor</span>
+            <Select value={selectedSupervisorFilter} onValueChange={setSelectedSupervisorFilter}>
+              <SelectTrigger className="h-7 text-[11px] font-semibold bg-background truncate px-2">
+                <SelectValue placeholder="Supervisor" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[240px]">
+                <SelectItem value="TODOS" className="text-xs font-semibold">Todos Supervisores</SelectItem>
+                {[...new Set(obras.filter(o => {
+                  const matchMes = selectedMesFilter === 'TODOS' ||
+                    o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
+                  const matchMun = selectedMunicipioFilter === 'TODOS' ||
+                    o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
+                  return matchMes && matchMun;
+                }).map(o => o.supervisor).filter(Boolean))].sort().map(s => (
+                  <SelectItem key={s} value={s} className="text-xs">
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Busca por Obra */}
+          <div className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Pesquisar Obra</span>
+            <div className="relative">
+              <Search className="w-3 h-3 absolute left-2 top-2 text-muted-foreground" />
+              <Input
+                placeholder="B-XXXXX, título..."
+                value={searchObra}
+                onChange={e => setSearchObra(e.target.value)}
+                className="pl-7 h-7 text-[11px] bg-background"
+              />
             </div>
+          </div>
+
+          {/* Botão Limpar Filtros */}
+          <div className="flex flex-col justify-end shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearFilters}
+              className="h-7 text-[10px] px-2 font-semibold text-muted-foreground hover:text-foreground shrink-0"
+              title="Limpar todos os filtros da carteira"
+            >
+              <Filter className="w-3 h-3 mr-1" /> Limpar
+            </Button>
           </div>
         </div>
       </Card>
