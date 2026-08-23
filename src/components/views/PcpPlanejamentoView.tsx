@@ -114,7 +114,21 @@ function safeFormatDate(val?: any, fmt = 'dd/MM/yyyy'): string {
   }
 }
 
-// ─── PontosMultiSelect — Popover compacto de seleção múltipla de pontos ───
+function formatMinToHours(minutes: number): string {
+  if (!minutes || minutes <= 0) return '0,00h (00:00)';
+  const hDec = (minutes / 60).toFixed(2).replace('.', ',');
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  const clock = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return `${hDec}h (${clock})`;
+}
+
+function formatHoursDecimal(minutes: number): string {
+  if (!minutes || minutes <= 0) return '0,00h';
+  return `${(minutes / 60).toFixed(2).replace('.', ',')}h`;
+}
+
+// ─── PontosMultiSelect — Popover de seleção de pontos com exclusividade por dia ───
 interface PontosMultiSelectProps {
   pontos: string[];
   selected: string[];
@@ -137,12 +151,30 @@ const PontosMultiSelect = ({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  const filtered = pontos.filter(p => p.toLowerCase().includes(search.toLowerCase()));
+  // Pontos disponíveis = livres ou já alocados neste dia ativo
+  const pontosDisponiveis = useMemo(() => {
+    return pontos.filter(p => !pontosAlocadosEmOutrosDiasMap[p.toUpperCase()] || selected.includes(p.toUpperCase()));
+  }, [pontos, pontosAlocadosEmOutrosDiasMap, selected]);
+
+  // Pontos bloqueados = alocados em outros dias
+  const pontosBloqueadosOutrosDias = useMemo(() => {
+    return pontos.filter(p => pontosAlocadosEmOutrosDiasMap[p.toUpperCase()] && !selected.includes(p.toUpperCase()));
+  }, [pontos, pontosAlocadosEmOutrosDiasMap, selected]);
+
+  const filteredDisponiveis = useMemo(() => {
+    if (!search.trim()) return pontosDisponiveis;
+    return pontosDisponiveis.filter(p => p.toLowerCase().includes(search.toLowerCase().trim()));
+  }, [pontosDisponiveis, search]);
+
+  const filteredBloqueados = useMemo(() => {
+    if (!search.trim()) return pontosBloqueadosOutrosDias;
+    return pontosBloqueadosOutrosDias.filter(p => p.toLowerCase().includes(search.toLowerCase().trim()));
+  }, [pontosBloqueadosOutrosDias, search]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="h-8 text-xs font-semibold px-3 bg-background min-w-[200px] justify-between">
+        <Button variant="outline" className="h-8 text-xs font-semibold px-3 bg-background min-w-[210px] justify-between">
           <span className="flex items-center gap-1.5">
             <PackageCheck className="w-3.5 h-3.5 text-primary" />
             {selected.length === 0
@@ -152,13 +184,13 @@ const PontosMultiSelect = ({
           <ChevronDown className="w-3 h-3 opacity-50 ml-2 shrink-0" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className="w-[330px] p-0" align="start">
         {/* Header com busca */}
         <div className="p-2 border-b border-border">
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
             <input
-              placeholder="Buscar ponto (P1, V2...)..."
+              placeholder="Buscar ponto (P1, P2...)..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full h-8 pl-8 pr-2 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary font-mono"
@@ -168,27 +200,33 @@ const PontosMultiSelect = ({
         </div>
 
         {/* Ações rápidas */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-border text-[10px]">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-border text-[10px] bg-muted/30">
           <button onClick={onSelectAll} className="text-primary hover:underline font-semibold">
-            Selecionar todos ({pontos.length})
+            Selecionar todos disponíveis ({pontosDisponiveis.length})
           </button>
           <button onClick={onDeselectAll} className="text-muted-foreground hover:underline">
-            Limpar
+            Limpar deste dia
           </button>
         </div>
 
-        {/* Lista de pontos com scroll */}
-        <div className="overflow-y-auto max-h-[260px] p-1.5 space-y-0.5
+        {/* Lista de pontos disponíveis com scroll */}
+        <div className="overflow-y-auto max-h-[260px] p-1.5 space-y-1
           [&::-webkit-scrollbar]:w-1.5
           [&::-webkit-scrollbar-thumb]:bg-border
           [&::-webkit-scrollbar-thumb]:rounded-full">
-          {filtered.length === 0 ? (
-            <p className="text-xs text-center text-muted-foreground py-4">Nenhum ponto encontrado</p>
+          
+          <div className="px-1.5 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Pontos Disponíveis ({filteredDisponiveis.length})
+          </div>
+
+          {filteredDisponiveis.length === 0 ? (
+            <p className="text-[11px] text-center text-muted-foreground py-3 italic">
+              Nenhum ponto disponível para seleção neste dia
+            </p>
           ) : (
-            filtered.map(p => {
+            filteredDisponiveis.map(p => {
               const isChecked = selected.includes(p);
               const count = (orcamentoPorPontoMap.get(p) || []).length;
-              const outroDia = pontosAlocadosEmOutrosDiasMap[p];
               return (
                 <div
                   key={p}
@@ -199,22 +237,43 @@ const PontosMultiSelect = ({
                 >
                   <Checkbox checked={isChecked} onCheckedChange={() => onToggle(p)} className="h-3.5 w-3.5 shrink-0" />
                   <span className="font-mono font-bold">{p}</span>
-                  {outroDia && !isChecked && (
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 bg-muted text-muted-foreground font-mono">
-                      {outroDia}
-                    </Badge>
-                  )}
-                  <span className="text-[10px] text-muted-foreground ml-auto">{count} ativ.</span>
+                  <span className="text-[10px] text-muted-foreground ml-auto">{count} ativ. orçadas</span>
                 </div>
               );
             })
           )}
+
+          {/* Seção de pontos já alocados em outros dias (Bloqueados) */}
+          {filteredBloqueados.length > 0 && (
+            <div className="pt-2 mt-2 border-t border-border/60">
+              <div className="px-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Já Marcados em Outros Dias ({filteredBloqueados.length})
+              </div>
+              <div className="space-y-0.5 opacity-60">
+                {filteredBloqueados.map(p => {
+                  const outroDia = pontosAlocadosEmOutrosDiasMap[p.toUpperCase()];
+                  return (
+                    <div
+                      key={p}
+                      className="flex items-center justify-between px-2 py-1 rounded bg-muted/40 text-[11px] cursor-not-allowed"
+                      title={`Ponto ${p} já alocado em ${outroDia}`}
+                    >
+                      <span className="font-mono font-medium text-muted-foreground">{p}</span>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 bg-muted text-muted-foreground font-mono">
+                        {outroDia}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer com contador */}
-        <div className="px-3 py-2 border-t border-border text-[10px] text-muted-foreground flex justify-between">
-          <span>{selected.length} selecionados</span>
-          <button onClick={() => setOpen(false)} className="text-primary hover:underline font-semibold">Confirmar</button>
+        <div className="px-3 py-2 border-t border-border text-[10px] text-muted-foreground flex justify-between bg-muted/30">
+          <span><strong>{selected.length}</strong> ponto(s) neste dia</span>
+          <button onClick={() => setOpen(false)} className="text-primary hover:underline font-bold">Confirmar</button>
         </div>
       </PopoverContent>
     </Popover>
@@ -526,9 +585,38 @@ export const PcpPlanejamentoView = () => {
       const dataStr = safeFormatDate(dayDate, 'dd/MM');
       const dataCompleta = safeFormatDate(dayDate, 'dd/MM/yyyy');
 
+      // Regras Oficiais de Deslocamento:
+      // 1. Se filtro for BASE ou nenhum: todos os dias saem e voltam para a BASE
+      // 2. Se filtro for Alojamento:
+      //    - Dia Único: Sai da Base ➔ Obra ➔ Retorna à Base
+      //    - Primeiro Dia: Sai da Base ➔ Obra ➔ Pernoita no Alojamento
+      //    - Dias Intermediários: Sai do Alojamento ➔ Obra ➔ Pernoita no Alojamento
+      //    - Último Dia: Sai do Alojamento ➔ Obra ➔ Retorna à Base
+      let defaultOrigemId = 'BASE';
+      let defaultDestinoId = 'BASE';
+
+      if (selectedAlojamentoPadraoId === 'BASE' || selectedAlojamentoPadraoId === 'nenhum') {
+        defaultOrigemId = 'BASE';
+        defaultDestinoId = 'BASE';
+      } else {
+        if (totalDias === 1) {
+          defaultOrigemId = 'BASE';
+          defaultDestinoId = 'BASE';
+        } else if (idx === 0) {
+          defaultOrigemId = 'BASE';
+          defaultDestinoId = selectedAlojamentoPadraoId;
+        } else if (idx === totalDias - 1) {
+          defaultOrigemId = selectedAlojamentoPadraoId;
+          defaultDestinoId = 'BASE';
+        } else {
+          defaultOrigemId = selectedAlojamentoPadraoId;
+          defaultDestinoId = selectedAlojamentoPadraoId;
+        }
+      }
+
       const customAloj = (diasSemanaCustom && diasSemanaCustom[idx]) || {
-        origemId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === 0 ? 'BASE' : selectedAlojamentoPadraoId),
-        destinoId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === totalDias - 1 ? 'BASE' : selectedAlojamentoPadraoId)
+        origemId: defaultOrigemId,
+        destinoId: defaultDestinoId
       };
 
       const baseInfo = unidadeAtivaInfo || UNIDADES_PLANEJAMENTO[1];
@@ -872,15 +960,25 @@ export const PcpPlanejamentoView = () => {
     });
   }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter, selectedDonoFilter, selectedSupervisorFilter]);
 
-  // Toggle point label selection no dia ativo
+  // Toggle point label selection no dia ativo com bloqueio de duplicidade entre dias
   const handleTogglePontoLabel = (pLabel: string) => {
     const upper = pLabel.toUpperCase().trim();
     if (!upper || !activeDia) return;
+
+    const alocadoEmOutroDia = pontosAlocadosEmOutrosDiasMap[upper];
+    const currentPoints = diasPontosMap[activeDia.id] || [];
+    const isAlreadyInActive = currentPoints.includes(upper);
+
+    if (!isAlreadyInActive && alocadoEmOutroDia) {
+      toast.error(`O ponto ${upper} já está alocado em ${alocadoEmOutroDia}. Desmarque-o daquele dia antes de alocar aqui.`);
+      return;
+    }
+
     setDiasPontosMap(prev => {
-      const current = prev[activeDia.id] || [];
-      const updated = current.includes(upper)
-        ? current.filter(p => p !== upper)
-        : [...current, upper];
+      const cur = prev[activeDia.id] || [];
+      const updated = isAlreadyInActive
+        ? cur.filter(p => p !== upper)
+        : [...cur, upper];
       return {
         ...prev,
         [activeDia.id]: updated
@@ -888,12 +986,15 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Selecionar todos os pontos disponíveis da obra para o dia ativo
+  // Selecionar todos os pontos disponíveis (excluindo os já alocados em outros dias)
   const handleSelectAllPontosDaObra = () => {
     if (pontosDisponiveisDoProjeto.length > 0 && activeDia) {
+      const pontosLivres = pontosDisponiveisDoProjeto.filter(
+        p => !pontosAlocadosEmOutrosDiasMap[p.toUpperCase()] || (diasPontosMap[activeDia.id] || []).includes(p.toUpperCase())
+      );
       setDiasPontosMap(prev => ({
         ...prev,
-        [activeDia.id]: [...pontosDisponiveisDoProjeto]
+        [activeDia.id]: pontosLivres
       }));
     }
   };
@@ -908,7 +1009,7 @@ export const PcpPlanejamentoView = () => {
     }
   };
 
-  // Distribuir pontos da obra automaticamente entre os dias programados
+  // Distribuir pontos da obra automaticamente entre os dias programados de forma exclusiva
   const handleDistribuirPontosAuto = () => {
     if (diasProgramados.length === 0 || pontosDisponiveisDoProjeto.length === 0) return;
     const newMap: Record<string, string[]> = {};
@@ -919,11 +1020,12 @@ export const PcpPlanejamentoView = () => {
     pontosDisponiveisDoProjeto.forEach((p, idx) => {
       const dayTarget = diasProgramados[idx % diasProgramados.length];
       if (dayTarget) {
-        newMap[dayTarget.id].push(p);
+        newMap[dayTarget.id].push(p.toUpperCase());
       }
     });
 
     setDiasPontosMap(newMap);
+    toast.success(`Distribuídos ${pontosDisponiveisDoProjeto.length} pontos entre os ${diasProgramados.length} dias programados.`);
   };
 
   // Adicionar ponto customizado no dia ativo
@@ -2008,10 +2110,10 @@ export const PcpPlanejamentoView = () => {
                 <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-primary flex items-center gap-1.5">
-                      <Navigation className="w-3.5 h-3.5" /> Deslocamento Previsto no Dia Ativo ({activeDia?.nomeDia} - {activeDia?.dataStr}):
+                      <Navigation className="w-3.5 h-3.5" /> Deslocamento Previsto ({activeDia?.nomeDia} - {activeDia?.dataStr}):
                     </span>
                     <Badge variant="outline" className="text-xs font-mono font-bold bg-background text-primary border-primary/30">
-                      Total: {activeDia?.tempoTotalDeslocamentoMin || 30} min
+                      Total: {formatMinToHours(activeDia?.tempoTotalDeslocamentoMin || 30)}
                     </Badge>
                   </div>
 
@@ -2023,8 +2125,8 @@ export const PcpPlanejamentoView = () => {
                       <span className="font-bold text-foreground mt-0.5 truncate" title={activeDia?.origemNome}>
                         {activeDia?.origemNome}
                       </span>
-                      <span className="font-mono text-primary font-semibold text-[11px] mt-0.5">
-                        {activeDia?.tempoIdaMin} min {activeDia && activeDia.distIdaKm > 0 ? `(${activeDia.distIdaKm} km)` : ''}
+                      <span className="font-mono text-primary font-bold text-xs mt-0.5">
+                        {formatMinToHours(activeDia?.tempoIdaMin || 15)} {activeDia && activeDia.distIdaKm > 0 ? `(${activeDia.distIdaKm} km)` : ''}
                       </span>
                     </div>
 
@@ -2035,8 +2137,8 @@ export const PcpPlanejamentoView = () => {
                       <span className="font-bold text-foreground mt-0.5 truncate" title={activeDia?.destinoNome}>
                         {activeDia?.destinoNome}
                       </span>
-                      <span className="font-mono text-primary font-semibold text-[11px] mt-0.5">
-                        {activeDia?.tempoVoltaMin} min {activeDia && activeDia.distVoltaKm > 0 ? `(${activeDia.distVoltaKm} km)` : ''}
+                      <span className="font-mono text-primary font-bold text-xs mt-0.5">
+                        {formatMinToHours(activeDia?.tempoVoltaMin || 15)} {activeDia && activeDia.distVoltaKm > 0 ? `(${activeDia.distVoltaKm} km)` : ''}
                       </span>
                     </div>
                   </div>
@@ -2048,7 +2150,7 @@ export const PcpPlanejamentoView = () => {
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                       Cronograma dos Dias Programados ({diasProgramados.length} dias)
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground font-medium">
                       *1º dia sai da Base, último dia retorna à Base
                     </span>
                   </div>
@@ -2060,7 +2162,7 @@ export const PcpPlanejamentoView = () => {
                           <TableHead className="py-1 px-2">Dia</TableHead>
                           <TableHead className="py-1 px-2">Saída (Ida)</TableHead>
                           <TableHead className="py-1 px-2">Retorno (Volta)</TableHead>
-                          <TableHead className="py-1 px-2 text-right">Ida + Volta</TableHead>
+                          <TableHead className="py-1 px-2 text-right">Deslocamento (Horas)</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -2110,7 +2212,7 @@ export const PcpPlanejamentoView = () => {
                               </select>
                             </TableCell>
                             <TableCell className="py-1 px-2 text-right font-mono font-bold text-primary whitespace-nowrap text-[10px]">
-                              {d.tempoIdaMin}m + {d.tempoVoltaMin}m = <strong className="text-foreground">{d.tempoTotalDeslocamentoMin}m</strong>
+                              {formatHoursDecimal(d.tempoIdaMin)} + {formatHoursDecimal(d.tempoVoltaMin)} = <strong className="text-foreground">{formatHoursDecimal(d.tempoTotalDeslocamentoMin)}</strong>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -2136,8 +2238,8 @@ export const PcpPlanejamentoView = () => {
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    Ida: {activeDia?.tempoIdaMin ?? 15}m + Volta: {activeDia?.tempoVoltaMin ?? 15}m
+                  <span className="text-[10px] text-primary font-mono font-bold">
+                    {formatMinToHours(tempoDeslocamento)}
                   </span>
                 </div>
 
@@ -2155,7 +2257,9 @@ export const PcpPlanejamentoView = () => {
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">Tempo operacional</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {formatHoursDecimal(tempoSaidaBase)}
+                  </span>
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -2172,7 +2276,9 @@ export const PcpPlanejamentoView = () => {
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">DDS e inspeção</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {formatHoursDecimal(tempoSeguranca)}
+                  </span>
                 </div>
               </div>
 
@@ -2303,7 +2409,7 @@ export const PcpPlanejamentoView = () => {
                           {d.pontos.length > 0 ? d.pontos.join(', ') : <span className="text-muted-foreground font-normal">Nenhum</span>}
                         </TableCell>
                         <TableCell className={`p-2 text-[11px] font-mono ${tempoTotalDia > 540 ? 'text-red-500 font-bold' : ''}`}>
-                          {Math.floor(tempoTotalDia / 60)}h {tempoTotalDia % 60}m
+                          {formatMinToHours(tempoTotalDia)}
                         </TableCell>
                         <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono">
                           R$ {metaEquipeInput.toFixed(2)}
