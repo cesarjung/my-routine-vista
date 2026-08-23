@@ -33,6 +33,7 @@ import {
   TrendingUp,
   Percent,
   MapPin,
+  UtilityPole,
   Zap,
   ZoomIn,
   ZoomOut,
@@ -1767,8 +1768,9 @@ export const PcpPlanejamentoView = () => {
 
                         <div className="flex items-center gap-1.5">
                           {o.qtdPostesDisponiveis > 0 && (
-                            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-500/20 font-mono px-1.5 py-0 font-bold">
-                              📌 {o.qtdPostesDisponiveis} post.
+                            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-500/20 font-mono px-1.5 py-0 font-bold flex items-center gap-1">
+                              <UtilityPole className="w-3 h-3 text-blue-600 shrink-0" />
+                              <span>{o.qtdPostesDisponiveis} post.</span>
                             </Badge>
                           )}
                           {o.qtdCabosDisponiveis > 0 && (
@@ -2583,7 +2585,7 @@ export const PcpPlanejamentoView = () => {
                 <div className="p-2.5 rounded-xl border bg-card/90 border-border/80 flex items-center justify-between shadow-xs">
                   <div className="flex items-center gap-2">
                     <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 shrink-0">
-                      <MapPin className="w-4 h-4" />
+                      <UtilityPole className="w-4 h-4" />
                     </div>
                     <div>
                       <p className="text-[10px] text-muted-foreground font-semibold">Postes Disponíveis (Col Y)</p>
