@@ -594,58 +594,63 @@ export const PcpPlanejamentoView = () => {
 
   // Update a specific day's date
   const handleUpdateDiaDate = (index: number, newDateStr: string) => {
-    const base = (customDatesList && customDatesList.length > 0) ? [...customDatesList] : [...effectiveDates];
-    const oldId = base[index];
-    base[index] = newDateStr;
+    setCustomDatesList(prev => {
+      const base = (prev && prev.length > 0) ? [...prev] : [...effectiveDates];
+      const oldId = base[index];
+      base[index] = newDateStr;
 
-    // Migrate points, alojamentos and etapas if ID changed
-    if (oldId && oldId !== newDateStr) {
-      if (diasPontosMap[oldId]) {
-        setDiasPontosMap(pMap => {
-          const nextMap = { ...pMap, [newDateStr]: pMap[oldId] };
-          delete nextMap[oldId];
-          return nextMap;
-        });
+      // Migrate points, alojamentos and etapas if ID changed
+      if (oldId && oldId !== newDateStr) {
+        if (diasPontosMap[oldId]) {
+          setDiasPontosMap(pMap => {
+            const nextMap = { ...pMap, [newDateStr]: pMap[oldId] };
+            delete nextMap[oldId];
+            return nextMap;
+          });
+        }
+        if (diasEtapasMap[oldId]) {
+          setDiasEtapasMap(eMap => {
+            const nextMap = { ...eMap, [newDateStr]: eMap[oldId] };
+            delete nextMap[oldId];
+            return nextMap;
+          });
+        }
+        if (diasCustomAlojMap[oldId]) {
+          setDiasCustomAlojMap(aMap => {
+            const nextMap = { ...aMap, [newDateStr]: aMap[oldId] };
+            delete nextMap[oldId];
+            return nextMap;
+          });
+        }
+        if (activeDayId === oldId) {
+          setActiveDayId(newDateStr);
+        }
       }
-      if (diasEtapasMap[oldId]) {
-        setDiasEtapasMap(eMap => {
-          const nextMap = { ...eMap, [newDateStr]: eMap[oldId] };
-          delete nextMap[oldId];
-          return nextMap;
-        });
-      }
-      if (diasCustomAlojMap[oldId]) {
-        setDiasCustomAlojMap(aMap => {
-          const nextMap = { ...aMap, [newDateStr]: aMap[oldId] };
-          delete nextMap[oldId];
-          return nextMap;
-        });
-      }
-      if (activeDayId === oldId) {
-        setActiveDayId(newDateStr);
-      }
-    }
-    setCustomDatesList(base);
+      return base;
+    });
   };
 
   // Add extra day to schedule
   const handleAddDiaExtra = () => {
-    const base = (customDatesList && customDatesList.length > 0) ? [...customDatesList] : [...effectiveDates];
-    const lastDateStr = base[base.length - 1] || dataFim || format(new Date(), 'yyyy-MM-dd');
-    const nextDate = addDays(safeParseDate(lastDateStr), 1);
-    const nextDateStr = safeFormatDate(nextDate, 'yyyy-MM-dd');
-    setCustomDatesList([...base, nextDateStr]);
+    setCustomDatesList(prev => {
+      const base = (prev && prev.length > 0) ? [...prev] : [...effectiveDates];
+      const lastDateStr = base[base.length - 1] || dataFim || format(new Date(), 'yyyy-MM-dd');
+      const nextDate = addDays(safeParseDate(lastDateStr), 1);
+      const nextDateStr = safeFormatDate(nextDate, 'yyyy-MM-dd');
+      return [...base, nextDateStr];
+    });
   };
 
   // Remove day from schedule
   const handleRemoveDia = (index: number) => {
-    const base = (customDatesList && customDatesList.length > 0) ? [...customDatesList] : [...effectiveDates];
-    if (base.length <= 1) {
-      alert('A programação deve ter pelo menos 1 dia.');
-      return;
-    }
-    const updated = base.filter((_, i) => i !== index);
-    setCustomDatesList(updated);
+    setCustomDatesList(prev => {
+      const base = (prev && prev.length > 0) ? [...prev] : [...effectiveDates];
+      if (base.length <= 1) {
+        alert('A programação deve ter pelo menos 1 dia.');
+        return prev;
+      }
+      return base.filter((_, i) => i !== index);
+    });
   };
 
   // Cálculo dos Dias Programados no Período (com suporte a datas editáveis e dias extras)
@@ -2750,7 +2755,7 @@ export const PcpPlanejamentoView = () => {
             const pctMetaDia = metaEquipeInput > 0 ? Math.round((valPlanejadoDia / metaEquipeInput) * 1000) / 10 : 0;
 
             return (
-              <Card key={dia.id} className="border border-border shadow-sm overflow-hidden">
+              <Card key={`${dia.id}_${diaIdx}`} className="border border-border shadow-sm overflow-hidden">
                 {/* Header do Bloco do Dia */}
                 <CardHeader className="bg-muted/40 border-b border-border/70 py-3.5 px-4">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
@@ -2792,11 +2797,16 @@ export const PcpPlanejamentoView = () => {
                         {/* Botão de Remover Dia (se tiver mais de 1 dia) */}
                         {diasProgramados.length > 1 && (
                           <Button
+                            type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleRemoveDia(diaIdx)}
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            title={`Remover Dia ${diaIdx + 1} (${dia.nomeDia})`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleRemoveDia(diaIdx);
+                            }}
+                            className="h-7 w-7 text-rose-600 hover:text-rose-700 hover:bg-rose-500/20 bg-rose-500/10 border border-rose-500/30 transition-colors"
+                            title={`Excluir Dia ${diaIdx + 1} (${dia.nomeDia})`}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
