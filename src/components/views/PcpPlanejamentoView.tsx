@@ -633,6 +633,11 @@ export const PcpPlanejamentoView = () => {
     return map;
   }, [diasProgramados, activeDia?.id]);
 
+  // Pontos selecionados no dia ativo
+  const selectedPontosLabels = useMemo(() => {
+    return (activeDia && Array.isArray(activeDia.pontos)) ? activeDia.pontos : [];
+  }, [activeDia?.pontos]);
+
   // ── Auto-selecionar status dinâmicos (menos os concluídos) ────────────────
   useEffect(() => {
     if (statusesCarteira.length > 0) {
@@ -1043,10 +1048,7 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Pontos selecionados no dia ativo
-  const selectedPontosLabels = useMemo(() => {
-    return activeDia?.pontos || [];
-  }, [activeDia?.pontos]);
+
 
   // Flattened list of ALL items across all selected point cards in the ACTIVE DAY
   const allPontosListFlat = useMemo(() => {
