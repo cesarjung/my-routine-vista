@@ -572,34 +572,26 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // List of custom programmed dates: string[] (yyyy-MM-dd)
-  const [customDatesList, setCustomDatesList] = useSessionState<string[]>('pcp_shared_custom_dates_list_v4', []);
-
-  // Compute effective dates from customDatesList or default interval
-  const effectiveDates = useMemo(() => {
-    if (customDatesList && customDatesList.length > 0) {
-      return customDatesList;
-    }
+  // Lista direta de Datas Programadas
+  const [datasProgramadas, setDatasProgramadas] = useState<string[]>(() => {
     let dStart = safeParseDate(dataInicio);
     let dEnd = safeParseDate(dataFim);
     if (dEnd < dStart) dEnd = dStart;
-    let days: Date[] = [];
     try {
-      days = eachDayOfInterval({ start: dStart, end: dEnd });
+      return eachDayOfInterval({ start: dStart, end: dEnd }).map(d => safeFormatDate(d, 'yyyy-MM-dd'));
     } catch {
-      days = [dStart];
+      return [safeFormatDate(dStart, 'yyyy-MM-dd')];
     }
-    return days.map(d => safeFormatDate(d, 'yyyy-MM-dd'));
-  }, [customDatesList, dataInicio, dataFim]);
+  });
 
-  // Update a specific day's date
+  // Atualizar data de um dia específico
   const handleUpdateDiaDate = (index: number, newDateStr: string) => {
-    setCustomDatesList(prev => {
-      const base = (prev && prev.length > 0) ? [...prev] : [...effectiveDates];
-      const oldId = base[index];
-      base[index] = newDateStr;
+    setDatasProgramadas(prev => {
+      const copy = [...prev];
+      const oldId = copy[index];
+      copy[index] = newDateStr;
 
-      // Migrate points, alojamentos and etapas if ID changed
+      // Migrar pontos, etapas e alojamentos caso a data tenha mudado
       if (oldId && oldId !== newDateStr) {
         if (diasPontosMap[oldId]) {
           setDiasPontosMap(pMap => {
@@ -626,36 +618,36 @@ export const PcpPlanejamentoView = () => {
           setActiveDayId(newDateStr);
         }
       }
-      return base;
+      return copy;
     });
   };
 
-  // Add extra day to schedule
+  // Inserir dia extra na programação
   const handleAddDiaExtra = () => {
-    setCustomDatesList(prev => {
-      const base = (prev && prev.length > 0) ? [...prev] : [...effectiveDates];
-      const lastDateStr = base[base.length - 1] || dataFim || format(new Date(), 'yyyy-MM-dd');
+    setDatasProgramadas(prev => {
+      const lastDateStr = prev[prev.length - 1] || dataFim || format(new Date(), 'yyyy-MM-dd');
       const nextDate = addDays(safeParseDate(lastDateStr), 1);
       const nextDateStr = safeFormatDate(nextDate, 'yyyy-MM-dd');
-      return [...base, nextDateStr];
+      return [...prev, nextDateStr];
     });
   };
 
-  // Remove day from schedule
+  // Excluir dia da programação
   const handleRemoveDia = (index: number) => {
-    setCustomDatesList(prev => {
-      const base = (prev && prev.length > 0) ? [...prev] : [...effectiveDates];
-      if (base.length <= 1) {
+    setDatasProgramadas(prev => {
+      if (prev.length <= 1) {
         alert('A programação deve ter pelo menos 1 dia.');
         return prev;
       }
-      return base.filter((_, i) => i !== index);
+      return prev.filter((_, i) => i !== index);
     });
   };
 
   // Cálculo dos Dias Programados no Período (com suporte a datas editáveis e dias extras)
   const diasProgramados = useMemo(() => {
-    const dates = effectiveDates;
+    const dates = (datasProgramadas && datasProgramadas.length > 0)
+      ? datasProgramadas
+      : [safeFormatDate(new Date(), 'yyyy-MM-dd')];
     const totalDias = dates.length;
     const nomesSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
@@ -2084,8 +2076,12 @@ export const PcpPlanejamentoView = () => {
                               setDataInicio(s);
                               const end = s > dataFim ? s : dataFim;
                               if (s > dataFim) setDataFim(s);
-                              const days = eachDayOfInterval({ start: d, end: safeParseDate(end) });
-                              setCustomDatesList(days.map(item => safeFormatDate(item, 'yyyy-MM-dd')));
+                              try {
+                                const days = eachDayOfInterval({ start: d, end: safeParseDate(end) });
+                                setDatasProgramadas(days.map(item => safeFormatDate(item, 'yyyy-MM-dd')));
+                              } catch {
+                                setDatasProgramadas([s]);
+                              }
                               setIsDataInicioOpen(false);
                             }
                           }}
@@ -2116,8 +2112,12 @@ export const PcpPlanejamentoView = () => {
                               setDataFim(s);
                               const start = s < dataInicio ? s : dataInicio;
                               if (s < dataInicio) setDataInicio(s);
-                              const days = eachDayOfInterval({ start: safeParseDate(start), end: d });
-                              setCustomDatesList(days.map(item => safeFormatDate(item, 'yyyy-MM-dd')));
+                              try {
+                                const days = eachDayOfInterval({ start: safeParseDate(start), end: d });
+                                setDatasProgramadas(days.map(item => safeFormatDate(item, 'yyyy-MM-dd')));
+                              } catch {
+                                setDatasProgramadas([s]);
+                              }
                               setIsDataFimOpen(false);
                             }
                           }}
