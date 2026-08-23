@@ -442,6 +442,26 @@ export const usePcpPlanejamentoData = (
     return Array.from(setP).sort();
   }, [obras]);
 
+  const donosCarteira = useMemo(() => {
+    const setD = new Set<string>();
+    obras.forEach(o => {
+      if (o.donoDaObra && o.donoDaObra.trim() && o.donoDaObra !== 'NÃO INFORMADO') {
+        setD.add(o.donoDaObra.trim().toUpperCase());
+      }
+    });
+    return Array.from(setD).sort();
+  }, [obras]);
+
+  const supervisoresCarteira = useMemo(() => {
+    const setSup = new Set<string>();
+    obras.forEach(o => {
+      if (o.supervisor && o.supervisor.trim()) {
+        setSup.add(o.supervisor.trim().toUpperCase());
+      }
+    });
+    return Array.from(setSup).sort();
+  }, [obras]);
+
   // Dynamic unique status values extracted from real obra data
   const statusesCarteira = useMemo(() => {
     const setS = new Set<string>();
@@ -958,6 +978,8 @@ export const usePcpPlanejamentoData = (
     mesesCarteira,
     municipiosCarteira,
     prioridadesCarteira,
+    donosCarteira,
+    supervisoresCarteira,
     statusesCarteira,
     metasPorEquipeMap,
     orcamentoPontosQuery,

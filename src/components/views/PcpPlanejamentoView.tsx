@@ -304,6 +304,8 @@ export const PcpPlanejamentoView = () => {
   const [selectedMesFilter, setSelectedMesFilter] = useSessionState<string>('pcp_shared_mes', 'TODOS');
   const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState<string>('pcp_shared_municipio', 'TODOS');
   const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_shared_prioridade', 'TODAS');
+  const [selectedDonoFilter, setSelectedDonoFilter] = useSessionState<string>('pcp_shared_dono', 'TODOS');
+  const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useSessionState<string>('pcp_shared_supervisor', 'TODOS');
   const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_shared_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
 
   // Selected Pontos list for active Obra
@@ -325,6 +327,8 @@ export const PcpPlanejamentoView = () => {
     mesesCarteira,
     municipiosCarteira,
     prioridadesCarteira,
+    donosCarteira,
+    supervisoresCarteira,
     statusesCarteira,
     metasPorEquipeMap,
     orcamentoPontosQuery,
@@ -466,6 +470,8 @@ export const PcpPlanejamentoView = () => {
     setSelectedMesFilter('TODOS');
     setSelectedMunicipioFilter('TODOS');
     setSelectedPrioridadeFilter('TODAS');
+    setSelectedDonoFilter('TODOS');
+    setSelectedSupervisorFilter('TODOS');
     setSearchObra('');
   };
 
@@ -631,17 +637,28 @@ export const PcpPlanejamentoView = () => {
         return false;
       }
 
-      // 6. Search Text filter
+      // 6. Dono da Obra filter
+      if (selectedDonoFilter !== 'TODOS' && (o.donoDaObra || '').toUpperCase() !== (selectedDonoFilter || '').toUpperCase()) {
+        return false;
+      }
+
+      // 7. Supervisor filter
+      if (selectedSupervisorFilter !== 'TODOS' && (o.supervisor || '').toUpperCase() !== (selectedSupervisorFilter || '').toUpperCase()) {
+        return false;
+      }
+
+      // 8. Search Text filter
       if (!searchObra.trim()) return true;
       const q = searchObra.toLowerCase().trim();
       return (
         (o.projeto || '').toLowerCase().includes(q) ||
         (o.nomeProjeto || '').toLowerCase().includes(q) ||
         (o.municipio || '').toLowerCase().includes(q) ||
-        (o.donoDaObra || '').toLowerCase().includes(q)
+        (o.donoDaObra || '').toLowerCase().includes(q) ||
+        (o.supervisor || '').toLowerCase().includes(q)
       );
     });
-  }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter]);
+  }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter, selectedDonoFilter, selectedSupervisorFilter]);
 
   // Toggle point label selection in C6 (multi-select points)
   const handleTogglePontoLabel = (pLabel: string) => {
@@ -1047,7 +1064,13 @@ export const PcpPlanejamentoView = () => {
             {/* Mês / Carteira (Coluna G) — apenas meses da unidade selecionada */}
             <div className="flex flex-col gap-1 min-w-[150px]">
               <span className="text-[10px] text-muted-foreground font-semibold">Mês da Carteira</span>
-              <Select value={selectedMesFilter} onValueChange={v => { setSelectedMesFilter(v); setSelectedMunicipioFilter('TODOS'); setSelectedPrioridadeFilter('TODAS'); }}>
+              <Select value={selectedMesFilter} onValueChange={v => {
+                setSelectedMesFilter(v);
+                setSelectedMunicipioFilter('TODOS');
+                setSelectedPrioridadeFilter('TODAS');
+                setSelectedDonoFilter('TODOS');
+                setSelectedSupervisorFilter('TODOS');
+              }}>
                 <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate font-mono">
                   <SelectValue placeholder="Mês" />
                 </SelectTrigger>
@@ -1066,7 +1089,7 @@ export const PcpPlanejamentoView = () => {
             </div>
 
             {/* Município — apenas municípios das obras filtradas pelo mês atual */}
-            <div className="flex flex-col gap-1 min-w-[150px]">
+            <div className="flex flex-col gap-1 min-w-[140px]">
               <span className="text-[10px] text-muted-foreground font-semibold">Município</span>
               <Select value={selectedMunicipioFilter} onValueChange={setSelectedMunicipioFilter}>
                 <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
@@ -1087,9 +1110,9 @@ export const PcpPlanejamentoView = () => {
               </Select>
             </div>
 
-            {/* Prioridade / Dono — apenas prioridades das obras visíveis (mês + município selecionados) */}
-            <div className="flex flex-col gap-1 min-w-[150px]">
-              <span className="text-[10px] text-muted-foreground font-semibold">Prioridade / Dono</span>
+            {/* Prioridade — apenas prioridades das obras visíveis (mês + município selecionados) */}
+            <div className="flex flex-col gap-1 min-w-[130px]">
+              <span className="text-[10px] text-muted-foreground font-semibold">Prioridade</span>
               <Select value={selectedPrioridadeFilter} onValueChange={setSelectedPrioridadeFilter}>
                 <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
                   <SelectValue placeholder="Prioridade" />
@@ -1105,6 +1128,54 @@ export const PcpPlanejamentoView = () => {
                   }).map(o => o.prioridade).filter(Boolean))].sort().map(p => (
                     <SelectItem key={p} value={p} className="text-xs">
                       {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Dono da Obra (Coluna BG) */}
+            <div className="flex flex-col gap-1 min-w-[130px]">
+              <span className="text-[10px] text-muted-foreground font-semibold">Dono da Obra</span>
+              <Select value={selectedDonoFilter} onValueChange={setSelectedDonoFilter}>
+                <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
+                  <SelectValue placeholder="Dono" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[240px]">
+                  <SelectItem value="TODOS" className="text-xs font-semibold">Todos os Donos</SelectItem>
+                  {[...new Set(obras.filter(o => {
+                    const matchMes = selectedMesFilter === 'TODOS' ||
+                      o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
+                    const matchMun = selectedMunicipioFilter === 'TODOS' ||
+                      o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
+                    return matchMes && matchMun;
+                  }).map(o => o.donoDaObra).filter(d => d && d !== 'NÃO INFORMADO'))].sort().map(d => (
+                    <SelectItem key={d} value={d} className="text-xs">
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Supervisor */}
+            <div className="flex flex-col gap-1 min-w-[130px]">
+              <span className="text-[10px] text-muted-foreground font-semibold">Supervisor</span>
+              <Select value={selectedSupervisorFilter} onValueChange={setSelectedSupervisorFilter}>
+                <SelectTrigger className="h-8 text-xs font-semibold bg-background truncate">
+                  <SelectValue placeholder="Supervisor" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[240px]">
+                  <SelectItem value="TODOS" className="text-xs font-semibold">Todos Supervisores</SelectItem>
+                  {[...new Set(obras.filter(o => {
+                    const matchMes = selectedMesFilter === 'TODOS' ||
+                      o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
+                    const matchMun = selectedMunicipioFilter === 'TODOS' ||
+                      o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
+                    return matchMes && matchMun;
+                  }).map(o => o.supervisor).filter(Boolean))].sort().map(s => (
+                    <SelectItem key={s} value={s} className="text-xs">
+                      {s}
                     </SelectItem>
                   ))}
                 </SelectContent>
