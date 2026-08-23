@@ -572,26 +572,91 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Cálculo dos Dias Programados no Período (Data Início até Data Fim)
-  const diasProgramados = useMemo(() => {
+  // List of custom programmed dates: string[] (yyyy-MM-dd)
+  const [customDatesList, setCustomDatesList] = useSessionState<string[]>('pcp_shared_custom_dates_list_v4', []);
+
+  // Compute effective dates from customDatesList or default interval
+  const effectiveDates = useMemo(() => {
+    if (customDatesList && customDatesList.length > 0) {
+      return customDatesList;
+    }
     let dStart = safeParseDate(dataInicio);
     let dEnd = safeParseDate(dataFim);
-
     if (dEnd < dStart) dEnd = dStart;
-
     let days: Date[] = [];
     try {
       days = eachDayOfInterval({ start: dStart, end: dEnd });
     } catch {
       days = [dStart];
     }
-    if (!days || days.length === 0) days = [dStart];
+    return days.map(d => safeFormatDate(d, 'yyyy-MM-dd'));
+  }, [customDatesList, dataInicio, dataFim]);
 
-    const totalDias = days.length;
+  // Update a specific day's date
+  const handleUpdateDiaDate = (index: number, newDateStr: string) => {
+    const base = (customDatesList && customDatesList.length > 0) ? [...customDatesList] : [...effectiveDates];
+    const oldId = base[index];
+    base[index] = newDateStr;
+
+    // Migrate points, alojamentos and etapas if ID changed
+    if (oldId && oldId !== newDateStr) {
+      if (diasPontosMap[oldId]) {
+        setDiasPontosMap(pMap => {
+          const nextMap = { ...pMap, [newDateStr]: pMap[oldId] };
+          delete nextMap[oldId];
+          return nextMap;
+        });
+      }
+      if (diasEtapasMap[oldId]) {
+        setDiasEtapasMap(eMap => {
+          const nextMap = { ...eMap, [newDateStr]: eMap[oldId] };
+          delete nextMap[oldId];
+          return nextMap;
+        });
+      }
+      if (diasCustomAlojMap[oldId]) {
+        setDiasCustomAlojMap(aMap => {
+          const nextMap = { ...aMap, [newDateStr]: aMap[oldId] };
+          delete nextMap[oldId];
+          return nextMap;
+        });
+      }
+      if (activeDayId === oldId) {
+        setActiveDayId(newDateStr);
+      }
+    }
+    setCustomDatesList(base);
+  };
+
+  // Add extra day to schedule
+  const handleAddDiaExtra = () => {
+    const base = (customDatesList && customDatesList.length > 0) ? [...customDatesList] : [...effectiveDates];
+    const lastDateStr = base[base.length - 1] || dataFim || format(new Date(), 'yyyy-MM-dd');
+    const nextDate = addDays(safeParseDate(lastDateStr), 1);
+    const nextDateStr = safeFormatDate(nextDate, 'yyyy-MM-dd');
+    setCustomDatesList([...base, nextDateStr]);
+  };
+
+  // Remove day from schedule
+  const handleRemoveDia = (index: number) => {
+    const base = (customDatesList && customDatesList.length > 0) ? [...customDatesList] : [...effectiveDates];
+    if (base.length <= 1) {
+      alert('A programação deve ter pelo menos 1 dia.');
+      return;
+    }
+    const updated = base.filter((_, i) => i !== index);
+    setCustomDatesList(updated);
+  };
+
+  // Cálculo dos Dias Programados no Período (com suporte a datas editáveis e dias extras)
+  const diasProgramados = useMemo(() => {
+    const dates = effectiveDates;
+    const totalDias = dates.length;
     const nomesSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
-    return days.map((dayDate, idx) => {
-      const id = safeFormatDate(dayDate, 'yyyy-MM-dd');
+    return dates.map((dateStrItem, idx) => {
+      const dayDate = safeParseDate(dateStrItem);
+      const id = dateStrItem;
       const diaSemanaIndex = dayDate.getDay();
       const nomeDia = nomesSemana[diaSemanaIndex] || 'Dia';
       const dataStr = safeFormatDate(dayDate, 'dd/MM');
@@ -2012,7 +2077,10 @@ export const PcpPlanejamentoView = () => {
                             if (d) {
                               const s = safeFormatDate(d, 'yyyy-MM-dd');
                               setDataInicio(s);
+                              const end = s > dataFim ? s : dataFim;
                               if (s > dataFim) setDataFim(s);
+                              const days = eachDayOfInterval({ start: d, end: safeParseDate(end) });
+                              setCustomDatesList(days.map(item => safeFormatDate(item, 'yyyy-MM-dd')));
                               setIsDataInicioOpen(false);
                             }
                           }}
@@ -2041,7 +2109,10 @@ export const PcpPlanejamentoView = () => {
                             if (d) {
                               const s = safeFormatDate(d, 'yyyy-MM-dd');
                               setDataFim(s);
+                              const start = s < dataInicio ? s : dataInicio;
                               if (s < dataInicio) setDataInicio(s);
+                              const days = eachDayOfInterval({ start: safeParseDate(start), end: d });
+                              setCustomDatesList(days.map(item => safeFormatDate(item, 'yyyy-MM-dd')));
                               setIsDataFimOpen(false);
                             }
                           }}
@@ -2684,14 +2755,52 @@ export const PcpPlanejamentoView = () => {
                 <CardHeader className="bg-muted/40 border-b border-border/70 py-3.5 px-4">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-primary text-primary-foreground font-mono text-xs px-2 py-0.5 font-bold">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className="bg-primary text-primary-foreground font-mono text-xs px-2 py-0.5 font-bold shrink-0">
                           Dia {diaIdx + 1} de {diasProgramados.length}
                         </Badge>
-                        <h2 className="font-bold text-base text-foreground font-mono flex items-center gap-1.5">
-                          <CalendarIcon className="w-4 h-4 text-primary" />
-                          {dia.nomeDia}, {dia.dataCompleta}
-                        </h2>
+                        
+                        {/* Seletor / Editor da Data deste Dia */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs font-bold font-mono text-foreground flex items-center gap-1.5 bg-background border-border/80 hover:bg-accent hover:border-primary/50 shadow-2xs"
+                              title="Clique para alterar a data deste dia"
+                            >
+                              <CalendarIcon className="w-3.5 h-3.5 text-primary" />
+                              <span>{dia.nomeDia}, {dia.dataCompleta}</span>
+                              <span className="text-[10px] text-muted-foreground ml-0.5">✏️ Alterar</span>
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={dia.dayDate}
+                              onSelect={d => {
+                                if (d) {
+                                  handleUpdateDiaDate(diaIdx, safeFormatDate(d, 'yyyy-MM-dd'));
+                                }
+                              }}
+                              locale={ptBR}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+
+                        {/* Botão de Remover Dia (se tiver mais de 1 dia) */}
+                        {diasProgramados.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveDia(diaIdx)}
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title={`Remover Dia ${diaIdx + 1} (${dia.nomeDia})`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </div>
 
                       {/* Detalhes de Deslocamento do Dia */}
@@ -3082,6 +3191,17 @@ export const PcpPlanejamentoView = () => {
               </Card>
             );
           })}
+
+          {/* BOTÃO PARA INSERIR DIA EXTRA NA PROGRAMAÇÃO */}
+          <div className="flex items-center justify-center p-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 transition-all shadow-2xs">
+            <Button
+              onClick={handleAddDiaExtra}
+              variant="outline"
+              className="h-9 px-4 text-xs font-bold gap-2 bg-background text-primary border-primary/30 shadow-2xs hover:bg-primary hover:text-primary-foreground transition-all"
+            >
+              <Plus className="w-4 h-4" /> Inserir Dia Extra na Programação (Dia {diasProgramados.length + 1})
+            </Button>
+          </div>
 
           {/* RESUMO GERAL CONSOLIDADO DO PERÍODO & GRAVAÇÃO EM LOTE */}
           <Card className="border border-border shadow-sm bg-card">
