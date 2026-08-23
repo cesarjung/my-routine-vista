@@ -447,6 +447,9 @@ export const PcpPlanejamentoView = () => {
   const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
   const [equipe, setEquipe] = useState<string>('EH156');
   const [tempoDeslocamento, setTempoDeslocamento] = useState<number>(30);
+  const [tempoSaidaBase, setTempoSaidaBase] = useState<number>(15);
+  const [tempoSeguranca, setTempoSeguranca] = useState<number>(15);
+  const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
   // Per-day Etapas & LV Filters maps: Record<dayId, string[]> and Record<dayId, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>
   const [diasEtapasMap, setDiasEtapasMap] = useSessionState<Record<string, string[]>>('pcp_shared_dias_etapas_map_v2', {});
   const [diasFiltroLvMap, setDiasFiltroLvMap] = useSessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_shared_dias_filtro_lv_map_v2', {});
