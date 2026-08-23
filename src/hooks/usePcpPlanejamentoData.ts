@@ -335,7 +335,21 @@ export const usePcpPlanejamentoData = (
       if (!Array.isArray(carteiraRows) || carteiraRows.length < 7) return [];
 
       const result: PcpObra[] = [];
-      const mapProjetos = new Set<string>();
+      // Identifica dinamicamente a coluna de Dono da Obra nos cabeçalhos da planilha ou usa Coluna BG (index 58)
+      let colDonoIdx = 58; // Coluna BG (index 58)
+      for (let r = 0; r < Math.min(6, carteiraRows.length); r++) {
+        const headerRow = carteiraRows[r];
+        if (Array.isArray(headerRow)) {
+          const foundIdx = headerRow.findIndex(cell => {
+            const str = String(cell || '').toUpperCase().trim();
+            return str.includes('DONO DA OBRA') || str === 'DONO' || str.includes('DONO');
+          });
+          if (foundIdx !== -1) {
+            colDonoIdx = foundIdx;
+            break;
+          }
+        }
+      }
 
       for (let i = 6; i < carteiraRows.length; i++) {
         const row = carteiraRows[i];
@@ -360,6 +374,9 @@ export const usePcpPlanejamentoData = (
         let lat = Number(String(row[46] || '').replace(',', '.'));
         let lng = Number(String(row[47] || '').replace(',', '.'));
 
+        const donoDaObraRaw = String(row[colDonoIdx] || '').trim();
+        const prioridadeRaw = String(row[15] || '').trim();
+
         result.push({
           projeto,
           nomeProjeto: String(row[13] || row[14] || '').trim(),
@@ -369,8 +386,8 @@ export const usePcpPlanejamentoData = (
           dataInicio: String(row[9] || '').trim(),
           dataFim: String(row[10] || '').trim(),
           qtdOrcada: String(row[3] || '0').trim(),
-          donoDaObra: String(row[15] || 'DIRETORIA').trim(),
-          prioridade: String(row[15] || '').trim(),
+          donoDaObra: donoDaObraRaw || 'NÃO INFORMADO',
+          prioridade: prioridadeRaw || 'SEM PRIORIDADE',
           situacao,
           qtdPostesDisponiveis: parseNumericCell(row[24]), // Coluna Y (PT DISP.)
           qtdCabosDisponiveis: parseNumericCell(row[30]),  // Coluna AE (CABO DISP.)
