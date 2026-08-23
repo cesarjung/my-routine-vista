@@ -447,26 +447,25 @@ export const PcpPlanejamentoView = () => {
   const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
   const [equipe, setEquipe] = useState<string>('EH156');
   const [tempoDeslocamento, setTempoDeslocamento] = useState<number>(30);
-  const [tempoSaidaBase, setTempoSaidaBase] = useState<number>(15);
-  const [tempoSeguranca, setTempoSeguranca] = useState<number>(15);
-  const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
+  // Per-day Etapas & LV Filters maps: Record<dayId, string[]> and Record<dayId, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>
+  const [diasEtapasMap, setDiasEtapasMap] = useSessionState<Record<string, string[]>>('pcp_shared_dias_etapas_map_v2', {});
+  const [diasFiltroLvMap, setDiasFiltroLvMap] = useSessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_shared_dias_filtro_lv_map_v2', {});
 
-  // MULTI-SELECT ETAPAS FILTER (Tudo desmarcado pré-definido por padrão)
-  const [selectedEtapas, setSelectedEtapas] = useState<string[]>([]);
-  const [isEtapasPopoverOpen, setIsEtapasPopoverOpen] = useState<boolean>(false);
-  
-  const [filtroLv, setFiltroLv] = useSessionState<'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>('pcp_shared_filtro_lv', 'COMPLETO');
+  const handleToggleEtapaNoDia = (diaId: string, etapa: string) => {
+    setDiasEtapasMap(prev => {
+      const cur = prev[diaId] || [];
+      const updated = cur.includes(etapa) ? cur.filter(e => e !== etapa) : [...cur, etapa];
+      return { ...prev, [diaId]: updated };
+    });
+  };
+
+  const handleSetFiltroLvNoDia = (diaId: string, filtro: 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV') => {
+    setDiasFiltroLvMap(prev => ({ ...prev, [diaId]: filtro }));
+  };
 
   const filteredServicosBase = useMemo(() => {
-    const base = Array.isArray(servicosBase) ? servicosBase : [];
-    if (filtroLv === 'SOMENTE_LV') {
-      return base.filter(s => s && s.servico && (s.servico.toUpperCase().includes(' LV') || s.servico.toUpperCase().includes('LINHA VIVA')));
-    }
-    if (filtroLv === 'SEM_LV') {
-      return base.filter(s => s && s.servico && !s.servico.toUpperCase().includes(' LV') && !s.servico.toUpperCase().includes('LINHA VIVA'));
-    }
-    return base;
-  }, [servicosBase, filtroLv]);
+    return Array.isArray(servicosBase) ? servicosBase : [];
+  }, [servicosBase]);
 
   // ZOOM — igual padrão das outras seções do Módulo Planejamento
   const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_pcpplanejamento', 1);
@@ -1320,13 +1319,17 @@ export const PcpPlanejamentoView = () => {
       return;
     }
 
+    const etapasDoDia = (diasEtapasMap[dia.id] && diasEtapasMap[dia.id].length > 0)
+      ? diasEtapasMap[dia.id].join(', ')
+      : Array.from(new Set(itensSelecionados.map(i => i.etapaPrevista).filter(Boolean))).join(', ');
+
     await salvarProgramacao.mutateAsync({
       unidadeId: selectedUnidadeId,
       dataProgramacao: dia.dataCompleta,
       dateObj: dia.dayDate,
       supervisor,
       equipe,
-      etapa: selectedEtapas.join(', '),
+      etapa: etapasDoDia,
       obra: selectedObra,
       pontos: itensDoDia,
       tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
@@ -1362,13 +1365,17 @@ export const PcpPlanejamentoView = () => {
 
         if (itensDoDia.length === 0) continue;
 
+        const etapasDoDia = (diasEtapasMap[d.id] && diasEtapasMap[d.id].length > 0)
+          ? diasEtapasMap[d.id].join(', ')
+          : Array.from(new Set(itensDoDia.filter(i => i.selected).map(i => i.etapaPrevista).filter(Boolean))).join(', ');
+
         await salvarProgramacao.mutateAsync({
           unidadeId: selectedUnidadeId,
           dataProgramacao: d.dataCompleta,
           dateObj: d.dayDate,
           supervisor,
           equipe,
-          etapa: selectedEtapas.join(', '),
+          etapa: etapasDoDia,
           obra: selectedObra,
           pontos: itensDoDia,
           tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
@@ -2067,67 +2074,7 @@ export const PcpPlanejamentoView = () => {
                         <SelectItem key={eq} value={eq} className="text-xs font-mono">
                           {eq}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
-              </div>
-
-              {/* MULTI-SELECT ETAPA POPOVER */}
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <Label className="text-xs">Etapas da Obra (Multiseleção)</Label>
-                <Popover open={isEtapasPopoverOpen} onOpenChange={setIsEtapasPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-9 text-xs justify-between px-3 font-semibold">
-                      <span className="flex items-center gap-1.5 truncate">
-                        <Tag className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span className="truncate">
-                          {selectedEtapas.length === 0
-                            ? 'Nenhuma Etapa (Desmarcado)'
-                            : selectedEtapas.length === etapasDisponiveis.length
-                            ? 'Todas as Etapas'
-                            : selectedEtapas.join(', ')}
-                        </span>
-                      </span>
-                      <ChevronDown className="w-3 h-3 opacity-50 shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[260px] p-3 text-xs" align="start">
-                    <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold">
-                      <span>Selecione as Etapas</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setSelectedEtapas([])}
-                          className="text-[10px] text-muted-foreground hover:underline"
-                        >
-                          Desmarcar
-                        </button>
-                        <button
-                          onClick={() => setSelectedEtapas([...etapasDisponiveis])}
-                          className="text-[10px] text-primary hover:underline"
-                        >
-                          Marcar Todas
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                      {etapasDisponiveis.map(et => {
-                        const isChecked = selectedEtapas.includes(et);
-                        return (
-                          <div
-                            key={et}
-                            onClick={() => handleToggleEtapa(et)}
-                            className="flex items-center gap-2 cursor-pointer hover:bg-accent/40 p-1.5 rounded"
-                          >
-                            <Checkbox checked={isChecked} onCheckedChange={() => handleToggleEtapa(et)} />
-                            <span className="text-xs font-medium text-foreground">{et}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </PopoverContent>
-                </Popover>
               </div>
             </CardContent>
           </Card>
@@ -2682,35 +2629,8 @@ export const PcpPlanejamentoView = () => {
                 </div>
               </div>
 
-              {/* Botão de Distribuição Automática Global & Filtro LV */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-primary/20 flex-wrap">
-                <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
-                  <Button
-                    size="sm"
-                    variant={filtroLv === 'COMPLETO' ? 'default' : 'ghost'}
-                    onClick={() => setFiltroLv('COMPLETO')}
-                    className="h-7 text-xs font-semibold px-3"
-                  >
-                    COMPLETO
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={filtroLv === 'SOMENTE_LV' ? 'default' : 'ghost'}
-                    onClick={() => setFiltroLv('SOMENTE_LV')}
-                    className="h-7 text-xs font-semibold px-3"
-                  >
-                    SOMENTE LV
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={filtroLv === 'SEM_LV' ? 'default' : 'ghost'}
-                    onClick={() => setFiltroLv('SEM_LV')}
-                    className="h-7 text-xs font-semibold px-3"
-                  >
-                    SEM LV
-                  </Button>
-                </div>
-
+              {/* Botão de Distribuição Automática Global */}
+              <div className="flex items-center justify-end pt-2 border-t border-primary/20">
                 <Button
                   size="sm"
                   variant="outline"
@@ -2733,6 +2653,9 @@ export const PcpPlanejamentoView = () => {
           {diasProgramados.map((dia, diaIdx) => {
             const pontosDoDia = dia.pontos || [];
             const outrosDiasMap = getPontosAlocadosEmOutrosDias(dia.id);
+            const etapasDoDia = diasEtapasMap[dia.id] || [];
+            const filtroLvDoDia = diasFiltroLvMap[dia.id] || 'COMPLETO';
+
             const itensDoDiaFlat = pontosDoDia.flatMap(p => pontosGroupedMap[p] || []);
             const itensDoDiaSelecionados = itensDoDiaFlat.filter(item => item.selected);
             const tempoAtivMinDia = itensDoDiaSelecionados.reduce((acc, item) => acc + (item.tempoEstimadoMinutos || 0), 0);
@@ -2782,42 +2705,134 @@ export const PcpPlanejamentoView = () => {
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-4">
-                  {/* SELETOR C6 DE PONTOS ESPECÍFICO PARA ESTE DIA */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap bg-muted/20 p-2.5 rounded-lg border border-border/60">
-                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <PackageCheck className="w-4 h-4 text-primary" />
-                      Pontos a Executar em <strong className="text-primary">{dia.nomeDia} ({dia.dataStr})</strong>:
-                    </span>
+                  {/* BARRA DE CONFIGURAÇÕES DESTE DIA: ETAPAS DA OBRA + FILTRO LV + SELETOR DE PONTOS */}
+                  <div className="flex flex-col gap-2.5 bg-muted/20 p-3 rounded-xl border border-border/60">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {/* Etapas da Obra para este Dia (Multiseleção) */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-1">
+                          <Tag className="w-3.5 h-3.5 text-primary" /> Etapas:
+                        </span>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs font-semibold bg-background px-2.5 max-w-[250px]">
+                              <span className="truncate">
+                                {etapasDoDia.length === 0
+                                  ? 'Todas as Etapas (Desmarcado)'
+                                  : etapasDoDia.length === etapasDisponiveis.length
+                                  ? 'Todas as Etapas'
+                                  : etapasDoDia.join(', ')}
+                              </span>
+                              <ChevronDown className="w-3 h-3 ml-1 opacity-60 shrink-0" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[260px] p-3 text-xs" align="start">
+                            <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold">
+                              <span>Etapas ({dia.nomeDia})</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setDiasEtapasMap(prev => ({ ...prev, [dia.id]: [] }))}
+                                  className="text-[10px] text-muted-foreground hover:underline"
+                                >
+                                  Limpar
+                                </button>
+                                <button
+                                  onClick={() => setDiasEtapasMap(prev => ({ ...prev, [dia.id]: [...etapasDisponiveis] }))}
+                                  className="text-[10px] text-primary hover:underline"
+                                >
+                                  Todas
+                                </button>
+                              </div>
+                            </div>
 
-                    <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
-                      {orcamentoPontosQuery.isLoading ? (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando pontos...
-                        </div>
-                      ) : (
-                        <PontosMultiSelect
-                          pontos={pontosDisponiveisDoProjeto}
-                          selected={pontosDoDia}
-                          orcamentoPorPontoMap={orcamentoPorPontoMap}
-                          pontosAlocadosEmOutrosDiasMap={outrosDiasMap}
-                          onToggle={p => handleTogglePontoNoDia(dia.id, p)}
-                          onSelectAll={() => handleSelectAllPontosNoDia(dia.id)}
-                          onDeselectAll={() => handleDeselectAllPontosNoDia(dia.id)}
-                        />
-                      )}
+                            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                              {etapasDisponiveis.map(et => {
+                                const isChecked = etapasDoDia.includes(et);
+                                return (
+                                  <div
+                                    key={et}
+                                    onClick={() => handleToggleEtapaNoDia(dia.id, et)}
+                                    className="flex items-center gap-2 cursor-pointer hover:bg-accent/40 p-1.5 rounded"
+                                  >
+                                    <Checkbox checked={isChecked} onCheckedChange={() => handleToggleEtapaNoDia(dia.id, et)} />
+                                    <span className="text-xs font-medium text-foreground">{et}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
 
-                      {/* Input rápido para ponto customizado neste dia */}
-                      <div className="flex items-center gap-1">
-                        <Input
-                          placeholder="Outro Ponto..."
-                          value={customPontoInputMap[dia.id] || ''}
-                          onChange={e => setCustomPontoInputMap(prev => ({ ...prev, [dia.id]: e.target.value }))}
-                          onKeyDown={e => e.key === 'Enter' && handleAddCustomPontoNoDia(dia.id)}
-                          className="h-8 text-xs w-[120px] font-mono"
-                        />
-                        <Button size="sm" variant="outline" onClick={() => handleAddCustomPontoNoDia(dia.id)} className="h-8 text-xs px-2">
-                          <Plus className="w-3.5 h-3.5 mr-0.5" /> Add
+                      {/* Filtro LV para este Dia (COMPLETO / SOMENTE LV / SEM LV) */}
+                      <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border">
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={filtroLvDoDia === 'COMPLETO' ? 'default' : 'ghost'}
+                          onClick={() => handleSetFiltroLvNoDia(dia.id, 'COMPLETO')}
+                          className="h-6 text-[10px] font-semibold px-2"
+                        >
+                          COMPLETO
                         </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={filtroLvDoDia === 'SOMENTE_LV' ? 'default' : 'ghost'}
+                          onClick={() => handleSetFiltroLvNoDia(dia.id, 'SOMENTE_LV')}
+                          className="h-6 text-[10px] font-semibold px-2"
+                        >
+                          SOMENTE LV
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={filtroLvDoDia === 'SEM_LV' ? 'default' : 'ghost'}
+                          onClick={() => handleSetFiltroLvNoDia(dia.id, 'SEM_LV')}
+                          className="h-6 text-[10px] font-semibold px-2"
+                        >
+                          SEM LV
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* SELETOR C6 DE PONTOS ESPECÍFICO PARA ESTE DIA */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-border/40">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <PackageCheck className="w-4 h-4 text-primary" />
+                        Pontos a Executar em <strong className="text-primary">{dia.nomeDia} ({dia.dataStr})</strong>:
+                      </span>
+
+                      <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
+                        {orcamentoPontosQuery.isLoading ? (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando pontos...
+                          </div>
+                        ) : (
+                          <PontosMultiSelect
+                            pontos={pontosDisponiveisDoProjeto}
+                            selected={pontosDoDia}
+                            orcamentoPorPontoMap={orcamentoPorPontoMap}
+                            pontosAlocadosEmOutrosDiasMap={outrosDiasMap}
+                            onToggle={p => handleTogglePontoNoDia(dia.id, p)}
+                            onSelectAll={() => handleSelectAllPontosNoDia(dia.id)}
+                            onDeselectAll={() => handleDeselectAllPontosNoDia(dia.id)}
+                          />
+                        )}
+
+                        {/* Input rápido para ponto customizado neste dia */}
+                        <div className="flex items-center gap-1">
+                          <Input
+                            placeholder="Outro Ponto..."
+                            value={customPontoInputMap[dia.id] || ''}
+                            onChange={e => setCustomPontoInputMap(prev => ({ ...prev, [dia.id]: e.target.value }))}
+                            onKeyDown={e => e.key === 'Enter' && handleAddCustomPontoNoDia(dia.id)}
+                            className="h-7 text-xs w-[110px] font-mono"
+                          />
+                          <Button size="sm" variant="outline" onClick={() => handleAddCustomPontoNoDia(dia.id)} className="h-7 text-xs px-2">
+                            <Plus className="w-3 h-3 mr-0.5" /> Add
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2850,8 +2865,11 @@ export const PcpPlanejamentoView = () => {
                         const itemsDoPontoRaw = pontosGroupedMap[pLabel] || [];
                         const itemsDoPonto = itemsDoPontoRaw.filter(i => {
                           const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.servico || '').toUpperCase().includes('LINHA VIVA');
-                          if (filtroLv === 'SOMENTE_LV') return isLv;
-                          if (filtroLv === 'SEM_LV') return !isLv;
+                          if (filtroLvDoDia === 'SOMENTE_LV' && !isLv) return false;
+                          if (filtroLvDoDia === 'SEM_LV' && isLv) return false;
+                          if (etapasDoDia.length > 0 && i.etapaPrevista && !etapasDoDia.includes(i.etapaPrevista)) {
+                            return false;
+                          }
                           return true;
                         });
                         const itemsSelecionados = itemsDoPonto.filter(i => i.selected);
