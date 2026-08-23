@@ -845,7 +845,7 @@ export const PcpPlanejamentoView = () => {
   }, [equipe, metasPorEquipeMap]);
 
   // Map of PcpPontoItem[] grouped by Ponto Label (e.g., 'P71' -> items[], 'P72' -> items[])
-  const [pontosGroupedMap, setPontosGroupedMap] = useSessionState<Record<string, PcpPontoItem[]>>('pcp_shared_pontos_grouped', {});
+  const [pontosGroupedMap, setPontosGroupedMap] = useSessionState<Record<string, PcpPontoItem[]>>('pcp_shared_pontos_grouped_v4', {});
 
   // Helper for "Limpar Filtros"
   const handleClearFilters = () => {
@@ -883,47 +883,30 @@ export const PcpPlanejamentoView = () => {
         if (!pLabel) return;
         const pLabelUpper = pLabel.toUpperCase();
         const budgetItems = orcamentoPorPontoMap?.get ? orcamentoPorPontoMap.get(pLabelUpper) : undefined;
+        const existingItems = currentPrevMap[pLabelUpper] || [];
+        const existingSelectedMap = new Map(existingItems.map(i => [i.servico || i.id, i.selected]));
 
-        if (currentPrevMap[pLabelUpper] && Array.isArray(currentPrevMap[pLabelUpper]) && currentPrevMap[pLabelUpper].length > 0) {
-          // Ponto já existe — atualiza tempo/valor vindo do orçamento, mas preserva seleções manuais
-          if (budgetItems && Array.isArray(budgetItems) && budgetItems.length > 0) {
-            const budgetByDescricao = new Map(budgetItems.map(b => [b.servicoPrevisto, b]));
-            const budgetByCode = new Map(budgetItems.filter(b => b.codigo).map(b => [b.codigo, b]));
-
-            nextMap[pLabelUpper] = currentPrevMap[pLabelUpper].map(item => {
-              if (!item) return item;
-              const match = (item.codigoMaterial ? budgetByCode.get(item.codigoMaterial) : undefined) || (item.servico ? budgetByDescricao.get(item.servico) : undefined);
-              if (match) {
-                return {
-                  ...item,
-                  codigoMaterial: item.codigoMaterial || match.codigo,
-                  descricaoMaterial: item.descricaoMaterial || match.descricao,
-                  tempoEstimadoMinutos: match.tempoMinutos > 0 ? match.tempoMinutos : (item.tempoEstimadoMinutos || 0),
-                  valorEstimado: match.valorEstimado > 0 ? match.valorEstimado : (item.valorEstimado || 0),
-                  isBudgeted: true,
-                };
-              }
-              return item;
-            });
-          } else {
-            nextMap[pLabelUpper] = currentPrevMap[pLabelUpper];
-          }
-        } else if (budgetItems && Array.isArray(budgetItems) && budgetItems.length > 0) {
-          // Novo ponto — cria a partir do orçamento
-          nextMap[pLabelUpper] = budgetItems.map((bItem, bIdx) => ({
-            id: `${pLabelUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
-            ponto: pLabelUpper,
-            servico: bItem.servicoPrevisto || 'SERVIÇO',
-            codigoMaterial: bItem.codigo,
-            descricaoMaterial: bItem.descricao,
-            qtdOrcadaPonto: bItem.quantidade || 1,
-            etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
-            quantidade: bItem.quantidade || 1,
-            tempoEstimadoMinutos: bItem.tempoMinutos || 15,
-            valorEstimado: bItem.valorEstimado || 0,
-            selected: false,
-            isBudgeted: true,
-          }));
+        if (budgetItems && Array.isArray(budgetItems) && budgetItems.length > 0) {
+          nextMap[pLabelUpper] = budgetItems.map((bItem, bIdx) => {
+            const serv = bItem.servicoPrevisto || 'SERVIÇO';
+            const wasSelected = existingSelectedMap.has(serv) ? existingSelectedMap.get(serv)! : false;
+            return {
+              id: `${pLabelUpper}-${serv.replace(/\s+/g, '_')}-${bIdx}`,
+              ponto: pLabelUpper,
+              servico: serv,
+              codigoMaterial: bItem.codigo,
+              descricaoMaterial: bItem.descricao,
+              qtdOrcadaPonto: bItem.quantidade || 1,
+              etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(serv),
+              quantidade: bItem.quantidade || 1,
+              tempoEstimadoMinutos: bItem.tempoMinutos || 15,
+              valorEstimado: bItem.valorEstimado || 0,
+              selected: wasSelected,
+              isBudgeted: true,
+            };
+          });
+        } else if (existingItems.length > 0) {
+          nextMap[pLabelUpper] = existingItems;
         } else {
           // Sem orçamento — cria linha em branco com fallback
           const fallback = (Array.isArray(filteredServicosBase) && filteredServicosBase.length > 0)
