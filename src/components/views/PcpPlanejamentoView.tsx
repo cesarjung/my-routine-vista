@@ -1397,17 +1397,17 @@ export const PcpPlanejamentoView = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6 w-full max-w-[1600px] mx-auto min-h-screen bg-background" style={{ zoom: zoomLevel } as React.CSSProperties}>
+    <div className="flex flex-col gap-3.5 p-3 sm:p-4 w-full max-w-[1750px] mx-auto min-h-screen bg-background" style={{ zoom: zoomLevel } as React.CSSProperties}>
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-card border border-border shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-primary/10 text-primary">
-            <FileSpreadsheet className="w-7 h-7" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl bg-card border border-border shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
+            <FileSpreadsheet className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-foreground">Módulo PCP — Seção Planejamento</h1>
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-semibold">
+              <h1 className="text-lg font-bold text-foreground">Módulo PCP — Seção Planejamento</h1>
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-semibold text-[10px] px-1.5 py-0">
                 Ambiente Local
               </Badge>
             </div>
@@ -1418,9 +1418,9 @@ export const PcpPlanejamentoView = () => {
         </div>
 
         {/* Controles: Zoom + Atualizar */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {/* Zoom Control */}
-          <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
+          <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-0.5">
             <button onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} className="text-muted-foreground hover:text-foreground" title="Diminuir Zoom">
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
@@ -1436,19 +1436,20 @@ export const PcpPlanejamentoView = () => {
             onClick={() => rawCacheQuery.refetch()}
             disabled={rawCacheQuery.isFetching}
             title="Atualizar Dados"
+            className="h-8 w-8"
           >
-            <RefreshCw className={`w-4 h-4 ${rawCacheQuery.isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${rawCacheQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
 
       {/* BARRA DE FILTROS SUPERIOR (Padrão das seções do Planejamento) */}
-      <Card className="border border-border p-3.5 bg-card shadow-xs rounded-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-2.5 flex-1">
-            <div className="flex items-center gap-1.5 font-bold text-foreground pr-2.5 border-r border-border">
-              <Filter className="w-4 h-4 text-primary" />
-              <span>Filtros da Carteira</span>
+      <Card className="border border-border p-2.5 sm:p-3 bg-card shadow-2xs rounded-xl">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2 flex-1">
+            <div className="flex items-center gap-1.5 font-bold text-foreground pr-2 border-r border-border">
+              <Filter className="w-3.5 h-3.5 text-primary" />
+              <span>Filtros</span>
             </div>
 
             {/* Unidade */}
@@ -1687,9 +1688,9 @@ export const PcpPlanejamentoView = () => {
       </Card>
 
       {/* Main Grid: Parameters & Obra Selector */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
         {/* Left Column: Carteira de Obras (NO TOPO), Parametros & Tempos (5 Cols) */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
+        <div className="lg:col-span-5 flex flex-col gap-3.5">
           {/* 1. Card Seletor de Obras da Carteira (AGORA NO TOPO DA COLUNA ESQUERDA) */}
           <Card className="border border-border flex flex-col">
             <CardHeader className="pb-3 space-y-2">
@@ -2129,20 +2130,20 @@ export const PcpPlanejamentoView = () => {
                   </Select>
                 </div>
 
-                {/* FATOR DE ACRÉSCIMO CAMINHÃO PESADO / ESTRADAS */}
-                <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col gap-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-foreground flex items-center gap-1">
-                        🚚 Fator de Acréscimo Caminhão Pesado:
+                {/* FATOR DE ACRÉSCIMO */}
+                <div className="p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col gap-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1 whitespace-nowrap">
+                        🚚 Fator Acréscimo:
                       </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        (+{acrescimoVeiculoPct}% sobre o tempo base de estradas)
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        (+{acrescimoVeiculoPct}% sobre estradas)
                       </span>
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5">
                         <Input
                           type="number"
                           step="5"
@@ -2150,9 +2151,9 @@ export const PcpPlanejamentoView = () => {
                           max="200"
                           value={acrescimoVeiculoPct}
                           onChange={e => setAcrescimoVeiculoPct(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="h-7 w-16 text-center font-mono font-bold text-xs bg-background"
+                          className="h-6 w-14 text-center font-mono font-bold text-xs bg-background py-0 px-1"
                         />
-                        <span className="text-xs font-bold text-muted-foreground">%</span>
+                        <span className="text-[11px] font-bold text-muted-foreground">%</span>
                       </div>
 
                       {/* Botões Rápidos */}
@@ -2164,7 +2165,7 @@ export const PcpPlanejamentoView = () => {
                             type="button"
                             variant={acrescimoVeiculoPct === pct ? 'default' : 'outline'}
                             onClick={() => setAcrescimoVeiculoPct(pct)}
-                            className="h-6 text-[10px] px-1.5 font-mono font-semibold"
+                            className="h-5 text-[9.5px] px-1 font-mono font-semibold"
                           >
                             +{pct}%
                           </Button>
@@ -2172,8 +2173,8 @@ export const PcpPlanejamentoView = () => {
                       </div>
                     </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground italic">
-                    Calcula a distância estimada por estradas (fator 1.25x) e aplica velocidade reduzida de caminhão com a % acima. Você também pode digitar o tempo exato em cada linha abaixo.
+                  <p className="text-[9.5px] text-muted-foreground italic leading-tight">
+                    Calcula a distância por estradas (1.25x) com velocidade de caminhão (+{acrescimoVeiculoPct}%). Ajuste as horas exatas na tabela abaixo se desejar.
                   </p>
                 </div>
 
@@ -2481,28 +2482,28 @@ export const PcpPlanejamentoView = () => {
 
           {/* 5. CARD RESUMO DOS DIAS DA PROGRAMAÇÃO COM METAS */}
           <Card className="border border-border shadow-xs">
-            <CardHeader className="pb-3">
+            <CardHeader className="py-2 px-3">
               <CardTitle className="text-xs font-semibold flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-primary" /> Resumo do Período ({diasProgramados.length} dias — {equipe})
+                <span className="flex items-center gap-1.5">
+                  <CalendarIcon className="w-3.5 h-3.5 text-primary" /> Resumo do Período ({diasProgramados.length} dias — {equipe})
                 </span>
                 {tempoTotalGeralMinutos > 540 && (
-                  <Badge variant="destructive" className="text-[10px] px-2 py-0.5 font-bold">
-                    ⚠️ Dia ativo excede 9h
+                  <Badge variant="destructive" className="text-[9px] px-1.5 py-0 font-bold">
+                    ⚠️ Excede 9h
                   </Badge>
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="p-0 border-t border-border overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] p-2">Dia</TableHead>
-                    <TableHead className="text-[10px] p-2">Pontos</TableHead>
-                    <TableHead className="text-[10px] p-2">Tempo Total</TableHead>
-                    <TableHead className="text-[10px] p-2 text-right">V. Meta</TableHead>
-                    <TableHead className="text-[10px] p-2 text-right">V. Planejado</TableHead>
-                    <TableHead className="text-[10px] p-2 text-right">% Meta</TableHead>
+                  <TableRow className="bg-muted/40 text-[10px]">
+                    <TableHead className="py-1 px-2 whitespace-nowrap">Dia</TableHead>
+                    <TableHead className="py-1 px-2 whitespace-nowrap">Pontos</TableHead>
+                    <TableHead className="py-1 px-2 whitespace-nowrap">Tempo Total</TableHead>
+                    <TableHead className="py-1 px-2 text-right whitespace-nowrap">V. Meta</TableHead>
+                    <TableHead className="py-1 px-2 text-right whitespace-nowrap">V. Planejado</TableHead>
+                    <TableHead className="py-1 px-2 text-right whitespace-nowrap">% Meta</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2520,23 +2521,23 @@ export const PcpPlanejamentoView = () => {
                         onClick={() => setActiveDayId(d.id)}
                         className={cn("cursor-pointer transition-colors", isActive ? "bg-primary/10 font-bold" : "hover:bg-accent/40")}
                       >
-                        <TableCell className="p-2 text-[11px] font-medium font-mono">
+                        <TableCell className="py-1.5 px-2 text-[11px] font-medium font-mono whitespace-nowrap">
                           {d.nomeDia.slice(0, 3)} ({d.dataStr})
                           {isActive && <Badge className="ml-1 text-[8px] px-1 py-0 bg-primary text-primary-foreground">Ativo</Badge>}
                         </TableCell>
-                        <TableCell className="p-2 text-[11px] font-mono text-primary font-bold">
+                        <TableCell className="py-1.5 px-2 text-[11px] font-mono text-primary font-bold whitespace-nowrap">
                           {d.pontos.length > 0 ? d.pontos.join(', ') : <span className="text-muted-foreground font-normal">Nenhum</span>}
                         </TableCell>
-                        <TableCell className={`p-2 text-[11px] font-mono ${tempoTotalDia > 540 ? 'text-red-500 font-bold' : ''}`}>
+                        <TableCell className={`py-1.5 px-2 text-[11px] font-mono whitespace-nowrap ${tempoTotalDia > 540 ? 'text-red-500 font-bold' : ''}`}>
                           {formatMinToHours(tempoTotalDia)}
                         </TableCell>
-                        <TableCell className="p-2 text-[11px] text-right text-muted-foreground font-mono">
+                        <TableCell className="py-1.5 px-2 text-[11px] text-right text-muted-foreground font-mono whitespace-nowrap">
                           R$ {metaEquipeInput.toFixed(2)}
                         </TableCell>
-                        <TableCell className="p-2 text-[11px] text-right text-emerald-600 dark:text-emerald-400 font-mono font-semibold">
+                        <TableCell className="py-1.5 px-2 text-[11px] text-right text-emerald-600 dark:text-emerald-400 font-mono font-semibold whitespace-nowrap">
                           R$ {valPlanejado.toFixed(2)}
                         </TableCell>
-                        <TableCell className="p-2 text-[11px] text-right font-mono font-bold">
+                        <TableCell className="py-1.5 px-2 text-[11px] text-right font-mono font-bold whitespace-nowrap">
                           <span className={pctMetaDia >= 100 ? "text-emerald-600 dark:text-emerald-400" : pctMetaDia >= 75 ? "text-amber-600" : "text-rose-600"}>
                             {pctMetaDia}%
                           </span>
@@ -2551,7 +2552,7 @@ export const PcpPlanejamentoView = () => {
         </div>
 
         {/* Right Column: Estrutura por Dia Programado em Sequência (7 Cols) */}
-        <div className="lg:col-span-7 flex flex-col gap-6">
+        <div className="lg:col-span-7 flex flex-col gap-3.5">
           {/* Obra Selecionada Banner & Saldos */}
           {selectedObra ? (
             <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 flex flex-col gap-3">
@@ -3050,10 +3051,12 @@ export const PcpPlanejamentoView = () => {
                   )}
 
                   {/* Subtotais do Dia e Botão de Gravar Individualmente este Dia */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/60 bg-muted/20 p-3 rounded-lg">
-                    <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground flex-wrap">
-                      <span>⏱️ Tempo Total: <strong className="text-foreground">{formatMinToHours(tempoTotalDiaMin)}</strong></span>
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2.5 border-t border-border/60 bg-muted/20 p-2.5 rounded-lg">
+                    <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground flex-wrap whitespace-nowrap">
+                      <span>⏱️ Tempo: <strong className="text-foreground">{formatMinToHours(tempoTotalDiaMin)}</strong></span>
+                      <span>•</span>
                       <span>💰 Valor: <strong className="text-emerald-600 dark:text-emerald-400">R$ {valPlanejadoDia.toFixed(2)}</strong></span>
+                      <span>•</span>
                       <span>🎯 Meta: <strong className={pctMetaDia >= 100 ? "text-emerald-600" : pctMetaDia >= 75 ? "text-amber-600" : "text-rose-600"}>{pctMetaDia}%</strong></span>
                     </div>
 
@@ -3062,9 +3065,9 @@ export const PcpPlanejamentoView = () => {
                       variant="outline"
                       onClick={() => handleEnviarPlanPrincipalDia(dia)}
                       disabled={pontosDoDia.length === 0 || itensDoDiaSelecionados.length === 0 || salvarProgramacao.isPending || isSavingAll}
-                      className="gap-1.5 text-xs font-semibold h-8 bg-background shadow-2xs"
+                      className="gap-1.5 text-xs font-semibold h-7 bg-background shadow-2xs shrink-0"
                     >
-                      <Send className="w-3.5 h-3.5 text-primary" /> Gravar Dia {dia.nomeDia} ({dia.dataStr})
+                      <Send className="w-3 h-3 text-primary" /> Gravar Dia {dia.nomeDia} ({dia.dataStr})
                     </Button>
                   </div>
                 </CardContent>
