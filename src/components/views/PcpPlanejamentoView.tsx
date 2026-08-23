@@ -2137,7 +2137,7 @@ export const PcpPlanejamentoView = () => {
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
                   <span className="text-[10px] text-muted-foreground font-mono">
-                    Ida: {diaSelecionadoInfo.tempoIdaMin}m + Volta: {diaSelecionadoInfo.tempoVoltaMin}m
+                    Ida: {activeDia?.tempoIdaMin ?? 15}m + Volta: {activeDia?.tempoVoltaMin ?? 15}m
                   </span>
                 </div>
 
