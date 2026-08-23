@@ -36,9 +36,11 @@ import {
   Zap,
   ZoomIn,
   ZoomOut,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Home
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { useSessionState } from '@/hooks/useSessionState';
 import {
   usePcpPlanejamentoData,
@@ -68,7 +70,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { format } from 'date-fns';
+import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MaterialPontoBudget } from '@/hooks/usePcpPlanejamentoData';
 import { useAlojamentos } from '@/hooks/useAlojamentos';
@@ -412,19 +414,120 @@ export const PcpPlanejamentoView = () => {
     document.addEventListener('mouseup', onMouseUp);
   }, [obrasListHeight]);
 
-  // Alojamento Handler
-  const handleAlojamentoChange = (alojId: string) => {
-    setSelectedAlojamentoId(alojId);
-    if (alojId !== 'nenhum' && selectedObra?.latitude && selectedObra?.longitude) {
-      const aloj = alojamentos.find(a => a.id === alojId);
-      if (aloj?.latitude && aloj?.longitude) {
-        const distKm = calcDistanceKM(selectedObra.latitude, selectedObra.longitude, aloj.latitude, aloj.longitude);
-        setTempoDeslocamento(Math.round(distKm * 1.5)); // avg 40km/h = 1.5 min/km
+  // Informações da Base e Alojamentos da Unidade Ativa
+  const unidadeAtivaInfo = useMemo(() => {
+    return UNIDADES_PLANEJAMENTO.find(u => u.id === selectedUnidadeId) || UNIDADES_PLANEJAMENTO[1];
+  }, [selectedUnidadeId]);
+
+  const alojamentosDaUnidade = useMemo(() => {
+    return alojamentos.filter(a => a.unidadeId === selectedUnidadeId);
+  }, [alojamentos, selectedUnidadeId]);
+
+  // Alojamento Padrão da Semana (Filtro Geral: 'BASE' ou ID de Alojamento)
+  const [selectedAlojamentoPadraoId, setSelectedAlojamentoPadraoId] = useSessionState<string>('pcp_shared_aloj_padrao', 'BASE');
+  const [diasSemanaCustom, setDiasSemanaCustom] = useSessionState<Record<number, { origemId: string; destinoId: string }>>('pcp_shared_dias_semana_aloj', {});
+
+  // Atualizar quando o Alojamento Padrão da Semana mudar
+  const handleAlojamentoPadraoChange = (alojId: string) => {
+    setSelectedAlojamentoPadraoId(alojId);
+    const newCustom: Record<number, { origemId: string; destinoId: string }> = {};
+    for (let i = 0; i < 6; i++) {
+      if (alojId === 'BASE' || alojId === 'nenhum') {
+        newCustom[i] = { origemId: 'BASE', destinoId: 'BASE' };
+      } else {
+        newCustom[i] = {
+          origemId: i === 0 ? 'BASE' : alojId,
+          destinoId: i === 5 ? 'BASE' : alojId
+        };
       }
-    } else if (alojId === 'nenhum') {
-      setTempoDeslocamento(30);
     }
+    setDiasSemanaCustom(newCustom);
   };
+
+  // Atualizar origem ou destino de um dia específico
+  const handleUpdateDiaAlojamento = (diaIdx: number, field: 'origemId' | 'destinoId', val: string) => {
+    setDiasSemanaCustom(prev => {
+      const existing = prev[diaIdx] || {
+        origemId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (diaIdx === 0 ? 'BASE' : selectedAlojamentoPadraoId),
+        destinoId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (diaIdx === 5 ? 'BASE' : selectedAlojamentoPadraoId)
+      };
+      return {
+        ...prev,
+        [diaIdx]: {
+          ...existing,
+          [field]: val
+        }
+      };
+    });
+  };
+
+  // Cálculo Semanal de Deslocamentos (Segunda a Sábado) com Ida e Volta
+  const diasDaSemana = useMemo(() => {
+    const monday = startOfWeek(selectedDate, { weekStartsOn: 1 });
+    const nomesDias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+    return nomesDias.map((nomeDia, idx) => {
+      const dayDate = addDays(monday, idx);
+      const custom = diasSemanaCustom[idx] || {
+        origemId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === 0 ? 'BASE' : selectedAlojamentoPadraoId),
+        destinoId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === 5 ? 'BASE' : selectedAlojamentoPadraoId)
+      };
+
+      const origemObj = custom.origemId === 'BASE'
+        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude, isBase: true }
+        : (alojamentosDaUnidade.find(a => a.id === custom.origemId) || { id: custom.origemId, nome: 'Alojamento', latitude: null, longitude: null, isBase: false });
+
+      const destinoObj = custom.destinoId === 'BASE'
+        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude, isBase: true }
+        : (alojamentosDaUnidade.find(a => a.id === custom.destinoId) || { id: custom.destinoId, nome: 'Alojamento', latitude: null, longitude: null, isBase: false });
+
+      let distIdaKm = 0;
+      let tempoIdaMin = 15;
+      if (origemObj.latitude && origemObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
+        distIdaKm = Math.round(calcDistanceKM(origemObj.latitude, origemObj.longitude, selectedObra.latitude, selectedObra.longitude) * 10) / 10;
+        tempoIdaMin = Math.max(5, Math.round(distIdaKm * 1.5));
+      }
+
+      let distVoltaKm = 0;
+      let tempoVoltaMin = 15;
+      if (destinoObj.latitude && destinoObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
+        distVoltaKm = Math.round(calcDistanceKM(selectedObra.latitude, selectedObra.longitude, destinoObj.latitude, destinoObj.longitude) * 10) / 10;
+        tempoVoltaMin = Math.max(5, Math.round(distVoltaKm * 1.5));
+      }
+
+      const tempoTotalDeslocamentoMin = tempoIdaMin + tempoVoltaMin;
+      const isCurrentSelectedDate = isSameDay(dayDate, selectedDate);
+
+      return {
+        idx,
+        nomeDia,
+        dataStr: format(dayDate, 'dd/MM'),
+        dataCompleta: format(dayDate, 'dd/MM/yyyy'),
+        dayDate,
+        isCurrentSelectedDate,
+        origemId: custom.origemId,
+        origemNome: origemObj.nome,
+        destinoId: custom.destinoId,
+        destinoNome: destinoObj.nome,
+        distIdaKm,
+        tempoIdaMin,
+        distVoltaKm,
+        tempoVoltaMin,
+        tempoTotalDeslocamentoMin
+      };
+    });
+  }, [selectedDate, diasSemanaCustom, selectedAlojamentoPadraoId, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra]);
+
+  const diaSelecionadoInfo = useMemo(() => {
+    return diasDaSemana.find(d => d.isCurrentSelectedDate) || diasDaSemana[0];
+  }, [diasDaSemana]);
+
+  // Sincroniza o tempo total de deslocamento do dia selecionado
+  useEffect(() => {
+    if (diaSelecionadoInfo) {
+      setTempoDeslocamento(diaSelecionadoInfo.tempoTotalDeslocamentoMin);
+    }
+  }, [diaSelecionadoInfo?.tempoTotalDeslocamentoMin]);
 
   // Formatted date string for submission & display
   const dataProgramacaoFormatada = useMemo(() => {
@@ -1637,29 +1740,156 @@ export const PcpPlanejamentoView = () => {
             </CardHeader>
 
             <CardContent className="space-y-4 text-xs">
-              {/* Grid Campos de Tempo Complementares */}
-              <div className="grid grid-cols-4 gap-3">
-                <div className="flex flex-col gap-1">
-                  <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <Truck className="w-3 h-3 text-blue-500" /> Base
-                  </Label>
-                  <Select value={selectedAlojamentoId} onValueChange={handleAlojamentoChange}>
-                    <SelectTrigger className="h-8 text-[10px] font-mono pr-2">
-                      <SelectValue placeholder="Padrão" />
+              {/* SELEÇÃO DE ALOJAMENTO / BASE DA UNIDADE & CRONOGRAMA SEMANAL */}
+              <div className="p-3 rounded-xl bg-card border border-border flex flex-col gap-3 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/60">
+                  <div>
+                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Home className="w-4 h-4 text-primary" /> Alojamento / Base da Unidade
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Unidade: <strong className="text-foreground">{unidadeAtivaInfo.nome}</strong> • {alojamentosDaUnidade.length} alojamento(s) cadastrado(s)
+                    </p>
+                  </div>
+
+                  <Select value={selectedAlojamentoPadraoId} onValueChange={handleAlojamentoPadraoChange}>
+                    <SelectTrigger className="h-8 text-xs font-semibold bg-background min-w-[200px]">
+                      <SelectValue placeholder="Selecione Base ou Alojamento" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="nenhum">Nenhum / Padrão</SelectItem>
-                      {alojamentos.map(a => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.nome} {a.cidade ? `(${a.cidade})` : ''}
+                      <SelectItem value="BASE" className="text-xs font-semibold">
+                        🏢 {unidadeAtivaInfo.baseNome} (Padrão)
+                      </SelectItem>
+                      {alojamentosDaUnidade.map(a => (
+                        <SelectItem key={a.id} value={a.id} className="text-xs">
+                          🏠 {a.nome} (Cap: {a.capacidade}p)
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Banner de Tempos do Dia Selecionado da Programação (Ida + Volta) */}
+                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-primary flex items-center gap-1.5">
+                      <Navigation className="w-3.5 h-3.5" /> Deslocamento Previsto ({diaSelecionadoInfo.nomeDia} - {diaSelecionadoInfo.dataStr}):
+                    </span>
+                    <Badge variant="outline" className="text-xs font-mono font-bold bg-background text-primary border-primary/30">
+                      Total: {diaSelecionadoInfo.tempoTotalDeslocamentoMin} min
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2 rounded bg-background/80 border border-border/50 flex flex-col">
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold">
+                        🛫 Tempo de Ida (Partida ➔ Obra)
+                      </span>
+                      <span className="font-bold text-foreground mt-0.5 truncate" title={diaSelecionadoInfo.origemNome}>
+                        {diaSelecionadoInfo.origemNome}
+                      </span>
+                      <span className="font-mono text-primary font-semibold text-[11px] mt-0.5">
+                        {diaSelecionadoInfo.tempoIdaMin} min {diaSelecionadoInfo.distIdaKm > 0 ? `(${diaSelecionadoInfo.distIdaKm} km)` : ''}
+                      </span>
+                    </div>
+
+                    <div className="p-2 rounded bg-background/80 border border-border/50 flex flex-col">
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold">
+                        🛬 Tempo de Volta (Obra ➔ Retorno)
+                      </span>
+                      <span className="font-bold text-foreground mt-0.5 truncate" title={diaSelecionadoInfo.destinoNome}>
+                        {diaSelecionadoInfo.destinoNome}
+                      </span>
+                      <span className="font-mono text-primary font-semibold text-[11px] mt-0.5">
+                        {diaSelecionadoInfo.tempoVoltaMin} min {diaSelecionadoInfo.distVoltaKm > 0 ? `(${diaSelecionadoInfo.distVoltaKm} km)` : ''}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Grade Semanal de Alojamento e Deslocamento (Segunda a Sábado) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Cronograma Semanal de Alojamentos & Deslocamento
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      *1º dia sai da Base, último dia retorna à Base
+                    </span>
+                  </div>
+
+                  <div className="rounded-lg border border-border overflow-hidden bg-background">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/40 text-[10px] font-bold">
+                          <TableHead className="py-1 px-2">Dia</TableHead>
+                          <TableHead className="py-1 px-2">Saída (Ida)</TableHead>
+                          <TableHead className="py-1 px-2">Retorno (Volta)</TableHead>
+                          <TableHead className="py-1 px-2 text-right">Ida + Volta</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {diasDaSemana.map(d => (
+                          <TableRow
+                            key={d.idx}
+                            onClick={() => setSelectedDate(d.dayDate)}
+                            className={cn(
+                              "text-[11px] cursor-pointer transition-colors",
+                              d.isCurrentSelectedDate 
+                                ? "bg-primary/10 font-semibold border-l-2 border-l-primary" 
+                                : "hover:bg-accent/40"
+                            )}
+                          >
+                            <TableCell className="py-1 px-2 font-mono">
+                              <div className="flex items-center gap-1">
+                                <span>{d.nomeDia.slice(0, 3)} ({d.dataStr})</span>
+                                {d.isCurrentSelectedDate && (
+                                  <Badge className="text-[8px] px-1 py-0 h-3.5 bg-primary text-primary-foreground font-bold">
+                                    Ativo
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-0.5 px-1.5" onClick={e => e.stopPropagation()}>
+                              <select
+                                value={d.origemId}
+                                onChange={e => handleUpdateDiaAlojamento(d.idx, 'origemId', e.target.value)}
+                                className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
+                              >
+                                <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
+                                {alojamentosDaUnidade.map(a => (
+                                  <option key={a.id} value={a.id}>🏠 {a.nome}</option>
+                                ))}
+                              </select>
+                            </TableCell>
+                            <TableCell className="py-0.5 px-1.5" onClick={e => e.stopPropagation()}>
+                              <select
+                                value={d.destinoId}
+                                onChange={e => handleUpdateDiaAlojamento(d.idx, 'destinoId', e.target.value)}
+                                className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
+                              >
+                                <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
+                                {alojamentosDaUnidade.map(a => (
+                                  <option key={a.id} value={a.id}>🏠 {a.nome}</option>
+                                ))}
+                              </select>
+                            </TableCell>
+                            <TableCell className="py-1 px-2 text-right font-mono font-bold text-primary whitespace-nowrap text-[10px]">
+                              {d.tempoIdaMin}m + {d.tempoVoltaMin}m = <strong className="text-foreground">{d.tempoTotalDeslocamentoMin}m</strong>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid Campos de Tempo Complementares */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="flex flex-col gap-1">
                   <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <Navigation className="w-3 h-3 text-blue-500" /> Deslocamento
+                    <Navigation className="w-3 h-3 text-blue-500" /> Deslocamento Total
                   </Label>
                   <div className="relative">
                     <Input
@@ -1671,6 +1901,9 @@ export const PcpPlanejamentoView = () => {
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    Ida: {diaSelecionadoInfo.tempoIdaMin}m + Volta: {diaSelecionadoInfo.tempoVoltaMin}m
+                  </span>
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -1687,6 +1920,7 @@ export const PcpPlanejamentoView = () => {
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
+                  <span className="text-[10px] text-muted-foreground">Tempo operacional</span>
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -1703,6 +1937,7 @@ export const PcpPlanejamentoView = () => {
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
+                  <span className="text-[10px] text-muted-foreground">DDS e inspeção</span>
                 </div>
               </div>
 
