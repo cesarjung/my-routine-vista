@@ -1008,7 +1008,10 @@ export const PcpPlanejamentoView = () => {
     });
   }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter, selectedDonoFilter, selectedSupervisorFilter]);
 
-  // Custom Ponto i  // Adicionar ou remover ponto em um dia específico (sem restrição entre dias)
+  // Custom Ponto input map per day
+  const [customPontoInputMap, setCustomPontoInputMap] = useState<Record<string, string>>({});
+
+  // Adicionar ou remover ponto em um dia específico (sem restrição entre dias)
   const handleTogglePontoNoDia = (diaId: string, pontoLabel: string) => {
     const upper = pontoLabel.toUpperCase().trim();
     if (!upper || !diaId) return;
