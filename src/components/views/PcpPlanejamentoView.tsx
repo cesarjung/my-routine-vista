@@ -960,56 +960,73 @@ export const PcpPlanejamentoView = () => {
     });
   }, [obras, searchObra, selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter, selectedDonoFilter, selectedSupervisorFilter]);
 
-  // Toggle point label selection no dia ativo com bloqueio de duplicidade entre dias
-  const handleTogglePontoLabel = (pLabel: string) => {
+  // Custom Ponto input map per day
+  const [customPontoInputMap, setCustomPontoInputMap] = useState<Record<string, string>>({});
+
+  // Toggle point label selection em um dia específico com bloqueio de duplicidade entre dias
+  const handleTogglePontoNoDia = (diaId: string, pLabel: string) => {
     const upper = pLabel.toUpperCase().trim();
-    if (!upper || !activeDia) return;
+    if (!upper || !diaId) return;
 
-    const alocadoEmOutroDia = pontosAlocadosEmOutrosDiasMap[upper];
-    const currentPoints = diasPontosMap[activeDia.id] || [];
-    const isAlreadyInActive = currentPoints.includes(upper);
+    let alocadoEmOutroDia = '';
+    diasProgramados.forEach(d => {
+      if (d.id !== diaId && (diasPontosMap[d.id] || []).includes(upper)) {
+        alocadoEmOutroDia = `${d.nomeDia.slice(0, 3)} (${d.dataStr})`;
+      }
+    });
 
-    if (!isAlreadyInActive && alocadoEmOutroDia) {
+    const currentPoints = diasPontosMap[diaId] || [];
+    const isAlreadyInThisDay = currentPoints.includes(upper);
+
+    if (!isAlreadyInThisDay && alocadoEmOutroDia) {
       toast.error(`O ponto ${upper} já está alocado em ${alocadoEmOutroDia}. Desmarque-o daquele dia antes de alocar aqui.`);
       return;
     }
 
     setDiasPontosMap(prev => {
-      const cur = prev[activeDia.id] || [];
-      const updated = isAlreadyInActive
+      const cur = prev[diaId] || [];
+      const updated = isAlreadyInThisDay
         ? cur.filter(p => p !== upper)
         : [...cur, upper];
       return {
         ...prev,
-        [activeDia.id]: updated
+        [diaId]: updated
       };
     });
   };
 
-  // Selecionar todos os pontos disponíveis (excluindo os já alocados em outros dias)
-  const handleSelectAllPontosDaObra = () => {
-    if (pontosDisponiveisDoProjeto.length > 0 && activeDia) {
+  // Selecionar todos os pontos disponíveis para um dia específico
+  const handleSelectAllPontosNoDia = (diaId: string) => {
+    if (pontosDisponiveisDoProjeto.length > 0 && diaId) {
+      const pontosEmOutrosDias = new Set<string>();
+      diasProgramados.forEach(d => {
+        if (d.id !== diaId) {
+          (diasPontosMap[d.id] || []).forEach(p => pontosEmOutrosDias.add(p.toUpperCase()));
+        }
+      });
+
       const pontosLivres = pontosDisponiveisDoProjeto.filter(
-        p => !pontosAlocadosEmOutrosDiasMap[p.toUpperCase()] || (diasPontosMap[activeDia.id] || []).includes(p.toUpperCase())
+        p => !pontosEmOutrosDias.has(p.toUpperCase()) || (diasPontosMap[diaId] || []).includes(p.toUpperCase())
       );
+
       setDiasPontosMap(prev => ({
         ...prev,
-        [activeDia.id]: pontosLivres
+        [diaId]: pontosLivres
       }));
     }
   };
 
-  // Limpar pontos do dia ativo
-  const handleDeselectAllPontos = () => {
-    if (activeDia) {
+  // Limpar pontos de um dia específico
+  const handleDeselectAllPontosNoDia = (diaId: string) => {
+    if (diaId) {
       setDiasPontosMap(prev => ({
         ...prev,
-        [activeDia.id]: []
+        [diaId]: []
       }));
     }
   };
 
-  // Distribuir pontos da obra automaticamente entre os dias programados de forma exclusiva
+  // Distribuir pontos da obra automaticamente entre os dias programados de forma equilibrada
   const handleDistribuirPontosAuto = () => {
     if (diasProgramados.length === 0 || pontosDisponiveisDoProjeto.length === 0) return;
     const newMap: Record<string, string[]> = {};
@@ -1028,21 +1045,36 @@ export const PcpPlanejamentoView = () => {
     toast.success(`Distribuídos ${pontosDisponiveisDoProjeto.length} pontos entre os ${diasProgramados.length} dias programados.`);
   };
 
-  // Adicionar ponto customizado no dia ativo
-  const handleAddCustomPontoLabel = () => {
-    if (!newCustomPontoInput.trim() || !activeDia) return;
-    const clean = newCustomPontoInput.toUpperCase().trim();
+  // Adicionar ponto customizado em um dia específico
+  const handleAddCustomPontoNoDia = (diaId: string) => {
+    const inputVal = (customPontoInputMap[diaId] || '').toUpperCase().trim();
+    if (!inputVal || !diaId) return;
+
     setDiasPontosMap(prev => {
-      const current = prev[activeDia.id] || [];
-      if (!current.includes(clean)) {
+      const current = prev[diaId] || [];
+      if (!current.includes(inputVal)) {
         return {
           ...prev,
-          [activeDia.id]: [...current, clean]
+          [diaId]: [...current, inputVal]
         };
       }
       return prev;
     });
-    setNewCustomPontoInput('');
+
+    setCustomPontoInputMap(prev => ({ ...prev, [diaId]: '' }));
+  };
+
+  // Mapa de pontos alocados em outros dias para um dia específico
+  const getPontosAlocadosEmOutrosDias = (currentDiaId: string) => {
+    const map: Record<string, string> = {};
+    diasProgramados.forEach(d => {
+      if (d.id !== currentDiaId) {
+        (diasPontosMap[d.id] || []).forEach(p => {
+          map[p.toUpperCase()] = `${d.nomeDia.slice(0, 3)} (${d.dataStr})`;
+        });
+      }
+    });
+    return map;
   };
 
   // Handle adding a new activity line via button (isBudgeted: false -> full catalog dropdown)
@@ -1238,28 +1270,42 @@ export const PcpPlanejamentoView = () => {
     }).join(' | ');
   }, [selectedItemsFlat]);
 
-  // Handle submit single active day to Plan_Principal
-  const handleEnviarPlanPrincipalDiaAtivo = async () => {
+  // Handle submit single day to Plan_Principal
+  const handleEnviarPlanPrincipalDia = async (dia: any) => {
     if (!selectedObra) {
       alert('Por favor, selecione uma Obra da carteira antes de enviar.');
       return;
     }
 
-    if (!activeDia || selectedItemsFlat.length === 0) {
-      alert('Selecione pelo menos uma atividade marcada no dia ativo para enviar.');
+    const pontosDoDia = dia.pontos || [];
+    if (pontosDoDia.length === 0) {
+      alert(`Selecione pelo menos um ponto para o dia ${dia.nomeDia} (${dia.dataStr}).`);
+      return;
+    }
+
+    const itensDoDia: PcpPontoItem[] = [];
+    pontosDoDia.forEach((p: string) => {
+      if (pontosGroupedMap[p]) {
+        itensDoDia.push(...pontosGroupedMap[p]);
+      }
+    });
+
+    const itensSelecionados = itensDoDia.filter(i => i.selected);
+    if (itensSelecionados.length === 0) {
+      alert(`Marque pelo menos uma atividade para execução no dia ${dia.nomeDia} (${dia.dataStr}).`);
       return;
     }
 
     await salvarProgramacao.mutateAsync({
       unidadeId: selectedUnidadeId,
-      dataProgramacao: activeDia.dataCompleta,
-      dateObj: activeDia.dayDate,
+      dataProgramacao: dia.dataCompleta,
+      dateObj: dia.dayDate,
       supervisor,
       equipe,
       etapa: selectedEtapas.join(', '),
       obra: selectedObra,
-      pontos: allPontosListFlat,
-      tempoDeslocamentoMinutos: activeDia.tempoTotalDeslocamentoMin,
+      pontos: itensDoDia,
+      tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
       tempoSaidaBaseMinutos: tempoSaidaBase,
       tempoSegurancaMinutos: tempoSeguranca,
       metaEquipeValor: metaEquipeInput,
@@ -2431,9 +2477,9 @@ export const PcpPlanejamentoView = () => {
           </Card>
         </div>
 
-        {/* Right Column: Estrutura por Ponto & Tabela de Atividades Orçadas do Ponto (7 Cols) */}
+        {/* Right Column: Estrutura por Dia Programado em Sequência (7 Cols) */}
         <div className="lg:col-span-7 flex flex-col gap-6">
-          {/* Obra Selecionada Banner & C6 Marcação de Pontos Previstos (Multi-Seleção) */}
+          {/* Obra Selecionada Banner & Saldos */}
           {selectedObra ? (
             <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 flex flex-col gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2516,133 +2562,45 @@ export const PcpPlanejamentoView = () => {
                 </div>
               </div>
 
-              {/* C6 — SELEÇÃO DOS PONTOS DO DIA ATIVO COM ABAS DE NAVEGAÇÃO */}
-              <div className="pt-2.5 border-t border-primary/20 flex flex-col gap-3">
-                {/* Abas dos Dias Programados */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                  <span className="text-[11px] font-bold text-muted-foreground uppercase whitespace-nowrap mr-1">
-                    Dias:
-                  </span>
-                  {diasProgramados.map((d, idx) => {
-                    const isActive = d.id === activeDia?.id;
-                    const ptsCount = d.pontos.length;
-                    return (
-                      <button
-                        key={d.id}
-                        onClick={() => setActiveDayId(d.id)}
-                        className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 border",
-                          isActive
-                            ? "bg-primary text-primary-foreground border-primary shadow-xs ring-1 ring-primary/40"
-                            : "bg-card hover:bg-accent text-foreground border-border/70"
-                        )}
-                      >
-                        <span className="font-mono">Dia {idx + 1} ({d.nomeDia.slice(0, 3)} {d.dataStr})</span>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-[9px] px-1 py-0 h-4 font-mono font-bold",
-                            isActive
-                              ? "bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30"
-                              : ptsCount > 0
-                              ? "bg-primary/10 text-primary border-primary/20"
-                              : "bg-muted text-muted-foreground border-border"
-                          )}
-                        >
-                          {ptsCount} {ptsCount === 1 ? 'pt' : 'pts'}
-                        </Badge>
-                      </button>
-                    );
-                  })}
-
+              {/* Botão de Distribuição Automática Global & Filtro LV */}
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-primary/20 flex-wrap">
+                <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={handleDistribuirPontosAuto}
-                    className="h-7 text-[10px] ml-auto shrink-0 font-semibold bg-background"
-                    title="Distribuir pontos da obra igualmente entre os dias do período"
+                    variant={filtroLv === 'COMPLETO' ? 'default' : 'ghost'}
+                    onClick={() => setFiltroLv('COMPLETO')}
+                    className="h-7 text-xs font-semibold px-3"
                   >
-                    ⚡ Distribuir Pontos Auto
+                    COMPLETO
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={filtroLv === 'SOMENTE_LV' ? 'default' : 'ghost'}
+                    onClick={() => setFiltroLv('SOMENTE_LV')}
+                    className="h-7 text-xs font-semibold px-3"
+                  >
+                    SOMENTE LV
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={filtroLv === 'SEM_LV' ? 'default' : 'ghost'}
+                    onClick={() => setFiltroLv('SEM_LV')}
+                    className="h-7 text-xs font-semibold px-3"
+                  >
+                    SEM LV
                   </Button>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 flex-wrap bg-card/60 p-2.5 rounded-lg border border-border/60">
-                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <PackageCheck className="w-4 h-4 text-primary" />
-                    C6 — Pontos para trabalhar em <strong className="text-primary">{activeDia?.nomeDia} ({activeDia?.dataStr})</strong>:
-                  </span>
-
-                  {/* Popover multi-select de Pontos para o dia ativo */}
-                  <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
-                    {orcamentoPontosQuery.isLoading ? (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando pontos...
-                      </div>
-                    ) : (
-                      <PontosMultiSelect
-                        pontos={pontosDisponiveisDoProjeto}
-                        selected={selectedPontosLabels}
-                        orcamentoPorPontoMap={orcamentoPorPontoMap}
-                        pontosAlocadosEmOutrosDiasMap={pontosAlocadosEmOutrosDiasMap}
-                        onToggle={handleTogglePontoLabel}
-                        onSelectAll={handleSelectAllPontosDaObra}
-                        onDeselectAll={handleDeselectAllPontos}
-                      />
-                    )}
-
-                    {/* Input rápido para ponto customizado */}
-                    <div className="flex items-center gap-1">
-                      <Input
-                        placeholder="Outro Ponto (P99)..."
-                        value={newCustomPontoInput}
-                        onChange={e => setNewCustomPontoInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleAddCustomPontoLabel()}
-                        className="h-8 text-xs w-[130px] font-mono"
-                      />
-                      <Button size="sm" variant="outline" onClick={handleAddCustomPontoLabel} className="h-8 text-xs px-2.5">
-                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Badges dos pontos selecionados no dia ativo */}
-                {selectedPontosLabels.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {selectedPontosLabels.map(p => (
-                      <Badge
-                        key={p}
-                        variant="secondary"
-                        className="font-mono text-[11px] px-2 py-0.5 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
-                        onClick={() => handleTogglePontoLabel(p)}
-                        title="Clique para remover deste dia"
-                      >
-                        {p} ✕
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground italic py-1">
-                    Nenhum ponto alocado para {activeDia?.nomeDia} ({activeDia?.dataStr}). Selecione os pontos acima.
-                  </p>
-                )}
-                {/* RISK BADGE */}
-                {riskForObra && (
-                  <div className="mt-1 flex items-center justify-between gap-2 p-2 rounded-md bg-muted/30 border">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        riskForObra.classificacao === 'Vermelho' ? 'bg-red-500' :
-                        riskForObra.classificacao === 'Laranja' ? 'bg-orange-500' : 'bg-emerald-500'
-                      }`} />
-                      <span className="text-[10px] font-semibold text-muted-foreground">IA</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground truncate" title={riskForObra.alerta}>
-                      {riskForObra.alerta}
-                    </span>
-                  </div>
-                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDistribuirPontosAuto}
+                  className="h-8 text-xs font-semibold bg-background gap-1.5 shadow-2xs"
+                  title="Distribuir todos os pontos da obra igualmente entre os dias programados"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500" /> ⚡ Distribuir Pontos Automaticamente ({diasProgramados.length} dias)
+                </Button>
               </div>
-
             </div>
           ) : (
             <div className="p-4 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 flex items-center gap-3 text-amber-600 text-xs font-medium">
@@ -2651,375 +2609,361 @@ export const PcpPlanejamentoView = () => {
             </div>
           )}
 
-          {/* LISTAGEM DOS PONTOS SELECIONADOS COM FILTRO LV NO TOPO DIREITO */}
-          <div className="flex flex-col gap-4">
-            {/* Header Bar com Título e Botões de Seleção LV (SOMENTE LV / SEM LV / COMPLETO) */}
-            <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
-              <div>
-                <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-primary" />
-                  Planejamento das Atividades por Ponto
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {selectedPontosLabels.length} {selectedPontosLabels.length === 1 ? 'ponto selecionado' : 'pontos selecionados'} para execução
-                </p>
-              </div>
+          {/* LISTA SEQUENCIAL DE TODOS OS DIAS DO PERÍODO PROGRAMADO */}
+          {diasProgramados.map((dia, diaIdx) => {
+            const pontosDoDia = dia.pontos || [];
+            const outrosDiasMap = getPontosAlocadosEmOutrosDias(dia.id);
+            const itensDoDiaFlat = pontosDoDia.flatMap(p => pontosGroupedMap[p] || []);
+            const itensDoDiaSelecionados = itensDoDiaFlat.filter(item => item.selected);
+            const tempoAtivMinDia = itensDoDiaSelecionados.reduce((acc, item) => acc + (item.tempoEstimadoMinutos || 0), 0);
+            const tempoTotalDiaMin = tempoAtivMinDia + dia.tempoTotalDeslocamentoMin + tempoSaidaBase + tempoSeguranca;
+            const valPlanejadoDia = itensDoDiaSelecionados.reduce((acc, item) => acc + (item.valorEstimado || 0), 0);
+            const pctMetaDia = metaEquipeInput > 0 ? Math.round((valPlanejadoDia / metaEquipeInput) * 1000) / 10 : 0;
 
-              {/* Botão Seletor de LV: SOMENTE LV | SEM LV | COMPLETO */}
-              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
-                <Button
-                  size="sm"
-                  variant={filtroLv === 'COMPLETO' ? 'default' : 'ghost'}
-                  onClick={() => setFiltroLv('COMPLETO')}
-                  className="h-7 text-xs font-semibold px-3"
-                >
-                  COMPLETO
-                </Button>
-                <Button
-                  size="sm"
-                  variant={filtroLv === 'SOMENTE_LV' ? 'default' : 'ghost'}
-                  onClick={() => setFiltroLv('SOMENTE_LV')}
-                  className="h-7 text-xs font-semibold px-3"
-                >
-                  SOMENTE LV
-                </Button>
-                <Button
-                  size="sm"
-                  variant={filtroLv === 'SEM_LV' ? 'default' : 'ghost'}
-                  onClick={() => setFiltroLv('SEM_LV')}
-                  className="h-7 text-xs font-semibold px-3"
-                >
-                  SEM LV
-                </Button>
-              </div>
-            </div>
+            return (
+              <Card key={dia.id} className="border border-border shadow-sm overflow-hidden">
+                {/* Header do Bloco do Dia */}
+                <CardHeader className="bg-muted/40 border-b border-border/70 py-3.5 px-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-primary text-primary-foreground font-mono text-xs px-2 py-0.5 font-bold">
+                          Dia {diaIdx + 1} de {diasProgramados.length}
+                        </Badge>
+                        <h2 className="font-bold text-base text-foreground font-mono flex items-center gap-1.5">
+                          <CalendarIcon className="w-4 h-4 text-primary" />
+                          {dia.nomeDia}, {dia.dataCompleta}
+                        </h2>
+                      </div>
 
-            {selectedPontosLabels.length === 0 ? (
-              <Card className="border border-border">
-                <CardContent className="py-12 text-center text-muted-foreground text-xs space-y-1">
-                  <p className="font-semibold text-foreground">Nenhum ponto marcado para execução hoje.</p>
-                  <p>Marque os pontos no painel acima para carregar o detalhamento das atividades.</p>
+                      {/* Detalhes de Deslocamento do Dia */}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1 font-mono">
+                        <span>🛫 Saída: <strong className="text-foreground">{dia.origemNome}</strong> ({formatHoursDecimal(dia.tempoIdaMin)})</span>
+                        <span>•</span>
+                        <span>🛬 Retorno: <strong className="text-foreground">{dia.destinoNome}</strong> ({formatHoursDecimal(dia.tempoVoltaMin)})</span>
+                        <span>•</span>
+                        <span className="text-primary font-bold">Deslocamento Total: {formatMinToHours(dia.tempoTotalDeslocamentoMin)}</span>
+                      </div>
+                    </div>
+
+                    {/* Resumo Rápido no Header do Dia */}
+                    <div className="flex items-center gap-2 font-mono text-xs shrink-0 flex-wrap">
+                      <Badge variant="outline" className="bg-background">
+                        {pontosDoDia.length} {pontosDoDia.length === 1 ? 'ponto' : 'pontos'}
+                      </Badge>
+                      <Badge variant="outline" className="bg-background text-emerald-600 dark:text-emerald-400 font-bold">
+                        R$ {valPlanejadoDia.toFixed(2)}
+                      </Badge>
+                      <Badge className={pctMetaDia >= 100 ? "bg-emerald-600 text-white font-bold" : pctMetaDia >= 75 ? "bg-amber-600 text-white font-bold" : "bg-rose-600 text-white font-bold"}>
+                        {pctMetaDia}% Meta
+                      </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-4 space-y-4">
+                  {/* SELETOR C6 DE PONTOS ESPECÍFICO PARA ESTE DIA */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap bg-muted/20 p-2.5 rounded-lg border border-border/60">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <PackageCheck className="w-4 h-4 text-primary" />
+                      Pontos a Executar em <strong className="text-primary">{dia.nomeDia} ({dia.dataStr})</strong>:
+                    </span>
+
+                    <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
+                      {orcamentoPontosQuery.isLoading ? (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando pontos...
+                        </div>
+                      ) : (
+                        <PontosMultiSelect
+                          pontos={pontosDisponiveisDoProjeto}
+                          selected={pontosDoDia}
+                          orcamentoPorPontoMap={orcamentoPorPontoMap}
+                          pontosAlocadosEmOutrosDiasMap={outrosDiasMap}
+                          onToggle={p => handleTogglePontoNoDia(dia.id, p)}
+                          onSelectAll={() => handleSelectAllPontosNoDia(dia.id)}
+                          onDeselectAll={() => handleDeselectAllPontosNoDia(dia.id)}
+                        />
+                      )}
+
+                      {/* Input rápido para ponto customizado neste dia */}
+                      <div className="flex items-center gap-1">
+                        <Input
+                          placeholder="Outro Ponto..."
+                          value={customPontoInputMap[dia.id] || ''}
+                          onChange={e => setCustomPontoInputMap(prev => ({ ...prev, [dia.id]: e.target.value }))}
+                          onKeyDown={e => e.key === 'Enter' && handleAddCustomPontoNoDia(dia.id)}
+                          className="h-8 text-xs w-[120px] font-mono"
+                        />
+                        <Button size="sm" variant="outline" onClick={() => handleAddCustomPontoNoDia(dia.id)} className="h-8 text-xs px-2">
+                          <Plus className="w-3.5 h-3.5 mr-0.5" /> Add
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Badges dos Pontos Selecionados neste Dia */}
+                  {pontosDoDia.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {pontosDoDia.map(p => (
+                        <Badge
+                          key={p}
+                          variant="secondary"
+                          className="font-mono text-xs px-2.5 py-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors font-bold"
+                          onClick={() => handleTogglePontoNoDia(dia.id, p)}
+                          title={`Clique para remover ${p} de ${dia.nomeDia}`}
+                        >
+                          {p} ✕
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-muted-foreground text-xs border border-dashed rounded-lg">
+                      Nenhum ponto marcado para <strong>{dia.nomeDia} ({dia.dataStr})</strong>. Selecione os pontos acima para este dia.
+                    </div>
+                  )}
+
+                  {/* TABELAS DE ATIVIDADES DOS PONTOS DESTE DIA */}
+                  {pontosDoDia.length > 0 && (
+                    <div className="space-y-4 pt-1">
+                      {pontosDoDia.map(pLabel => {
+                        const itemsDoPontoRaw = pontosGroupedMap[pLabel] || [];
+                        const itemsDoPonto = itemsDoPontoRaw.filter(i => {
+                          const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.servico || '').toUpperCase().includes('LINHA VIVA');
+                          if (filtroLv === 'SOMENTE_LV') return isLv;
+                          if (filtroLv === 'SEM_LV') return !isLv;
+                          return true;
+                        });
+                        const itemsSelecionados = itemsDoPonto.filter(i => i.selected);
+                        const subtotalMinutos = itemsSelecionados.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+                        const subtotalValor = itemsSelecionados.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
+
+                        return (
+                          <Card key={pLabel} className="border border-border/80 shadow-2xs">
+                            <CardHeader className="pb-2.5 bg-muted/20 flex flex-row items-center justify-between border-b border-border/60">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <CardTitle className="text-sm font-bold font-mono text-primary flex items-center gap-1.5">
+                                    <Layers className="w-4 h-4" />
+                                    PONTO {pLabel}
+                                  </CardTitle>
+                                  <Badge variant="outline" className="text-[11px] font-mono">
+                                    {itemsDoPonto.length} {itemsDoPonto.length === 1 ? 'atividade' : 'atividades'}
+                                  </Badge>
+                                </div>
+                                <CardDescription className="text-xs mt-0.5">
+                                  Atividades do ponto <strong className="font-mono text-foreground">{pLabel}</strong> em {dia.nomeDia} ({dia.dataStr})
+                                </CardDescription>
+                              </div>
+
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleAddAtividadeNoPonto(pLabel)}
+                                className="h-7 gap-1 text-xs font-semibold"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Adicionar Atividade em {pLabel}
+                              </Button>
+                            </CardHeader>
+
+                            <CardContent className="pt-3 space-y-3">
+                              <div className="rounded-xl border border-border overflow-hidden">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-muted/50 text-[11px]">
+                                      <TableHead className="w-[36px] text-center">
+                                        <Checkbox
+                                          checked={itemsDoPonto.length > 0 && itemsDoPonto.every(i => i.selected)}
+                                          onCheckedChange={c => {
+                                            const val = Boolean(c);
+                                            const idsInFilter = new Set(itemsDoPonto.map(i => i.id));
+                                            setPontosGroupedMap(prev => ({
+                                              ...prev,
+                                              [pLabel]: (prev[pLabel] || []).map(item => idsInFilter.has(item.id) ? { ...item, selected: val } : item)
+                                            }));
+                                          }}
+                                        />
+                                      </TableHead>
+                                      <TableHead>Atividade / Serviço em {pLabel}</TableHead>
+                                      <TableHead className="w-[85px] text-center" title="Coluna F: Quantidade Prevista no Orçamento">
+                                        Qtd Prev. (Col F)
+                                      </TableHead>
+                                      <TableHead className="w-[140px]" title="Coluna M: Etapa Prevista para esta atividade">
+                                        Etapa (Col M)
+                                      </TableHead>
+                                      <TableHead className="w-[85px] text-center">Qtd Prog.</TableHead>
+                                      <TableHead className="w-[95px]">Tempo</TableHead>
+                                      <TableHead className="w-[100px]">Valor</TableHead>
+                                      <TableHead className="w-[36px] text-right"></TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+
+                                  <TableBody className="text-xs">
+                                    {itemsDoPonto.length === 0 ? (
+                                      <TableRow>
+                                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground text-xs">
+                                          Nenhuma atividade cadastrada para o Ponto {pLabel}.
+                                        </TableCell>
+                                      </TableRow>
+                                    ) : (
+                                      itemsDoPonto.map((item, itemIdx) => (
+                                        <TableRow key={item.id || itemIdx} className={`hover:bg-accent/30 transition-colors ${!item.selected ? 'bg-muted/10 text-muted-foreground' : 'bg-background'}`}>
+                                          <TableCell className="p-2 text-center">
+                                            <Checkbox
+                                              checked={item.selected}
+                                              onCheckedChange={c => handleUpdateAtividade(pLabel, item.id, 'selected', Boolean(c))}
+                                            />
+                                          </TableCell>
+
+                                          <TableCell className="p-2">
+                                            <div className="flex items-center gap-2">
+                                              <Wrench className="w-3.5 h-3.5 text-primary shrink-0" />
+                                              {item.isBudgeted ? (
+                                                <span className="font-semibold text-xs text-foreground">{item.servico}</span>
+                                              ) : (
+                                                <SearchableServicoSelect
+                                                  value={item.servico}
+                                                  onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'servico', val)}
+                                                  options={filteredServicosBase}
+                                                />
+                                              )}
+                                            </div>
+                                          </TableCell>
+
+                                          <TableCell className="p-2 text-center">
+                                            <Badge variant="outline" className="font-mono text-xs bg-muted/40 font-bold px-2 py-0.5">
+                                              {item.qtdOrcadaPonto}
+                                            </Badge>
+                                          </TableCell>
+
+                                          <TableCell className="p-2">
+                                            <Select
+                                              value={item.etapaPrevista}
+                                              onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'etapaPrevista', val)}
+                                            >
+                                              <SelectTrigger className="h-7 text-[11px] font-medium bg-background px-2">
+                                                <SelectValue placeholder="Selecione a Etapa" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {etapasDisponiveis.map(et => (
+                                                  <SelectItem key={et} value={et} className="text-xs">
+                                                    {et}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </TableCell>
+
+                                          <TableCell className="p-2">
+                                            <Input
+                                              type="number"
+                                              step="1"
+                                              min="1"
+                                              value={item.quantidade}
+                                              onChange={e => handleUpdateAtividade(pLabel, item.id, 'quantidade', e.target.value)}
+                                              className="h-8 text-xs text-center font-mono font-bold w-16"
+                                            />
+                                          </TableCell>
+
+                                          <TableCell className="p-2 font-mono text-muted-foreground font-semibold">
+                                            {formatMinToHours(item.tempoEstimadoMinutos)}
+                                          </TableCell>
+
+                                          <TableCell className="p-2 font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                                            R$ {item.valorEstimado.toFixed(2)}
+                                          </TableCell>
+
+                                          <TableCell className="p-2 text-right">
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handleRemoveAtividade(pLabel, item.id)}
+                                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </Button>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))
+                                    )}
+                                  </TableBody>
+                                </Table>
+                              </div>
+
+                              {/* Subtotais do Ponto */}
+                              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                                <span>Ponto {pLabel}: {itemsSelecionados.length} atividades marcadas</span>
+                                <div className="flex items-center gap-4 font-mono font-semibold">
+                                  <span>Tempo: {formatMinToHours(subtotalMinutos)}</span>
+                                  <span className="text-emerald-600 dark:text-emerald-400">R$ {subtotalValor.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Subtotais do Dia e Botão de Gravar Individualmente este Dia */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/60 bg-muted/20 p-3 rounded-lg">
+                    <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground flex-wrap">
+                      <span>⏱️ Tempo Total: <strong className="text-foreground">{formatMinToHours(tempoTotalDiaMin)}</strong></span>
+                      <span>💰 Valor: <strong className="text-emerald-600 dark:text-emerald-400">R$ {valPlanejadoDia.toFixed(2)}</strong></span>
+                      <span>🎯 Meta: <strong className={pctMetaDia >= 100 ? "text-emerald-600" : pctMetaDia >= 75 ? "text-amber-600" : "text-rose-600"}>{pctMetaDia}%</strong></span>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEnviarPlanPrincipalDia(dia)}
+                      disabled={pontosDoDia.length === 0 || itensDoDiaSelecionados.length === 0 || salvarProgramacao.isPending || isSavingAll}
+                      className="gap-1.5 text-xs font-semibold h-8 bg-background shadow-2xs"
+                    >
+                      <Send className="w-3.5 h-3.5 text-primary" /> Gravar Dia {dia.nomeDia} ({dia.dataStr})
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
-            ) : (
-              selectedPontosLabels.map(pLabel => {
-                const itemsDoPontoRaw = pontosGroupedMap[pLabel] || [];
-                const itemsDoPonto = itemsDoPontoRaw.filter(i => {
-                  const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.servico || '').toUpperCase().includes('LINHA VIVA');
-                  if (filtroLv === 'SOMENTE_LV') return isLv;
-                  if (filtroLv === 'SEM_LV') return !isLv;
-                  return true;
-                });
-                const itemsSelecionados = itemsDoPonto.filter(i => i.selected);
-                const subtotalMinutos = itemsSelecionados.reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
-                const subtotalValor = itemsSelecionados.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
+            );
+          })}
 
-                return (
-                  <Card key={pLabel} className="border border-border shadow-xs">
-                    {/* Header do Conjunto do Ponto com BOTÃO "Adicionar Atividade no Ponto Px" */}
-                    <CardHeader className="pb-3 bg-muted/30 flex flex-row items-center justify-between border-b border-border/60">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-sm font-bold font-mono text-primary flex items-center gap-1.5">
-                            <Layers className="w-4 h-4" />
-                            PONTO {pLabel}
-                          </CardTitle>
-                          <Badge variant="outline" className="text-[11px] font-mono">
-                            {itemsDoPonto.length} {itemsDoPonto.length === 1 ? 'atividade' : 'atividades'} {filtroLv !== 'COMPLETO' ? `(${filtroLv.replace('_', ' ')})` : 'previst.'}
-                          </Badge>
-                        </div>
-                        <CardDescription className="text-xs mt-0.5">
-                          Atividades e serviços previstos para execução no ponto <strong className="font-mono text-foreground">{pLabel}</strong>
-                        </CardDescription>
-                      </div>
-
-                      {/* Botão Adicionar Atividade no Ponto Px com acesso a TODAS as atividades do catálogo */}
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => handleAddAtividadeNoPonto(pLabel)}
-                        className="h-8 gap-1 text-xs font-semibold"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Adicionar Atividade no Ponto {pLabel}
-                      </Button>
-                    </CardHeader>
-
-                    <CardContent className="pt-4 space-y-3">
-                      <div className="rounded-xl border border-border overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/50 text-[11px]">
-                              <TableHead className="w-[36px] text-center">
-                                <Checkbox
-                                  checked={itemsDoPonto.length > 0 && itemsDoPonto.every(i => i.selected)}
-                                  onCheckedChange={c => {
-                                    const val = Boolean(c);
-                                    const idsInFilter = new Set(itemsDoPonto.map(i => i.id));
-                                    setPontosGroupedMap(prev => ({
-                                      ...prev,
-                                      [pLabel]: (prev[pLabel] || []).map(item => idsInFilter.has(item.id) ? { ...item, selected: val } : item)
-                                    }));
-                                  }}
-                                />
-                              </TableHead>
-                              <TableHead>Atividade / Serviço no Ponto {pLabel}</TableHead>
-                              <TableHead className="w-[85px] text-center" title="Coluna F: Quantidade Prevista no Orçamento">
-                                Qtd Prev. (Col F)
-                              </TableHead>
-                              <TableHead className="w-[140px]" title="Coluna M: Etapa Prevista para esta atividade">
-                                Etapa (Col M)
-                              </TableHead>
-                              <TableHead className="w-[85px] text-center">Qtd Prog.</TableHead>
-                              <TableHead className="w-[95px]">Tempo</TableHead>
-                              <TableHead className="w-[100px]">Valor</TableHead>
-                              <TableHead className="w-[36px] text-right"></TableHead>
-                            </TableRow>
-                          </TableHeader>
-
-                          <TableBody className="text-xs">
-                            {itemsDoPonto.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={8} className="text-center py-6 text-muted-foreground text-xs">
-                                  {filtroLv !== 'COMPLETO' 
-                                    ? `Nenhuma atividade encontrada com o filtro "${filtroLv.replace('_', ' ')}" no Ponto ${pLabel}.`
-                                    : `Nenhuma atividade cadastrada para o Ponto ${pLabel}. Clique em "+ Adicionar Atividade no Ponto ${pLabel}".`}
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              itemsDoPonto.map((item, itemIdx) => (
-                                <TableRow key={item.id || itemIdx} className={`hover:bg-accent/30 transition-colors ${!item.selected ? 'bg-muted/10 text-muted-foreground' : 'bg-background'}`}>
-                                  {/* Checkbox selecionar por linha (Vêm DESMARCADOS por padrão) */}
-                                  <TableCell className="p-2 text-center">
-                                    <Checkbox
-                                      checked={item.selected}
-                                      onCheckedChange={c => handleUpdateAtividade(pLabel, item.id, 'selected', Boolean(c))}
-                                    />
-                                  </TableCell>
-
-                                  {/* Atividade / Serviço no Ponto Px */}
-                                  <TableCell className="p-2">
-                                    <div className="flex items-center gap-2">
-                                      <Wrench className="w-3.5 h-3.5 text-primary shrink-0" />
-
-                                      {item.isBudgeted ? (
-                                        /* Atividade Prevista do Orçamento: Exibe Texto Fixo */
-                                        <span className="font-semibold text-xs text-foreground">{item.servico}</span>
-                                      ) : (
-                                        /* Atividade Inserida pelo Botão: Exibe Seletor com Busca por Digitação */
-                                        <SearchableServicoSelect
-                                          value={item.servico}
-                                          onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'servico', val)}
-                                          options={filteredServicosBase}
-                                        />
-                                      )}
-                                    </div>
-                                  </TableCell>
-
-                                  {/* COLUNA F — Quantidade Prevista (Orçada) */}
-                                  <TableCell className="p-2 text-center">
-                                    <Badge variant="outline" className="font-mono text-xs bg-muted/40 font-bold px-2 py-0.5">
-                                      {item.qtdOrcadaPonto}
-                                    </Badge>
-                                  </TableCell>
-
-                                  {/* COLUNA M — Etapa Prevista */}
-                                  <TableCell className="p-2">
-                                    <Select
-                                      value={item.etapaPrevista}
-                                      onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'etapaPrevista', val)}
-                                    >
-                                      <SelectTrigger className="h-7 text-[11px] font-medium bg-background px-2">
-                                        <SelectValue placeholder="Selecione a Etapa" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {etapasDisponiveis.map(et => (
-                                          <SelectItem key={et} value={et} className="text-xs">
-                                            {et}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </TableCell>
-
-                                  {/* Quantidade a Realizar Hoje */}
-                                  <TableCell className="p-2">
-                                    <Input
-                                      type="number"
-                                      step="1"
-                                      min="1"
-                                      value={item.quantidade}
-                                      onChange={e => handleUpdateAtividade(pLabel, item.id, 'quantidade', e.target.value)}
-                                      className="h-8 text-xs text-center font-mono font-bold w-16"
-                                    />
-                                  </TableCell>
-
-                                  {/* Tempo Calculado */}
-                                  <TableCell className="p-2 font-mono text-muted-foreground font-semibold">
-                                    {item.tempoEstimadoMinutos} min
-                                  </TableCell>
-
-                                  {/* Valor Calculado */}
-                                  <TableCell className="p-2 font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                                    R$ {item.valorEstimado.toFixed(2)}
-                                  </TableCell>
-
-                                  {/* Excluir Atividade deste Ponto */}
-                                  <TableCell className="p-2 text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleRemoveAtividade(pLabel, item.id)}
-                                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      {/* Subtotais do Ponto */}
-                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                        <span>Ponto {pLabel}: {itemsSelecionados.length} atividades marcadas</span>
-                        <div className="flex items-center gap-4 font-mono font-semibold">
-                          <span>Tempo: {Math.floor(subtotalMinutos / 60)}h {subtotalMinutos % 60}m</span>
-                          <span className="text-emerald-600 dark:text-emerald-400">R$ {subtotalValor.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-
-          {/* Totais Gerais Summary Cards (Com Tempo Total Somado + Meta e % Meta) */}
-          <div className="grid grid-cols-4 gap-3">
-            <Card className="bg-card border border-border/60">
-              <CardContent className="p-3.5 flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-600 shrink-0">
-                  <Layers className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground font-medium">Atividades Marcadas</p>
-                  <p className="text-base font-bold font-mono text-foreground">
-                    {selectedItemsFlat.length} <span className="text-xs font-normal text-muted-foreground">de {allPontosListFlat.length}</span>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card border border-border/60">
-              <CardContent className="p-3.5 flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-600 shrink-0">
-                  <Clock className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground font-medium">Tempo Total Somado</p>
-                  <p className="text-base font-bold font-mono text-foreground">{tempoTotalFormatado}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card border border-border/60">
-              <CardContent className="p-3.5 flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 shrink-0">
-                  <DollarSign className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground font-medium">Valor Total Previsto</p>
-                  <p className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    R$ {totalValor.toFixed(2)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* % PREVISTO DA META CARD */}
-            <Card className="bg-card border border-border/60">
-              <CardContent className="p-3.5 flex items-center gap-3">
-                <div className={`p-2.5 rounded-lg shrink-0 ${
-                  percentualMeta >= 100 ? 'bg-emerald-500/10 text-emerald-600' : percentualMeta >= 75 ? 'bg-amber-500/10 text-amber-600' : 'bg-rose-500/10 text-rose-600'
-                }`}>
-                  <Target className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground font-medium">% Previsto da Meta</p>
-                  <p className={`text-base font-extrabold font-mono ${
-                    percentualMeta >= 100 ? 'text-emerald-600 dark:text-emerald-400' : percentualMeta >= 75 ? 'text-amber-600' : 'text-rose-600'
-                  }`}>
-                    {percentualMeta}%
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Envio para Plan_Principal Card */}
-          <Card className="border border-border">
+          {/* RESUMO GERAL CONSOLIDADO DO PERÍODO & GRAVAÇÃO EM LOTE */}
+          <Card className="border border-border shadow-sm bg-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Send className="w-4 h-4 text-primary" />
-                Pré-visualização do Formato e Envio (Plan_Principal)
+              <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Send className="w-4 h-4 text-primary" />
+                  Consolidação do Período & Gravação em Lote ({diasProgramados.length} dias programados)
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-3 rounded-xl bg-muted/60 border border-border font-mono text-xs text-foreground break-all">
-                <span className="text-muted-foreground font-sans text-[11px] block mb-1">
-                  Coluna O (Compilado de atividades por ponto com Qtd Prev. Col F e Etapa Col M):
-                </span>
-                {compiledPreview || <span className="text-muted-foreground italic">Nenhuma atividade selecionada para envio...</span>}
-              </div>
-
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                 <div className="text-xs text-muted-foreground">
-                  Dia Ativo: <strong className="text-foreground">{activeDia?.nomeDia} ({activeDia?.dataCompleta})</strong> | Obra: <strong className="text-foreground">{selectedObra?.projeto || 'Nenhuma'}</strong> | Equipe: <strong className="text-foreground">{equipe}</strong> | Meta: <strong className="text-foreground">R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
+                  Obra: <strong className="text-foreground">{selectedObra?.projeto || 'Nenhuma'}</strong> | Equipe: <strong className="text-foreground">{equipe}</strong> | Meta Diária: <strong className="text-foreground">R$ {metaEquipeInput.toFixed(2)}</strong> ({percentualMeta}%)
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleEnviarPlanPrincipalDiaAtivo}
-                    disabled={!selectedObra || selectedItemsFlat.length === 0 || salvarProgramacao.isPending || isSavingAll}
-                    className="gap-1.5 font-semibold text-xs h-9 bg-background"
-                  >
-                    {salvarProgramacao.isPending && !isSavingAll ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5 text-primary" /> Gravar Dia Ativo ({activeDia?.dataStr})
-                      </>
-                    )}
-                  </Button>
-
-                  <Button
-                    onClick={handleEnviarTodosOsDias}
-                    disabled={!selectedObra || diasProgramados.every(d => d.pontos.length === 0) || salvarProgramacao.isPending || isSavingAll}
-                    className="gap-1.5 font-semibold text-xs h-9 bg-primary text-primary-foreground shadow-sm"
-                  >
-                    {isSavingAll ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando {diasProgramados.length} Dias...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5" /> Gravar Todos os {diasProgramados.length} Dias
-                      </>
-                    )}
-                  </Button>
-                </div>
+                <Button
+                  onClick={handleEnviarTodosOsDias}
+                  disabled={!selectedObra || diasProgramados.every(d => d.pontos.length === 0) || salvarProgramacao.isPending || isSavingAll}
+                  className="gap-2 font-bold text-xs h-10 px-5 bg-primary text-primary-foreground shadow-md"
+                >
+                  {isSavingAll ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Gravando {diasProgramados.length} Dias na Plan_Principal...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" /> Gravar Todos os {diasProgramados.length} Dias na Plan_Principal
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
-
-        
+        </div>
       </div>
     </div>
-  </div>
   );
 };
