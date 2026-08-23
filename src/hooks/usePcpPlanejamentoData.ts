@@ -945,5 +945,6 @@ export const usePcpPlanejamentoData = (
     orcamentoPorPontoMap,
     pontosDisponiveisDoProjeto,
     salvarProgramacao,
+    servicosBase: servicosBase || [],
   };
 };

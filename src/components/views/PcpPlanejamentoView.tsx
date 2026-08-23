@@ -568,44 +568,63 @@ export const PcpPlanejamentoView = () => {
 
   // Handle adding a new activity line via button (isBudgeted: false -> full catalog dropdown)
   const handleAddAtividadeNoPonto = (pontoLabelTarget: string) => {
-    const existing = pontosGroupedMap[pontoLabelTarget] || [];
+    const existing = (pontosGroupedMap && Array.isArray(pontosGroupedMap[pontoLabelTarget])) 
+      ? pontosGroupedMap[pontoLabelTarget] 
+      : [];
     const existingServicos = new Set(existing.map(i => i.servico));
-    const fallback = filteredServicosBase.length > 0 ? filteredServicosBase[0] : (servicosBase.length > 0 ? servicosBase[0] : { servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
-    const nextAvailableServico = filteredServicosBase.find(s => !existingServicos.has(s.servico)) || fallback;
+    
+    const safeFiltered = Array.isArray(filteredServicosBase) ? filteredServicosBase : [];
+    const safeBase = Array.isArray(servicosBase) ? servicosBase : [];
+    
+    const fallback = safeFiltered.length > 0 
+      ? safeFiltered[0] 
+      : (safeBase.length > 0 
+        ? safeBase[0] 
+        : { servico: 'INSTALAR ISOLADOR BASTAO/DISCO', tempoMinutosPorUnidade: 27, valorPorUnidade: 338.40 });
+        
+    const nextAvailableServico = safeFiltered.find(s => s && s.servico && !existingServicos.has(s.servico)) || fallback;
+    const servicoName = nextAvailableServico?.servico || 'SERVIÇO PADRÃO';
 
     const newActivity: PcpPontoItem = {
-      id: `${pontoLabelTarget}-manual-${Date.now()}`,
+      id: `${pontoLabelTarget}-manual-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       ponto: pontoLabelTarget,
-      servico: nextAvailableServico.servico,
+      servico: servicoName,
+      codigoMaterial: nextAvailableServico?.codigo,
       qtdOrcadaPonto: 1, // Coluna F: Qtd Prevista
-      etapaPrevista: inferEtapaFromServico(nextAvailableServico.servico), // Coluna M: Etapa Prevista
+      etapaPrevista: inferEtapaFromServico(servicoName), // Coluna M: Etapa Prevista
       quantidade: 1,
-      tempoEstimadoMinutos: nextAvailableServico.tempoMinutosPorUnidade,
-      valorEstimado: nextAvailableServico.valorPorUnidade,
+      tempoEstimadoMinutos: nextAvailableServico?.tempoMinutosPorUnidade || 60,
+      valorEstimado: nextAvailableServico?.valorPorUnidade || 100,
       selected: true, // Atividade inserida pelo botão vem marcada por padrão
       isBudgeted: false, // Inserida pelo botão -> dá acesso à lista completa
     };
 
-    setPontosGroupedMap(prev => ({
-      ...prev,
-      [pontoLabelTarget]: [...(prev[pontoLabelTarget] || []), newActivity]
-    }));
+    setPontosGroupedMap(prev => {
+      const prevGroup = prev || {};
+      const currentList = Array.isArray(prevGroup[pontoLabelTarget]) ? [...prevGroup[pontoLabelTarget]] : [];
+      return {
+        ...prevGroup,
+        [pontoLabelTarget]: [...currentList, newActivity]
+      };
+    });
   };
 
   // Handle updating an activity row in a specific Ponto Card
   const handleUpdateAtividade = (pontoLabelTarget: string, itemIdOrIndex: string | number, field: keyof PcpPontoItem, value: any) => {
     setPontosGroupedMap(prev => {
-      const items = prev[pontoLabelTarget] ? [...prev[pontoLabelTarget]] : [];
+      const prevGroup = prev || {};
+      const items = Array.isArray(prevGroup[pontoLabelTarget]) ? [...prevGroup[pontoLabelTarget]] : [];
       const itemIndex = typeof itemIdOrIndex === 'number'
         ? itemIdOrIndex
         : items.findIndex(i => i.id === itemIdOrIndex);
 
-      if (itemIndex === -1 || !items[itemIndex]) return prev;
+      if (itemIndex === -1 || !items[itemIndex]) return prevGroup;
 
       const target = { ...items[itemIndex] };
+      const safeBase = Array.isArray(servicosBase) ? servicosBase : [];
 
       if (field === 'servico') {
-        const found = servicosBase.find(s => s.servico === value);
+        const found = safeBase.find(s => s && s.servico === value);
         target.servico = value;
         target.etapaPrevista = inferEtapaFromServico(value);
         if (found) {
@@ -613,8 +632,8 @@ export const PcpPlanejamentoView = () => {
           target.valorEstimado = Math.round(found.valorPorUnidade * target.quantidade * 100) / 100;
         }
       } else if (field === 'quantidade') {
-        const fallback = servicosBase.length > 0 ? servicosBase[0] : { servico: target.servico, tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
-        const found = servicosBase.find(s => s.servico === target.servico) || fallback;
+        const fallback = safeBase.length > 0 ? safeBase[0] : { servico: target.servico, tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
+        const found = safeBase.find(s => s && s.servico === target.servico) || fallback;
         const qty = Math.max(1, Math.round(Number(value) || 1));
         target.quantidade = qty;
         target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * qty);
@@ -629,7 +648,7 @@ export const PcpPlanejamentoView = () => {
 
       items[itemIndex] = target;
       return {
-        ...prev,
+        ...prevGroup,
         [pontoLabelTarget]: items
       };
     });
