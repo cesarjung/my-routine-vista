@@ -2077,6 +2077,9 @@ export const PcpPlanejamentoView = () => {
                         <SelectItem key={eq} value={eq} className="text-xs font-mono">
                           {eq}
                         </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardContent>
