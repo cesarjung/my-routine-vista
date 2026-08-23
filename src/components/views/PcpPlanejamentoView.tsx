@@ -523,36 +523,23 @@ export const PcpPlanejamentoView = () => {
   }, [alojamentos, selectedUnidadeId]);
 
   // Alojamento Padrão da Semana (Filtro Geral: 'BASE' ou ID de Alojamento)
-  const [selectedAlojamentoPadraoId, setSelectedAlojamentoPadraoId] = useSessionState<string>('pcp_shared_aloj_padrao', 'BASE');
-  const [diasSemanaCustom, setDiasSemanaCustom] = useSessionState<Record<number, { origemId: string; destinoId: string }>>('pcp_shared_dias_semana_aloj', {});
+  const [selectedAlojamentoPadraoId, setSelectedAlojamentoPadraoId] = useSessionState<string>('pcp_shared_aloj_padrao_v2', 'BASE');
+  const [diasCustomAlojMap, setDiasCustomAlojMap] = useSessionState<Record<string, { origemId?: string; destinoId?: string }>>('pcp_shared_dias_custom_aloj_v2', {});
 
-  // Atualizar quando o Alojamento Padrão da Semana mudar
+  // Atualizar quando o Alojamento Padrão mudar
   const handleAlojamentoPadraoChange = (alojId: string) => {
     setSelectedAlojamentoPadraoId(alojId);
-    const newCustom: Record<number, { origemId: string; destinoId: string }> = {};
-    for (let i = 0; i < 6; i++) {
-      if (alojId === 'BASE' || alojId === 'nenhum') {
-        newCustom[i] = { origemId: 'BASE', destinoId: 'BASE' };
-      } else {
-        newCustom[i] = {
-          origemId: i === 0 ? 'BASE' : alojId,
-          destinoId: i === 5 ? 'BASE' : alojId
-        };
-      }
-    }
-    setDiasSemanaCustom(newCustom);
+    // Limpa overrides manuais para que todos os dias do período assumam as novas regras automáticas
+    setDiasCustomAlojMap({});
   };
 
-  // Atualizar origem ou destino de um dia específico
-  const handleUpdateDiaAlojamento = (diaIdx: number, field: 'origemId' | 'destinoId', val: string) => {
-    setDiasSemanaCustom(prev => {
-      const existing = prev[diaIdx] || {
-        origemId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (diaIdx === 0 ? 'BASE' : selectedAlojamentoPadraoId),
-        destinoId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (diaIdx === 5 ? 'BASE' : selectedAlojamentoPadraoId)
-      };
+  // Atualizar origem ou destino de um dia específico (chaveada pela data yyyy-MM-dd)
+  const handleUpdateDiaAlojamento = (diaId: string, field: 'origemId' | 'destinoId', val: string) => {
+    setDiasCustomAlojMap(prev => {
+      const existing = prev[diaId] || {};
       return {
         ...prev,
-        [diaIdx]: {
+        [diaId]: {
           ...existing,
           [field]: val
         }
@@ -588,10 +575,10 @@ export const PcpPlanejamentoView = () => {
       // Regras Oficiais de Deslocamento:
       // 1. Se filtro for BASE ou nenhum: todos os dias saem e voltam para a BASE
       // 2. Se filtro for Alojamento:
-      //    - Dia Único: Sai da Base ➔ Obra ➔ Retorna à Base
-      //    - Primeiro Dia: Sai da Base ➔ Obra ➔ Pernoita no Alojamento
+      //    - Dia Único (totalDias === 1): Sai da Base ➔ Obra ➔ Retorna à Base
+      //    - Primeiro Dia (idx === 0): Sai da Base ➔ Obra ➔ Pernoita no Alojamento
       //    - Dias Intermediários: Sai do Alojamento ➔ Obra ➔ Pernoita no Alojamento
-      //    - Último Dia: Sai do Alojamento ➔ Obra ➔ Retorna à Base
+      //    - Último Dia (idx === totalDias - 1): Sai do Alojamento ➔ Obra ➔ Retorna à Base
       let defaultOrigemId = 'BASE';
       let defaultDestinoId = 'BASE';
 
@@ -614,21 +601,20 @@ export const PcpPlanejamentoView = () => {
         }
       }
 
-      const customAloj = (diasSemanaCustom && diasSemanaCustom[idx]) || {
-        origemId: defaultOrigemId,
-        destinoId: defaultDestinoId
-      };
+      const customAloj = diasCustomAlojMap[id] || {};
+      const finalOrigemId = customAloj.origemId || defaultOrigemId;
+      const finalDestinoId = customAloj.destinoId || defaultDestinoId;
 
       const baseInfo = unidadeAtivaInfo || UNIDADES_PLANEJAMENTO[1];
       const alojList = Array.isArray(alojamentosDaUnidade) ? alojamentosDaUnidade : [];
 
-      const origemObj = customAloj.origemId === 'BASE'
+      const origemObj = finalOrigemId === 'BASE'
         ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
-        : (alojList.find(a => a.id === customAloj.origemId) || { id: customAloj.origemId, nome: 'Alojamento', latitude: null, longitude: null });
+        : (alojList.find(a => a.id === finalOrigemId) || { id: finalOrigemId, nome: 'Alojamento', latitude: null, longitude: null });
 
-      const destinoObj = customAloj.destinoId === 'BASE'
+      const destinoObj = finalDestinoId === 'BASE'
         ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
-        : (alojList.find(a => a.id === customAloj.destinoId) || { id: customAloj.destinoId, nome: 'Alojamento', latitude: null, longitude: null });
+        : (alojList.find(a => a.id === finalDestinoId) || { id: finalDestinoId, nome: 'Alojamento', latitude: null, longitude: null });
 
       let distIdaKm = 0;
       let tempoIdaMin = 15;
@@ -655,9 +641,9 @@ export const PcpPlanejamentoView = () => {
         dataCompleta,
         nomeDia,
         pontos: pontosDoDia,
-        origemId: customAloj.origemId,
+        origemId: finalOrigemId,
         origemNome: origemObj.nome,
-        destinoId: customAloj.destinoId,
+        destinoId: finalDestinoId,
         destinoNome: destinoObj.nome,
         distIdaKm,
         tempoIdaMin,
@@ -666,7 +652,7 @@ export const PcpPlanejamentoView = () => {
         tempoTotalDeslocamentoMin
       };
     });
-  }, [dataInicio, dataFim, diasSemanaCustom, selectedAlojamentoPadraoId, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra, diasPontosMap]);
+  }, [dataInicio, dataFim, diasCustomAlojMap, selectedAlojamentoPadraoId, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra, diasPontosMap]);
 
   // Dia ativo selecionado para visualização/edição
   const activeDia = useMemo(() => {
@@ -2236,7 +2222,7 @@ export const PcpPlanejamentoView = () => {
                             <TableCell className="py-0.5 px-1.5" onClick={e => e.stopPropagation()}>
                               <select
                                 value={d.origemId}
-                                onChange={e => handleUpdateDiaAlojamento(d.idx, 'origemId', e.target.value)}
+                                onChange={e => handleUpdateDiaAlojamento(d.id, 'origemId', e.target.value)}
                                 className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
                               >
                                 <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
@@ -2248,7 +2234,7 @@ export const PcpPlanejamentoView = () => {
                             <TableCell className="py-0.5 px-1.5" onClick={e => e.stopPropagation()}>
                               <select
                                 value={d.destinoId}
-                                onChange={e => handleUpdateDiaAlojamento(d.idx, 'destinoId', e.target.value)}
+                                onChange={e => handleUpdateDiaAlojamento(d.id, 'destinoId', e.target.value)}
                                 className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
                               >
                                 <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
