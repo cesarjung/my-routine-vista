@@ -755,7 +755,7 @@ export const PcpPlanejamentoView = () => {
         isManualVolta: customAloj.manualTempoVoltaMin !== undefined && customAloj.manualTempoVoltaMin > 0
       };
     });
-  }, [dataInicio, dataFim, diasCustomAlojMap, selectedAlojamentoPadraoId, acrescimoVeiculoPct, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra, diasPontosMap]);
+  }, [datasProgramadas, diasCustomAlojMap, selectedAlojamentoPadraoId, acrescimoVeiculoPct, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra, diasPontosMap]);
 
   // Dia ativo selecionado para visualização/edição
   const activeDia = useMemo(() => {
