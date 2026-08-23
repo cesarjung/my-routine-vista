@@ -846,18 +846,27 @@ export const PcpPlanejamentoView = () => {
     setPontosGroupedMap({});
   };
 
-  // Sync items table grouped by Ponto whenever selectedPontosLabels or orcamentoPorPontoMap changes
+  // Sync items table grouped by Ponto whenever orcamentoPorPontoMap or pontosDisponiveisDoProjeto changes
   useEffect(() => {
     if (!selectedObra) return;
 
     setPontosGroupedMap(prevMap => {
       const currentPrevMap = prevMap || {};
-      const nextMap: Record<string, PcpPontoItem[]> = {};
-      const currentLabels = Array.isArray(selectedPontosLabels) ? selectedPontosLabels : [];
+      const nextMap: Record<string, PcpPontoItem[]> = { ...currentPrevMap };
 
-      currentLabels.forEach(pLabel => {
-        if (!pLabel) return;
-        const pLabelUpper = pLabel.toUpperCase();
+      // Coletar todos os pontos possíveis: do projeto, dos dias programados, ou do mapa de orçamento
+      const allLabels = new Set<string>();
+      (pontosDisponiveisDoProjeto || []).forEach(p => allLabels.add(p.toUpperCase()));
+      Object.values(diasPontosMap || {}).forEach(pts => (pts || []).forEach(p => allLabels.add(p.toUpperCase())));
+      if (orcamentoPorPontoMap?.keys) {
+        for (const k of orcamentoPorPontoMap.keys()) {
+          allLabels.add(k.toUpperCase());
+        }
+      }
+      if (allLabels.size === 0) allLabels.add('P1');
+
+      allLabels.forEach(pLabelUpper => {
+        if (!pLabelUpper) return;
         const budgetItems = orcamentoPorPontoMap?.get ? orcamentoPorPontoMap.get(pLabelUpper) : undefined;
         const existingItems = currentPrevMap[pLabelUpper] || [];
         const existingSelectedMap = new Map(existingItems.map(i => [i.servico || i.id, i.selected]));
@@ -908,7 +917,7 @@ export const PcpPlanejamentoView = () => {
 
       return nextMap;
     });
-  }, [selectedPontosLabels, orcamentoPorPontoMap, selectedObra, servicosBase, filteredServicosBase]);
+  }, [pontosDisponiveisDoProjeto, diasPontosMap, orcamentoPorPontoMap, selectedObra, servicosBase, filteredServicosBase]);
 
   // Toggle multi-select status filter
   const handleToggleStatus = (statusName: string) => {
@@ -2979,7 +2988,27 @@ export const PcpPlanejamentoView = () => {
                   {pontosDoDia.length > 0 && (
                     <div className="space-y-4 pt-1">
                       {pontosDoDia.map(pLabel => {
-                        const itemsDoPontoRaw = pontosGroupedMap[pLabel] || [];
+                        const pUpper = (pLabel || '').toUpperCase();
+                        let itemsDoPontoRaw = pontosGroupedMap[pUpper] || pontosGroupedMap[pLabel] || [];
+                        if (itemsDoPontoRaw.length === 0 && orcamentoPorPontoMap?.get) {
+                          const budget = orcamentoPorPontoMap.get(pUpper);
+                          if (budget && budget.length > 0) {
+                            itemsDoPontoRaw = budget.map((bItem, bIdx) => ({
+                              id: `${pUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
+                              ponto: pUpper,
+                              servico: bItem.servicoPrevisto || 'SERVIÇO',
+                              codigoMaterial: bItem.codigo,
+                              descricaoMaterial: bItem.descricao,
+                              qtdOrcadaPonto: bItem.quantidade || 1,
+                              etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
+                              quantidade: bItem.quantidade || 1,
+                              tempoEstimadoMinutos: bItem.tempoMinutos || 15,
+                              valorEstimado: bItem.valorEstimado || 0,
+                              selected: false,
+                              isBudgeted: true,
+                            }));
+                          }
+                        }
                         const itemsDoPonto = itemsDoPontoRaw.filter(i => {
                           const servUpper = (i.servico || '').toUpperCase();
                           const etapaUpper = (i.etapaPrevista || '').toUpperCase();
