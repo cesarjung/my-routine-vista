@@ -917,7 +917,7 @@ export const PcpPlanejamentoView = () => {
             codigoMaterial: bItem.codigo,
             descricaoMaterial: bItem.descricao,
             qtdOrcadaPonto: bItem.quantidade || 1,
-            etapaPrevista: inferEtapaFromServico(bItem.servicoPrevisto || ''),
+            etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
             quantidade: bItem.quantidade || 1,
             tempoEstimadoMinutos: bItem.tempoMinutos || 15,
             valorEstimado: bItem.valorEstimado || 0,
@@ -2998,7 +2998,23 @@ export const PcpPlanejamentoView = () => {
                       {pontosDoDia.map(pLabel => {
                         const itemsDoPontoRaw = pontosGroupedMap[pLabel] || [];
                         const itemsDoPonto = itemsDoPontoRaw.filter(i => {
-                          const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.servico || '').toUpperCase().includes('LINHA VIVA');
+                          const servUpper = (i.servico || '').toUpperCase();
+                          const etapaUpper = (i.etapaPrevista || '').toUpperCase();
+                          const descMatUpper = (i.descricaoMaterial || '').toUpperCase();
+                          const codUpper = (i.codigoMaterial || '').toUpperCase();
+
+                          const isLv = servUpper.includes(' LV') || 
+                                       servUpper.includes('LINHA VIVA') || 
+                                       servUpper.includes('LV/') ||
+                                       servUpper.endsWith('LV') ||
+                                       etapaUpper.includes('LV') || 
+                                       etapaUpper.includes('LINHA VIVA') ||
+                                       descMatUpper.includes(' LV') ||
+                                       descMatUpper.includes('LINHA VIVA') ||
+                                       descMatUpper.endsWith('LV') ||
+                                       codUpper.startsWith('SDEV') ||
+                                       codUpper.includes('LV');
+
                           if (filtroLvDoDia === 'SOMENTE_LV' && !isLv) return false;
                           if (filtroLvDoDia === 'SEM_LV' && isLv) return false;
                           if (etapasDoDia.length > 0 && i.etapaPrevista && !etapasDoDia.includes(i.etapaPrevista)) {

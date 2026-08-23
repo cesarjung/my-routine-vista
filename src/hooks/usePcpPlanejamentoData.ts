@@ -166,6 +166,9 @@ export const formatDateWithWeekday = (dateStr: string, dateObj?: Date): string =
 // Helper to infer Etapa (Coluna M) based on service type without leading numbers
 export const inferEtapaFromServico = (servicoName: string): string => {
   const s = (servicoName || '').toUpperCase();
+  if (s.includes(' LV') || s.includes('LINHA VIVA') || s.includes('LV/') || s.endsWith('LV')) {
+    return 'ATIVIDADE LV';
+  }
   if (s.includes('POSTE') || s.includes('ESCAVA') || s.includes('CAVA') || s.includes('DISTRIBUIÇÃO DE POSTES') || s.includes('ESTAI')) {
     return 'IMPLANTAÇÃO';
   }
