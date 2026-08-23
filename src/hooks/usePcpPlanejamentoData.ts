@@ -351,6 +351,8 @@ export const usePcpPlanejamentoData = (
         }
       }
 
+      const mapProjetos = new Set<string>();
+
       for (let i = 6; i < carteiraRows.length; i++) {
         const row = carteiraRows[i];
         if (!row || !Array.isArray(row)) continue;
