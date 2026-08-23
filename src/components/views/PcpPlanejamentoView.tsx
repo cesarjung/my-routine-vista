@@ -344,9 +344,6 @@ export const PcpPlanejamentoView = () => {
   const [selectedDonoFilter, setSelectedDonoFilter] = useSessionState<string>('pcp_shared_dono', 'TODOS');
   const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useSessionState<string>('pcp_shared_supervisor', 'TODOS');
   const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_shared_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
-
-  // Selected Pontos list for active Obra
-  const [selectedPontosLabels, setSelectedPontosLabels] = useSessionState<string[]>('pcp_shared_selected_pontos', []);
   const [newCustomPontoInput, setNewCustomPontoInput] = useState<string>('');
 
   // Alojamentos
@@ -682,7 +679,12 @@ export const PcpPlanejamentoView = () => {
 
   const handleSelectObra = (obra: PcpObra) => {
     setSelectedObraId(obra.projeto);
-    setSelectedPontosLabels(['P1']);
+    if (activeDia) {
+      setDiasPontosMap(prev => ({
+        ...prev,
+        [activeDia.id]: ['P1']
+      }));
+    }
     setPontosGroupedMap({});
   };
 
