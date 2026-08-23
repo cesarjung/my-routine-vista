@@ -87,6 +87,33 @@ function calcDistanceKM(lat1: number, lon1: number, lat2: number, lon2: number) 
   return R * c;
 }
 
+function safeParseDate(val?: any): Date {
+  if (!val) return new Date();
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  if (typeof val === 'string') {
+    const parts = val.split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const dt = new Date(y, m, d, 12, 0, 0);
+      if (!isNaN(dt.getTime())) return dt;
+    }
+    const dObj = new Date(val);
+    if (!isNaN(dObj.getTime())) return dObj;
+  }
+  return new Date();
+}
+
+function safeFormatDate(val?: any, fmt = 'dd/MM/yyyy'): string {
+  try {
+    const d = safeParseDate(val);
+    return format(d, fmt);
+  } catch {
+    return format(new Date(), fmt);
+  }
+}
+
 // ─── PontosMultiSelect — Popover compacto de seleção múltipla de pontos ───
 interface PontosMultiSelectProps {
   pontos: string[];
@@ -479,43 +506,44 @@ export const PcpPlanejamentoView = () => {
 
   // Cálculo dos Dias Programados no Período (Data Início até Data Fim)
   const diasProgramados = useMemo(() => {
-    let dStart = new Date();
-    try {
-      const parts = dataInicio.split('-');
-      if (parts.length === 3) dStart = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    } catch {}
-
-    let dEnd = new Date();
-    try {
-      const parts = dataFim.split('-');
-      if (parts.length === 3) dEnd = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    } catch {}
+    let dStart = safeParseDate(dataInicio);
+    let dEnd = safeParseDate(dataFim);
 
     if (dEnd < dStart) dEnd = dStart;
 
-    const days = eachDayOfInterval({ start: dStart, end: dEnd });
+    let days: Date[] = [];
+    try {
+      days = eachDayOfInterval({ start: dStart, end: dEnd });
+    } catch {
+      days = [dStart];
+    }
+    if (!days || days.length === 0) days = [dStart];
+
     const totalDias = days.length;
     const nomesSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
     return days.map((dayDate, idx) => {
-      const id = format(dayDate, 'yyyy-MM-dd');
+      const id = safeFormatDate(dayDate, 'yyyy-MM-dd');
       const diaSemanaIndex = dayDate.getDay();
-      const nomeDia = nomesSemana[diaSemanaIndex];
-      const dataStr = format(dayDate, 'dd/MM');
-      const dataCompleta = format(dayDate, 'dd/MM/yyyy');
+      const nomeDia = nomesSemana[diaSemanaIndex] || 'Dia';
+      const dataStr = safeFormatDate(dayDate, 'dd/MM');
+      const dataCompleta = safeFormatDate(dayDate, 'dd/MM/yyyy');
 
-      const customAloj = diasSemanaCustom[idx] || {
+      const customAloj = (diasSemanaCustom && diasSemanaCustom[idx]) || {
         origemId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === 0 ? 'BASE' : selectedAlojamentoPadraoId),
         destinoId: selectedAlojamentoPadraoId === 'BASE' ? 'BASE' : (idx === totalDias - 1 ? 'BASE' : selectedAlojamentoPadraoId)
       };
 
+      const baseInfo = unidadeAtivaInfo || UNIDADES_PLANEJAMENTO[1];
+      const alojList = Array.isArray(alojamentosDaUnidade) ? alojamentosDaUnidade : [];
+
       const origemObj = customAloj.origemId === 'BASE'
-        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude }
-        : (alojamentosDaUnidade.find(a => a.id === customAloj.origemId) || { id: customAloj.origemId, nome: 'Alojamento', latitude: null, longitude: null });
+        ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
+        : (alojList.find(a => a.id === customAloj.origemId) || { id: customAloj.origemId, nome: 'Alojamento', latitude: null, longitude: null });
 
       const destinoObj = customAloj.destinoId === 'BASE'
-        ? { id: 'BASE', nome: unidadeAtivaInfo.baseNome, latitude: unidadeAtivaInfo.baseLatitude, longitude: unidadeAtivaInfo.baseLongitude }
-        : (alojamentosDaUnidade.find(a => a.id === customAloj.destinoId) || { id: customAloj.destinoId, nome: 'Alojamento', latitude: null, longitude: null });
+        ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
+        : (alojList.find(a => a.id === customAloj.destinoId) || { id: customAloj.destinoId, nome: 'Alojamento', latitude: null, longitude: null });
 
       let distIdaKm = 0;
       let tempoIdaMin = 15;
@@ -532,7 +560,7 @@ export const PcpPlanejamentoView = () => {
       }
 
       const tempoTotalDeslocamentoMin = tempoIdaMin + tempoVoltaMin;
-      const pontosDoDia = diasPontosMap[id] || [];
+      const pontosDoDia = (diasPontosMap && Array.isArray(diasPontosMap[id])) ? diasPontosMap[id] : [];
 
       return {
         idx,
@@ -557,8 +585,29 @@ export const PcpPlanejamentoView = () => {
 
   // Dia ativo selecionado para visualização/edição
   const activeDia = useMemo(() => {
+    if (!diasProgramados || diasProgramados.length === 0) {
+      const now = new Date();
+      return {
+        idx: 0,
+        id: safeFormatDate(now, 'yyyy-MM-dd'),
+        dayDate: now,
+        dataStr: safeFormatDate(now, 'dd/MM'),
+        dataCompleta: safeFormatDate(now, 'dd/MM/yyyy'),
+        nomeDia: 'Hoje',
+        pontos: [],
+        origemId: 'BASE',
+        origemNome: unidadeAtivaInfo?.baseNome || 'Base',
+        destinoId: 'BASE',
+        destinoNome: unidadeAtivaInfo?.baseNome || 'Base',
+        distIdaKm: 0,
+        tempoIdaMin: 15,
+        distVoltaKm: 0,
+        tempoVoltaMin: 15,
+        tempoTotalDeslocamentoMin: 30
+      };
+    }
     return diasProgramados.find(d => d.id === activeDayId) || diasProgramados[0];
-  }, [diasProgramados, activeDayId]);
+  }, [diasProgramados, activeDayId, unidadeAtivaInfo]);
 
   // Garantir que activeDayId aponta para um dia existente
   useEffect(() => {
@@ -1757,16 +1806,16 @@ export const PcpPlanejamentoView = () => {
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="h-8 text-xs font-mono font-semibold justify-start">
                           <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                          {format(new Date(dataInicio + 'T12:00:00'), 'dd/MM/yyyy')}
+                          {safeFormatDate(dataInicio, 'dd/MM/yyyy')}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={new Date(dataInicio + 'T12:00:00')}
+                          selected={safeParseDate(dataInicio)}
                           onSelect={d => {
                             if (d) {
-                              const s = format(d, 'yyyy-MM-dd');
+                              const s = safeFormatDate(d, 'yyyy-MM-dd');
                               setDataInicio(s);
                               if (s > dataFim) setDataFim(s);
                               setIsDataInicioOpen(false);
@@ -1786,16 +1835,16 @@ export const PcpPlanejamentoView = () => {
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="h-8 text-xs font-mono font-semibold justify-start">
                           <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                          {format(new Date(dataFim + 'T12:00:00'), 'dd/MM/yyyy')}
+                          {safeFormatDate(dataFim, 'dd/MM/yyyy')}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={new Date(dataFim + 'T12:00:00')}
+                          selected={safeParseDate(dataFim)}
                           onSelect={d => {
                             if (d) {
-                              const s = format(d, 'yyyy-MM-dd');
+                              const s = safeFormatDate(d, 'yyyy-MM-dd');
                               setDataFim(s);
                               if (s < dataInicio) setDataInicio(s);
                               setIsDataFimOpen(false);
@@ -1846,33 +1895,6 @@ export const PcpPlanejamentoView = () => {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-                      <SelectItem key={eq} value={eq} className="text-xs font-mono">
-                        {eq}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Dropdown de Supervisor Responsável */}
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <Label className="text-xs flex items-center justify-between">
-                  <span>Supervisor Responsável</span>
-                  <span className="text-[10px] text-muted-foreground">({supervisoresDisponiveis.length})</span>
-                </Label>
-                <Select value={supervisor} onValueChange={setSupervisor}>
-                  <SelectTrigger className="h-9 text-xs font-semibold">
-                    <SelectValue placeholder="Selecione o supervisor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {supervisoresDisponiveis.map(sup => (
-                      <SelectItem key={sup} value={sup} className="text-xs">
-                        {sup}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* MULTI-SELECT ETAPA POPOVER */}
