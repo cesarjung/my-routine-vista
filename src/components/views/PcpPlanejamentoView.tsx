@@ -35,8 +35,10 @@ import {
   MapPin,
   Zap,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  ChevronsUpDown
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useSessionState } from '@/hooks/useSessionState';
 import {
   usePcpPlanejamentoData,
@@ -46,6 +48,7 @@ import {
   DEFAULT_SELECTED_STATUSES,
   PcpObra,
   PcpPontoItem,
+  ServicoBase,
   inferEtapaFromServico
 } from '@/hooks/usePcpPlanejamentoData';
 import { Button } from '@/components/ui/button';
@@ -175,6 +178,115 @@ const PontosMultiSelect = ({
         <div className="px-3 py-2 border-t border-border text-[10px] text-muted-foreground flex justify-between">
           <span>{selected.length} selecionados</span>
           <button onClick={() => setOpen(false)} className="text-primary hover:underline font-semibold">Confirmar</button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+// Componente de Seleção de Atividades com Busca por Digitação
+const SearchableServicoSelect = ({
+  value,
+  onValueChange,
+  options
+}: {
+  value: string;
+  onValueChange: (val: string) => void;
+  options: ServicoBase[];
+}) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const safeOptions = Array.isArray(options) ? options : [];
+  const filtered = useMemo(() => {
+    if (!search.trim()) return safeOptions;
+    const sUpper = search.toUpperCase().trim();
+    return safeOptions.filter(o => 
+      (o.servico && o.servico.toUpperCase().includes(sUpper)) ||
+      (o.codigo && o.codigo.toUpperCase().includes(sUpper))
+    );
+  }, [safeOptions, search]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-8 w-full justify-between text-xs font-semibold bg-background border-border hover:bg-accent/50 px-2.5"
+        >
+          <span className="truncate text-left flex-1 font-semibold text-foreground">
+            {value || "Selecione a Atividade..."}
+          </span>
+          <ChevronsUpDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[380px] p-0 shadow-lg border-border z-[9999]" align="start">
+        <div className="p-2 border-b border-border flex items-center gap-2 bg-muted/20">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input
+            type="text"
+            placeholder="Pesquisar atividade por nome ou código..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full text-xs bg-transparent outline-none placeholder:text-muted-foreground text-foreground"
+            autoFocus
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="text-[11px] text-muted-foreground hover:text-foreground font-bold px-1.5 py-0.5 rounded hover:bg-muted"
+              title="Limpar pesquisa"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="max-h-[260px] overflow-y-auto p-1 space-y-0.5 custom-scrollbar">
+          {filtered.length === 0 ? (
+            <div className="p-4 text-center text-xs text-muted-foreground">
+              Nenhuma atividade encontrada para "{search}".
+            </div>
+          ) : (
+            filtered.map(s => {
+              const isSelected = s.servico === value;
+              return (
+                <div
+                  key={s.servico}
+                  onClick={() => {
+                    onValueChange(s.servico);
+                    setOpen(false);
+                    setSearch('');
+                  }}
+                  className={cn(
+                    "flex items-center justify-between p-2 rounded-md text-xs cursor-pointer transition-colors",
+                    isSelected 
+                      ? "bg-primary text-primary-foreground font-bold" 
+                      : "hover:bg-accent hover:text-accent-foreground text-foreground"
+                  )}
+                >
+                  <div className="flex flex-col flex-1 pr-2 truncate">
+                    <span className="truncate font-semibold">{s.servico}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {s.codigo && (
+                        <span className={cn("text-[10px] font-mono", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                          Cód: {s.codigo}
+                        </span>
+                      )}
+                      <span className={cn("text-[10px] font-mono", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                        • {s.tempoMinutosPorUnidade} min
+                      </span>
+                    </div>
+                  </div>
+                  {isSelected && <Check className="h-4 h-4 shrink-0 ml-1 text-primary-foreground" />}
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="p-1.5 border-t border-border bg-muted/30 text-[10px] text-muted-foreground text-center font-medium">
+          {filtered.length} {filtered.length === 1 ? 'atividade disponível' : 'atividades disponíveis'}
         </div>
       </PopoverContent>
     </Popover>
@@ -1997,22 +2109,12 @@ export const PcpPlanejamentoView = () => {
                                         /* Atividade Prevista do Orçamento: Exibe Texto Fixo */
                                         <span className="font-semibold text-xs text-foreground">{item.servico}</span>
                                       ) : (
-                                        /* Atividade Inserida pelo Botão: Exibe Seletor com o Catálogo Completo */
-                                        <Select
+                                        /* Atividade Inserida pelo Botão: Exibe Seletor com Busca por Digitação */
+                                        <SearchableServicoSelect
                                           value={item.servico}
                                           onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'servico', val)}
-                                        >
-                                          <SelectTrigger className="h-8 text-xs font-semibold bg-background border-border">
-                                            <SelectValue placeholder="Selecione a Atividade" />
-                                          </SelectTrigger>
-                                          <SelectContent className="max-h-[200px]">
-                                            {filteredServicosBase.map(s => (
-                                              <SelectItem key={s.servico} value={s.servico} className="text-[10px]">
-                                                {s.servico}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
+                                          options={filteredServicosBase}
+                                        />
                                       )}
                                     </div>
                                   </TableCell>
