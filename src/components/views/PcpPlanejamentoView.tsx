@@ -1071,12 +1071,7 @@ export const PcpPlanejamentoView = () => {
 
   const handleSelectObra = (obra: PcpObra) => {
     setSelectedObraId(obra.projeto);
-    if (activeDia) {
-      setDiasPontosMap(prev => ({
-        ...prev,
-        [activeDia.id]: ['P1']
-      }));
-    }
+    setDiasPontosMap({});
     setDiasPontosGroupedMap({});
   };
 
@@ -1826,7 +1821,7 @@ export const PcpPlanejamentoView = () => {
 
       if (dayId) {
         // Pontos do dia (garante que todos os pontos descritos na Plan_Principal vêm marcados)
-        nextDiasPontosMap[dayId] = plan.pontos.length > 0 ? plan.pontos : ['P1'];
+        nextDiasPontosMap[dayId] = plan.pontos.length > 0 ? plan.pontos : [];
         // Etapas do dia
         nextDiasEtapasMap[dayId] = plan.etapasGeral;
         // PES do dia
