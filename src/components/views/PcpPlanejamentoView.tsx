@@ -3270,15 +3270,15 @@ export const PcpPlanejamentoView = () => {
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-4">
-                  {/* BARRA DE CONFIGURAÇÕES DESTE DIA: REPROGRAMAR (ESQUERDA) + ETAPAS DA OBRA + FILTRO LV + PES */}
-                  <div className="flex flex-col gap-2.5 bg-muted/20 p-3 rounded-xl border border-border/60">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                  {/* BARRA DE CONFIGURAÇÕES DESTE DIA (100% EM UMA ÚNICA LINHA: REPROGRAMAR + MOTIVO + ETAPAS + PES + FILTRO LV) */}
+                  <div className="flex flex-col gap-2.5 bg-muted/20 p-2.5 rounded-xl border border-border/60">
+                    <div className="flex items-center justify-between gap-3 overflow-x-auto flex-nowrap min-w-full pb-0.5">
                       {/* LADO ESQUERDO: Reprogramar (Vermelho) + Motivo (Coluna AU) + Etapas */}
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 shrink-0 flex-nowrap">
                         {/* Botão Reprogramar do Dia */}
                         <div 
                           onClick={() => handleToggleReprogramarDia(dia.id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs shrink-0 ${
                             diasReprogramarMap[dia.id]
                               ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
                               : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
@@ -3295,14 +3295,14 @@ export const PcpPlanejamentoView = () => {
 
                         {/* Select de Motivos da Reprogramação (Coluna AU da Plan_Principal) */}
                         {diasReprogramarMap[dia.id] && (
-                          <div className="flex items-center gap-1 animate-in fade-in duration-200">
+                          <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-200">
                             <Select
                               value={diasMotivoReprogramarMap[dia.id] || MOTIVOS_REPROGRAMACAO_COL_AU[0]}
                               onValueChange={(val) => setDiasMotivoReprogramarMap(prev => ({ ...prev, [dia.id]: val }))}
                             >
-                              <SelectTrigger className="h-7 text-[11px] font-semibold bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800 max-w-[290px] shadow-2xs">
+                              <SelectTrigger className="h-7 text-[11px] font-semibold bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800 w-[240px] shadow-2xs shrink-0">
                                 <span className="truncate">
-                                  {diasMotivoReprogramarMap[dia.id] || 'Selecione o motivo (Col AU)...'}
+                                  {diasMotivoReprogramarMap[dia.id] || 'Motivo (Col AU)...'}
                                 </span>
                               </SelectTrigger>
                               <SelectContent className="max-h-[280px] max-w-[420px] z-[220]">
@@ -3316,16 +3316,16 @@ export const PcpPlanejamentoView = () => {
                           </div>
                         )}
 
-                        <span className="text-muted-foreground text-xs">•</span>
+                        <span className="text-muted-foreground/50 text-xs shrink-0">•</span>
 
                         {/* Etapas da Obra para este Dia (Multiseleção) */}
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-foreground flex items-center gap-1">
-                            <Tag className="w-3.5 h-3.5 text-primary" /> Etapas (Col M):
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-xs font-bold text-foreground flex items-center gap-1 shrink-0">
+                            <Tag className="w-3.5 h-3.5 text-primary shrink-0" /> Etapas (Col M):
                           </span>
                           <Popover>
                             <PopoverTrigger asChild>
-                              <Button variant="outline" size="sm" className="h-7 text-xs font-semibold bg-background px-2.5 max-w-[220px]">
+                              <Button variant="outline" size="sm" className="h-7 text-xs font-semibold bg-background px-2.5 max-w-[180px] shrink-0">
                                 <span className="truncate">
                                   {etapasDoDia.length === 0
                                     ? 'Selecionar Etapas...'
@@ -3376,11 +3376,11 @@ export const PcpPlanejamentoView = () => {
                       </div>
 
                       {/* LADO DIREITO: PES e Filtro LV para este Dia */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-2 shrink-0 flex-nowrap">
                         {/* Botão PES do Dia (Coluna Q da Plan_Principal) */}
                         <div 
                           onClick={() => handleTogglePesDia(dia.id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs shrink-0 ${
                             diasPesMap[dia.id]
                               ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
                               : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
@@ -3395,7 +3395,7 @@ export const PcpPlanejamentoView = () => {
                           <span className="font-mono text-[11px] tracking-wide">PES</span>
                         </div>
 
-                        <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border">
+                        <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border shrink-0">
                           <Button
                             size="sm"
                             type="button"
