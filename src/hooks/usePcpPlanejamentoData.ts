@@ -32,10 +32,12 @@ export interface PcpPontoItem {
   codigoMaterial?: string;
   descricaoMaterial?: string;
   qtdOrcadaPonto: number;       // Coluna F: Qtd Prevista (orçada)
-  etapaPrevista: string;         // Coluna M: Etapa Prevista (ex: "IMPLANTAÇÃO")
+  etapaPrevista: string;         // Coluna BY: Etapa da atividade na base do pré-fechamento
   quantidade: number;           // Qtd a programar hoje
   tempoEstimadoMinutos: number; // Ex: 15 min
   valorEstimado: number;        // Ex: R$ 280.00
+  valorUnitario?: number;       // Ex: R$ 67.64
+  tempoUnitarioMinutos?: number;// Ex: 15 min
   selected: boolean;            // Checkbox se vai incluir no envio
   isBudgeted?: boolean;         // True se veio do orçamento do ponto
 }
@@ -63,6 +65,7 @@ export interface PlanPrincipalRow {
   equipe: string;
   projeto: string;
   municipio: string;
+  etapa: string;
   detalhesPontos: string;
 }
 
@@ -77,6 +80,8 @@ export interface MaterialPontoBudget {
   etapaPrevista?: string; // From ATIVIDADES_POR_PONTO_BASE (Col C), optional for materiais fallback
   tempoMinutos: number;
   valorEstimado: number;
+  valorUnitario?: number;
+  tempoUnitarioMinutos?: number;
 }
 
 export const UNIDADES_DISPONIVEIS = [
@@ -686,6 +691,8 @@ export const usePcpPlanejamentoData = (
             etapaPrevista: info.etapa,  // Etapa directly from sheet (Col C)
             tempoMinutos: Math.round(foundServ.tempoMinutosPorUnidade * totalQty),
             valorEstimado: Math.round(foundServ.valorPorUnidade * totalQty * 100) / 100,
+            valorUnitario: foundServ.valorPorUnidade,
+            tempoUnitarioMinutos: foundServ.tempoMinutosPorUnidade,
           });
         });
         if (list.length > 0) map.set(pontoKey, list);
@@ -749,6 +756,8 @@ export const usePcpPlanejamentoData = (
             servicoPrevisto: servico,
             tempoMinutos: foundServ.tempoMinutosPorUnidade * totalQty,
             valorEstimado: foundServ.valorPorUnidade * totalQty,
+            valorUnitario: foundServ.valorPorUnidade,
+            tempoUnitarioMinutos: foundServ.tempoMinutosPorUnidade,
           });
         });
         if (list.length > 0) map.set(pontoKey, list);
@@ -887,19 +896,19 @@ export const usePcpPlanejamentoData = (
       if (qtdTrafos > 0) newRow[29] = formatQuantityDisplay(qtdTrafos);         // Col AD: Trafos/Equipamentos
 
       // Colunas Calculadas de Produção e Valores (Cols 36-43 / AK-AR)
-      newRow[36] = 'NÃO';                                     // Col AK: ANALISAR PRODUÇÃO?
-      newRow[37] = 'R$ 0,00';                                 // Col AL
-      newRow[38] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col AM: Valor Total Previsto das Atividades
-      newRow[39] = '0,00%';                                   // Col AN
-      newRow[40] = 'R$ 0,00';                                 // Col AO
-      newRow[41] = '0%';                                      // Col AP
-
+      newRow[36] = 'NÃO';                                     // Col AK (36): ANALISAR PRODUÇÃO?
+      newRow[37] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col AL (37): Valor Planejado
+      
       const metaVal = form.metaEquipeValor || 4442;
-      newRow[42] = `R$ ${metaVal.toFixed(2)}`;                // Col AQ: Valor da Meta da Equipe
+      newRow[38] = `R$ ${metaVal.toFixed(2)}`;                // Col AM (38): Valor da Meta da Equipe
 
       const pctMeta = metaVal > 0 ? (valorTotalAtividades / metaVal * 100) : 0;
       const pctMetaFormatted = `${pctMeta.toFixed(1)}%`;
-      newRow[43] = pctMetaFormatted;                          // Col AR: % Previsto da Meta
+      newRow[39] = pctMetaFormatted;                          // Col AN (39): Percentual Planejado da Meta
+      newRow[40] = 'R$ 0,00';                                 // Col AO
+      newRow[41] = '0%';                                      // Col AP
+      newRow[42] = `R$ ${metaVal.toFixed(2)}`;                // Col AQ
+      newRow[43] = pctMetaFormatted;                          // Col AR
 
       newRow[56] = nomeUnidadePlanejadaUpper;                 // Col BE (56): Unidade Planejada em MAIÚSCULAS ("BOM JESUS DA LAPA")
       
@@ -911,17 +920,17 @@ export const usePcpPlanejamentoData = (
       const tDesloc = form.tempoDeslocamentoMinutos || 30;
       const tSeg = form.tempoSegurancaMinutos || 15;
 
-      newRow[63] = `00:${String(tSaidaBase).padStart(2, '0')}:00`; // Col BL (63): Tempo Saída Base
+      const hAtiv = Math.floor(tempoAtividadesMin / 60);
+      const mAtiv = tempoAtividadesMin % 60;
+      newRow[63] = `${String(hAtiv).padStart(2, '0')}:${String(mAtiv).padStart(2, '0')}:00`; // Col BL (63): Tempo de Serviço / Atividades
 
       const hDesl = Math.floor(tDesloc / 60);
       const mDesl = tDesloc % 60;
       newRow[64] = `${String(hDesl).padStart(2, '0')}:${String(mDesl).padStart(2, '0')}:00`; // Col BM (64): Tempo Deslocamento
 
-      newRow[65] = `00:${String(tSeg).padStart(2, '0')}:00`;       // Col BN (65): Tempo Segurança
+      newRow[65] = `00:${String(tSaidaBase).padStart(2, '0')}:00`;                           // Col BN (65): Tempo Saída Base
 
-      const hAtiv = Math.floor(tempoAtividadesMin / 60);
-      const mAtiv = tempoAtividadesMin % 60;
-      newRow[66] = `${String(hAtiv).padStart(2, '0')}:${String(mAtiv).padStart(2, '0')}:00`; // Col BO (66): Tempo Atividades
+      newRow[66] = `00:${String(tSeg).padStart(2, '0')}:00`;                                 // Col BO (66): Tempo Segurança
 
       const tTotalGeral = tempoAtividadesMin + tDesloc + tSaidaBase + tSeg;
       const hTot = Math.floor(tTotalGeral / 60);

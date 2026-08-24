@@ -1184,10 +1184,12 @@ export const PcpPlanejamentoView = () => {
       servico: servicoName,
       codigoMaterial: nextAvailableServico?.codigo,
       qtdOrcadaPonto: 1, // Coluna F: Qtd Prevista
-      etapaPrevista: inferEtapaFromServico(servicoName), // Coluna M: Etapa Prevista
+      etapaPrevista: inferEtapaFromServico(servicoName), // Coluna BY: Etapa da atividade
       quantidade: 1,
       tempoEstimadoMinutos: nextAvailableServico?.tempoMinutosPorUnidade || 60,
       valorEstimado: nextAvailableServico?.valorPorUnidade || 100,
+      valorUnitario: nextAvailableServico?.valorPorUnidade || 100,
+      tempoUnitarioMinutos: nextAvailableServico?.tempoMinutosPorUnidade || 60,
       selected: true, // Atividade inserida pelo botão vem marcada por padrão
       isBudgeted: false, // Inserida pelo botão -> dá acesso à lista completa
     };
@@ -1221,16 +1223,22 @@ export const PcpPlanejamentoView = () => {
         target.servico = value;
         target.etapaPrevista = inferEtapaFromServico(value);
         if (found) {
+          target.valorUnitario = found.valorPorUnidade;
+          target.tempoUnitarioMinutos = found.tempoMinutosPorUnidade;
           target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * target.quantidade);
           target.valorEstimado = Math.round(found.valorPorUnidade * target.quantidade * 100) / 100;
         }
       } else if (field === 'quantidade') {
         const fallback = safeBase.length > 0 ? safeBase[0] : { servico: target.servico, tempoMinutosPorUnidade: 60, valorPorUnidade: 100 };
         const found = safeBase.find(s => s && s.servico === target.servico) || fallback;
+        const unitVal = target.valorUnitario !== undefined ? target.valorUnitario : (found?.valorPorUnidade || 100);
+        const unitTempo = target.tempoUnitarioMinutos !== undefined ? target.tempoUnitarioMinutos : (found?.tempoMinutosPorUnidade || 60);
         const qty = Math.max(1, Math.round(Number(value) || 1));
         target.quantidade = qty;
-        target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * qty);
-        target.valorEstimado = Math.round(found.valorPorUnidade * qty * 100) / 100;
+        target.valorUnitario = unitVal;
+        target.tempoUnitarioMinutos = unitTempo;
+        target.tempoEstimadoMinutos = Math.round(unitTempo * qty);
+        target.valorEstimado = Math.round(unitVal * qty * 100) / 100;
       } else if (field === 'qtdOrcadaPonto') {
         target.qtdOrcadaPonto = Math.max(0.1, Number(value) || 1);
       } else if (field === 'etapaPrevista') {
@@ -2697,10 +2705,12 @@ export const PcpPlanejamentoView = () => {
                   <TableRow className="bg-muted/40 text-[10px]">
                     <TableHead className="py-1 px-2 whitespace-nowrap">Dia</TableHead>
                     <TableHead className="py-1 px-2 whitespace-nowrap">Pontos</TableHead>
-                    <TableHead className="py-1 px-2 whitespace-nowrap">Tempo Total</TableHead>
-                    <TableHead className="py-1 px-2 text-right whitespace-nowrap">V. Meta</TableHead>
-                    <TableHead className="py-1 px-2 text-right whitespace-nowrap">V. Planejado</TableHead>
-                    <TableHead className="py-1 px-2 text-right whitespace-nowrap">% Meta</TableHead>
+                    <TableHead className="py-1 px-2 whitespace-nowrap" title="Coluna BL: Tempo de Serviço / Atividades">T. Serviços (BL)</TableHead>
+                    <TableHead className="py-1 px-2 whitespace-nowrap" title="Coluna BM: Tempo de Deslocamento">Desloc. (BM)</TableHead>
+                    <TableHead className="py-1 px-2 whitespace-nowrap" title="Coluna BP: Tempo Total Geral Somado">Tempo Total (BP)</TableHead>
+                    <TableHead className="py-1 px-2 text-right whitespace-nowrap" title="Coluna AM: Meta da Equipe">V. Meta (AM)</TableHead>
+                    <TableHead className="py-1 px-2 text-right whitespace-nowrap" title="Coluna AL: Valor Planejado">V. Planejado (AL)</TableHead>
+                    <TableHead className="py-1 px-2 text-right whitespace-nowrap" title="Coluna AN: Percentual Planejado">% Meta (AN)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2727,7 +2737,13 @@ export const PcpPlanejamentoView = () => {
                         <TableCell className="py-1.5 px-2 text-[11px] font-mono text-primary font-bold whitespace-nowrap">
                           {d.pontos.length > 0 ? d.pontos.join(', ') : <span className="text-muted-foreground font-normal">Nenhum</span>}
                         </TableCell>
-                        <TableCell className={`py-1.5 px-2 text-[11px] font-mono whitespace-nowrap ${tempoTotalDia > 540 ? 'text-red-500 font-bold' : ''}`}>
+                        <TableCell className="py-1.5 px-2 text-[11px] font-mono whitespace-nowrap font-bold text-foreground">
+                          {formatMinToHours(tempoAtiv)}
+                        </TableCell>
+                        <TableCell className="py-1.5 px-2 text-[11px] font-mono whitespace-nowrap text-muted-foreground">
+                          {formatMinToHours(d.tempoTotalDeslocamentoMin)}
+                        </TableCell>
+                        <TableCell className={`py-1.5 px-2 text-[11px] font-mono whitespace-nowrap ${tempoTotalDia > 540 ? 'text-red-500 font-bold' : 'font-semibold text-primary'}`}>
                           {formatMinToHours(tempoTotalDia)}
                         </TableCell>
                         <TableCell className="py-1.5 px-2 text-[11px] text-right text-muted-foreground font-mono whitespace-nowrap">
@@ -3263,8 +3279,9 @@ export const PcpPlanejamentoView = () => {
                                         Etapa (Col BY)
                                       </TableHead>
                                       <TableHead className="w-[85px] text-center">Qtd Prog.</TableHead>
-                                      <TableHead className="w-[95px]">Tempo</TableHead>
-                                      <TableHead className="w-[100px]">Valor</TableHead>
+                                      <TableHead className="w-[85px]">Tempo</TableHead>
+                                      <TableHead className="w-[95px] text-right">V. Unit. (R$)</TableHead>
+                                      <TableHead className="w-[105px] text-right">Valor Total</TableHead>
                                       <TableHead className="w-[36px] text-right"></TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -3272,12 +3289,16 @@ export const PcpPlanejamentoView = () => {
                                   <TableBody className="text-xs">
                                     {itemsDoPonto.length === 0 ? (
                                       <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground text-xs">
+                                        <TableCell colSpan={9} className="text-center py-6 text-muted-foreground text-xs">
                                           Nenhuma atividade cadastrada para o Ponto {pLabel}.
                                         </TableCell>
                                       </TableRow>
                                     ) : (
-                                      itemsDoPonto.map((item, itemIdx) => (
+                                      itemsDoPonto.map((item, itemIdx) => {
+                                        const unitPrice = item.valorUnitario !== undefined 
+                                          ? item.valorUnitario 
+                                          : (item.quantidade > 0 ? item.valorEstimado / item.quantidade : 0);
+                                        return (
                                         <TableRow key={item.id || itemIdx} className={`hover:bg-accent/30 transition-colors ${!item.selected ? 'bg-muted/10 text-muted-foreground' : 'bg-background'}`}>
                                           <TableCell className="p-2 text-center">
                                             <Checkbox
@@ -3340,7 +3361,11 @@ export const PcpPlanejamentoView = () => {
                                             {formatMinToHours(item.tempoEstimadoMinutos)}
                                           </TableCell>
 
-                                          <TableCell className="p-2 font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                                          <TableCell className="p-2 font-mono text-muted-foreground font-semibold text-right">
+                                            R$ {unitPrice.toFixed(2)}
+                                          </TableCell>
+
+                                          <TableCell className="p-2 font-mono text-emerald-600 dark:text-emerald-400 font-semibold text-right">
                                             R$ {item.valorEstimado.toFixed(2)}
                                           </TableCell>
 
@@ -3355,7 +3380,7 @@ export const PcpPlanejamentoView = () => {
                                             </Button>
                                           </TableCell>
                                         </TableRow>
-                                      ))
+                                      );})
                                     )}
                                   </TableBody>
                                 </Table>
