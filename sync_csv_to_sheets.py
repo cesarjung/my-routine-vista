@@ -98,7 +98,7 @@ def upload_csv_to_gdrive(drive_service, unit_sigla, csv_filepath):
         logging.error(f"Erro ao enviar arquivo para o Google Drive: {e}")
         return None
 
-def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath):
+def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprogramar=False):
     sheet_id = UNIDADES_MAP.get(unit_sigla)
     if not sheet_id:
         logging.error(f"Sigla de unidade desconhecida '{unit_sigla}'")
@@ -118,7 +118,64 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath):
         # Process all data lines from the CSV
         data_lines = lines[1:]
 
-        # Find first empty row starting at line 6 (index 5) by checking Column B (Data)
+        # 1. Identify keys to check for existing rows
+        # Col BK is index 62 (ex: EH156_21092026)
+        keys_to_replace = set()
+        for line in data_lines:
+            cells = line.split(';')
+            bk_val = cells[62].strip().strip('"') if len(cells) > 62 else ""
+            if bk_val:
+                keys_to_replace.add(bk_val)
+
+        # 2. Check if keys already exist in Plan_Principal (Col BK is column 63 in 1-based indexing)
+        col_bk_values = worksheet.col_values(63)
+        rows_to_remove = []
+        for r_idx, val in enumerate(col_bk_values):
+            if r_idx < 5: # Rows 1-5 are headers
+                continue
+            if val.strip() in keys_to_replace:
+                rows_to_remove.append(r_idx + 1) # 1-based row index
+
+        # If existing rows were found:
+        if rows_to_remove:
+            logging.info(f"  [SHEETS] Encontradas {len(rows_to_remove)} linha(s) existentes na Plan_Principal para substituição/reprogramação: {rows_to_remove}")
+            
+            if is_reprogramar:
+                # Open Reprogramadas worksheet
+                ws_reprog = spreadsheet.worksheet("Reprogramadas")
+                # Find first empty row in Reprogramadas (Col B / Data)
+                reprog_b_vals = ws_reprog.col_values(2)
+                target_reprog_row = None
+                for i in range(5, len(reprog_b_vals)):
+                    if not reprog_b_vals[i].strip():
+                        target_reprog_row = i + 1
+                        break
+                if target_reprog_row is None:
+                    target_reprog_row = len(reprog_b_vals) + 1
+
+                # Copy each existing row from Plan_Principal to Reprogramadas
+                for offset, r_num in enumerate(rows_to_remove):
+                    existing_vals = worksheet.row_values(r_num)
+                    reprog_row_num = target_reprog_row + offset
+                    reprog_updates = []
+                    for c_idx, val in enumerate(existing_vals):
+                        val_str = str(val if val is not None else '').strip()
+                        if val_str:
+                            col_letter = chr(65+c_idx) if c_idx < 26 else (chr(65+c_idx//26 - 1) + chr(65+c_idx%26))
+                            reprog_updates.append({
+                                'range': f"{col_letter}{reprog_row_num}",
+                                'values': [[val_str]]
+                            })
+                    if reprog_updates:
+                        ws_reprog.batch_update(reprog_updates, value_input_option='USER_ENTERED')
+                logging.info(f"  [SHEETS] Linhas antigas copiadas com sucesso para a aba Reprogramadas!")
+
+            # Delete old rows in reverse order to maintain correct indices
+            for r_num in sorted(rows_to_remove, reverse=True):
+                worksheet.delete_rows(r_num)
+                logging.info(f"  [SHEETS] Linha antiga {r_num} removida da Plan_Principal.")
+
+        # 3. Find first empty row starting at line 6 (index 5) by checking Column B (Data)
         col_b_values = worksheet.col_values(2)
         target_row_idx = None
 
@@ -163,7 +220,7 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath):
         logging.error(f"  [SHEETS ERRO] Não foi possível escrever diretamente na Plan_Principal: {err_msg}")
         return False
 
-def process_csv_file(csv_filepath):
+def process_csv_file(csv_filepath, is_reprogramar=False):
     filename = os.path.basename(csv_filepath)
     sigla = filename.split('_')[0].upper()
 
@@ -175,22 +232,24 @@ def process_csv_file(csv_filepath):
     gc = gspread.authorize(creds)
     drive_service = build('drive', 'v3', credentials=creds)
 
-    logging.info(f"Iniciando processamento imediato do arquivo {filename} para a unidade {sigla}...")
+    logging.info(f"Iniciando processamento imediato do arquivo {filename} para a unidade {sigla} (reprogramar={is_reprogramar})...")
 
     # 1. Salva o CSV na pasta do Google Drive da unidade (ex: BJL)
     upload_res = upload_csv_to_gdrive(drive_service, sigla, csv_filepath)
 
     # 2. Insere IMEDIATAMENTE os dados na primeira linha em branco da Plan_Principal do Sheets preservando listas suspensas!
-    paste_res = paste_row_directly_to_plan_principal(gc, sigla, csv_filepath)
+    paste_res = paste_row_directly_to_plan_principal(gc, sigla, csv_filepath, is_reprogramar=is_reprogramar)
 
     return paste_res
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        files = [sys.argv[1]]
+    is_reprog = '--reprogramar' in sys.argv
+    clean_args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    if len(clean_args) > 0:
+        files = [clean_args[0]]
     else:
         files = glob.glob("*.csv") + glob.glob("scratch/*.csv")
 
-    for csv_file in files:
-        if "_" in os.path.basename(csv_file):
-            process_csv_file(csv_file)
+    for f in files:
+        if os.path.exists(f):
+            process_csv_file(f, is_reprogramar=is_reprog)

@@ -17,7 +17,7 @@ const pcpSyncApiPlugin = (): Plugin => ({
         req.on("end", () => {
           try {
             const data = JSON.parse(body);
-            const { csvFilename, csvContent, unitSigla } = data;
+            const { csvFilename, csvContent, unitSigla, reprogramar } = data;
 
             if (!csvFilename || !csvContent) {
               res.statusCode = 400;
@@ -33,11 +33,11 @@ const pcpSyncApiPlugin = (): Plugin => ({
 
             const filePath = path.join(scratchDir, csvFilename);
             fs.writeFileSync(filePath, csvContent, "utf-8");
-            console.log(`\n[API PCP] 📄 Arquivo CSV salvo em: ${filePath}`);
+            console.log(`\n[API PCP] 📄 Arquivo CSV salvo em: ${filePath} (reprogramar=${Boolean(reprogramar)})`);
 
             // Run sync_csv_to_sheets.py immediately to upload to Drive & paste to Plan_Principal
             const pyScript = path.resolve(__dirname, "sync_csv_to_sheets.py");
-            const cmd = `python "${pyScript}" "${filePath}"`;
+            const cmd = `python "${pyScript}" "${filePath}"${reprogramar ? ' --reprogramar' : ''}`;
 
             console.log(`[API PCP] 🚀 Disparando upload pro Drive e gravação direta na Plan_Principal: ${cmd}`);
             exec(cmd, { cwd: __dirname }, (error, stdout, stderr) => {

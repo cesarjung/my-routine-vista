@@ -39,7 +39,8 @@ import {
   ZoomOut,
   ChevronsUpDown,
   Home,
-  SlidersHorizontal
+  SlidersHorizontal,
+  RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
@@ -54,8 +55,17 @@ import {
   PcpObra,
   PcpPontoItem,
   ServicoBase,
-  inferEtapaFromServico
+  inferEtapaFromServico,
+  ParsedPlanejamentoExistente,
+  MaterialPontoBudget
 } from '@/hooks/usePcpPlanejamentoData';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -375,6 +385,7 @@ export const PcpPlanejamentoView = () => {
     rawCacheQuery,
     obras,
     programacoesAtivas,
+    planejamentosExistentesList,
     supervisoresDisponiveis,
     equipesDisponiveis,
     etapasDisponiveis,
@@ -424,6 +435,21 @@ export const PcpPlanejamentoView = () => {
       [diaId]: !prev[diaId]
     }));
   };
+
+  // Map de dias com flag REPROGRAMAR: Record<dayId, boolean>
+  const [diasReprogramarMap, setDiasReprogramarMap] = useSessionState<Record<string, boolean>>('pcp_dias_reprogramar_map_v1', {});
+
+  const handleToggleReprogramarDia = (diaId: string) => {
+    setDiasReprogramarMap(prev => ({
+      ...prev,
+      [diaId]: !prev[diaId]
+    }));
+  };
+
+  // Modal para carregar planejamento existente da Plan_Principal (Fluxo Inverso)
+  const [isCarregarPlanModalOpen, setIsCarregarPlanModalOpen] = useState<boolean>(false);
+  const [searchExistingPlan, setSearchExistingPlan] = useState<string>('');
+  const [filterEquipeExistingPlan, setFilterEquipeExistingPlan] = useState<string>('TODAS');
 
   const handleUpdateDiaTempoComp = (diaId: string, field: 'tempoSaidaBaseMin' | 'tempoSegurancaMin', val: number) => {
     setDiasTemposCompMap(prev => ({
@@ -1405,6 +1431,7 @@ export const PcpPlanejamentoView = () => {
     const tempoSegurancaDia = diasTemposCompMap[dia.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
 
     const isDiaPes = Boolean(diasPesMap[dia.id]);
+    const isDiaReprog = Boolean(diasReprogramarMap[dia.id]);
 
     const forms: PcpProgramacaoForm[] = equipesToSend.map(eq => {
       const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
@@ -1420,6 +1447,7 @@ export const PcpPlanejamentoView = () => {
         obra: selectedObra,
         pontos: itensDoDia,
         isPes: isDiaPes,
+        reprogramar: isDiaReprog,
         tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
         tempoSaidaBaseMinutos: tempoSaidaBaseDia,
         tempoSegurancaMinutos: tempoSegurancaDia,
@@ -1467,6 +1495,7 @@ export const PcpPlanejamentoView = () => {
         const tempoSaidaBaseDia = diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
         const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
         const isDiaPes = Boolean(diasPesMap[d.id]);
+        const isDiaReprog = Boolean(diasReprogramarMap[d.id]);
 
         for (const eq of equipesToSend) {
           const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
@@ -1482,6 +1511,7 @@ export const PcpPlanejamentoView = () => {
             obra: selectedObra,
             pontos: itensDoDia,
             isPes: isDiaPes,
+            reprogramar: isDiaReprog,
             tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
             tempoSaidaBaseMinutos: tempoSaidaBaseDia,
             tempoSegurancaMinutos: tempoSegurancaDia,
@@ -1502,6 +1532,180 @@ export const PcpPlanejamentoView = () => {
     } finally {
       setIsSavingAll(false);
     }
+  };
+
+  // Filtros dos planejamentos existentes
+  const filteredExistingPlans = useMemo(() => {
+    const list = planejamentosExistentesList || [];
+    return list.filter(p => {
+      if (filterEquipeExistingPlan !== 'TODAS' && p.equipe.toUpperCase() !== filterEquipeExistingPlan.toUpperCase()) {
+        return false;
+      }
+      if (searchExistingPlan.trim()) {
+        const q = searchExistingPlan.toLowerCase();
+        const matchesProj = (p.projeto || '').toLowerCase().includes(q);
+        const matchesEq = (p.equipe || '').toLowerCase().includes(q);
+        const matchesSup = (p.supervisor || '').toLowerCase().includes(q);
+        const matchesPts = (p.pontosStr || '').toLowerCase().includes(q);
+        const matchesData = (p.dataCompleta || '').toLowerCase().includes(q);
+        if (!matchesProj && !matchesEq && !matchesSup && !matchesPts && !matchesData) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [planejamentosExistentesList, filterEquipeExistingPlan, searchExistingPlan]);
+
+  // Handler para carregar o planejamento existente no fluxo inverso
+  const handleCarregarPlanejamentoExistente = (plan: ParsedPlanejamentoExistente) => {
+    // 1. Obra
+    const obraEncontrada = obras.find(o => o.projeto === plan.projeto);
+    if (obraEncontrada) {
+      setSelectedObraId(obraEncontrada.projeto);
+    } else {
+      setSelectedObraId(plan.projeto);
+    }
+
+    // 2. Supervisor & Equipe
+    if (plan.supervisor) setSupervisor(plan.supervisor);
+    if (plan.equipe) setSelectedEquipes([plan.equipe]);
+
+    // 3. Ajuste de Datas (Período)
+    if (plan.dataStr) {
+      const parts = plan.dataStr.split('/');
+      if (parts.length === 3) {
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
+        const targetDate = new Date(y, m, d);
+        if (!isNaN(targetDate.getTime())) {
+          // Ajusta dataInicio para a segunda-feira daquela semana e dataFim para sábado
+          const dayOfWeek = targetDate.getDay();
+          const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+          const monday = new Date(targetDate);
+          monday.setDate(monday.getDate() + mondayOffset);
+          const saturday = new Date(monday);
+          saturday.setDate(saturday.getDate() + 5);
+
+          const fmt = (dt: Date) => {
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const yyyy = dt.getFullYear();
+            return `${dd}/${mm}/${yyyy}`;
+          };
+
+          setDataInicio(fmt(monday));
+          setDataFim(fmt(saturday));
+
+          const dayId = `${d}_${m + 1}_${y}`;
+          setActiveDayId(dayId);
+
+          // 4. Pontos do Dia (todos os pontos da programação vêm marcados)
+          setDiasPontosMap(prev => ({
+            ...prev,
+            [dayId]: plan.pontos.length > 0 ? plan.pontos : ['P1']
+          }));
+
+          // 5. Etapas do Dia
+          setDiasEtapasMap(prev => ({
+            ...prev,
+            [dayId]: plan.etapasGeral
+          }));
+
+          // 6. PES do Dia
+          setDiasPesMap(prev => ({
+            ...prev,
+            [dayId]: plan.isPes
+          }));
+
+          // 7. Tempos complementares do Dia
+          setDiasTemposCompMap(prev => ({
+            ...prev,
+            [dayId]: {
+              tempoSaidaBaseMin: plan.tempoSaidaBaseMin || tempoSaidaBasePadrao,
+              tempoSegurancaMin: plan.tempoSegurancaMin || tempoSegurancaPadrao,
+            }
+          }));
+        }
+      }
+    }
+
+    // 8. Meta da Equipe
+    if (plan.metaEquipeValor && plan.metaEquipeValor > 0) {
+      setMetaEquipeInput(plan.metaEquipeValor);
+    }
+
+    // 9. Popula Atividades por Ponto e marca como selecionadas
+    const ativPorPontoMap: Record<string, PcpPontoItem[]> = {};
+
+    plan.pontos.forEach(pLabel => {
+      const pUpper = pLabel.toUpperCase();
+      const ativsDoPonto = plan.parsedAtividades.filter(a => a.ponto === pUpper);
+      const budgetItems = orcamentoPorPontoMap?.get ? (orcamentoPorPontoMap.get(pUpper) || []) : [];
+
+      const combinedItems: PcpPontoItem[] = [];
+
+      ativsDoPonto.forEach((a, aIdx) => {
+        const matchedBudget = budgetItems.find(b =>
+          (b.servicoPrevisto || '').toUpperCase().includes((a.servico || '').toUpperCase()) ||
+          (a.servico || '').toUpperCase().includes((b.servicoPrevisto || '').toUpperCase())
+        );
+
+        const vUnit = matchedBudget?.valorUnitario || (a.quantidade > 0 ? (matchedBudget?.valorEstimado ? matchedBudget.valorEstimado / (matchedBudget.quantidade || 1) : 0) : 0);
+        const valorEst = vUnit > 0 ? vUnit * a.quantidade : (matchedBudget?.valorEstimado || 0);
+
+        combinedItems.push({
+          id: `loaded-${pUpper}-${aIdx}`,
+          ponto: pUpper,
+          servico: a.servico,
+          codigoMaterial: matchedBudget?.codigo || '',
+          descricaoMaterial: matchedBudget?.descricao || a.servico,
+          qtdOrcadaPonto: matchedBudget?.quantidade || a.quantidade,
+          etapaPrevista: a.etapa || matchedBudget?.etapaPrevista || 'IMPLANTAÇÃO',
+          quantidade: a.quantidade,
+          valorUnitario: vUnit,
+          tempoEstimadoMinutos: a.tempoMinutos || matchedBudget?.tempoMinutos || 15,
+          tempoUnitarioMinutos: matchedBudget?.tempoUnitarioMinutos || 15,
+          valorEstimado: valorEst,
+          selected: true,
+          isBudgeted: Boolean(matchedBudget),
+        });
+      });
+
+      budgetItems.forEach((bItem, bIdx) => {
+        const alreadyAdded = combinedItems.some(ci =>
+          (ci.servico || '').toUpperCase() === (bItem.servicoPrevisto || '').toUpperCase()
+        );
+        if (!alreadyAdded) {
+          combinedItems.push({
+            id: `${pUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
+            ponto: pUpper,
+            servico: bItem.servicoPrevisto || 'SERVIÇO',
+            codigoMaterial: bItem.codigo,
+            descricaoMaterial: bItem.descricao,
+            qtdOrcadaPonto: bItem.quantidade || 1,
+            etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
+            quantidade: bItem.quantidade || 1,
+            valorUnitario: bItem.valorUnitario,
+            tempoEstimadoMinutos: bItem.tempoMinutos || 15,
+            tempoUnitarioMinutos: bItem.tempoUnitarioMinutos || 15,
+            valorEstimado: bItem.valorEstimado || 0,
+            selected: false,
+            isBudgeted: true,
+          });
+        }
+      });
+
+      ativPorPontoMap[pUpper] = combinedItems;
+    });
+
+    setPontosGroupedMap(prev => ({
+      ...prev,
+      ...ativPorPontoMap
+    }));
+
+    setIsCarregarPlanModalOpen(false);
+    toast.success(`Planejamento de ${plan.equipe} em ${plan.dataStr} carregado com sucesso no fluxo inverso!`);
   };
 
   return (
@@ -1525,8 +1729,17 @@ export const PcpPlanejamentoView = () => {
           </div>
         </div>
 
-        {/* Controles: Zoom + Atualizar */}
-        <div className="flex items-center gap-2.5">
+        {/* Controles: Carregar Planejamento Existente + Zoom + Atualizar */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Botão Carregar Planejamento Existente (Fluxo Inverso) */}
+          <Button
+            onClick={() => setIsCarregarPlanModalOpen(true)}
+            variant="outline"
+            className="h-8 gap-1.5 text-xs font-semibold border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary shadow-2xs"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Carregar Planejamento Existente
+          </Button>
+
           {/* Zoom Control */}
           <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-0.5">
             <button onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} className="text-muted-foreground hover:text-foreground" title="Diminuir Zoom">
@@ -3104,8 +3317,26 @@ export const PcpPlanejamentoView = () => {
                         </Popover>
                       </div>
 
-                      {/* Filtro LV para este Dia (COMPLETO / SOMENTE LV / SEM LV) */}
+                      {/* Filtro LV, PES e Reprogramar para este Dia */}
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Botão Reprogramar do Dia */}
+                        <div 
+                          onClick={() => handleToggleReprogramarDia(dia.id)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs ${
+                            diasReprogramarMap[dia.id]
+                              ? 'bg-purple-600 text-white border-purple-700 shadow-sm'
+                              : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
+                          }`}
+                          title="Marcar este dia como Reprogramação (arquiva versão anterior em 'Reprogramadas' na planilha)"
+                        >
+                          <Checkbox
+                            checked={Boolean(diasReprogramarMap[dia.id])}
+                            onCheckedChange={() => handleToggleReprogramarDia(dia.id)}
+                            className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-purple-600 border-current w-3.5 h-3.5"
+                          />
+                          <span className="font-mono text-[11px] tracking-wide">Reprogramar</span>
+                        </div>
+
                         {/* Botão PES do Dia (Coluna Q da Plan_Principal) */}
                         <div 
                           onClick={() => handleTogglePesDia(dia.id)}
@@ -3516,6 +3747,112 @@ export const PcpPlanejamentoView = () => {
           </Card>
         </div>
       </div>
+
+      {/* MODAL CARREGAR PLANEJAMENTO EXISTENTE (FLUXO INVERSO) */}
+      <Dialog open={isCarregarPlanModalOpen} onOpenChange={setIsCarregarPlanModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-6 bg-card border-border shadow-2xl z-[200]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <RotateCcw className="w-5 h-5 text-primary" />
+              Carregar Planejamento Existente da Plan_Principal
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Selecione uma programação gravada para carregar todos os dados no fluxo inverso (obra, pontos marcados, atividades, etapas e tempos).
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Filtros do Modal */}
+          <div className="flex items-center gap-3 py-2 border-b border-border">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por Projeto/Obra, Equipe, Supervisor, Ponto ou Data..."
+                value={searchExistingPlan}
+                onChange={e => setSearchExistingPlan(e.target.value)}
+                className="pl-8 h-8 text-xs font-medium"
+              />
+            </div>
+
+            <div className="w-[170px]">
+              <Select value={filterEquipeExistingPlan} onValueChange={setFilterEquipeExistingPlan}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Equipe" />
+                </SelectTrigger>
+                <SelectContent className="z-[250]">
+                  <SelectItem value="TODAS" className="text-xs">Todas as Equipes</SelectItem>
+                  {equipesDisponiveis.map(eq => (
+                    <SelectItem key={eq} value={eq} className="text-xs">{eq}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Lista de Planejamentos Existentes */}
+          <div className="flex-1 overflow-y-auto space-y-2 py-2 pr-1 min-h-[250px] max-h-[450px]">
+            {filteredExistingPlans.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-xs border border-dashed rounded-lg">
+                Nenhum planejamento encontrado na Plan_Principal para os filtros informados.
+              </div>
+            ) : (
+              filteredExistingPlans.map(plan => (
+                <div
+                  key={`${plan.chaveBk}-${plan.rowIdx}`}
+                  className="p-3 rounded-xl border border-border bg-card hover:border-primary hover:bg-primary/5 transition-all cursor-pointer flex flex-col gap-2 shadow-2xs"
+                  onClick={() => handleCarregarPlanejamentoExistente(plan)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="font-mono font-bold text-xs bg-primary/10 text-primary border-primary/20">
+                        {plan.equipe}
+                      </Badge>
+                      <span className="font-bold text-xs text-foreground">
+                        {plan.dataCompleta}
+                      </span>
+                      <span className="text-xs text-muted-foreground">•</span>
+                      <span className="font-mono font-semibold text-xs text-primary">
+                        {plan.projeto}
+                      </span>
+                      {plan.municipio && (
+                        <span className="text-xs text-muted-foreground">({plan.municipio})</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {plan.isPes && (
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px] font-bold">
+                          PES
+                        </Badge>
+                      )}
+                      <span className="font-mono font-bold text-xs text-emerald-600">
+                        R$ {plan.valorPlanejado.toFixed(2)}
+                      </span>
+                      <Button size="sm" variant="outline" className="h-7 text-xs font-semibold gap-1 bg-background">
+                        <RotateCcw className="w-3 h-3" /> Carregar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/40 gap-2 flex-wrap">
+                    <div>
+                      Pontos: <strong className="text-foreground font-mono">{plan.pontosStr || 'P1'}</strong> ({plan.parsedAtividades.length} {plan.parsedAtividades.length === 1 ? 'atividade' : 'atividades'})
+                    </div>
+                    <div>
+                      Etapas: <strong className="text-foreground">{plan.etapasGeral.join('/')}</strong>
+                    </div>
+                    <div>
+                      Supervisor: <strong className="text-foreground">{plan.supervisor}</strong>
+                    </div>
+                    <div>
+                      T. Total: <strong className="text-foreground font-mono">{formatMinToHours(plan.tempoServicoMin + plan.tempoDeslocamentoMin + plan.tempoSaidaBaseMin + plan.tempoSegurancaMin)}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

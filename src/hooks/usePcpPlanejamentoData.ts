@@ -52,11 +52,44 @@ export interface PcpProgramacaoForm {
   obra: PcpObra;
   pontos: PcpPontoItem[];
   isPes?: boolean;
+  reprogramar?: boolean;
   tempoDeslocamentoMinutos?: number;
   tempoSaidaBaseMinutos?: number;
   tempoSegurancaMinutos?: number;
   metaEquipeValor?: number;
   observacao?: string;
+}
+
+export interface ParsedAtividadeItem {
+  id: string;
+  ponto: string;
+  etapa: string;
+  servico: string;
+  quantidade: number;
+  tempoMinutos: number;
+}
+
+export interface ParsedPlanejamentoExistente {
+  rowIdx: number;
+  dataStr: string;        // "21/09/2026"
+  dataCompleta: string;   // "21/09/2026 - segunda-feira"
+  supervisor: string;
+  equipe: string;
+  projeto: string;
+  pontosStr: string;      // "P1, P2"
+  pontos: string[];       // ['P1', 'P2']
+  municipio: string;
+  etapasGeral: string[];  // ['IMPLANTAÇÃO', 'LINHA VIVA']
+  isPes: boolean;
+  compiladoAtividades: string;
+  parsedAtividades: ParsedAtividadeItem[];
+  tempoServicoMin: number;
+  tempoDeslocamentoMin: number;
+  tempoSaidaBaseMin: number;
+  tempoSegurancaMin: number;
+  metaEquipeValor: number;
+  valorPlanejado: number;
+  chaveBk: string;
 }
 
 export interface PlanPrincipalRow {
@@ -161,6 +194,43 @@ export const EXACT_PLAN_PRINCIPAL_HEADERS = [
 export const formatQuantityDisplay = (qty: number): string => {
   const rounded = Math.round(qty * 100) / 100;
   return String(rounded);
+};
+
+// Helper para parsear string compilada da Coluna O da Plan_Principal em itens estruturados
+export const parseCompiledAtividades = (compiledStr: string): ParsedAtividadeItem[] => {
+  if (!compiledStr) return [];
+  const blocos = compiledStr.split(/\s*\|\s*/);
+  return blocos.map((bloco, idx) => {
+    // Formato padrão: P1 - [ETAPA] SERVICO - Qtd: X - Hr. Prev: hh:mm
+    const m = bloco.match(/^([^-]+?)\s*-\s*(?:\[([^\]]+)\]\s*)?(.+?)\s*-\s*Qtd:\s*([0-9.,]+)\s*-\s*Hr\.\s*Prev:\s*(\d{1,2}):(\d{2})/i);
+    if (m) {
+      const ponto = m[1].trim().toUpperCase();
+      const etapa = (m[2] || 'IMPLANTAÇÃO').trim();
+      const servico = m[3].trim();
+      const qtd = parseFloat(m[4].replace(',', '.')) || 1;
+      const h = parseInt(m[5], 10) || 0;
+      const min = parseInt(m[6], 10) || 0;
+      return {
+        id: `parsed-${ponto}-${idx}`,
+        ponto,
+        etapa,
+        servico,
+        quantidade: qtd,
+        tempoMinutos: h * 60 + min,
+      };
+    } else {
+      const parts = bloco.split(/\s*-\s*/);
+      const ponto = parts[0]?.trim().toUpperCase() || 'P1';
+      return {
+        id: `fallback-${idx}`,
+        ponto,
+        etapa: 'IMPLANTAÇÃO',
+        servico: bloco.trim(),
+        quantidade: 1,
+        tempoMinutos: 15,
+      };
+    }
+  });
 };
 
 // Helper to format date with weekday matching Sirtec sheet format: "16/08/2026 - domingo"
@@ -967,6 +1037,8 @@ export const usePcpPlanejamentoData = (
       const csvFilename = generateCsvFilename(firstForm.unidadeId);
       const csvContent = buildCsvContent(allNewRows);
 
+      const isReprogramar = formsArray.some(f => Boolean(f.reprogramar));
+
       // 1. DISPARO IMEDIATO AO BACKEND PARA SALVAR DIRETO NO GOOGLE DRIVE E COLAR NA PLAN_PRINCIPAL DO SHEETS
       try {
         await fetch('/api/salvar-programacao', {
@@ -976,6 +1048,7 @@ export const usePcpPlanejamentoData = (
             csvFilename,
             csvContent,
             unitSigla: unidadeObj.sigla,
+            reprogramar: isReprogramar,
           }),
         });
       } catch (apiErr) {
@@ -1016,10 +1089,100 @@ export const usePcpPlanejamentoData = (
     },
   });
 
+  // Lista de planejamentos existentes carregados do cache da Plan_Principal
+  const planejamentosExistentesList = useMemo<ParsedPlanejamentoExistente[]>(() => {
+    if (!rawCacheQuery.data?.principal) return [];
+    try {
+      const rawStr = rawCacheQuery.data.principal;
+      const rows: any[][] = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      if (!Array.isArray(rows)) return [];
+
+      const result: ParsedPlanejamentoExistente[] = [];
+      rows.forEach((row, idx) => {
+        if (!Array.isArray(row) || row.length < 15) return;
+        const dataCompleta = String(row[1] || '').trim();
+        const equipe = String(row[6] || '').trim();
+        const projeto = String(row[7] || '').trim();
+        if (!dataCompleta || !equipe || !projeto) return;
+
+        const dataMatch = dataCompleta.match(/(\d{2}\/\d{2}\/\d{4})/);
+        const dataStr = dataMatch ? dataMatch[1] : dataCompleta;
+
+        const supervisor = String(row[4] || '').trim();
+        const pontosStr = String(row[8] || '').trim();
+        const pontos = pontosStr ? pontosStr.split(/[,/]/).map(p => p.trim().toUpperCase()).filter(Boolean) : [];
+        const municipio = String(row[10] || '').trim();
+        const etapasStr = String(row[12] || '').trim();
+        const etapasGeral = etapasStr ? etapasStr.split(/[,/]/).map(e => e.trim()).filter(Boolean) : ['IMPLANTAÇÃO'];
+        const compiladoAtividades = String(row[14] || '').trim();
+        const isPes = String(row[16] || '').trim().toUpperCase() === 'TRUE';
+
+        const valorPlanRaw = String(row[37] || '').replace(/[^0-9.,]/g, '').replace(',', '.');
+        const valorPlanejado = parseFloat(valorPlanRaw) || 0;
+
+        const metaRaw = String(row[38] || '').replace(/[^0-9.,]/g, '').replace(',', '.');
+        const metaEquipeValor = parseFloat(metaRaw) || 4442;
+
+        const chaveBk = String(row[62] || '').trim();
+
+        const parseTimeToMin = (tStr: string) => {
+          if (!tStr) return 0;
+          const parts = tStr.split(':');
+          const h = parseInt(parts[0], 10) || 0;
+          const m = parseInt(parts[1], 10) || 0;
+          return h * 60 + m;
+        };
+
+        const tempoServicoMin = parseTimeToMin(String(row[63] || ''));
+        const tempoDeslocamentoMin = parseTimeToMin(String(row[64] || ''));
+        const tempoSaidaBaseMin = parseTimeToMin(String(row[65] || ''));
+        const tempoSegurancaMin = parseTimeToMin(String(row[66] || ''));
+
+        const parsedAtividades = parseCompiledAtividades(compiladoAtividades);
+
+        // Se houver pontos no compilado que não constavam na Col I, inclui
+        parsedAtividades.forEach(a => {
+          if (a.ponto && !pontos.includes(a.ponto)) {
+            pontos.push(a.ponto);
+          }
+        });
+
+        result.push({
+          rowIdx: idx,
+          dataStr,
+          dataCompleta,
+          supervisor,
+          equipe,
+          projeto,
+          pontosStr: pontos.join(', '),
+          pontos,
+          municipio,
+          etapasGeral,
+          isPes,
+          compiladoAtividades,
+          parsedAtividades,
+          tempoServicoMin,
+          tempoDeslocamentoMin,
+          tempoSaidaBaseMin,
+          tempoSegurancaMin,
+          metaEquipeValor,
+          valorPlanejado,
+          chaveBk,
+        });
+      });
+
+      return result.reverse(); // Mais recentes primeiro
+    } catch (e) {
+      console.error('Erro ao parsear planejamentos existentes da Plan_Principal:', e);
+      return [];
+    }
+  }, [rawCacheQuery.data?.principal]);
+
   return {
     rawCacheQuery,
     obras,
     programacoesAtivas,
+    planejamentosExistentesList,
     supervisoresDisponiveis,
     equipesDisponiveis,
     etapasDisponiveis,
