@@ -815,13 +815,6 @@ export const PcpPlanejamentoView = () => {
     }
   }, [diasProgramados, activeDayId, setActiveDayId]);
 
-  // Sincroniza o tempo total de deslocamento do dia selecionado
-  useEffect(() => {
-    if (activeDia) {
-      setTempoDeslocamento(activeDia.tempoTotalDeslocamentoMin);
-    }
-  }, [activeDia?.tempoTotalDeslocamentoMin]);
-
   // Pontos alocados em outros dias (para badges no dropdown)
   const pontosAlocadosEmOutrosDiasMap = useMemo(() => {
     const map: Record<string, string> = {};
