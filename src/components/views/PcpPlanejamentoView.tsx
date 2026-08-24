@@ -3387,12 +3387,6 @@ export const PcpPlanejamentoView = () => {
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="p-4 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 flex items-center gap-3 text-amber-600 text-xs font-medium">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Selecione uma Obra no painel à esquerda para carregar a lista de Pontos.</span>
-            </div>
-          )}
 
           {/* LISTA SEQUENCIAL DE TODOS OS DIAS DO PERÍODO PROGRAMADO */}
           {diasProgramados.map((dia, diaIdx) => {
