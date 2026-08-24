@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import googleCredentialsStatic from '../google_credentials.json' with { type: 'json' };
+import { GOOGLE_CREDS } from './google_creds.js';
 
 const ROOT_DRIVE_FOLDER_ID = '13UejORpk84bhf6Y4ISb3TedPLGU79eHn';
 
@@ -23,8 +23,8 @@ function getGoogleCredentials() {
         : process.env.GOOGLE_CREDENTIALS;
     } catch (e) {}
   }
-  if (googleCredentialsStatic && googleCredentialsStatic.client_email) {
-    return googleCredentialsStatic;
+  if (GOOGLE_CREDS && GOOGLE_CREDS.client_email) {
+    return GOOGLE_CREDS;
   }
   throw new Error('Nenhuma credencial Google encontrada.');
 }

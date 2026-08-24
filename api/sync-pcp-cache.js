@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import googleCredentialsStatic from '../google_credentials.json' with { type: 'json' };
+import { GOOGLE_CREDS } from './google_creds.js';
 
 const UNIDADES_MAP = {
   'BJL': '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI',
@@ -33,8 +33,8 @@ function getGoogleCredentials() {
         : process.env.GOOGLE_CREDENTIALS;
     } catch (e) {}
   }
-  if (googleCredentialsStatic && googleCredentialsStatic.client_email) {
-    return googleCredentialsStatic;
+  if (GOOGLE_CREDS && GOOGLE_CREDS.client_email) {
+    return GOOGLE_CREDS;
   }
   throw new Error('Nenhuma credencial Google encontrada.');
 }
