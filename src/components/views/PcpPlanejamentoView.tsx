@@ -119,17 +119,17 @@ function safeFormatDate(val?: any, fmt = 'dd/MM/yyyy'): string {
 }
 
 function formatMinToHours(minutes: number): string {
-  if (!minutes || minutes <= 0) return '0,00h (00:00)';
-  const hDec = (minutes / 60).toFixed(2).replace('.', ',');
+  if (!minutes || minutes <= 0) return '00:00';
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
-  const clock = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  return `${hDec}h (${clock})`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 function formatHoursDecimal(minutes: number): string {
-  if (!minutes || minutes <= 0) return '0,00h';
-  return `${(minutes / 60).toFixed(2).replace('.', ',')}h`;
+  if (!minutes || minutes <= 0) return '00:00';
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 // ─── PontosMultiSelect — Popover de seleção de pontos com exclusividade por dia ───
@@ -2974,12 +2974,12 @@ export const PcpPlanejamentoView = () => {
 
                       {/* Detalhes de Deslocamento e Tempos Complementares do Dia */}
                       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground mt-1.5 font-mono">
-                        <span>🛫 Saída: <strong className="text-foreground">{dia.origemNome}</strong> ({formatHoursDecimal(dia.tempoIdaMin)})</span>
+                        <span>🛫 Saída: <strong className="text-foreground">{dia.origemNome}</strong> ({formatMinToHours(dia.tempoIdaMin)})</span>
                         <span>•</span>
-                        <span>🛬 Retorno: <strong className="text-foreground">{dia.destinoNome}</strong> ({formatHoursDecimal(dia.tempoVoltaMin)})</span>
+                        <span>🛬 Retorno: <strong className="text-foreground">{dia.destinoNome}</strong> ({formatMinToHours(dia.tempoVoltaMin)})</span>
                         <span>•</span>
                         <span className={cn("font-bold", excedeMetaDesloc ? "text-amber-600 dark:text-amber-400" : "text-primary")}>
-                          Deslocamento: {formatHoursDecimal(dia.tempoTotalDeslocamentoMin)} {excedeMetaDesloc && `(Meta: ${metaDeslocamentoDiarioHoras}h)`}
+                          Deslocamento: {formatMinToHours(dia.tempoTotalDeslocamentoMin)} {excedeMetaDesloc && `(Meta: ${formatMinToHours(metaDeslocamentoDiarioHoras * 60)})`}
                         </span>
                         <span>•</span>
                         <span>Saída Base: <strong className="text-foreground">{tempoSaidaBaseDia}m</strong></span>
