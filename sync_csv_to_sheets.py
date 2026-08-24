@@ -37,6 +37,18 @@ UNIDADES_MAP = {
 
 SERVICE_ACCOUNT_EMAIL = 'zps-importador@roteirizador-461922.iam.gserviceaccount.com'
 
+def get_unit_from_filename(filename):
+    if not filename:
+        return 'BJL'
+    basename = os.path.basename(filename).upper()
+    for sigla in UNIDADES_MAP.keys():
+        if basename.startswith(sigla) or f"_{sigla}_" in f"_{basename}_":
+            return sigla
+    # Default to BJL if Bom Jesus da Lapa
+    if 'BOM JESUS' in basename or 'LAPA' in basename or 'BJL' in basename:
+        return 'BJL'
+    return 'BJL'
+
 def get_credentials():
     creds_json_str = os.environ.get("GOOGLE_CREDENTIALS")
     if creds_json_str:
