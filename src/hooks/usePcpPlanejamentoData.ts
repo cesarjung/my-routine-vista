@@ -131,7 +131,14 @@ export const ETAPAS_ATIVIDADES_PRE_FECHAMENTO = [
   'ESCAVAÇÃO',
   'IMPLANTAÇÃO',
   'LANÇAMENTO DE CABO',
-  'LINHA VIVA'
+  'LINHA VIVA',
+  'DESATIVAÇÃO DE REDE',
+  'DESLIGAMENTO',
+  'PODA',
+  'REALOCAÇÃO DE REDE',
+  'RECONDUTORAMENTO',
+  'SUBSTITUIÇÃO DE TRAFO',
+  'TRANSPORTE'
 ];
 
 // Exact Column Header titles from line 4 of Plan_Principal sheet in Google Sheets
