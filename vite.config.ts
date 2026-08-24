@@ -74,6 +74,42 @@ const pcpSyncApiPlugin = (): Plugin => ({
         next();
       }
     });
+
+    server.middlewares.use("/api/sync-pcp-cache", (req, res, next) => {
+      if (req.method === "POST") {
+        let body = "";
+        req.on("data", chunk => { body += chunk.toString(); });
+        req.on("end", () => {
+          try {
+            const data = body ? JSON.parse(body) : {};
+            const unidadeId = data.unidadeId || "1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI";
+            const pyScript = path.resolve(__dirname, "sync_unit_now.py");
+            const cmd = `python "${pyScript}" "${unidadeId}"`;
+
+            console.log(`[API PCP SYNC] 🔄 Sincronizando dados do Google Sheets para o Supabase: ${cmd}`);
+            exec(cmd, { cwd: __dirname }, (error, stdout, stderr) => {
+              if (error) {
+                console.error(`[API PCP SYNC ERRO] ${error.message}`);
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ success: false, error: error.message }));
+              } else {
+                console.log(`[API PCP SYNC SUCESSO]\n${stdout}`);
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ success: true, message: "Dados sincronizados do Google Sheets com sucesso!" }));
+              }
+            });
+          } catch (e: any) {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ success: false, error: e.message }));
+          }
+        });
+      } else {
+        next();
+      }
+    });
   },
 });
 

@@ -461,6 +461,29 @@ export const PcpPlanejamentoView = () => {
   const [filterOnlyCurrentPeriod, setFilterOnlyCurrentPeriod] = useState<boolean>(true);
   const [filterOnlyCurrentObra, setFilterOnlyCurrentObra] = useState<boolean>(false);
   const [selectedExistingPlanKeys, setSelectedExistingPlanKeys] = useState<string[]>([]);
+  const [isSyncingSheets, setIsSyncingSheets] = useState<boolean>(false);
+
+  const handleSyncFromGoogleSheets = async () => {
+    try {
+      setIsSyncingSheets(true);
+      const res = await fetch('/api/sync-pcp-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unidadeId: selectedUnidadeId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await rawCacheQuery.refetch();
+        toast.success('Planilha do Google Sheets sincronizada com sucesso no Supabase!');
+      } else {
+        toast.error('Erro ao sincronizar planilha: ' + (data.error || 'Erro desconhecido'));
+      }
+    } catch (e: any) {
+      toast.error('Falha na comunicação com o servidor: ' + e.message);
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
 
   const handleOpenCarregarPlanModal = () => {
     if (selectedEquipes.length > 0 && selectedEquipes[0]) {
@@ -1668,23 +1691,26 @@ export const PcpPlanejamentoView = () => {
     }
   };
 
-  // Filtros dos planejamentos existentes (Filtrando por Unidade, Equipe e Período Atual por padrão)
+  // Filtros dos planejamentos existentes (Filtrando por Equipe e Período Atual por padrão)
   const filteredExistingPlans = useMemo(() => {
     const list = planejamentosExistentesList || [];
     const activeDatesSet = new Set(diasProgramados.map(d => d.dataCompleta));
+    const activeShortDatesSet = new Set(diasProgramados.map(d => d.dataStr));
 
     return list.filter(p => {
-      // 0. Pertence à Unidade selecionada (se houver obras carregadas)
-      if (unitProjectsSet.size > 0 && !unitProjectsSet.has((p.projeto || '').toUpperCase().trim())) {
-        return false;
-      }
       // 1. Filtro de Equipe
       if (filterEquipeExistingPlan !== 'TODAS' && p.equipe.toUpperCase() !== filterEquipeExistingPlan.toUpperCase()) {
         return false;
       }
       // 2. Filtro do Período Atual
       if (filterOnlyCurrentPeriod) {
-        const isMatched = activeDatesSet.has(p.dataStr) || diasProgramados.some(d => p.dataCompleta.includes(d.dataCompleta) || d.dataCompleta.includes(p.dataStr));
+        const isMatched = activeDatesSet.has(p.dataStr) ||
+          activeShortDatesSet.has(p.dataStr) ||
+          diasProgramados.some(d =>
+            p.dataCompleta.includes(d.dataCompleta) ||
+            d.dataCompleta.includes(p.dataStr) ||
+            p.dataCompleta.includes(d.dataStr)
+          );
         if (!isMatched) return false;
       }
       // 3. Filtro da Obra Atual
@@ -1707,7 +1733,7 @@ export const PcpPlanejamentoView = () => {
       }
       return true;
     });
-  }, [planejamentosExistentesList, unitProjectsSet, filterEquipeExistingPlan, filterOnlyCurrentPeriod, filterOnlyCurrentObra, selectedObraId, diasProgramados, searchExistingPlan]);
+  }, [planejamentosExistentesList, filterEquipeExistingPlan, filterOnlyCurrentPeriod, filterOnlyCurrentObra, selectedObraId, diasProgramados, searchExistingPlan]);
 
   const handleToggleSelectPlan = (planKey: string) => {
     setSelectedExistingPlanKeys(prev =>
@@ -1882,7 +1908,7 @@ export const PcpPlanejamentoView = () => {
           </div>
         </div>
 
-        {/* Controles: Carregar Planejamento Existente + Zoom + Atualizar */}
+        {/* Controles: Carregar Planejamento Existente + Sincronizar Sheets + Zoom + Atualizar */}
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Botão Carregar Planejamento Existente (Fluxo Inverso) */}
           <Button
@@ -1891,6 +1917,18 @@ export const PcpPlanejamentoView = () => {
             className="h-8 gap-1.5 text-xs font-semibold border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary shadow-2xs"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Carregar Planejamento Existente
+          </Button>
+
+          {/* Botão Sincronizar do Google Sheets */}
+          <Button
+            onClick={handleSyncFromGoogleSheets}
+            disabled={isSyncingSheets}
+            variant="outline"
+            className="h-8 gap-1.5 text-xs font-semibold border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs"
+            title="Sincronizar dados em tempo real direto da Planilha do Google Sheets para o Supabase"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+            {isSyncingSheets ? 'Sincronizando...' : 'Sincronizar Sheets'}
           </Button>
 
           {/* Zoom Control */}
@@ -3912,10 +3950,24 @@ export const PcpPlanejamentoView = () => {
       <Dialog open={isCarregarPlanModalOpen} onOpenChange={setIsCarregarPlanModalOpen}>
         <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col p-6 bg-card border-border shadow-2xl z-[200]">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <RotateCcw className="w-5 h-5 text-primary" />
-              Carregar Planejamento Existente da Plan_Principal
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                <RotateCcw className="w-5 h-5 text-primary" />
+                Carregar Planejamento Existente da Plan_Principal
+              </DialogTitle>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSyncFromGoogleSheets}
+                disabled={isSyncingSheets}
+                className="h-7 text-xs font-semibold gap-1.5 bg-background border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                title="Buscar dados mais recentes da Plan_Principal direto da planilha Google Sheets"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                {isSyncingSheets ? 'Sincronizando Sheets...' : 'Atualizar do Google Sheets'}
+              </Button>
+            </div>
             <DialogDescription className="text-xs text-muted-foreground">
               Selecione as programações gravadas para carregar no fluxo inverso (pontos marcados, atividades, etapas e tempos para os dias correspondentes).
             </DialogDescription>

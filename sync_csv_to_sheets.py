@@ -249,6 +249,16 @@ def process_csv_file(csv_filepath, is_reprogramar=False, motivo=None):
     # 2. Insere IMEDIATAMENTE os dados na primeira linha em branco da Plan_Principal do Sheets preservando listas suspensas!
     paste_res = paste_row_directly_to_plan_principal(gc, sigla, csv_filepath, is_reprogramar=is_reprogramar, motivo=motivo)
 
+    # 3. Sincroniza a Plan_Principal atualizada de volta pro Supabase imediatamente!
+    sheet_id = UNIDADES_MAP.get(sigla)
+    if sheet_id and paste_res:
+        try:
+            from sync_unit_now import sync_single_unit
+            logging.info(f"  [SUPABASE] Atualizando cache da unidade {sigla} no Supabase...")
+            sync_single_unit(sheet_id)
+        except Exception as e_sync:
+            logging.error(f"  [SUPABASE ERRO] Erro ao sincronizar cache: {e_sync}")
+
     return paste_res
 
 if __name__ == "__main__":
