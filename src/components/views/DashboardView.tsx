@@ -309,6 +309,11 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
     }
   });
 
+  // State for global period filter (defaults to 'today' so daily routines show exact daily tasks)
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
+    return localStorage.getItem('dashboard_global_period_filter') || 'today';
+  });
+
   // Track the layout context based strictly on forcedSectorId or 'global'
   const contextIdentifier = forcedSectorId || 'global';
   const { data: sectors } = useSectors();
@@ -338,6 +343,10 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
       localStorage.setItem('dashboard_global_sector_filters', JSON.stringify(selectedSectorIds));
     }
   }, [selectedSectorIds, forcedSectorId]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboard_global_period_filter', selectedPeriod);
+  }, [selectedPeriod]);
   const { data: statsData, isLoading } = useOverallStats(selectedSectorIds);
   const unitStatus = statsData?.unitStatus || [];
   const responsibleStatus = statsData?.responsibleStatus || [];
@@ -398,6 +407,7 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
     <UnifiedDraggablePanels
       customPanels={filteredPanels}
       selectedSectorId={selectedSectorIds[0] || undefined}
+      selectedPeriod={selectedPeriod}
       renderUnitsPanel={() => (
         <ResizablePanel title="Unidades" icon={Building2} count={unitStatus?.length || 0}>
           {unitStatus?.length === 0 ? (
@@ -568,6 +578,21 @@ export const DashboardView = ({ forcedSectorId, hideHeader }: DashboardViewProps
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Global Period Selector */}
+          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+            <SelectTrigger className="h-8 w-[130px] text-xs font-normal bg-card">
+              <SelectValue placeholder="Período" />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="today">Hoje (Diário)</SelectItem>
+              <SelectItem value="week">Esta Semana</SelectItem>
+              <SelectItem value="month">Este Mês</SelectItem>
+              <SelectItem value="quarter">Trimestre</SelectItem>
+              <SelectItem value="year">Ano</SelectItem>
+              <SelectItem value="all">Todo o Período</SelectItem>
+            </SelectContent>
+          </Select>
 
           <PanelFormDialog panelCount={filteredPanels?.length || 0} dashboardContext={contextIdentifier} />
 

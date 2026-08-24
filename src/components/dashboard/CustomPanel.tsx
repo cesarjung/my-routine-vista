@@ -75,11 +75,17 @@ const getPeriodDates = (period: string) => {
   }
 };
 
-const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | null) => {
+const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | null, dashboardPeriod?: string | null) => {
   const { filters, titleFallback, titleIlikeFallback } = panel;
 
+  // Determine effective period: global dashboard period overrides panel period if provided
+  let effectivePeriod = dashboardPeriod && dashboardPeriod !== 'all_default' ? dashboardPeriod : (filters.period || 'all');
+  if (effectivePeriod === 'all' && (panel.title?.toLowerCase().includes('diaria') || (filters.task_frequency?.length === 1 && filters.task_frequency[0] === 'diaria'))) {
+    effectivePeriod = 'today';
+  }
+
   return useQuery({
-    queryKey: ['custom-panel-data', panel.id, filters, dashboardSectorId],
+    queryKey: ['custom-panel-data', panel.id, filters, dashboardSectorId, effectivePeriod],
     queryFn: async () => {
       // 1. Fetch active routines to build lookup maps
       const { data: allRoutines } = await supabase
@@ -112,7 +118,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       });
 
       // Get period dates
-      const periodDates = getPeriodDates(filters.period || 'all');
+      const periodDates = getPeriodDates(effectivePeriod);
 
       // Build tasks query
       let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, start_date, sector_id');
@@ -166,9 +172,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         const startStr = formatDateString(periodDates.start);
         const endStr = `${formatDateString(periodDates.end)}T23:59:59.999Z`;
 
-        tasksQuery = tasksQuery.or(
-          `and(due_date.gte.${startStr},due_date.lte.${endStr}),and(start_date.lte.${endStr},due_date.gte.${startStr})`
-        );
+        tasksQuery = tasksQuery.gte('due_date', startStr).lte('due_date', endStr);
       }
 
       // Fetch all task rows bypassing the 1000 row Supabase API default:
@@ -523,10 +527,11 @@ const STATUS_LABELS: Record<string, string> = {
 interface CustomPanelProps {
   panel: DashboardPanel;
   dashboardSectorId?: string | null;
+  dashboardPeriod?: string | null;
 }
 
-export const CustomPanel = ({ panel, dashboardSectorId }: CustomPanelProps) => {
-  const { data, isLoading } = useCustomPanelData(panel, dashboardSectorId);
+export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: CustomPanelProps) => {
+  const { data, isLoading } = useCustomPanelData(panel, dashboardSectorId, dashboardPeriod);
   const Icon = getGroupIcon(panel.filters.group_by);
   const updatePanel = useUpdateDashboardPanel();
 

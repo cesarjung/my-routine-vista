@@ -28,6 +28,7 @@ export type UnifiedPanel = {
 interface UnifiedDraggablePanelsProps {
   customPanels: DashboardPanel[];
   selectedSectorId?: string | null;
+  selectedPeriod?: string;
   renderUnitsPanel: () => React.ReactNode;
   renderResponsiblesPanel: () => React.ReactNode;
 }
@@ -263,16 +264,17 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
 };
 
 // Drag Overlay Component  
-const DragOverlayContent = ({ panel, selectedSectorId, renderUnitsPanel, renderResponsiblesPanel }: {
+const DragOverlayContent = ({ panel, selectedSectorId, selectedPeriod, renderUnitsPanel, renderResponsiblesPanel }: {
   panel: UnifiedPanel;
   selectedSectorId?: string | null;
+  selectedPeriod?: string;
   renderUnitsPanel: () => React.ReactNode;
   renderResponsiblesPanel: () => React.ReactNode;
 }) => {
   const renderContent = () => {
     switch (panel.type) {
       case 'custom':
-        return panel.panel ? <CustomPanel panel={panel.panel} dashboardSectorId={selectedSectorId} /> : null;
+        return panel.panel ? <CustomPanel panel={panel.panel} dashboardSectorId={selectedSectorId} dashboardPeriod={selectedPeriod} /> : null;
       case 'units':
         return renderUnitsPanel();
       case 'responsibles':
@@ -295,6 +297,7 @@ const DragOverlayContent = ({ panel, selectedSectorId, renderUnitsPanel, renderR
 export const UnifiedDraggablePanels = ({
   customPanels,
   selectedSectorId,
+  selectedPeriod,
   renderUnitsPanel,
   renderResponsiblesPanel,
 }: UnifiedDraggablePanelsProps) => {
@@ -421,7 +424,7 @@ export const UnifiedDraggablePanels = ({
   const renderPanelContent = (panel: UnifiedPanel) => {
     switch (panel.type) {
       case 'custom':
-        return panel.panel ? <CustomPanel panel={panel.panel} dashboardSectorId={selectedSectorId} /> : null;
+        return panel.panel ? <CustomPanel panel={panel.panel} dashboardSectorId={selectedSectorId} dashboardPeriod={selectedPeriod} /> : null;
       case 'units':
         return renderUnitsPanel();
       case 'responsibles':
