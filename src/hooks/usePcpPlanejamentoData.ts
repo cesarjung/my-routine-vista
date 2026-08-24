@@ -53,12 +53,41 @@ export interface PcpProgramacaoForm {
   pontos: PcpPontoItem[];
   isPes?: boolean;
   reprogramar?: boolean;
+  motivoReprogramacao?: string;
   tempoDeslocamentoMinutos?: number;
   tempoSaidaBaseMinutos?: number;
   tempoSegurancaMinutos?: number;
   metaEquipeValor?: number;
   observacao?: string;
 }
+
+export const MOTIVOS_REPROGRAMACAO_COL_AU = [
+  'ATEND. EMERGENCIAL | EMERGENCIA',
+  'CLIMA | SEM CONDIÇÕES P/ LV ATUAR',
+  'COD | DEMANDA NÃO ATENDIDA',
+  'GESTÃO CLIENTE | CARTEIRA/PROJETO ALTERADO FORA PRAZO',
+  'GESTÃO OPERACIONAL | CAVA EM ROCHA/DISBAM',
+  'GESTÃO OPERACIONAL | FALTA COLABORADOR',
+  'GESTÃO OPERACIONAL | PRODUTIVIDADE',
+  'GESTÃO OPERACIONAL | RETRO NÃO ATENDEU',
+  'GESTÃO OPERACIONAL | SEM ACESSO',
+  'GESTÃO OPERACIONAL | TSB ELEVADO',
+  'GESTÃO OPERACIONAL | VEÍCULO',
+  'GESTÃO OPERACIONAL | ALTERAÇÃO PLANEJAMENTO',
+  'GESTÃO OPERACIONAL | ALTERAÇÃO PLANEJAMENTO - ATRASO DIA ANTERIOR',
+  'GESTÃO OPERACIONAL | DESCARREGAR CARRETA',
+  'GESTÃO OPERACIONAL | PARALIZAÇÃO SEGURANÇA',
+  'GESTÃO OPERACIONAL | SEM ALOJAMENTO/FALTA DE KIT',
+  'MATERIAL | RESERVAS NÃO ATENDIDAS A TEMPO',
+  'MATERIAL | FALTA DE MATERIAL',
+  'MATERIAL | NÃO ENVIADO/ENVIADO EM ATRASO',
+  'MATERIAL | SEPARADO/ENVIADO ERRADO',
+  'PCP - PLANEJAMENTO | CAVA EM ROCHA IDENTIFICADO NO DIA',
+  'PCP - PLANEJAMENTO | DOCUMENTO PES C/ PROBLEMA',
+  'PCP - PLANEJAMENTO | FALHA NO PLANEJAMENTO',
+  'PCP - PLANEJAMENTO | NÃO REALIZ./PROBLEMA NO PRÉ-FECHAMENTO',
+  'PCP - PLANEJAMENTO | NÃO REALIZADA/FALHA NA VISTORIA'
+];
 
 export interface ParsedAtividadeItem {
   id: string;
@@ -1038,6 +1067,7 @@ export const usePcpPlanejamentoData = (
       const csvContent = buildCsvContent(allNewRows);
 
       const isReprogramar = formsArray.some(f => Boolean(f.reprogramar));
+      const motivo = formsArray.find(f => Boolean(f.motivoReprogramacao))?.motivoReprogramacao || '';
 
       // 1. DISPARO IMEDIATO AO BACKEND PARA SALVAR DIRETO NO GOOGLE DRIVE E COLAR NA PLAN_PRINCIPAL DO SHEETS
       try {
@@ -1049,6 +1079,7 @@ export const usePcpPlanejamentoData = (
             csvContent,
             unitSigla: unidadeObj.sigla,
             reprogramar: isReprogramar,
+            motivo: motivo,
           }),
         });
       } catch (apiErr) {

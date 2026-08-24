@@ -98,7 +98,7 @@ def upload_csv_to_gdrive(drive_service, unit_sigla, csv_filepath):
         logging.error(f"Erro ao enviar arquivo para o Google Drive: {e}")
         return None
 
-def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprogramar=False):
+def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprogramar=False, motivo=None):
     sheet_id = UNIDADES_MAP.get(unit_sigla)
     if not sheet_id:
         logging.error(f"Sigla de unidade desconhecida '{unit_sigla}'")
@@ -156,6 +156,12 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
                 # Copy each existing row from Plan_Principal to Reprogramadas
                 for offset, r_num in enumerate(rows_to_remove):
                     existing_vals = worksheet.row_values(r_num)
+                    # Preenche o Motivo da Reprogramação na Coluna AU (índice 46)
+                    if motivo:
+                        while len(existing_vals) <= 46:
+                            existing_vals.append("")
+                        existing_vals[46] = str(motivo).strip()
+
                     reprog_row_num = target_reprog_row + offset
                     reprog_updates = []
                     for c_idx, val in enumerate(existing_vals):
@@ -168,7 +174,7 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
                             })
                     if reprog_updates:
                         ws_reprog.batch_update(reprog_updates, value_input_option='USER_ENTERED')
-                logging.info(f"  [SHEETS] Linhas antigas copiadas com sucesso para a aba Reprogramadas!")
+                logging.info(f"  [SHEETS] Linhas antigas copiadas com sucesso para a aba Reprogramadas (motivo='{motivo}')!")
 
             # Delete old rows in reverse order to maintain correct indices
             for r_num in sorted(rows_to_remove, reverse=True):
@@ -220,31 +226,41 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
         logging.error(f"  [SHEETS ERRO] Não foi possível escrever diretamente na Plan_Principal: {err_msg}")
         return False
 
-def process_csv_file(csv_filepath, is_reprogramar=False):
+def process_csv_file(csv_filepath, is_reprogramar=False, motivo=None):
     filename = os.path.basename(csv_filepath)
-    sigla = filename.split('_')[0].upper()
+    sigla = get_unit_from_filename(filename)
+    if not sigla:
+        logging.warning(f"Não foi possível identificar a unidade pelo nome do arquivo: {filename}")
+        return False
 
     creds = get_credentials()
     if not creds:
-        logging.error("Credenciais não encontradas.")
+        logging.error("Credenciais do Google não encontradas.")
         return False
 
     gc = gspread.authorize(creds)
     drive_service = build('drive', 'v3', credentials=creds)
 
-    logging.info(f"Iniciando processamento imediato do arquivo {filename} para a unidade {sigla} (reprogramar={is_reprogramar})...")
+    logging.info(f"Iniciando processamento imediato do arquivo {filename} para a unidade {sigla} (reprogramar={is_reprogramar}, motivo='{motivo}')...")
 
     # 1. Salva o CSV na pasta do Google Drive da unidade (ex: BJL)
     upload_res = upload_csv_to_gdrive(drive_service, sigla, csv_filepath)
 
     # 2. Insere IMEDIATAMENTE os dados na primeira linha em branco da Plan_Principal do Sheets preservando listas suspensas!
-    paste_res = paste_row_directly_to_plan_principal(gc, sigla, csv_filepath, is_reprogramar=is_reprogramar)
+    paste_res = paste_row_directly_to_plan_principal(gc, sigla, csv_filepath, is_reprogramar=is_reprogramar, motivo=motivo)
 
     return paste_res
 
 if __name__ == "__main__":
     is_reprog = '--reprogramar' in sys.argv
-    clean_args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    motivo_arg = None
+    for a in sys.argv[1:]:
+        if a.startswith('--motivo='):
+            motivo_arg = a.split('=', 1)[1]
+        elif a == '--motivo' and sys.argv.index(a) + 1 < len(sys.argv):
+            motivo_arg = sys.argv[sys.argv.index(a) + 1]
+
+    clean_args = [a for a in sys.argv[1:] if not a.startswith('--') and (motivo_arg is None or a != motivo_arg)]
     if len(clean_args) > 0:
         files = [clean_args[0]]
     else:
@@ -252,4 +268,4 @@ if __name__ == "__main__":
 
     for f in files:
         if os.path.exists(f):
-            process_csv_file(f, is_reprogramar=is_reprog)
+            process_csv_file(f, is_reprogramar=is_reprog, motivo=motivo_arg)

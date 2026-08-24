@@ -57,7 +57,8 @@ import {
   ServicoBase,
   inferEtapaFromServico,
   ParsedPlanejamentoExistente,
-  MaterialPontoBudget
+  MaterialPontoBudget,
+  MOTIVOS_REPROGRAMACAO_COL_AU
 } from '@/hooks/usePcpPlanejamentoData';
 import {
   Dialog,
@@ -438,12 +439,19 @@ export const PcpPlanejamentoView = () => {
 
   // Map de dias com flag REPROGRAMAR: Record<dayId, boolean>
   const [diasReprogramarMap, setDiasReprogramarMap] = useSessionState<Record<string, boolean>>('pcp_dias_reprogramar_map_v1', {});
+  const [diasMotivoReprogramarMap, setDiasMotivoReprogramarMap] = useSessionState<Record<string, string>>('pcp_dias_motivo_reprog_map_v1', {});
 
   const handleToggleReprogramarDia = (diaId: string) => {
-    setDiasReprogramarMap(prev => ({
-      ...prev,
-      [diaId]: !prev[diaId]
-    }));
+    setDiasReprogramarMap(prev => {
+      const nextVal = !prev[diaId];
+      if (nextVal && !diasMotivoReprogramarMap[diaId]) {
+        setDiasMotivoReprogramarMap(m => ({ ...m, [diaId]: MOTIVOS_REPROGRAMACAO_COL_AU[0] }));
+      }
+      return {
+        ...prev,
+        [diaId]: nextVal
+      };
+    });
   };
 
   // Modal para carregar planejamento existente da Plan_Principal (Fluxo Inverso)
@@ -1432,6 +1440,7 @@ export const PcpPlanejamentoView = () => {
 
     const isDiaPes = Boolean(diasPesMap[dia.id]);
     const isDiaReprog = Boolean(diasReprogramarMap[dia.id]);
+    const motivoReprog = isDiaReprog ? (diasMotivoReprogramarMap[dia.id] || MOTIVOS_REPROGRAMACAO_COL_AU[0]) : '';
 
     const forms: PcpProgramacaoForm[] = equipesToSend.map(eq => {
       const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
@@ -1448,6 +1457,7 @@ export const PcpPlanejamentoView = () => {
         pontos: itensDoDia,
         isPes: isDiaPes,
         reprogramar: isDiaReprog,
+        motivoReprogramacao: motivoReprog,
         tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
         tempoSaidaBaseMinutos: tempoSaidaBaseDia,
         tempoSegurancaMinutos: tempoSegurancaDia,
@@ -1496,6 +1506,7 @@ export const PcpPlanejamentoView = () => {
         const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
         const isDiaPes = Boolean(diasPesMap[d.id]);
         const isDiaReprog = Boolean(diasReprogramarMap[d.id]);
+        const motivoReprog = isDiaReprog ? (diasMotivoReprogramarMap[d.id] || MOTIVOS_REPROGRAMACAO_COL_AU[0]) : '';
 
         for (const eq of equipesToSend) {
           const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
@@ -1512,6 +1523,7 @@ export const PcpPlanejamentoView = () => {
             pontos: itensDoDia,
             isPes: isDiaPes,
             reprogramar: isDiaReprog,
+            motivoReprogramacao: motivoReprog,
             tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
             tempoSaidaBaseMinutos: tempoSaidaBaseDia,
             tempoSegurancaMinutos: tempoSegurancaDia,
@@ -3258,85 +3270,113 @@ export const PcpPlanejamentoView = () => {
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-4">
-                  {/* BARRA DE CONFIGURAÇÕES DESTE DIA: ETAPAS DA OBRA + FILTRO LV + SELETOR DE PONTOS */}
+                  {/* BARRA DE CONFIGURAÇÕES DESTE DIA: REPROGRAMAR (ESQUERDA) + ETAPAS DA OBRA + FILTRO LV + PES */}
                   <div className="flex flex-col gap-2.5 bg-muted/20 p-3 rounded-xl border border-border/60">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      {/* Etapas da Obra para este Dia (Multiseleção) */}
+                      {/* LADO ESQUERDO: Reprogramar (Vermelho) + Motivo (Coluna AU) + Etapas */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-foreground flex items-center gap-1">
-                          <Tag className="w-3.5 h-3.5 text-primary" /> Etapas (Col M):
-                        </span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-7 text-xs font-semibold bg-background px-2.5 max-w-[250px]">
-                              <span className="truncate">
-                                {etapasDoDia.length === 0
-                                  ? 'Selecionar Etapas (Col M)...'
-                                  : etapasDoDia.length === etapasDisponiveis.length
-                                  ? 'Todas as Etapas'
-                                  : etapasDoDia.join('/')}
-                              </span>
-                              <ChevronDown className="w-3 h-3 ml-1 opacity-60 shrink-0" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[260px] p-3 text-xs" align="start">
-                            <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold">
-                              <span>Etapas da Programação (Col M)</span>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => setDiasEtapasMap(prev => ({ ...prev, [dia.id]: [] }))}
-                                  className="text-[10px] text-muted-foreground hover:underline"
-                                >
-                                  Limpar
-                                </button>
-                                <button
-                                  onClick={() => setDiasEtapasMap(prev => ({ ...prev, [dia.id]: [...etapasDisponiveis] }))}
-                                  className="text-[10px] text-primary hover:underline"
-                                >
-                                  Todas
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
-                              {etapasDisponiveis.map(et => {
-                                const isChecked = etapasDoDia.includes(et);
-                                return (
-                                  <div
-                                    key={et}
-                                    onClick={() => handleToggleEtapaNoDia(dia.id, et)}
-                                    className="flex items-center gap-2 cursor-pointer hover:bg-accent/40 p-1.5 rounded"
-                                  >
-                                    <Checkbox checked={isChecked} onCheckedChange={() => handleToggleEtapaNoDia(dia.id, et)} />
-                                    <span className="text-xs font-medium text-foreground">{et}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      {/* Filtro LV, PES e Reprogramar para este Dia */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
                         {/* Botão Reprogramar do Dia */}
                         <div 
                           onClick={() => handleToggleReprogramarDia(dia.id)}
                           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs ${
                             diasReprogramarMap[dia.id]
-                              ? 'bg-purple-600 text-white border-purple-700 shadow-sm'
+                              ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
                               : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
                           }`}
-                          title="Marcar este dia como Reprogramação (arquiva versão anterior em 'Reprogramadas' na planilha)"
+                          title="Marcar este dia como Reprogramação (arquiva versão anterior em 'Reprogramadas' na planilha com motivo da Coluna AU)"
                         >
                           <Checkbox
                             checked={Boolean(diasReprogramarMap[dia.id])}
                             onCheckedChange={() => handleToggleReprogramarDia(dia.id)}
-                            className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-purple-600 border-current w-3.5 h-3.5"
+                            className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-rose-600 border-current w-3.5 h-3.5"
                           />
                           <span className="font-mono text-[11px] tracking-wide">Reprogramar</span>
                         </div>
 
+                        {/* Select de Motivos da Reprogramação (Coluna AU da Plan_Principal) */}
+                        {diasReprogramarMap[dia.id] && (
+                          <div className="flex items-center gap-1 animate-in fade-in duration-200">
+                            <Select
+                              value={diasMotivoReprogramarMap[dia.id] || MOTIVOS_REPROGRAMACAO_COL_AU[0]}
+                              onValueChange={(val) => setDiasMotivoReprogramarMap(prev => ({ ...prev, [dia.id]: val }))}
+                            >
+                              <SelectTrigger className="h-7 text-[11px] font-semibold bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800 max-w-[290px] shadow-2xs">
+                                <span className="truncate">
+                                  {diasMotivoReprogramarMap[dia.id] || 'Selecione o motivo (Col AU)...'}
+                                </span>
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[280px] max-w-[420px] z-[220]">
+                                {MOTIVOS_REPROGRAMACAO_COL_AU.map(motivo => (
+                                  <SelectItem key={motivo} value={motivo} className="text-xs">
+                                    {motivo}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <span className="text-muted-foreground text-xs">•</span>
+
+                        {/* Etapas da Obra para este Dia (Multiseleção) */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-foreground flex items-center gap-1">
+                            <Tag className="w-3.5 h-3.5 text-primary" /> Etapas (Col M):
+                          </span>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-7 text-xs font-semibold bg-background px-2.5 max-w-[220px]">
+                                <span className="truncate">
+                                  {etapasDoDia.length === 0
+                                    ? 'Selecionar Etapas...'
+                                    : etapasDoDia.length === etapasDisponiveis.length
+                                    ? 'Todas as Etapas'
+                                    : etapasDoDia.join('/')}
+                                </span>
+                                <ChevronDown className="w-3 h-3 ml-1 opacity-60 shrink-0" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[260px] p-3 text-xs" align="start">
+                              <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold">
+                                <span>Etapas da Programação (Col M)</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => setDiasEtapasMap(prev => ({ ...prev, [dia.id]: [] }))}
+                                    className="text-[10px] text-muted-foreground hover:underline"
+                                  >
+                                    Limpar
+                                  </button>
+                                  <button
+                                    onClick={() => setDiasEtapasMap(prev => ({ ...prev, [dia.id]: [...etapasDisponiveis] }))}
+                                    className="text-[10px] text-primary hover:underline"
+                                  >
+                                    Todas
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                                {etapasDisponiveis.map(et => {
+                                  const isChecked = etapasDoDia.includes(et);
+                                  return (
+                                    <div
+                                      key={et}
+                                      onClick={() => handleToggleEtapaNoDia(dia.id, et)}
+                                      className="flex items-center gap-2 cursor-pointer hover:bg-accent/40 p-1.5 rounded"
+                                    >
+                                      <Checkbox checked={isChecked} onCheckedChange={() => handleToggleEtapaNoDia(dia.id, et)} />
+                                      <span className="text-xs font-medium text-foreground">{et}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+
+                      {/* LADO DIREITO: PES e Filtro LV para este Dia */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {/* Botão PES do Dia (Coluna Q da Plan_Principal) */}
                         <div 
                           onClick={() => handleTogglePesDia(dia.id)}
