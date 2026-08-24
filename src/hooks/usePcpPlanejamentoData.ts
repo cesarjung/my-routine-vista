@@ -1092,12 +1092,9 @@ export const usePcpPlanejamentoData = (
       const csvFilename = generateCsvFilename(firstForm.unidadeId);
       const csvContent = buildCsvContent(allNewRows);
 
-      const isReprogramar = formsArray.some(f => Boolean(f.reprogramar));
-      const motivo = formsArray.find(f => Boolean(f.motivoReprogramacao))?.motivoReprogramacao || '';
-
-      // 1. DISPARO IMEDIATO AO BACKEND PARA SALVAR DIRETO NO GOOGLE DRIVE E COLAR NA PLAN_PRINCIPAL DO SHEETS
+      // 1. DISPARO AO BACKEND (Vercel Serverless / Local) PARA SALVAR NO GOOGLE DRIVE E COLAR NA PLAN_PRINCIPAL DO SHEETS
       try {
-        await fetch('/api/salvar-programacao', {
+        const apiRes = await fetch('/api/salvar-programacao', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1108,6 +1105,10 @@ export const usePcpPlanejamentoData = (
             motivo: motivo,
           }),
         });
+        const apiData = await apiRes.json().catch(() => ({}));
+        if (!apiRes.ok || apiData.success === false) {
+          console.warn('Aviso no envio para o Google Sheets:', apiData?.error);
+        }
       } catch (apiErr) {
         console.error('Erro na chamada da API /api/salvar-programacao:', apiErr);
       }
