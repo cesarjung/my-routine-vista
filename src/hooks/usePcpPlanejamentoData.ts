@@ -1092,6 +1092,9 @@ export const usePcpPlanejamentoData = (
       const csvFilename = generateCsvFilename(firstForm.unidadeId);
       const csvContent = buildCsvContent(allNewRows);
 
+      const isReprogramar = formsArray.some(f => Boolean(f.reprogramar));
+      const motivo = formsArray.find(f => Boolean(f.motivoReprogramacao))?.motivoReprogramacao || '';
+
       // 1. DISPARO AO BACKEND (Vercel Serverless / Local) PARA SALVAR NO GOOGLE DRIVE E COLAR NA PLAN_PRINCIPAL DO SHEETS
       const apiRes = await fetch('/api/salvar-programacao', {
         method: 'POST',
