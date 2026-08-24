@@ -415,6 +415,17 @@ export const PcpPlanejamentoView = () => {
   // Map de customizações diárias de tempos complementares: Record<dayId, { tempoSaidaBaseMin?: number, tempoSegurancaMin?: number }>
   const [diasTemposCompMap, setDiasTemposCompMap] = useSessionState<Record<string, { tempoSaidaBaseMin?: number, tempoSegurancaMin?: number }>>('pcp_dias_tempos_comp_map_v1', {});
 
+  // Map de pontos com flag PES (Coluna Q da Plan_Principal): Record<pontoUpper, boolean>
+  const [pontosPesMap, setPontosPesMap] = useSessionState<Record<string, boolean>>('pcp_shared_pontos_pes_map_v2', {});
+
+  const handleTogglePes = (pLabel: string) => {
+    const pUpper = (pLabel || '').toUpperCase();
+    setPontosPesMap(prev => ({
+      ...prev,
+      [pUpper]: !prev[pUpper]
+    }));
+  };
+
   const handleUpdateDiaTempoComp = (diaId: string, field: 'tempoSaidaBaseMin' | 'tempoSegurancaMin', val: number) => {
     setDiasTemposCompMap(prev => ({
       ...prev,
@@ -1394,6 +1405,8 @@ export const PcpPlanejamentoView = () => {
     const tempoSaidaBaseDia = diasTemposCompMap[dia.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
     const tempoSegurancaDia = diasTemposCompMap[dia.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
 
+    const isDiaPes = pontosDoDia.some(p => Boolean(pontosPesMap[(p || '').toUpperCase()]));
+
     const forms: PcpProgramacaoForm[] = equipesToSend.map(eq => {
       const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
         ? metaEquipeInput
@@ -1407,6 +1420,7 @@ export const PcpPlanejamentoView = () => {
         etapa: etapasDoDia,
         obra: selectedObra,
         pontos: itensDoDia,
+        isPes: isDiaPes,
         tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
         tempoSaidaBaseMinutos: tempoSaidaBaseDia,
         tempoSegurancaMinutos: tempoSegurancaDia,
@@ -1453,6 +1467,7 @@ export const PcpPlanejamentoView = () => {
 
         const tempoSaidaBaseDia = diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
         const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+        const isDiaPes = d.pontos.some(p => Boolean(pontosPesMap[(p || '').toUpperCase()]));
 
         for (const eq of equipesToSend) {
           const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
@@ -1467,6 +1482,7 @@ export const PcpPlanejamentoView = () => {
             etapa: etapasDoDia,
             obra: selectedObra,
             pontos: itensDoDia,
+            isPes: isDiaPes,
             tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
             tempoSaidaBaseMinutos: tempoSaidaBaseDia,
             tempoSegurancaMinutos: tempoSegurancaDia,
@@ -3251,14 +3267,34 @@ export const PcpPlanejamentoView = () => {
                                 </CardDescription>
                               </div>
 
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => handleAddAtividadeNoPonto(pLabel)}
-                                className="h-7 gap-1 text-xs font-semibold"
-                              >
-                                <Plus className="w-3.5 h-3.5" /> Adicionar Atividade em {pLabel}
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {/* Botão PES com Checkbox para Coluna Q da Plan_Principal */}
+                                <div 
+                                  onClick={() => handleTogglePes(pUpper)}
+                                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs ${
+                                    pontosPesMap[pUpper]
+                                      ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
+                                      : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
+                                  }`}
+                                  title="Marcar PES para este ponto (Coluna Q da Plan_Principal)"
+                                >
+                                  <Checkbox
+                                    checked={Boolean(pontosPesMap[pUpper])}
+                                    onCheckedChange={() => handleTogglePes(pUpper)}
+                                    className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-amber-600 border-current w-3.5 h-3.5"
+                                  />
+                                  <span className="font-mono text-[11px] tracking-wide">PES</span>
+                                </div>
+
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => handleAddAtividadeNoPonto(pLabel)}
+                                  className="h-7 gap-1 text-xs font-semibold"
+                                >
+                                  <Plus className="w-3.5 h-3.5" /> Adicionar Atividade em {pLabel}
+                                </Button>
+                              </div>
                             </CardHeader>
 
                             <CardContent className="pt-3 space-y-3">

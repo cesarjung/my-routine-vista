@@ -51,6 +51,7 @@ export interface PcpProgramacaoForm {
   etapa: string;
   obra: PcpObra;
   pontos: PcpPontoItem[];
+  isPes?: boolean;
   tempoDeslocamentoMinutos?: number;
   tempoSaidaBaseMinutos?: number;
   tempoSegurancaMinutos?: number;
@@ -889,6 +890,10 @@ export const usePcpPlanejamentoData = (
     newRow[10] = form.obra.municipio;                       // Col K: Município da Obra
     newRow[12] = cleanEtapaGeral;                           // Col M: Etapa(s) Prevista(s) do Topo
     newRow[14] = compiledStr;                               // Col O: Compilado de atividades
+
+    if (form.isPes) {
+      newRow[16] = 'TRUE';                                  // Col Q (16): PES (Checkbox marcado como TRUE)
+    }
 
     if (qtdCavaRocha > 0) newRow[18] = formatQuantityDisplay(qtdCavaRocha);   // Col S: Cava em Rocha
     if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);         // Col U: Postes
