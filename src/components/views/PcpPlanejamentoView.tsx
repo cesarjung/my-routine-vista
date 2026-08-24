@@ -947,15 +947,14 @@ export const PcpPlanejamentoView = () => {
     prevUnidadeRef.current = selectedUnidadeId;
   }, [selectedUnidadeId, statusesCarteira]);
 
-  // Sincroniza Obra Selecionada com a Carteira da Unidade
+  // Sincroniza Obra Selecionada com a Carteira da Unidade (mantém desmarcado até o usuário selecionar uma obra)
   useEffect(() => {
     if (obras.length > 0) {
-      const isStillInObras = obras.some(o => o.projeto === selectedObraId);
-      if (!isStillInObras) {
-        setSelectedObraId(obras[0].projeto);
+      if (selectedObraId && !obras.some(o => o.projeto === selectedObraId)) {
+        setSelectedObraId('');
       }
     } else {
-      setSelectedObraId(null);
+      setSelectedObraId('');
     }
   }, [obras, selectedUnidadeId]);
 
@@ -3205,9 +3204,22 @@ export const PcpPlanejamentoView = () => {
 
         {/* Right Column: Estrutura por Dia Programado em Sequência (7 Cols) */}
         <div className="lg:col-span-7 flex flex-col gap-3.5">
-          {/* Obra Selecionada Banner & Saldos */}
-          {selectedObra ? (
-            <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 flex flex-col gap-3">
+          {!selectedObra ? (
+            <Card className="border border-dashed border-border bg-card/60 p-12 text-center flex flex-col items-center justify-center gap-3">
+              <div className="p-3.5 rounded-full bg-primary/10 text-primary">
+                <Layers className="w-8 h-8" />
+              </div>
+              <div className="max-w-md">
+                <h3 className="text-base font-bold text-foreground">Nenhuma Obra Selecionada</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Selecione uma obra na lista da <strong>Carteira de Obras</strong> à esquerda para visualizar os pontos e montar o planejamento.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              {/* Obra Selecionada Banner & Saldos */}
+              <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 flex flex-col gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2">
@@ -3974,6 +3986,8 @@ export const PcpPlanejamentoView = () => {
               </div>
             </CardContent>
           </Card>
+            </>
+          )}
         </div>
       </div>
 
