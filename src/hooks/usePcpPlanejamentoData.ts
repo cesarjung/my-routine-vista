@@ -902,7 +902,7 @@ export const usePcpPlanejamentoData = (
       if (qtdCabos > 0) newRow[24] = formatQuantityDisplay(qtdCabos);           // Col Y: Cabos
       if (qtdTrafos > 0) newRow[29] = formatQuantityDisplay(qtdTrafos);         // Col AD: Trafos/Equipamentos
 
-      // Colunas Calculadas de Produção e Valores (Cols 36-43 / AK-AR)
+      // Colunas Calculadas de Produção e Valores (Cols 36-39 / AK-AN)
       newRow[36] = 'NÃO';                                     // Col AK (36): ANALISAR PRODUÇÃO?
       newRow[37] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col AL (37): Valor Planejado
       
@@ -912,10 +912,7 @@ export const usePcpPlanejamentoData = (
       const pctMeta = metaVal > 0 ? (valorTotalAtividades / metaVal * 100) : 0;
       const pctMetaFormatted = `${pctMeta.toFixed(1)}%`;
       newRow[39] = pctMetaFormatted;                          // Col AN (39): Percentual Planejado da Meta
-      newRow[40] = 'R$ 0,00';                                 // Col AO
-      newRow[41] = '0%';                                      // Col AP
-      newRow[42] = `R$ ${metaVal.toFixed(2)}`;                // Col AQ
-      newRow[43] = pctMetaFormatted;                          // Col AR
+      // Colunas AO, AP, AQ, AR (40 a 43): Deixadas vazias (não preencher pelo App)
 
       newRow[56] = nomeUnidadePlanejadaUpper;                 // Col BE (56): Unidade Planejada em MAIÚSCULAS ("BOM JESUS DA LAPA")
       
