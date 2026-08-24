@@ -1351,10 +1351,9 @@ export const PcpPlanejamentoView = () => {
   };
 
   // Handle adding a new activity line via button (isBudgeted: false -> full catalog dropdown)
-  const handleAddAtividadeNoPonto = (pontoLabelTarget: string) => {
-    const existing = (pontosGroupedMap && Array.isArray(pontosGroupedMap[pontoLabelTarget])) 
-      ? pontosGroupedMap[pontoLabelTarget] 
-      : [];
+  const handleAddAtividadeNoPonto = (diaId: string, pontoLabelTarget: string) => {
+    const pUpper = (pontoLabelTarget || '').toUpperCase();
+    const existing = getItemsDoPontoNoDia(diaId, pUpper);
     const existingServicos = new Set(existing.map(i => i.servico));
     
     const safeFiltered = Array.isArray(filteredServicosBase) ? filteredServicosBase : [];
@@ -3406,7 +3405,7 @@ export const PcpPlanejamentoView = () => {
             const etapasDoDia = diasEtapasMap[dia.id] || [];
             const filtroLvDoDia = diasFiltroLvMap[dia.id] || filtroLvPadraoGlobal || 'COMPLETO';
 
-            const itensDoDiaFlat = pontosDoDia.flatMap(p => pontosGroupedMap[p] || []);
+            const itensDoDiaFlat = pontosDoDia.flatMap(p => getItemsDoPontoNoDia(dia.id, p));
             const itensDoDiaSelecionados = itensDoDiaFlat.filter(item => item.selected);
             const tempoAtivMinDia = itensDoDiaSelecionados.reduce((acc, item) => acc + (item.tempoEstimadoMinutos || 0), 0);
             const tempoSaidaBaseDia = diasTemposCompMap[dia.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
