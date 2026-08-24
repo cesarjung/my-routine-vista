@@ -458,6 +458,21 @@ export const PcpPlanejamentoView = () => {
   const [isCarregarPlanModalOpen, setIsCarregarPlanModalOpen] = useState<boolean>(false);
   const [searchExistingPlan, setSearchExistingPlan] = useState<string>('');
   const [filterEquipeExistingPlan, setFilterEquipeExistingPlan] = useState<string>('TODAS');
+  const [filterOnlyCurrentPeriod, setFilterOnlyCurrentPeriod] = useState<boolean>(true);
+  const [filterOnlyCurrentObra, setFilterOnlyCurrentObra] = useState<boolean>(false);
+  const [selectedExistingPlanKeys, setSelectedExistingPlanKeys] = useState<string[]>([]);
+
+  const handleOpenCarregarPlanModal = () => {
+    if (selectedEquipes.length > 0 && selectedEquipes[0]) {
+      setFilterEquipeExistingPlan(selectedEquipes[0]);
+    } else {
+      setFilterEquipeExistingPlan('TODAS');
+    }
+    setFilterOnlyCurrentPeriod(true);
+    setFilterOnlyCurrentObra(false);
+    setSelectedExistingPlanKeys([]);
+    setIsCarregarPlanModalOpen(true);
+  };
 
   const handleUpdateDiaTempoComp = (diaId: string, field: 'tempoSaidaBaseMin' | 'tempoSegurancaMin', val: number) => {
     setDiasTemposCompMap(prev => ({
@@ -1546,13 +1561,28 @@ export const PcpPlanejamentoView = () => {
     }
   };
 
-  // Filtros dos planejamentos existentes
+  // Filtros dos planejamentos existentes (Filtrando por Equipe e Período Atual por padrão)
   const filteredExistingPlans = useMemo(() => {
     const list = planejamentosExistentesList || [];
+    const activeDatesSet = new Set(diasProgramados.map(d => d.dataCompleta));
+
     return list.filter(p => {
+      // 1. Filtro de Equipe
       if (filterEquipeExistingPlan !== 'TODAS' && p.equipe.toUpperCase() !== filterEquipeExistingPlan.toUpperCase()) {
         return false;
       }
+      // 2. Filtro do Período Atual
+      if (filterOnlyCurrentPeriod) {
+        const isMatched = activeDatesSet.has(p.dataStr) || diasProgramados.some(d => p.dataCompleta.includes(d.dataCompleta) || d.dataCompleta.includes(p.dataStr));
+        if (!isMatched) return false;
+      }
+      // 3. Filtro da Obra Atual
+      if (filterOnlyCurrentObra && selectedObraId) {
+        if (p.projeto !== selectedObraId) {
+          return false;
+        }
+      }
+      // 4. Busca em texto
       if (searchExistingPlan.trim()) {
         const q = searchExistingPlan.toLowerCase();
         const matchesProj = (p.projeto || '').toLowerCase().includes(q);
@@ -1566,158 +1596,158 @@ export const PcpPlanejamentoView = () => {
       }
       return true;
     });
-  }, [planejamentosExistentesList, filterEquipeExistingPlan, searchExistingPlan]);
+  }, [planejamentosExistentesList, filterEquipeExistingPlan, filterOnlyCurrentPeriod, filterOnlyCurrentObra, selectedObraId, diasProgramados, searchExistingPlan]);
 
-  // Handler para carregar o planejamento existente no fluxo inverso
-  const handleCarregarPlanejamentoExistente = (plan: ParsedPlanejamentoExistente) => {
+  const handleToggleSelectPlan = (planKey: string) => {
+    setSelectedExistingPlanKeys(prev =>
+      prev.includes(planKey) ? prev.filter(k => k !== planKey) : [...prev, planKey]
+    );
+  };
+
+  const handleSelectAllFilteredPlans = () => {
+    const allKeys = filteredExistingPlans.map(p => `${p.chaveBk}-${p.rowIdx}`);
+    if (selectedExistingPlanKeys.length === allKeys.length && allKeys.length > 0) {
+      setSelectedExistingPlanKeys([]);
+    } else {
+      setSelectedExistingPlanKeys(allKeys);
+    }
+  };
+
+  // Handler para carregar múltiplos planejamentos selecionados no fluxo inverso
+  const handleCarregarPlanejamentosSelecionados = (plansToLoad: ParsedPlanejamentoExistente[]) => {
+    if (!plansToLoad || plansToLoad.length === 0) {
+      toast.error('Nenhum planejamento selecionado para carregar.');
+      return;
+    }
+
     // 1. Obra
-    const obraEncontrada = obras.find(o => o.projeto === plan.projeto);
+    const firstPlan = plansToLoad[0];
+    const obraEncontrada = obras.find(o => o.projeto === firstPlan.projeto);
     if (obraEncontrada) {
       setSelectedObraId(obraEncontrada.projeto);
     } else {
-      setSelectedObraId(plan.projeto);
+      setSelectedObraId(firstPlan.projeto);
     }
 
     // 2. Supervisor & Equipe
-    if (plan.supervisor) setSupervisor(plan.supervisor);
-    if (plan.equipe) setSelectedEquipes([plan.equipe]);
+    if (firstPlan.supervisor) setSupervisor(firstPlan.supervisor);
+    const distinctEquipes = Array.from(new Set(plansToLoad.map(p => p.equipe).filter(Boolean)));
+    if (distinctEquipes.length > 0) {
+      setSelectedEquipes(distinctEquipes);
+    }
 
-    // 3. Ajuste de Datas (Período)
-    if (plan.dataStr) {
-      const parts = plan.dataStr.split('/');
-      if (parts.length === 3) {
-        const d = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1;
-        const y = parseInt(parts[2], 10);
-        const targetDate = new Date(y, m, d);
-        if (!isNaN(targetDate.getTime())) {
-          // Ajusta dataInicio para a segunda-feira daquela semana e dataFim para sábado
-          const dayOfWeek = targetDate.getDay();
-          const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-          const monday = new Date(targetDate);
-          monday.setDate(monday.getDate() + mondayOffset);
-          const saturday = new Date(monday);
-          saturday.setDate(saturday.getDate() + 5);
+    // 3. Montar dias e pontos
+    const nextDiasPontosMap = { ...diasPontosMap };
+    const nextDiasEtapasMap = { ...diasEtapasMap };
+    const nextDiasPesMap = { ...diasPesMap };
+    const nextDiasTemposCompMap = { ...diasTemposCompMap };
+    const nextPontosGroupedMap = { ...pontosGroupedMap };
 
-          const fmt = (dt: Date) => {
-            const dd = String(dt.getDate()).padStart(2, '0');
-            const mm = String(dt.getMonth() + 1).padStart(2, '0');
-            const yyyy = dt.getFullYear();
-            return `${dd}/${mm}/${yyyy}`;
-          };
-
-          setDataInicio(fmt(monday));
-          setDataFim(fmt(saturday));
-
-          const dayId = `${d}_${m + 1}_${y}`;
-          setActiveDayId(dayId);
-
-          // 4. Pontos do Dia (todos os pontos da programação vêm marcados)
-          setDiasPontosMap(prev => ({
-            ...prev,
-            [dayId]: plan.pontos.length > 0 ? plan.pontos : ['P1']
-          }));
-
-          // 5. Etapas do Dia
-          setDiasEtapasMap(prev => ({
-            ...prev,
-            [dayId]: plan.etapasGeral
-          }));
-
-          // 6. PES do Dia
-          setDiasPesMap(prev => ({
-            ...prev,
-            [dayId]: plan.isPes
-          }));
-
-          // 7. Tempos complementares do Dia
-          setDiasTemposCompMap(prev => ({
-            ...prev,
-            [dayId]: {
-              tempoSaidaBaseMin: plan.tempoSaidaBaseMin || tempoSaidaBasePadrao,
-              tempoSegurancaMin: plan.tempoSegurancaMin || tempoSegurancaPadrao,
-            }
-          }));
+    plansToLoad.forEach(plan => {
+      // Localiza o dia em diasProgramados pela dataCompleta (ex: 21/09/2026) ou dataStr
+      let matchedDia = diasProgramados.find(d => d.dataCompleta === plan.dataStr || plan.dataCompleta.includes(d.dataCompleta));
+      
+      let dayId = matchedDia?.id;
+      if (!dayId && plan.dataStr) {
+        const parts = plan.dataStr.split('/');
+        if (parts.length === 3) {
+          const d = parts[0].padStart(2, '0');
+          const m = parts[1].padStart(2, '0');
+          const y = parts[2];
+          dayId = `${y}-${m}-${d}`;
         }
       }
-    }
 
-    // 8. Meta da Equipe
-    if (plan.metaEquipeValor && plan.metaEquipeValor > 0) {
-      setMetaEquipeInput(plan.metaEquipeValor);
-    }
+      if (dayId) {
+        // Pontos do dia (garante que todos os pontos descritos na Plan_Principal vêm marcados)
+        nextDiasPontosMap[dayId] = plan.pontos.length > 0 ? plan.pontos : ['P1'];
+        // Etapas do dia
+        nextDiasEtapasMap[dayId] = plan.etapasGeral;
+        // PES do dia
+        nextDiasPesMap[dayId] = plan.isPes;
+        // Tempos complementares
+        nextDiasTemposCompMap[dayId] = {
+          tempoSaidaBaseMin: plan.tempoSaidaBaseMin || tempoSaidaBasePadrao,
+          tempoSegurancaMin: plan.tempoSegurancaMin || tempoSegurancaPadrao,
+        };
+      }
 
-    // 9. Popula Atividades por Ponto e marca como selecionadas
-    const ativPorPontoMap: Record<string, PcpPontoItem[]> = {};
+      // Popula atividades por ponto e marca selected = true
+      plan.pontos.forEach(pLabel => {
+        const pUpper = pLabel.toUpperCase();
+        const ativsDoPonto = plan.parsedAtividades.filter(a => a.ponto === pUpper);
+        const budgetItems = orcamentoPorPontoMap?.get ? (orcamentoPorPontoMap.get(pUpper) || []) : [];
 
-    plan.pontos.forEach(pLabel => {
-      const pUpper = pLabel.toUpperCase();
-      const ativsDoPonto = plan.parsedAtividades.filter(a => a.ponto === pUpper);
-      const budgetItems = orcamentoPorPontoMap?.get ? (orcamentoPorPontoMap.get(pUpper) || []) : [];
+        const combinedItems: PcpPontoItem[] = [];
 
-      const combinedItems: PcpPontoItem[] = [];
+        ativsDoPonto.forEach((a, aIdx) => {
+          const matchedBudget = budgetItems.find(b =>
+            (b.servicoPrevisto || '').toUpperCase().includes((a.servico || '').toUpperCase()) ||
+            (a.servico || '').toUpperCase().includes((b.servicoPrevisto || '').toUpperCase())
+          );
 
-      ativsDoPonto.forEach((a, aIdx) => {
-        const matchedBudget = budgetItems.find(b =>
-          (b.servicoPrevisto || '').toUpperCase().includes((a.servico || '').toUpperCase()) ||
-          (a.servico || '').toUpperCase().includes((b.servicoPrevisto || '').toUpperCase())
-        );
+          const vUnit = matchedBudget?.valorUnitario || (a.quantidade > 0 ? (matchedBudget?.valorEstimado ? matchedBudget.valorEstimado / (matchedBudget.quantidade || 1) : 0) : 0);
+          const valorEst = vUnit > 0 ? vUnit * a.quantidade : (matchedBudget?.valorEstimado || 0);
 
-        const vUnit = matchedBudget?.valorUnitario || (a.quantidade > 0 ? (matchedBudget?.valorEstimado ? matchedBudget.valorEstimado / (matchedBudget.quantidade || 1) : 0) : 0);
-        const valorEst = vUnit > 0 ? vUnit * a.quantidade : (matchedBudget?.valorEstimado || 0);
-
-        combinedItems.push({
-          id: `loaded-${pUpper}-${aIdx}`,
-          ponto: pUpper,
-          servico: a.servico,
-          codigoMaterial: matchedBudget?.codigo || '',
-          descricaoMaterial: matchedBudget?.descricao || a.servico,
-          qtdOrcadaPonto: matchedBudget?.quantidade || a.quantidade,
-          etapaPrevista: a.etapa || matchedBudget?.etapaPrevista || 'IMPLANTAÇÃO',
-          quantidade: a.quantidade,
-          valorUnitario: vUnit,
-          tempoEstimadoMinutos: a.tempoMinutos || matchedBudget?.tempoMinutos || 15,
-          tempoUnitarioMinutos: matchedBudget?.tempoUnitarioMinutos || 15,
-          valorEstimado: valorEst,
-          selected: true,
-          isBudgeted: Boolean(matchedBudget),
-        });
-      });
-
-      budgetItems.forEach((bItem, bIdx) => {
-        const alreadyAdded = combinedItems.some(ci =>
-          (ci.servico || '').toUpperCase() === (bItem.servicoPrevisto || '').toUpperCase()
-        );
-        if (!alreadyAdded) {
           combinedItems.push({
-            id: `${pUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
+            id: `loaded-${pUpper}-${aIdx}`,
             ponto: pUpper,
-            servico: bItem.servicoPrevisto || 'SERVIÇO',
-            codigoMaterial: bItem.codigo,
-            descricaoMaterial: bItem.descricao,
-            qtdOrcadaPonto: bItem.quantidade || 1,
-            etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
-            quantidade: bItem.quantidade || 1,
-            valorUnitario: bItem.valorUnitario,
-            tempoEstimadoMinutos: bItem.tempoMinutos || 15,
-            tempoUnitarioMinutos: bItem.tempoUnitarioMinutos || 15,
-            valorEstimado: bItem.valorEstimado || 0,
-            selected: false,
-            isBudgeted: true,
+            servico: a.servico,
+            codigoMaterial: matchedBudget?.codigo || '',
+            descricaoMaterial: matchedBudget?.descricao || a.servico,
+            qtdOrcadaPonto: matchedBudget?.quantidade || a.quantidade,
+            etapaPrevista: a.etapa || matchedBudget?.etapaPrevista || 'IMPLANTAÇÃO',
+            quantidade: a.quantidade,
+            valorUnitario: vUnit,
+            tempoEstimadoMinutos: a.tempoMinutos || matchedBudget?.tempoMinutos || 15,
+            tempoUnitarioMinutos: matchedBudget?.tempoUnitarioMinutos || 15,
+            valorEstimado: valorEst,
+            selected: true,
+            isBudgeted: Boolean(matchedBudget),
           });
-        }
-      });
+        });
 
-      ativPorPontoMap[pUpper] = combinedItems;
+        budgetItems.forEach((bItem, bIdx) => {
+          const alreadyAdded = combinedItems.some(ci =>
+            (ci.servico || '').toUpperCase() === (bItem.servicoPrevisto || '').toUpperCase()
+          );
+          if (!alreadyAdded) {
+            combinedItems.push({
+              id: `${pUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
+              ponto: pUpper,
+              servico: bItem.servicoPrevisto || 'SERVIÇO',
+              codigoMaterial: bItem.codigo,
+              descricaoMaterial: bItem.descricao,
+              qtdOrcadaPonto: bItem.quantidade || 1,
+              etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
+              quantidade: bItem.quantidade || 1,
+              valorUnitario: bItem.valorUnitario,
+              tempoEstimadoMinutos: bItem.tempoMinutos || 15,
+              tempoUnitarioMinutos: bItem.tempoUnitarioMinutos || 15,
+              valorEstimado: bItem.valorEstimado || 0,
+              selected: false,
+              isBudgeted: true,
+            });
+          }
+        });
+
+        nextPontosGroupedMap[pUpper] = combinedItems;
+      });
     });
 
-    setPontosGroupedMap(prev => ({
-      ...prev,
-      ...ativPorPontoMap
-    }));
+    setDiasPontosMap(nextDiasPontosMap);
+    setDiasEtapasMap(nextDiasEtapasMap);
+    setDiasPesMap(nextDiasPesMap);
+    setDiasTemposCompMap(nextDiasTemposCompMap);
+    setPontosGroupedMap(nextPontosGroupedMap);
+
+    if (firstPlan.metaEquipeValor && firstPlan.metaEquipeValor > 0) {
+      setMetaEquipeInput(firstPlan.metaEquipeValor);
+    }
 
     setIsCarregarPlanModalOpen(false);
-    toast.success(`Planejamento de ${plan.equipe} em ${plan.dataStr} carregado com sucesso no fluxo inverso!`);
+    setSelectedExistingPlanKeys([]);
+    toast.success(`${plansToLoad.length} planejamento(s) carregado(s) com sucesso no fluxo inverso!`);
   };
 
   return (
@@ -1745,7 +1775,7 @@ export const PcpPlanejamentoView = () => {
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Botão Carregar Planejamento Existente (Fluxo Inverso) */}
           <Button
-            onClick={() => setIsCarregarPlanModalOpen(true)}
+            onClick={handleOpenCarregarPlanModal}
             variant="outline"
             className="h-8 gap-1.5 text-xs font-semibold border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary shadow-2xs"
           >
@@ -3788,108 +3818,234 @@ export const PcpPlanejamentoView = () => {
         </div>
       </div>
 
-      {/* MODAL CARREGAR PLANEJAMENTO EXISTENTE (FLUXO INVERSO) */}
+      {/* MODAL CARREGAR PLANEJAMENTO EXISTENTE (FLUXO INVERSO COM SELEÇÃO MÚLTIPLA) */}
       <Dialog open={isCarregarPlanModalOpen} onOpenChange={setIsCarregarPlanModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-6 bg-card border-border shadow-2xl z-[200]">
+        <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col p-6 bg-card border-border shadow-2xl z-[200]">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <RotateCcw className="w-5 h-5 text-primary" />
               Carregar Planejamento Existente da Plan_Principal
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Selecione uma programação gravada para carregar todos os dados no fluxo inverso (obra, pontos marcados, atividades, etapas e tempos).
+              Selecione as programações gravadas para carregar no fluxo inverso (pontos marcados, atividades, etapas e tempos para os dias correspondentes).
             </DialogDescription>
           </DialogHeader>
 
-          {/* Filtros do Modal */}
-          <div className="flex items-center gap-3 py-2 border-b border-border">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por Projeto/Obra, Equipe, Supervisor, Ponto ou Data..."
-                value={searchExistingPlan}
-                onChange={e => setSearchExistingPlan(e.target.value)}
-                className="pl-8 h-8 text-xs font-medium"
-              />
+          {/* Barra de Filtros */}
+          <div className="flex flex-col gap-2.5 py-2.5 border-b border-border">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por Projeto/Obra, Equipe, Supervisor, Ponto ou Data..."
+                  value={searchExistingPlan}
+                  onChange={e => setSearchExistingPlan(e.target.value)}
+                  className="pl-8 h-8 text-xs font-medium bg-background"
+                />
+              </div>
+
+              <div className="w-[160px] shrink-0">
+                <Select value={filterEquipeExistingPlan} onValueChange={setFilterEquipeExistingPlan}>
+                  <SelectTrigger className="h-8 text-xs bg-background">
+                    <SelectValue placeholder="Equipe" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[250]">
+                    <SelectItem value="TODAS" className="text-xs">Todas as Equipes</SelectItem>
+                    {equipesDisponiveis.map(eq => (
+                      <SelectItem key={eq} value={eq} className="text-xs">{eq}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="w-[170px]">
-              <Select value={filterEquipeExistingPlan} onValueChange={setFilterEquipeExistingPlan}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Equipe" />
-                </SelectTrigger>
-                <SelectContent className="z-[250]">
-                  <SelectItem value="TODAS" className="text-xs">Todas as Equipes</SelectItem>
-                  {equipesDisponiveis.map(eq => (
-                    <SelectItem key={eq} value={eq} className="text-xs">{eq}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Checkboxes de Filtro Rápido: Período Atual e Obra Atual */}
+            <div className="flex items-center gap-4 text-xs font-semibold text-muted-foreground flex-wrap pt-0.5">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-foreground hover:text-primary transition-colors">
+                <Checkbox
+                  checked={filterOnlyCurrentPeriod}
+                  onCheckedChange={v => setFilterOnlyCurrentPeriod(Boolean(v))}
+                />
+                <span>
+                  Filtrar pelo Período Atual ({safeFormatDate(safeParseDate(dataInicio), 'dd/MM')} a {safeFormatDate(safeParseDate(dataFim), 'dd/MM')})
+                </span>
+              </label>
+
+              {selectedObra && (
+                <label className="flex items-center gap-2 cursor-pointer select-none text-foreground hover:text-primary transition-colors">
+                  <Checkbox
+                    checked={filterOnlyCurrentObra}
+                    onCheckedChange={v => setFilterOnlyCurrentObra(Boolean(v))}
+                  />
+                  <span>
+                    Apenas Obra Atual ({selectedObra.projeto})
+                  </span>
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* Barra de Ações de Seleção Múltipla */}
+          <div className="flex items-center justify-between gap-2 py-1.5 px-1 text-xs border-b border-border/60 bg-muted/20 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={filteredExistingPlans.length > 0 && selectedExistingPlanKeys.length === filteredExistingPlans.length}
+                onCheckedChange={handleSelectAllFilteredPlans}
+                disabled={filteredExistingPlans.length === 0}
+              />
+              <span className="font-semibold text-foreground">
+                {selectedExistingPlanKeys.length > 0
+                  ? `${selectedExistingPlanKeys.length} de ${filteredExistingPlans.length} selecionado(s)`
+                  : `${filteredExistingPlans.length} planejamento(s) encontrado(s)`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {selectedExistingPlanKeys.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedExistingPlanKeys([])}
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Limpar Seleção
+                </Button>
+              )}
+
+              <Button
+                size="sm"
+                onClick={() => {
+                  const plansToLoad = filteredExistingPlans.filter(p => selectedExistingPlanKeys.includes(`${p.chaveBk}-${p.rowIdx}`));
+                  handleCarregarPlanejamentosSelecionados(plansToLoad);
+                }}
+                disabled={selectedExistingPlanKeys.length === 0}
+                className="h-7 text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Carregar {selectedExistingPlanKeys.length} Planejamento(s) Marcado(s)
+              </Button>
             </div>
           </div>
 
           {/* Lista de Planejamentos Existentes */}
           <div className="flex-1 overflow-y-auto space-y-2 py-2 pr-1 min-h-[250px] max-h-[450px]">
             {filteredExistingPlans.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-xs border border-dashed rounded-lg">
-                Nenhum planejamento encontrado na Plan_Principal para os filtros informados.
+              <div className="text-center py-12 text-muted-foreground text-xs border border-dashed rounded-lg flex flex-col items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-muted-foreground opacity-50" />
+                <span>Nenhum planejamento encontrado para a equipe e período selecionados.</span>
+                {filterOnlyCurrentPeriod && (
+                  <button
+                    onClick={() => setFilterOnlyCurrentPeriod(false)}
+                    className="text-xs text-primary font-semibold hover:underline"
+                  >
+                    Desativar filtro de período para ver todas as datas
+                  </button>
+                )}
               </div>
             ) : (
-              filteredExistingPlans.map(plan => (
-                <div
-                  key={`${plan.chaveBk}-${plan.rowIdx}`}
-                  className="p-3 rounded-xl border border-border bg-card hover:border-primary hover:bg-primary/5 transition-all cursor-pointer flex flex-col gap-2 shadow-2xs"
-                  onClick={() => handleCarregarPlanejamentoExistente(plan)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="font-mono font-bold text-xs bg-primary/10 text-primary border-primary/20">
-                        {plan.equipe}
-                      </Badge>
-                      <span className="font-bold text-xs text-foreground">
-                        {plan.dataCompleta}
-                      </span>
-                      <span className="text-xs text-muted-foreground">•</span>
-                      <span className="font-mono font-semibold text-xs text-primary">
-                        {plan.projeto}
-                      </span>
-                      {plan.municipio && (
-                        <span className="text-xs text-muted-foreground">({plan.municipio})</span>
-                      )}
+              filteredExistingPlans.map(plan => {
+                const planKey = `${plan.chaveBk}-${plan.rowIdx}`;
+                const isChecked = selectedExistingPlanKeys.includes(planKey);
+
+                return (
+                  <div
+                    key={planKey}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 shadow-2xs select-none ${
+                      isChecked
+                        ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
+                        : 'border-border bg-card hover:border-primary/60 hover:bg-muted/30'
+                    }`}
+                    onClick={() => handleToggleSelectPlan(planKey)}
+                  >
+                    {/* Checkbox de Seleção */}
+                    <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => handleToggleSelectPlan(planKey)}
+                      />
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {plan.isPes && (
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px] font-bold">
-                          PES
-                        </Badge>
-                      )}
-                      <span className="font-mono font-bold text-xs text-emerald-600">
-                        R$ {plan.valorPlanejado.toFixed(2)}
-                      </span>
-                      <Button size="sm" variant="outline" className="h-7 text-xs font-semibold gap-1 bg-background">
-                        <RotateCcw className="w-3 h-3" /> Carregar
-                      </Button>
-                    </div>
-                  </div>
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="font-mono font-bold text-xs bg-primary/10 text-primary border-primary/20">
+                            {plan.equipe}
+                          </Badge>
+                          <span className="font-bold text-xs text-foreground">
+                            {plan.dataCompleta}
+                          </span>
+                          <span className="text-xs text-muted-foreground">•</span>
+                          <span className="font-mono font-semibold text-xs text-primary">
+                            {plan.projeto}
+                          </span>
+                          {plan.municipio && (
+                            <span className="text-xs text-muted-foreground">({plan.municipio})</span>
+                          )}
+                        </div>
 
-                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/40 gap-2 flex-wrap">
-                    <div>
-                      Pontos: <strong className="text-foreground font-mono">{plan.pontosStr || 'P1'}</strong> ({plan.parsedAtividades.length} {plan.parsedAtividades.length === 1 ? 'atividade' : 'atividades'})
-                    </div>
-                    <div>
-                      Etapas: <strong className="text-foreground">{plan.etapasGeral.join('/')}</strong>
-                    </div>
-                    <div>
-                      Supervisor: <strong className="text-foreground">{plan.supervisor}</strong>
-                    </div>
-                    <div>
-                      T. Total: <strong className="text-foreground font-mono">{formatMinToHours(plan.tempoServicoMin + plan.tempoDeslocamentoMin + plan.tempoSaidaBaseMin + plan.tempoSegurancaMin)}</strong>
+                        <div className="flex items-center gap-2">
+                          {plan.isPes && (
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px] font-bold">
+                              PES
+                            </Badge>
+                          )}
+                          <span className="font-mono font-bold text-xs text-emerald-600">
+                            R$ {plan.valorPlanejado.toFixed(2)}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCarregarPlanejamentosSelecionados([plan]);
+                            }}
+                            className="h-6 text-[11px] font-semibold gap-1 bg-background"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Carregar Só Este
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/40 gap-2 flex-wrap">
+                        <div>
+                          Pontos: <strong className="text-foreground font-mono">{plan.pontosStr || 'P1'}</strong> ({plan.parsedAtividades.length} {plan.parsedAtividades.length === 1 ? 'atividade' : 'atividades'})
+                        </div>
+                        <div>
+                          Etapas: <strong className="text-foreground">{plan.etapasGeral.join('/')}</strong>
+                        </div>
+                        <div>
+                          Supervisor: <strong className="text-foreground">{plan.supervisor}</strong>
+                        </div>
+                        <div>
+                          T. Total: <strong className="text-foreground font-mono">{formatMinToHours(plan.tempoServicoMin + plan.tempoDeslocamentoMin + plan.tempoSaidaBaseMin + plan.tempoSegurancaMin)}</strong>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
+          </div>
+
+          {/* Rodapé com Ação Rápida */}
+          <div className="flex items-center justify-between pt-3 border-t border-border mt-1">
+            <div className="text-xs text-muted-foreground">
+              {selectedExistingPlanKeys.length > 0 ? (
+                <span><strong>{selectedExistingPlanKeys.length}</strong> selecionado(s) pronto(s) para carregar</span>
+              ) : (
+                <span>Marque as caixas de seleção dos planejamentos que deseja carregar para a tela.</span>
+              )}
+            </div>
+
+            <Button
+              onClick={() => {
+                const plansToLoad = filteredExistingPlans.filter(p => selectedExistingPlanKeys.includes(`${p.chaveBk}-${p.rowIdx}`));
+                handleCarregarPlanejamentosSelecionados(plansToLoad);
+              }}
+              disabled={selectedExistingPlanKeys.length === 0}
+              className="font-bold text-xs gap-1.5 h-8 px-4 bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Carregar {selectedExistingPlanKeys.length} Planejamento(s) Marcado(s)
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
