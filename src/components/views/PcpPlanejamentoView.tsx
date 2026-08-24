@@ -3270,37 +3270,37 @@ export const PcpPlanejamentoView = () => {
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-4">
-                  {/* BARRA DE CONFIGURAÇÕES DESTE DIA (100% EM UMA ÚNICA LINHA: REPROGRAMAR + MOTIVO + ETAPAS + PES + FILTRO LV) */}
-                  <div className="flex flex-col gap-2.5 bg-muted/20 p-2.5 rounded-xl border border-border/60">
-                    <div className="flex items-center justify-between gap-3 overflow-x-auto flex-nowrap min-w-full pb-0.5">
+                  {/* BARRA DE CONFIGURAÇÕES DESTE DIA (100% COMPACTA EM UMA ÚNICA LINHA SEM SCROLLBAR) */}
+                  <div className="flex flex-col gap-2 bg-muted/20 p-2 rounded-xl border border-border/60">
+                    <div className="flex items-center justify-between gap-1.5 w-full flex-wrap sm:flex-nowrap">
                       {/* LADO ESQUERDO: Reprogramar (Vermelho) + Motivo (Coluna AU) + Etapas */}
-                      <div className="flex items-center gap-2 shrink-0 flex-nowrap">
+                      <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
                         {/* Botão Reprogramar do Dia */}
                         <div 
                           onClick={() => handleToggleReprogramarDia(dia.id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs shrink-0 ${
+                          className={`flex items-center gap-1 px-2 py-0.5 h-6 rounded border text-[10px] font-bold cursor-pointer select-none transition-all shadow-2xs shrink-0 ${
                             diasReprogramarMap[dia.id]
                               ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
                               : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
                           }`}
-                          title="Marcar este dia como Reprogramação (arquiva versão anterior em 'Reprogramadas' na planilha com motivo da Coluna AU)"
+                          title="Marcar este dia como Reprogramação"
                         >
                           <Checkbox
                             checked={Boolean(diasReprogramarMap[dia.id])}
                             onCheckedChange={() => handleToggleReprogramarDia(dia.id)}
-                            className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-rose-600 border-current w-3.5 h-3.5"
+                            className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-rose-600 border-current w-3 h-3"
                           />
-                          <span className="font-mono text-[11px] tracking-wide">Reprogramar</span>
+                          <span className="font-mono text-[10px] tracking-tight">Reprogramar</span>
                         </div>
 
                         {/* Select de Motivos da Reprogramação (Coluna AU da Plan_Principal) */}
                         {diasReprogramarMap[dia.id] && (
-                          <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-200">
+                          <div className="flex items-center shrink-0 animate-in fade-in duration-200">
                             <Select
                               value={diasMotivoReprogramarMap[dia.id] || MOTIVOS_REPROGRAMACAO_COL_AU[0]}
                               onValueChange={(val) => setDiasMotivoReprogramarMap(prev => ({ ...prev, [dia.id]: val }))}
                             >
-                              <SelectTrigger className="h-7 text-[11px] font-semibold bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800 w-[240px] shadow-2xs shrink-0">
+                              <SelectTrigger className="h-6 text-[10px] font-semibold bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800 w-[180px] sm:w-[200px] px-1.5 shadow-2xs shrink-0">
                                 <span className="truncate">
                                   {diasMotivoReprogramarMap[dia.id] || 'Motivo (Col AU)...'}
                                 </span>
@@ -3316,24 +3316,24 @@ export const PcpPlanejamentoView = () => {
                           </div>
                         )}
 
-                        <span className="text-muted-foreground/50 text-xs shrink-0">•</span>
+                        <span className="text-muted-foreground/40 text-[10px] shrink-0">•</span>
 
                         {/* Etapas da Obra para este Dia (Multiseleção) */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs font-bold text-foreground flex items-center gap-1 shrink-0">
-                            <Tag className="w-3.5 h-3.5 text-primary shrink-0" /> Etapas (Col M):
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[11px] font-bold text-foreground flex items-center gap-0.5 shrink-0">
+                            <Tag className="w-3 h-3 text-primary shrink-0" /> Etapas:
                           </span>
                           <Popover>
                             <PopoverTrigger asChild>
-                              <Button variant="outline" size="sm" className="h-7 text-xs font-semibold bg-background px-2.5 max-w-[180px] shrink-0">
+                              <Button variant="outline" size="sm" className="h-6 text-[10px] font-semibold bg-background px-2 max-w-[140px] shrink-0">
                                 <span className="truncate">
                                   {etapasDoDia.length === 0
-                                    ? 'Selecionar Etapas...'
+                                    ? 'Selecionar...'
                                     : etapasDoDia.length === etapasDisponiveis.length
-                                    ? 'Todas as Etapas'
+                                    ? 'Todas'
                                     : etapasDoDia.join('/')}
                                 </span>
-                                <ChevronDown className="w-3 h-3 ml-1 opacity-60 shrink-0" />
+                                <ChevronDown className="w-2.5 h-2.5 ml-1 opacity-60 shrink-0" />
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[260px] p-3 text-xs" align="start">
@@ -3376,11 +3376,11 @@ export const PcpPlanejamentoView = () => {
                       </div>
 
                       {/* LADO DIREITO: PES e Filtro LV para este Dia */}
-                      <div className="flex items-center gap-2 shrink-0 flex-nowrap">
+                      <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
                         {/* Botão PES do Dia (Coluna Q da Plan_Principal) */}
                         <div 
                           onClick={() => handleTogglePesDia(dia.id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer select-none transition-all shadow-2xs shrink-0 ${
+                          className={`flex items-center gap-1 px-2 py-0.5 h-6 rounded border text-[10px] font-bold cursor-pointer select-none transition-all shadow-2xs shrink-0 ${
                             diasPesMap[dia.id]
                               ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
                               : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
@@ -3390,18 +3390,18 @@ export const PcpPlanejamentoView = () => {
                           <Checkbox
                             checked={Boolean(diasPesMap[dia.id])}
                             onCheckedChange={() => handleTogglePesDia(dia.id)}
-                            className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-amber-600 border-current w-3.5 h-3.5"
+                            className="pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-amber-600 border-current w-3 h-3"
                           />
-                          <span className="font-mono text-[11px] tracking-wide">PES</span>
+                          <span className="font-mono text-[10px] tracking-tight">PES</span>
                         </div>
 
-                        <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border shrink-0">
+                        <div className="flex items-center gap-0.5 bg-muted/60 p-0.5 rounded border border-border shrink-0">
                           <Button
                             size="sm"
                             type="button"
                             variant={filtroLvDoDia === 'COMPLETO' ? 'default' : 'ghost'}
                             onClick={() => handleSetFiltroLvNoDia(dia.id, 'COMPLETO')}
-                            className="h-6 text-[10px] font-semibold px-2"
+                            className="h-5 text-[9px] font-semibold px-1.5"
                           >
                             COMPLETO
                           </Button>
@@ -3410,7 +3410,7 @@ export const PcpPlanejamentoView = () => {
                             type="button"
                             variant={filtroLvDoDia === 'SOMENTE_LV' ? 'default' : 'ghost'}
                             onClick={() => handleSetFiltroLvNoDia(dia.id, 'SOMENTE_LV')}
-                            className="h-6 text-[10px] font-semibold px-2"
+                            className="h-5 text-[9px] font-semibold px-1.5"
                           >
                             SOMENTE LV
                           </Button>
@@ -3419,7 +3419,7 @@ export const PcpPlanejamentoView = () => {
                             type="button"
                             variant={filtroLvDoDia === 'SEM_LV' ? 'default' : 'ghost'}
                             onClick={() => handleSetFiltroLvNoDia(dia.id, 'SEM_LV')}
-                            className="h-6 text-[10px] font-semibold px-2"
+                            className="h-5 text-[9px] font-semibold px-1.5"
                           >
                             SEM LV
                           </Button>
