@@ -855,19 +855,12 @@ export const PcpPlanejamentoView = () => {
     }
   }, [selectedUnidadeId, supervisoresDisponiveis, equipesDisponiveis]);
 
-  // Auto-sync team goal (Meta da Equipe R$) whenever selectedEquipes change
+  // Auto-sync team goal (Meta Individual Diária R$) whenever selectedEquipes change
   useEffect(() => {
     if (selectedEquipes.length > 0) {
-      let totalMeta = 0;
-      selectedEquipes.forEach(eq => {
-        const metaVal = metasPorEquipeMap.get(eq.toUpperCase());
-        if (metaVal && metaVal > 0) {
-          totalMeta += metaVal;
-        }
-      });
-      if (totalMeta > 0) {
-        setMetaEquipeInput(totalMeta);
-      }
+      const firstEq = selectedEquipes[0];
+      const metaVal = metasPorEquipeMap.get(firstEq.toUpperCase()) || 4442;
+      setMetaEquipeInput(metaVal);
     }
   }, [selectedEquipes, metasPorEquipeMap]);
 
@@ -1401,20 +1394,25 @@ export const PcpPlanejamentoView = () => {
     const tempoSaidaBaseDia = diasTemposCompMap[dia.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
     const tempoSegurancaDia = diasTemposCompMap[dia.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
 
-    const forms: PcpProgramacaoForm[] = equipesToSend.map(eq => ({
-      unidadeId: selectedUnidadeId,
-      dataProgramacao: dia.dataCompleta,
-      dateObj: dia.dayDate,
-      supervisor,
-      equipe: eq,
-      etapa: etapasDoDia,
-      obra: selectedObra,
-      pontos: itensDoDia,
-      tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
-      tempoSaidaBaseMinutos: tempoSaidaBaseDia,
-      tempoSegurancaMinutos: tempoSegurancaDia,
-      metaEquipeValor: metaEquipeInput,
-    }));
+    const forms: PcpProgramacaoForm[] = equipesToSend.map(eq => {
+      const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
+        ? metaEquipeInput
+        : (metasPorEquipeMap.get(eq.toUpperCase()) || metaEquipeInput || 4442);
+      return {
+        unidadeId: selectedUnidadeId,
+        dataProgramacao: dia.dataCompleta,
+        dateObj: dia.dayDate,
+        supervisor,
+        equipe: eq,
+        etapa: etapasDoDia,
+        obra: selectedObra,
+        pontos: itensDoDia,
+        tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
+        tempoSaidaBaseMinutos: tempoSaidaBaseDia,
+        tempoSegurancaMinutos: tempoSegurancaDia,
+        metaEquipeValor: metaIndividual,
+      };
+    });
 
     await salvarProgramacao.mutateAsync(forms);
     toast.success(`Programação de ${dia.nomeDia} enviada para ${equipesToSend.length} equipe(s) na Plan_Principal!`);
@@ -1457,6 +1455,9 @@ export const PcpPlanejamentoView = () => {
         const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
 
         for (const eq of equipesToSend) {
+          const metaIndividual = (selectedEquipes.length === 1 && metaEquipeInput > 0)
+            ? metaEquipeInput
+            : (metasPorEquipeMap.get(eq.toUpperCase()) || metaEquipeInput || 4442);
           allForms.push({
             unidadeId: selectedUnidadeId,
             dataProgramacao: d.dataCompleta,
@@ -1469,7 +1470,7 @@ export const PcpPlanejamentoView = () => {
             tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
             tempoSaidaBaseMinutos: tempoSaidaBaseDia,
             tempoSegurancaMinutos: tempoSegurancaDia,
-            metaEquipeValor: metaEquipeInput,
+            metaEquipeValor: metaIndividual,
           });
         }
       }
@@ -2629,7 +2630,7 @@ export const PcpPlanejamentoView = () => {
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <Target className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    Valor da Meta da(s) Equipe(s) {selectedEquipes.length > 0 ? selectedEquipes.join(', ') : 'EH156'} (R$):
+                    Valor da Meta Diária por Equipe (R$):
                   </Label>
 
                   {/* Input de Valor da Meta */}
