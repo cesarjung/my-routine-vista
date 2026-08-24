@@ -1295,10 +1295,17 @@ export const PcpPlanejamentoView = () => {
     return selectedItemsFlat.reduce((acc, p) => acc + (p.tempoEstimadoMinutos || 0), 0);
   }, [selectedItemsFlat]);
 
-  // 2. Tempo TOTAL com Deslocamento + Saída Base + Segurança
+  // 2. Tempo TOTAL com Deslocamento + Saída Base + Segurança do dia ativo
   const tempoTotalGeralMinutos = useMemo(() => {
-    return tempoAtividadesMinutos + Number(tempoDeslocamento || 0) + Number(tempoSaidaBase || 0) + Number(tempoSeguranca || 0);
-  }, [tempoAtividadesMinutos, tempoDeslocamento, tempoSaidaBase, tempoSeguranca]);
+    const desloc = activeDia?.tempoTotalDeslocamentoMin || 0;
+    const saida = (activeDia?.id && diasTemposCompMap[activeDia.id]?.tempoSaidaBaseMin !== undefined)
+      ? diasTemposCompMap[activeDia.id].tempoSaidaBaseMin!
+      : tempoSaidaBasePadrao;
+    const seg = (activeDia?.id && diasTemposCompMap[activeDia.id]?.tempoSegurancaMin !== undefined)
+      ? diasTemposCompMap[activeDia.id].tempoSegurancaMin!
+      : tempoSegurancaPadrao;
+    return tempoAtividadesMinutos + Number(desloc) + Number(saida) + Number(seg);
+  }, [tempoAtividadesMinutos, activeDia, diasTemposCompMap, tempoSaidaBasePadrao, tempoSegurancaPadrao]);
 
   const tempoTotalFormatado = useMemo(() => {
     const h = Math.floor(tempoTotalGeralMinutos / 60);
@@ -2707,7 +2714,9 @@ export const PcpPlanejamentoView = () => {
                     const isActive = d.id === activeDia?.id;
                     const itensDoDia = d.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(item => item.selected));
                     const tempoAtiv = itensDoDia.reduce((acc, item) => acc + (item.tempoEstimadoMinutos || 0), 0);
-                    const tempoTotalDia = tempoAtiv + d.tempoTotalDeslocamentoMin + tempoSaidaBase + tempoSeguranca;
+                    const tempoSaidaBaseDia = diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+                    const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+                    const tempoTotalDia = tempoAtiv + d.tempoTotalDeslocamentoMin + tempoSaidaBaseDia + tempoSegurancaDia;
                     const valPlanejado = itensDoDia.reduce((acc, item) => acc + (item.valorEstimado || 0), 0);
                     const pctMetaDia = metaEquipeInput > 0 ? Math.round((valPlanejado / metaEquipeInput) * 1000) / 10 : 0;
 
