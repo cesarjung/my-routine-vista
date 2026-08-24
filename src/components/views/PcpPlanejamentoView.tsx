@@ -406,10 +406,53 @@ export const PcpPlanejamentoView = () => {
   // Outros states fixos
   const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
   const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('pcp_shared_selected_equipes_v3', ['EH156']);
-  const [tempoDeslocamento, setTempoDeslocamento] = useState<number>(30);
-  const [tempoSaidaBase, setTempoSaidaBase] = useState<number>(15);
-  const [tempoSeguranca, setTempoSeguranca] = useState<number>(15);
+  const [metaDeslocamentoDiarioHoras, setMetaDeslocamentoDiarioHoras] = useSessionState<number>('pcp_meta_deslocamento_horas_v1', 2.0);
+  const [tempoSaidaBasePadrao, setTempoSaidaBasePadrao] = useSessionState<number>('pcp_tempo_saida_base_padrao_v1', 15);
+  const [tempoSegurancaPadrao, setTempoSegurancaPadrao] = useSessionState<number>('pcp_tempo_seguranca_padrao_v1', 15);
   const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
+
+  // Map de customizações diárias de tempos complementares: Record<dayId, { tempoSaidaBaseMin?: number, tempoSegurancaMin?: number }>
+  const [diasTemposCompMap, setDiasTemposCompMap] = useSessionState<Record<string, { tempoSaidaBaseMin?: number, tempoSegurancaMin?: number }>>('pcp_dias_tempos_comp_map_v1', {});
+
+  const handleUpdateDiaTempoComp = (diaId: string, field: 'tempoSaidaBaseMin' | 'tempoSegurancaMin', val: number) => {
+    setDiasTemposCompMap(prev => ({
+      ...prev,
+      [diaId]: {
+        ...prev[diaId],
+        [field]: Math.max(0, val)
+      }
+    }));
+  };
+
+  const handleChangeSaidaBasePadrao = (val: number) => {
+    const v = Math.max(0, val);
+    setTempoSaidaBasePadrao(v);
+    setDiasTemposCompMap(prev => {
+      const nextMap = { ...prev };
+      diasProgramados.forEach(d => {
+        nextMap[d.id] = {
+          ...nextMap[d.id],
+          tempoSaidaBaseMin: v
+        };
+      });
+      return nextMap;
+    });
+  };
+
+  const handleChangeSegurancaPadrao = (val: number) => {
+    const v = Math.max(0, val);
+    setTempoSegurancaPadrao(v);
+    setDiasTemposCompMap(prev => {
+      const nextMap = { ...prev };
+      diasProgramados.forEach(d => {
+        nextMap[d.id] = {
+          ...nextMap[d.id],
+          tempoSegurancaMin: v
+        };
+      });
+      return nextMap;
+    });
+  };
 
   const handleToggleEquipe = (eqName: string) => {
     setSelectedEquipes(prev => {
@@ -1346,6 +1389,8 @@ export const PcpPlanejamentoView = () => {
       : Array.from(new Set(itensSelecionados.map(i => i.etapaPrevista).filter(Boolean))).join(', ');
 
     const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
+    const tempoSaidaBaseDia = diasTemposCompMap[dia.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+    const tempoSegurancaDia = diasTemposCompMap[dia.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
 
     for (const eq of equipesToSend) {
       await salvarProgramacao.mutateAsync({
@@ -1358,8 +1403,8 @@ export const PcpPlanejamentoView = () => {
         obra: selectedObra,
         pontos: itensDoDia,
         tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
-        tempoSaidaBaseMinutos: tempoSaidaBase,
-        tempoSegurancaMinutos: tempoSeguranca,
+        tempoSaidaBaseMinutos: tempoSaidaBaseDia,
+        tempoSegurancaMinutos: tempoSegurancaDia,
         metaEquipeValor: metaEquipeInput,
       });
     }
@@ -1398,6 +1443,9 @@ export const PcpPlanejamentoView = () => {
           ? diasEtapasMap[d.id].join(', ')
           : Array.from(new Set(itensDoDia.filter(i => i.selected).map(i => i.etapaPrevista).filter(Boolean))).join(', ');
 
+        const tempoSaidaBaseDia = diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+        const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+
         for (const eq of equipesToSend) {
           await salvarProgramacao.mutateAsync({
             unidadeId: selectedUnidadeId,
@@ -1409,8 +1457,8 @@ export const PcpPlanejamentoView = () => {
             obra: selectedObra,
             pontos: itensDoDia,
             tempoDeslocamentoMinutos: d.tempoTotalDeslocamentoMin,
-            tempoSaidaBaseMinutos: tempoSaidaBase,
-            tempoSegurancaMinutos: tempoSeguranca,
+            tempoSaidaBaseMinutos: tempoSaidaBaseDia,
+            tempoSegurancaMinutos: tempoSegurancaDia,
             metaEquipeValor: metaEquipeInput,
           });
         }
@@ -2324,182 +2372,239 @@ export const PcpPlanejamentoView = () => {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/40 text-[10px] font-bold">
-                          <TableHead className="py-1 px-2 w-[110px]">Dia</TableHead>
-                          <TableHead className="py-1 px-2">Saída (Ida) & Tempo</TableHead>
-                          <TableHead className="py-1 px-2">Retorno (Volta) & Tempo</TableHead>
-                          <TableHead className="py-1 px-2 text-right w-[110px]">Total (Horas)</TableHead>
+                          <TableHead className="py-1 px-2 w-[95px]">Dia</TableHead>
+                          <TableHead className="py-1 px-1.5">Saída (Ida)</TableHead>
+                          <TableHead className="py-1 px-1.5">Retorno (Volta)</TableHead>
+                          <TableHead className="py-1 px-1.5 text-center w-[85px]">Desloc. (h)</TableHead>
+                          <TableHead className="py-1 px-1 text-center w-[75px]">Saída Base</TableHead>
+                          <TableHead className="py-1 px-1 text-center w-[75px]">Segurança</TableHead>
+                          <TableHead className="py-1 px-2 text-right w-[95px]">Total Comp.</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {diasProgramados.map(d => (
-                          <TableRow
-                            key={d.id}
-                            onClick={() => setActiveDayId(d.id)}
-                            className={cn(
-                              "text-[11px] cursor-pointer transition-colors",
-                              d.id === activeDia?.id
-                                ? "bg-primary/10 font-semibold border-l-2 border-l-primary" 
-                                : "hover:bg-accent/40"
-                            )}
-                          >
-                            <TableCell className="py-1 px-2 font-mono">
-                              <div className="flex items-center gap-1">
-                                <span>{d.nomeDia.slice(0, 3)} ({d.dataStr})</span>
-                                {d.id === activeDia?.id && (
-                                  <Badge className="text-[8px] px-1 py-0 h-3.5 bg-primary text-primary-foreground font-bold">
-                                    Ativo
-                                  </Badge>
+                        {diasProgramados.map(d => {
+                          const tempoSaidaBaseDia = diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+                          const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+                          const tempoCompTotalDia = d.tempoTotalDeslocamentoMin + tempoSaidaBaseDia + tempoSegurancaDia;
+                          const deslocHoras = d.tempoTotalDeslocamentoMin / 60;
+                          const excedeMetaDesloc = deslocHoras > metaDeslocamentoDiarioHoras;
+
+                          return (
+                            <TableRow
+                              key={d.id}
+                              onClick={() => setActiveDayId(d.id)}
+                              className={cn(
+                                "text-[11px] cursor-pointer transition-colors",
+                                d.id === activeDia?.id
+                                  ? "bg-primary/10 font-semibold border-l-2 border-l-primary" 
+                                  : "hover:bg-accent/40"
+                              )}
+                            >
+                              <TableCell className="py-1 px-2 font-mono">
+                                <div className="flex items-center gap-1">
+                                  <span>{d.nomeDia.slice(0, 3)} ({d.dataStr})</span>
+                                  {d.id === activeDia?.id && (
+                                    <Badge className="text-[8px] px-1 py-0 h-3.5 bg-primary text-primary-foreground font-bold">
+                                      Ativo
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+
+                              {/* Saída (Ida) com Select + Distância + Input Horas Editável */}
+                              <TableCell className="py-1 px-1.5" onClick={e => e.stopPropagation()}>
+                                <div className="flex flex-col gap-0.5">
+                                  <select
+                                    value={d.origemId}
+                                    onChange={e => handleUpdateDiaAlojamento(d.id, 'origemId', e.target.value)}
+                                    className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
+                                  >
+                                    <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
+                                    {alojamentosDaUnidade.map(a => (
+                                      <option key={a.id} value={a.id}>🏠 {a.nome}</option>
+                                    ))}
+                                  </select>
+                                  <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono">
+                                    <span title="Distância estimada">{d.distIdaKm > 0 ? `${d.distIdaKm} km` : '0 km'}</span>
+                                    <div className="flex items-center gap-0.5">
+                                      <Input
+                                        type="number"
+                                        step="0.05"
+                                        min="0"
+                                        value={Math.round((d.tempoIdaMin / 60) * 100) / 100}
+                                        onChange={e => {
+                                          const h = parseFloat(e.target.value) || 0;
+                                          handleUpdateDiaTempo(d.id, 'manualTempoIdaMin', Math.round(h * 60));
+                                        }}
+                                        className="h-5 w-12 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
+                                        title="Tempo de ida (h)"
+                                      />
+                                      <span className="text-[9px] font-bold">h</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              {/* Retorno (Volta) com Select + Distância + Input Horas Editável */}
+                              <TableCell className="py-1 px-1.5" onClick={e => e.stopPropagation()}>
+                                <div className="flex flex-col gap-0.5">
+                                  <select
+                                    value={d.destinoId}
+                                    onChange={e => handleUpdateDiaAlojamento(d.id, 'destinoId', e.target.value)}
+                                    className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
+                                  >
+                                    <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
+                                    {alojamentosDaUnidade.map(a => (
+                                      <option key={a.id} value={a.id}>🏠 {a.nome}</option>
+                                    ))}
+                                  </select>
+                                  <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono">
+                                    <span title="Distância estimada">{d.distVoltaKm > 0 ? `${d.distVoltaKm} km` : '0 km'}</span>
+                                    <div className="flex items-center gap-0.5">
+                                      <Input
+                                        type="number"
+                                        step="0.05"
+                                        min="0"
+                                        value={Math.round((d.tempoVoltaMin / 60) * 100) / 100}
+                                        onChange={e => {
+                                          const h = parseFloat(e.target.value) || 0;
+                                          handleUpdateDiaTempo(d.id, 'manualTempoVoltaMin', Math.round(h * 60));
+                                        }}
+                                        className="h-5 w-12 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
+                                        title="Tempo de volta (h)"
+                                      />
+                                      <span className="text-[9px] font-bold">h</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              {/* Deslocamento do Dia com Indicador de Meta */}
+                              <TableCell className="py-1 px-1.5 text-center font-mono font-bold whitespace-nowrap text-[10px]">
+                                <span className={excedeMetaDesloc ? "text-amber-600 dark:text-amber-400" : "text-foreground"}>
+                                  {formatHoursDecimal(d.tempoTotalDeslocamentoMin)}
+                                </span>
+                                {excedeMetaDesloc && (
+                                  <span className="block text-[8px] text-amber-600 font-semibold" title={`Excede meta de ${metaDeslocamentoDiarioHoras}h`}>
+                                    &gt;{metaDeslocamentoDiarioHoras}h meta
+                                  </span>
                                 )}
-                              </div>
-                            </TableCell>
+                              </TableCell>
 
-                            {/* Saída (Ida) com Select + Distância + Input Horas Editável */}
-                            <TableCell className="py-1 px-1.5" onClick={e => e.stopPropagation()}>
-                              <div className="flex flex-col gap-1">
-                                <select
-                                  value={d.origemId}
-                                  onChange={e => handleUpdateDiaAlojamento(d.id, 'origemId', e.target.value)}
-                                  className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
-                                >
-                                  <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
-                                  {alojamentosDaUnidade.map(a => (
-                                    <option key={a.id} value={a.id}>🏠 {a.nome}</option>
-                                  ))}
-                                </select>
-                                <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono">
-                                  <span title="Distância estimada por estradas">{d.distIdaKm > 0 ? `${d.distIdaKm} km` : '0 km'}</span>
-                                  <div className="flex items-center gap-0.5">
-                                    <Input
-                                      type="number"
-                                      step="0.05"
-                                      min="0"
-                                      value={Math.round((d.tempoIdaMin / 60) * 100) / 100}
-                                      onChange={e => {
-                                        const h = parseFloat(e.target.value) || 0;
-                                        handleUpdateDiaTempo(d.id, 'manualTempoIdaMin', Math.round(h * 60));
-                                      }}
-                                      className="h-5 w-14 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
-                                      title="Tempo de ida em horas decimais (ajustável manualmente)"
-                                    />
-                                    <span className="text-[9px] font-bold">h</span>
-                                  </div>
+                              {/* Saída Base do Dia */}
+                              <TableCell className="py-1 px-1 text-center" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    value={tempoSaidaBaseDia}
+                                    onChange={e => handleUpdateDiaTempoComp(d.id, 'tempoSaidaBaseMin', parseInt(e.target.value, 10) || 0)}
+                                    className="h-5 w-11 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
+                                    title="Tempo de saída da base neste dia (minutos)"
+                                  />
+                                  <span className="text-[8px] text-muted-foreground">m</span>
                                 </div>
-                              </div>
-                            </TableCell>
+                              </TableCell>
 
-                            {/* Retorno (Volta) com Select + Distância + Input Horas Editável */}
-                            <TableCell className="py-1 px-1.5" onClick={e => e.stopPropagation()}>
-                              <div className="flex flex-col gap-1">
-                                <select
-                                  value={d.destinoId}
-                                  onChange={e => handleUpdateDiaAlojamento(d.id, 'destinoId', e.target.value)}
-                                  className="h-6 text-[10px] bg-background border border-border rounded px-1 w-full font-medium"
-                                >
-                                  <option value="BASE">🏢 {unidadeAtivaInfo.baseNome}</option>
-                                  {alojamentosDaUnidade.map(a => (
-                                    <option key={a.id} value={a.id}>🏠 {a.nome}</option>
-                                  ))}
-                                </select>
-                                <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono">
-                                  <span title="Distância estimada por estradas">{d.distVoltaKm > 0 ? `${d.distVoltaKm} km` : '0 km'}</span>
-                                  <div className="flex items-center gap-0.5">
-                                    <Input
-                                      type="number"
-                                      step="0.05"
-                                      min="0"
-                                      value={Math.round((d.tempoVoltaMin / 60) * 100) / 100}
-                                      onChange={e => {
-                                        const h = parseFloat(e.target.value) || 0;
-                                        handleUpdateDiaTempo(d.id, 'manualTempoVoltaMin', Math.round(h * 60));
-                                      }}
-                                      className="h-5 w-14 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
-                                      title="Tempo de volta em horas decimais (ajustável manualmente)"
-                                    />
-                                    <span className="text-[9px] font-bold">h</span>
-                                  </div>
+                              {/* Segurança do Dia */}
+                              <TableCell className="py-1 px-1 text-center" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    value={tempoSegurancaDia}
+                                    onChange={e => handleUpdateDiaTempoComp(d.id, 'tempoSegurancaMin', parseInt(e.target.value, 10) || 0)}
+                                    className="h-5 w-11 text-[10px] text-right font-mono font-bold px-1 py-0 bg-background"
+                                    title="Tempo de segurança / DDS neste dia (minutos)"
+                                  />
+                                  <span className="text-[8px] text-muted-foreground">m</span>
                                 </div>
-                              </div>
-                            </TableCell>
+                              </TableCell>
 
-                            {/* Total Deslocamento */}
-                            <TableCell className="py-1 px-2 text-right font-mono font-bold text-primary whitespace-nowrap text-[10px]">
-                              {formatHoursDecimal(d.tempoIdaMin)} + {formatHoursDecimal(d.tempoVoltaMin)} = <strong className="text-foreground text-xs">{formatHoursDecimal(d.tempoTotalDeslocamentoMin)}</strong>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                              {/* Total Complementares */}
+                              <TableCell className="py-1 px-2 text-right font-mono font-bold text-primary whitespace-nowrap text-[10px]">
+                                {formatHoursDecimal(tempoCompTotalDia)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
                 </div>
               </div>
 
-              {/* Grid Campos de Tempo Complementares */}
+              {/* Grid Campos de Metas e Tempos Complementares Padrão */}
               <div className="grid grid-cols-3 gap-3">
+                {/* Meta de Deslocamento Diário em HORAS */}
                 <div className="flex flex-col gap-1">
                   <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <Navigation className="w-3 h-3 text-blue-500" /> Deslocamento Total
+                    <Navigation className="w-3 h-3 text-blue-500" /> Meta Deslocamento / Dia
                   </Label>
                   <div className="relative">
                     <Input
                       type="number"
+                      step="0.1"
                       min="0"
-                      value={tempoDeslocamento}
-                      onChange={e => setTempoDeslocamento(Math.max(0, Number(e.target.value) || 0))}
-                      className="h-8 text-xs font-mono font-bold pr-8"
+                      value={metaDeslocamentoDiarioHoras}
+                      onChange={e => setMetaDeslocamentoDiarioHoras(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="h-8 text-xs font-mono font-bold pr-7"
                     />
-                    <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
+                    <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">h</span>
                   </div>
-                  <span className="text-[10px] text-primary font-mono font-bold">
-                    {formatMinToHours(tempoDeslocamento)}
+                  <span className="text-[9px] text-muted-foreground font-mono">
+                    Meta máxima p/ indicadores
                   </span>
                 </div>
 
+                {/* Padrão Saída da Base */}
                 <div className="flex flex-col gap-1">
                   <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <LogOut className="w-3 h-3 text-amber-500" /> Saída Base
+                    <LogOut className="w-3 h-3 text-amber-500" /> Saída Base (Padrão)
                   </Label>
                   <div className="relative">
                     <Input
                       type="number"
                       min="0"
-                      value={tempoSaidaBase}
-                      onChange={e => setTempoSaidaBase(Math.max(0, Number(e.target.value) || 0))}
+                      value={tempoSaidaBasePadrao}
+                      onChange={e => handleChangeSaidaBasePadrao(parseInt(e.target.value, 10) || 0)}
                       className="h-8 text-xs font-mono font-bold pr-8"
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    {formatHoursDecimal(tempoSaidaBase)}
+                  <span className="text-[9px] text-muted-foreground font-mono">
+                    {formatHoursDecimal(tempoSaidaBasePadrao)} (Replicado nos dias)
                   </span>
                 </div>
 
+                {/* Padrão Segurança */}
                 <div className="flex flex-col gap-1">
                   <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-emerald-500" /> Segurança
+                    <ShieldCheck className="w-3 h-3 text-emerald-500" /> Segurança (Padrão)
                   </Label>
                   <div className="relative">
                     <Input
                       type="number"
                       min="0"
-                      value={tempoSeguranca}
-                      onChange={e => setTempoSeguranca(Math.max(0, Number(e.target.value) || 0))}
+                      value={tempoSegurancaPadrao}
+                      onChange={e => handleChangeSegurancaPadrao(parseInt(e.target.value, 10) || 0)}
                       className="h-8 text-xs font-mono font-bold pr-8"
                     />
                     <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-mono">min</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    {formatHoursDecimal(tempoSeguranca)}
+                  <span className="text-[9px] text-muted-foreground font-mono">
+                    {formatHoursDecimal(tempoSegurancaPadrao)} (Replicado nos dias)
                   </span>
                 </div>
               </div>
 
-              {/* Banner Resumo da Soma dos Tempos */}
-              <div className="p-3 rounded-xl bg-muted/40 border border-border flex items-center justify-between">
-                <span className="text-muted-foreground text-xs">
-                  Soma Total do Tempo: <strong>{Math.floor(tempoAtividadesMinutos / 60)}h {tempoAtividadesMinutos % 60}m</strong> (ativid.) + <strong>{tempoDeslocamento + tempoSaidaBase + tempoSeguranca}m</strong> (comp.)
+              {/* Banner Resumo da Soma dos Tempos do Dia Ativo */}
+              <div className="p-3 rounded-xl bg-muted/40 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-muted-foreground text-xs font-mono">
+                  Dia Ativo ({activeDia?.nomeDia} {activeDia?.dataStr}): <strong>{Math.floor(tempoAtividadesMinutos / 60)}h {tempoAtividadesMinutos % 60}m</strong> (ativid.) + <strong>{(activeDia?.tempoTotalDeslocamentoMin || 0) + (diasTemposCompMap[activeDia?.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao) + (diasTemposCompMap[activeDia?.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao)}m</strong> (comp.)
                 </span>
                 <span className="font-mono font-bold text-sm text-primary">
-                  = {tempoTotalFormatado}
+                  = {formatMinToHours(tempoAtividadesMinutos + (activeDia?.tempoTotalDeslocamentoMin || 0) + (diasTemposCompMap[activeDia?.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao) + (diasTemposCompMap[activeDia?.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao))}
                 </span>
               </div>
 
@@ -2790,16 +2895,20 @@ export const PcpPlanejamentoView = () => {
           {/* LISTA SEQUENCIAL DE TODOS OS DIAS DO PERÍODO PROGRAMADO */}
           {diasProgramados.map((dia, diaIdx) => {
             const pontosDoDia = dia.pontos || [];
-            const outrosDiasMap = getPontosAlocadosEmOutrosDias(dia.id);
             const etapasDoDia = diasEtapasMap[dia.id] || [];
             const filtroLvDoDia = diasFiltroLvMap[dia.id] || filtroLvPadraoGlobal || 'COMPLETO';
 
             const itensDoDiaFlat = pontosDoDia.flatMap(p => pontosGroupedMap[p] || []);
             const itensDoDiaSelecionados = itensDoDiaFlat.filter(item => item.selected);
             const tempoAtivMinDia = itensDoDiaSelecionados.reduce((acc, item) => acc + (item.tempoEstimadoMinutos || 0), 0);
-            const tempoTotalDiaMin = tempoAtivMinDia + dia.tempoTotalDeslocamentoMin + tempoSaidaBase + tempoSeguranca;
+            const tempoSaidaBaseDia = diasTemposCompMap[dia.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+            const tempoSegurancaDia = diasTemposCompMap[dia.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+            const tempoCompTotalDia = dia.tempoTotalDeslocamentoMin + tempoSaidaBaseDia + tempoSegurancaDia;
+            const tempoTotalDiaMin = tempoAtivMinDia + tempoCompTotalDia;
             const valPlanejadoDia = itensDoDiaSelecionados.reduce((acc, item) => acc + (item.valorEstimado || 0), 0);
             const pctMetaDia = metaEquipeInput > 0 ? Math.round((valPlanejadoDia / metaEquipeInput) * 1000) / 10 : 0;
+            const deslocHoras = dia.tempoTotalDeslocamentoMin / 60;
+            const excedeMetaDesloc = deslocHoras > metaDeslocamentoDiarioHoras;
 
             return (
               <Card key={`${dia.id}_${diaIdx}`} className="border border-border shadow-sm overflow-hidden">
@@ -2818,12 +2927,12 @@ export const PcpPlanejamentoView = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-7 text-xs font-bold font-mono text-foreground flex items-center gap-1.5 bg-background border-border/80 hover:bg-accent hover:border-primary/50 shadow-2xs"
+                              className="h-7 text-xs font-mono font-bold gap-1.5 bg-background shadow-2xs border-primary/40 hover:border-primary"
                               title="Clique para alterar a data deste dia"
                             >
                               <CalendarIcon className="w-3.5 h-3.5 text-primary" />
-                              <span>{dia.nomeDia}, {dia.dataCompleta}</span>
-                              <span className="text-[10px] text-muted-foreground ml-0.5">✏️ Alterar</span>
+                              <span>{dia.nomeDia}, {safeFormatDate(dia.dayDate, 'dd/MM/yyyy')}</span>
+                              <span className="text-[10px] text-muted-foreground font-normal ml-1">✏️ Alterar</span>
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
@@ -2860,13 +2969,21 @@ export const PcpPlanejamentoView = () => {
                         )}
                       </div>
 
-                      {/* Detalhes de Deslocamento do Dia */}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1 font-mono">
+                      {/* Detalhes de Deslocamento e Tempos Complementares do Dia */}
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground mt-1.5 font-mono">
                         <span>🛫 Saída: <strong className="text-foreground">{dia.origemNome}</strong> ({formatHoursDecimal(dia.tempoIdaMin)})</span>
                         <span>•</span>
                         <span>🛬 Retorno: <strong className="text-foreground">{dia.destinoNome}</strong> ({formatHoursDecimal(dia.tempoVoltaMin)})</span>
                         <span>•</span>
-                        <span className="text-primary font-bold">Deslocamento Total: {formatMinToHours(dia.tempoTotalDeslocamentoMin)}</span>
+                        <span className={cn("font-bold", excedeMetaDesloc ? "text-amber-600 dark:text-amber-400" : "text-primary")}>
+                          Deslocamento: {formatHoursDecimal(dia.tempoTotalDeslocamentoMin)} {excedeMetaDesloc && `(Meta: ${metaDeslocamentoDiarioHoras}h)`}
+                        </span>
+                        <span>•</span>
+                        <span>Saída Base: <strong className="text-foreground">{tempoSaidaBaseDia}m</strong></span>
+                        <span>•</span>
+                        <span>Segurança: <strong className="text-foreground">{tempoSegurancaDia}m</strong></span>
+                        <span>•</span>
+                        <span className="text-primary font-bold">Total Previsto: {formatMinToHours(tempoTotalDiaMin)}</span>
                       </div>
                     </div>
 
