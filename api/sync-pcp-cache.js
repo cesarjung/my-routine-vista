@@ -34,9 +34,15 @@ function getGoogleCredentials() {
         : process.env.GOOGLE_CREDENTIALS;
     } catch (e) {}
   }
-  const localFile = path.resolve(process.cwd(), 'google_credentials.json');
-  if (fs.existsSync(localFile)) {
-    return JSON.parse(fs.readFileSync(localFile, 'utf8'));
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'google_credentials.json'),
+    path.resolve('google_credentials.json'),
+    path.join(process.cwd(), 'public', 'google_credentials.json')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
   }
   throw new Error('Nenhuma credencial Google encontrada.');
 }

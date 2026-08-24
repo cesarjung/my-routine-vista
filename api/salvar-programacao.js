@@ -24,9 +24,15 @@ function getGoogleCredentials() {
         : process.env.GOOGLE_CREDENTIALS;
     } catch (e) {}
   }
-  const localFile = path.resolve(process.cwd(), 'google_credentials.json');
-  if (fs.existsSync(localFile)) {
-    return JSON.parse(fs.readFileSync(localFile, 'utf8'));
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'google_credentials.json'),
+    path.resolve('google_credentials.json'),
+    path.join(process.cwd(), 'public', 'google_credentials.json')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
   }
   throw new Error('Nenhuma credencial Google (GOOGLE_CREDENTIALS) encontrada.');
 }
@@ -159,10 +165,18 @@ export default async function handler(req, res) {
 
     // 2. Parse CSV lines
     const rawLines = csvContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    if (rawLines.length < 2) {
-      return res.status(400).json({ error: 'CSV sem dados suficientes.' });
+    if (rawLines.length === 0) {
+      return res.status(400).json({ error: 'CSV sem dados.' });
     }
-    const dataLines = rawLines.slice(1);
+    let dataLines = rawLines;
+    if (rawLines.length > 1 && (
+      rawLines[0].toLowerCase().includes('data') ||
+      rawLines[0].toLowerCase().includes('supervisor') ||
+      rawLines[0].toLowerCase().includes('equipe') ||
+      rawLines[0].toLowerCase().includes('projeto')
+    )) {
+      dataLines = rawLines.slice(1);
+    }
 
     // Identify keys in Col BK (index 62)
     const keysToReplace = new Set();
@@ -246,16 +260,17 @@ export default async function handler(req, res) {
       }
     }
 
-    // Find first empty row in Column B (Data) starting at row 6
-    let targetRow = 6;
+    // Find first empty row in Column B (Data) starting at row 6 (index 5)
+    let targetRow = -1;
     for (let i = 5; i < colBValues.length; i++) {
-      const val = (colBValues[i] && colBValues[i][0]) ? colBValues[i][0].trim() : '';
+      const row = colBValues[i];
+      const val = (row && row[0]) ? String(row[0]).trim() : '';
       if (!val) {
         targetRow = i + 1;
         break;
       }
     }
-    if (targetRow <= 5) {
+    if (targetRow === -1 || targetRow <= 5) {
       targetRow = Math.max(6, colBValues.length + 1);
     }
 
