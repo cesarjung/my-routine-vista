@@ -643,7 +643,7 @@ export const usePcpPlanejamentoData = (
     const setSup = new Set<string>();
 
     obras.forEach(o => {
-      if (o.supervisor && o.supervisor.trim()) {
+      if (o.supervisor && o.supervisor.trim() && o.supervisor.toUpperCase() !== 'NÃO INFORMADO') {
         setSup.add(o.supervisor.trim().toUpperCase());
       }
     });
@@ -654,25 +654,49 @@ export const usePcpPlanejamentoData = (
       }
     });
 
-    ['BARTOLOMEU', 'JOSE NILTON', 'ALFREDO', 'DANIEL', 'JHANATAN'].forEach(s => setSup.add(s));
+    if (setSup.size === 0) {
+      ['BARTOLOMEU', 'JOSE NILTON', 'ALFREDO', 'DANIEL', 'JHANATAN'].forEach(s => setSup.add(s));
+    }
 
     return Array.from(setSup).sort();
   }, [obras, programacoesAtivas]);
 
-  // Extract unique Equipes for this unit
+  // Extract unique Equipes for this unit (from bd_metas and programacoesAtivas)
   const equipesDisponiveis = useMemo(() => {
     const setEq = new Set<string>();
 
+    // 1. Extrai da tabela bd_metas da unidade selecionada
+    if (rawCacheQuery.data?.bd_metas) {
+      try {
+        const rawStr = rawCacheQuery.data.bd_metas;
+        const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+        const rows = parsed?.bd_metas || [];
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length < 2) continue;
+          const eq = String(row[1] || '').trim().toUpperCase();
+          if (eq && eq !== 'EQUIPE' && eq !== 'TOTAL' && !eq.includes('TOTAL')) {
+            setEq.add(eq);
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao extrair equipes de bd_metas:', e);
+      }
+    }
+
+    // 2. Extrai de programacoesAtivas da unidade
     programacoesAtivas.forEach(p => {
       if (p.equipe && p.equipe.trim()) {
         setEq.add(p.equipe.trim().toUpperCase());
       }
     });
 
-    ['EH156', 'EH155', 'EH154', 'EH_PODA158', 'EQP-01', 'EQP-02', 'EQP-03'].forEach(e => setEq.add(e));
+    if (setEq.size === 0) {
+      ['EH156', 'EH155', 'EH154', 'EH_PODA158'].forEach(e => setEq.add(e));
+    }
 
     return Array.from(setEq).sort();
-  }, [programacoesAtivas]);
+  }, [rawCacheQuery.data?.bd_metas, programacoesAtivas]);
 
   // Query point-by-point ATIVIDADES (from centralized ATIVIDADES_POR_PONTO_BASE sheet)
   // Primary: atividades_por_ponto table (clean activity data)

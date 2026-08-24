@@ -904,12 +904,38 @@ export const PcpPlanejamentoView = () => {
     }
   }, [statusesCarteira]);
 
-  // Load equipe default and its meta based on list
+  // Reseta / correlaciona todos os filtros da barra superior quando a Unidade mudar
+  useEffect(() => {
+    setSelectedSituacao('TODAS');
+    setSelectedMesFilter('TODOS');
+    setSelectedMunicipioFilter('TODOS');
+    setSelectedPrioridadeFilter('TODAS');
+    setSelectedDonoFilter('TODOS');
+    setSelectedSupervisorFilter('TODOS');
+    setSearchObra('');
+    if (statusesCarteira.length > 0) {
+      setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+    }
+  }, [selectedUnidadeId]);
+
+  // Sincroniza Obra Selecionada com a Carteira da Unidade
+  useEffect(() => {
+    if (obras.length > 0) {
+      const isStillInObras = obras.some(o => o.projeto === selectedObraId);
+      if (!isStillInObras) {
+        setSelectedObraId(obras[0].projeto);
+      }
+    } else {
+      setSelectedObraId(null);
+    }
+  }, [obras, selectedUnidadeId]);
+
+  // Load equipe default and supervisor based on the selected unit
   useEffect(() => {
     if (supervisoresDisponiveis.length > 0 && !supervisoresDisponiveis.includes(supervisor)) {
       setSupervisor(supervisoresDisponiveis[0]);
     }
-    if (equipesDisponiveis.length > 0 && selectedEquipes.length === 0) {
+    if (equipesDisponiveis.length > 0 && (selectedEquipes.length === 0 || !equipesDisponiveis.some(e => selectedEquipes.includes(e)))) {
       setSelectedEquipes([equipesDisponiveis[0]]);
     }
   }, [selectedUnidadeId, supervisoresDisponiveis, equipesDisponiveis]);
@@ -1058,6 +1084,87 @@ export const PcpPlanejamentoView = () => {
       });
     });
     return map;
+  }, [obras]);
+
+  // Opções de Municípios correlacionados aos filtros ativos da Unidade
+  const municipiosOptions = useMemo(() => {
+    const set = new Set<string>();
+    (obras || []).forEach(o => {
+      if (selectedSituacao !== 'TODAS' && o.situacao !== selectedSituacao) return;
+      if (selectedStatuses.length > 0 && !selectedStatuses.some(st => (o.statusExecucao || '').toUpperCase() === st.toUpperCase())) return;
+      if (selectedMesFilter !== 'TODOS') {
+        const targetM = selectedMesFilter.trim().toLowerCase();
+        const hasM = (o.meses || []).some(m => (m || '').trim().toLowerCase() === targetM) || (o.carteirasStr || '').toLowerCase().includes(targetM);
+        if (!hasM) return;
+      }
+      if (o.municipio && o.municipio.trim()) {
+        set.add(o.municipio.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [obras, selectedSituacao, selectedStatuses, selectedMesFilter]);
+
+  // Opções de Prioridade correlacionadas
+  const prioridadesOptions = useMemo(() => {
+    const set = new Set<string>();
+    (obras || []).forEach(o => {
+      if (selectedSituacao !== 'TODAS' && o.situacao !== selectedSituacao) return;
+      if (selectedStatuses.length > 0 && !selectedStatuses.some(st => (o.statusExecucao || '').toUpperCase() === st.toUpperCase())) return;
+      if (selectedMesFilter !== 'TODOS') {
+        const targetM = selectedMesFilter.trim().toLowerCase();
+        const hasM = (o.meses || []).some(m => (m || '').trim().toLowerCase() === targetM) || (o.carteirasStr || '').toLowerCase().includes(targetM);
+        if (!hasM) return;
+      }
+      if (selectedMunicipioFilter !== 'TODOS' && (o.municipio || '').toUpperCase() !== selectedMunicipioFilter.toUpperCase()) return;
+      if (o.prioridade && o.prioridade.trim()) {
+        set.add(o.prioridade.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [obras, selectedSituacao, selectedStatuses, selectedMesFilter, selectedMunicipioFilter]);
+
+  // Opções de Dono da Obra correlacionadas
+  const donosOptions = useMemo(() => {
+    const set = new Set<string>();
+    (obras || []).forEach(o => {
+      if (selectedSituacao !== 'TODAS' && o.situacao !== selectedSituacao) return;
+      if (selectedStatuses.length > 0 && !selectedStatuses.some(st => (o.statusExecucao || '').toUpperCase() === st.toUpperCase())) return;
+      if (selectedMesFilter !== 'TODOS') {
+        const targetM = selectedMesFilter.trim().toLowerCase();
+        const hasM = (o.meses || []).some(m => (m || '').trim().toLowerCase() === targetM) || (o.carteirasStr || '').toLowerCase().includes(targetM);
+        if (!hasM) return;
+      }
+      if (selectedMunicipioFilter !== 'TODOS' && (o.municipio || '').toUpperCase() !== selectedMunicipioFilter.toUpperCase()) return;
+      if (o.donoDaObra && o.donoDaObra.trim() && o.donoDaObra !== 'NÃO INFORMADO') {
+        set.add(o.donoDaObra.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [obras, selectedSituacao, selectedStatuses, selectedMesFilter, selectedMunicipioFilter]);
+
+  // Opções de Supervisor correlacionadas
+  const supervisoresFiltroOptions = useMemo(() => {
+    const set = new Set<string>();
+    (obras || []).forEach(o => {
+      if (selectedSituacao !== 'TODAS' && o.situacao !== selectedSituacao) return;
+      if (selectedStatuses.length > 0 && !selectedStatuses.some(st => (o.statusExecucao || '').toUpperCase() === st.toUpperCase())) return;
+      if (selectedMesFilter !== 'TODOS') {
+        const targetM = selectedMesFilter.trim().toLowerCase();
+        const hasM = (o.meses || []).some(m => (m || '').trim().toLowerCase() === targetM) || (o.carteirasStr || '').toLowerCase().includes(targetM);
+        if (!hasM) return;
+      }
+      if (selectedMunicipioFilter !== 'TODOS' && (o.municipio || '').toUpperCase() !== selectedMunicipioFilter.toUpperCase()) return;
+      if (selectedDonoFilter !== 'TODOS' && (o.donoDaObra || '').toUpperCase() !== selectedDonoFilter.toUpperCase()) return;
+      if (o.supervisor && o.supervisor.trim() && o.supervisor !== 'NÃO INFORMADO') {
+        set.add(o.supervisor.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [obras, selectedSituacao, selectedStatuses, selectedMesFilter, selectedMunicipioFilter, selectedDonoFilter]);
+
+  // Conjunto de Projetos pertencentes à Unidade selecionada
+  const unitProjectsSet = useMemo(() => {
+    return new Set((obras || []).map(o => (o.projeto || '').toUpperCase().trim()));
   }, [obras]);
 
   // Filtered Obras list matching selectedStatuses, selectedSituacao, selectedMesFilter, selectedMunicipioFilter, selectedPrioridadeFilter
@@ -1561,12 +1668,16 @@ export const PcpPlanejamentoView = () => {
     }
   };
 
-  // Filtros dos planejamentos existentes (Filtrando por Equipe e Período Atual por padrão)
+  // Filtros dos planejamentos existentes (Filtrando por Unidade, Equipe e Período Atual por padrão)
   const filteredExistingPlans = useMemo(() => {
     const list = planejamentosExistentesList || [];
     const activeDatesSet = new Set(diasProgramados.map(d => d.dataCompleta));
 
     return list.filter(p => {
+      // 0. Pertence à Unidade selecionada (se houver obras carregadas)
+      if (unitProjectsSet.size > 0 && !unitProjectsSet.has((p.projeto || '').toUpperCase().trim())) {
+        return false;
+      }
       // 1. Filtro de Equipe
       if (filterEquipeExistingPlan !== 'TODAS' && p.equipe.toUpperCase() !== filterEquipeExistingPlan.toUpperCase()) {
         return false;
@@ -1596,7 +1707,7 @@ export const PcpPlanejamentoView = () => {
       }
       return true;
     });
-  }, [planejamentosExistentesList, filterEquipeExistingPlan, filterOnlyCurrentPeriod, filterOnlyCurrentObra, selectedObraId, diasProgramados, searchExistingPlan]);
+  }, [planejamentosExistentesList, unitProjectsSet, filterEquipeExistingPlan, filterOnlyCurrentPeriod, filterOnlyCurrentObra, selectedObraId, diasProgramados, searchExistingPlan]);
 
   const handleToggleSelectPlan = (planKey: string) => {
     setSelectedExistingPlanKeys(prev =>
@@ -1943,10 +2054,7 @@ export const PcpPlanejamentoView = () => {
               </SelectTrigger>
               <SelectContent className="max-h-[240px]">
                 <SelectItem value="TODOS" className="text-xs font-semibold">Todos Municípios</SelectItem>
-                {[...new Set(obras.filter(o =>
-                  selectedMesFilter === 'TODOS' ||
-                  o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase())
-                ).map(o => o.municipio).filter(Boolean))].sort().map(m => (
+                {municipiosOptions.map(m => (
                   <SelectItem key={m} value={m} className="text-xs">
                     {m}
                   </SelectItem>
@@ -1964,13 +2072,7 @@ export const PcpPlanejamentoView = () => {
               </SelectTrigger>
               <SelectContent className="max-h-[240px]">
                 <SelectItem value="TODAS" className="text-xs font-semibold">Todas</SelectItem>
-                {[...new Set(obras.filter(o => {
-                  const matchMes = selectedMesFilter === 'TODOS' ||
-                    o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
-                  const matchMun = selectedMunicipioFilter === 'TODOS' ||
-                    o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
-                  return matchMes && matchMun;
-                }).map(o => o.prioridade).filter(Boolean))].sort().map(p => (
+                {prioridadesOptions.map(p => (
                   <SelectItem key={p} value={p} className="text-xs">
                     {p}
                   </SelectItem>
@@ -1988,13 +2090,7 @@ export const PcpPlanejamentoView = () => {
               </SelectTrigger>
               <SelectContent className="max-h-[240px]">
                 <SelectItem value="TODOS" className="text-xs font-semibold">Todos Donos</SelectItem>
-                {[...new Set(obras.filter(o => {
-                  const matchMes = selectedMesFilter === 'TODOS' ||
-                    o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
-                  const matchMun = selectedMunicipioFilter === 'TODOS' ||
-                    o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
-                  return matchMes && matchMun;
-                }).map(o => o.donoDaObra).filter(d => d && d !== 'NÃO INFORMADO'))].sort().map(d => (
+                {donosOptions.map(d => (
                   <SelectItem key={d} value={d} className="text-xs">
                     {d}
                   </SelectItem>
@@ -2012,13 +2108,7 @@ export const PcpPlanejamentoView = () => {
               </SelectTrigger>
               <SelectContent className="max-h-[240px]">
                 <SelectItem value="TODOS" className="text-xs font-semibold">Todos Supervisores</SelectItem>
-                {[...new Set(obras.filter(o => {
-                  const matchMes = selectedMesFilter === 'TODOS' ||
-                    o.meses.some(m => m.trim().toLowerCase() === selectedMesFilter.trim().toLowerCase());
-                  const matchMun = selectedMunicipioFilter === 'TODOS' ||
-                    o.municipio.toUpperCase() === selectedMunicipioFilter.toUpperCase();
-                  return matchMes && matchMun;
-                }).map(o => o.supervisor).filter(Boolean))].sort().map(s => (
+                {supervisoresFiltroOptions.map(s => (
                   <SelectItem key={s} value={s} className="text-xs">
                     {s}
                   </SelectItem>
