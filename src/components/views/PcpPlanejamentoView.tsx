@@ -365,7 +365,7 @@ const SearchableServicoSelect = ({
 export const PcpPlanejamentoView = () => {
   // State
   // Selected Obra & Filters (Filtros da Carteira)
-  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_selected_obra_v6', '');
+  const [selectedObraId, setSelectedObraId] = useState<string>('');
   const [searchObra, setSearchObra] = useSessionState<string>('pcp_shared_search', '');
   const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_shared_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState<boolean>(false);
@@ -1947,15 +1947,15 @@ export const PcpPlanejamentoView = () => {
           </div>
         </div>
 
-        {/* Controles: Carregar Planejamento Existente + Sincronizar Sheets + Limpar Tela + Zoom + Atualizar */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Botão Carregar Planejamento Existente (Fluxo Inverso) */}
+        {/* Controles: Carregar + Sincronizar + Limpar + Zoom + Atualizar (TODOS EM 1 LINHA COMPACTA) */}
+        <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
+          {/* Botão Carregar Planejamento Existente */}
           <Button
             onClick={handleOpenCarregarPlanModal}
             variant="outline"
-            className="h-8 gap-1.5 text-xs font-semibold border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary shadow-2xs"
+            className="h-7 px-2.5 gap-1 text-[11px] font-semibold border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary shadow-2xs whitespace-nowrap"
           >
-            <RotateCcw className="w-3.5 h-3.5" /> Carregar Planejamento Existente
+            <RotateCcw className="w-3 h-3" /> Carregar Planejamento
           </Button>
 
           {/* Botão Sincronizar do Google Sheets */}
@@ -1963,10 +1963,10 @@ export const PcpPlanejamentoView = () => {
             onClick={handleSyncFromGoogleSheets}
             disabled={isSyncingSheets}
             variant="outline"
-            className="h-8 gap-1.5 text-xs font-semibold border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs"
+            className="h-7 px-2.5 gap-1 text-[11px] font-semibold border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs whitespace-nowrap"
             title="Sincronizar dados em tempo real direto da Planilha do Google Sheets para o Supabase"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 ${isSyncingSheets ? 'animate-spin' : ''}`} />
             {isSyncingSheets ? 'Sincronizando...' : 'Sincronizar Sheets'}
           </Button>
 
@@ -1974,20 +1974,20 @@ export const PcpPlanejamentoView = () => {
           <Button
             onClick={handleLimparTudoEmTela}
             variant="outline"
-            className="h-8 gap-1.5 text-xs font-semibold border-rose-400/40 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800 shadow-2xs"
+            className="h-7 px-2.5 gap-1 text-[11px] font-semibold border-rose-400/40 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800 shadow-2xs whitespace-nowrap"
             title="Limpar todos os pontos, atividades e planejamentos montados na tela"
           >
-            <Eraser className="w-3.5 h-3.5" /> Limpar Planejamento em Tela
+            <Eraser className="w-3 h-3" /> Limpar Planejamento
           </Button>
 
           {/* Zoom Control */}
-          <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-0.5">
-            <button onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} className="text-muted-foreground hover:text-foreground" title="Diminuir Zoom">
-              <ZoomOut className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-0.5 border border-border rounded-md px-1.5 py-0 h-7 bg-background">
+            <button onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))} className="text-muted-foreground hover:text-foreground p-0.5" title="Diminuir Zoom">
+              <ZoomOut className="w-3 h-3" />
             </button>
-            <span className="text-xs font-bold text-muted-foreground w-9 text-center tabular-nums font-mono">{(zoomLevel * 100).toFixed(0)}%</span>
-            <button onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} className="text-muted-foreground hover:text-foreground" title="Aumentar Zoom">
-              <ZoomIn className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-bold text-muted-foreground w-8 text-center tabular-nums font-mono">{(zoomLevel * 100).toFixed(0)}%</span>
+            <button onClick={() => setZoomLevel(z => Math.min(2.0, z + 0.1))} className="text-muted-foreground hover:text-foreground p-0.5" title="Aumentar Zoom">
+              <ZoomIn className="w-3 h-3" />
             </button>
           </div>
 
@@ -1997,7 +1997,7 @@ export const PcpPlanejamentoView = () => {
             onClick={() => rawCacheQuery.refetch()}
             disabled={rawCacheQuery.isFetching}
             title="Atualizar Dados"
-            className="h-8 w-8"
+            className="h-7 w-7"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${rawCacheQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
@@ -2014,15 +2014,27 @@ export const PcpPlanejamentoView = () => {
           </div>
 
           {/* Unidade */}
-          <div className="flex flex-col gap-0.5 w-[140px] shrink-0">
-            <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Unidade</span>
+          <div className="flex flex-col gap-0.5 w-[145px] shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Unidade</span>
+              {selectedUnidadeId && (
+                <button
+                  type="button"
+                  onClick={() => handleUnidadeChange('')}
+                  className="text-[9px] font-bold text-rose-600 hover:underline cursor-pointer"
+                  title="Limpar Unidade"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
             <Select value={selectedUnidadeId || 'LIMPAR'} onValueChange={(val) => handleUnidadeChange(val === 'LIMPAR' ? '' : val)}>
               <SelectTrigger className="h-7 text-[11px] font-semibold bg-background px-2">
                 <Building2 className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
                 <SelectValue placeholder="Selecione Unidade..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="LIMPAR" className="text-xs font-semibold text-rose-600 dark:text-rose-400 border-b border-border mb-1 cursor-pointer">
+                <SelectItem value="LIMPAR" className="text-xs font-bold text-rose-600 dark:text-rose-400 border-b border-border mb-1 cursor-pointer">
                   ✕ Limpar Unidade
                 </SelectItem>
                 {UNIDADES_DISPONIVEIS.map(u => (
