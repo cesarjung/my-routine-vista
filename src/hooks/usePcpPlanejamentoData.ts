@@ -1093,24 +1093,20 @@ export const usePcpPlanejamentoData = (
       const csvContent = buildCsvContent(allNewRows);
 
       // 1. DISPARO AO BACKEND (Vercel Serverless / Local) PARA SALVAR NO GOOGLE DRIVE E COLAR NA PLAN_PRINCIPAL DO SHEETS
-      try {
-        const apiRes = await fetch('/api/salvar-programacao', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            csvFilename,
-            csvContent,
-            unitSigla: unidadeObj.sigla,
-            reprogramar: isReprogramar,
-            motivo: motivo,
-          }),
-        });
-        const apiData = await apiRes.json().catch(() => ({}));
-        if (!apiRes.ok || apiData.success === false) {
-          console.warn('Aviso no envio para o Google Sheets:', apiData?.error);
-        }
-      } catch (apiErr) {
-        console.error('Erro na chamada da API /api/salvar-programacao:', apiErr);
+      const apiRes = await fetch('/api/salvar-programacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          csvFilename,
+          csvContent,
+          unitSigla: unidadeObj.sigla,
+          reprogramar: isReprogramar,
+          motivo: motivo,
+        }),
+      });
+      const apiData = await apiRes.json().catch(() => ({}));
+      if (!apiRes.ok || apiData.success === false) {
+        throw new Error(apiData?.error || `Falha ao gravar no Google Sheets/Drive (Status HTTP ${apiRes.status})`);
       }
 
       // 2. Atualizar cache local do Supabase

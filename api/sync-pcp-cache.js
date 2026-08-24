@@ -1,6 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
+import googleCredentialsStatic from '../google_credentials.json' with { type: 'json' };
 
 const UNIDADES_MAP = {
   'BJL': '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI',
@@ -34,15 +33,8 @@ function getGoogleCredentials() {
         : process.env.GOOGLE_CREDENTIALS;
     } catch (e) {}
   }
-  const possiblePaths = [
-    path.resolve(process.cwd(), 'google_credentials.json'),
-    path.resolve('google_credentials.json'),
-    path.join(process.cwd(), 'public', 'google_credentials.json')
-  ];
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
-    }
+  if (googleCredentialsStatic && googleCredentialsStatic.client_email) {
+    return googleCredentialsStatic;
   }
   throw new Error('Nenhuma credencial Google encontrada.');
 }

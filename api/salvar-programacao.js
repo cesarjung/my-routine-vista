@@ -1,6 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
+import googleCredentialsStatic from '../google_credentials.json' with { type: 'json' };
 
 const ROOT_DRIVE_FOLDER_ID = '13UejORpk84bhf6Y4ISb3TedPLGU79eHn';
 
@@ -24,17 +23,10 @@ function getGoogleCredentials() {
         : process.env.GOOGLE_CREDENTIALS;
     } catch (e) {}
   }
-  const possiblePaths = [
-    path.resolve(process.cwd(), 'google_credentials.json'),
-    path.resolve('google_credentials.json'),
-    path.join(process.cwd(), 'public', 'google_credentials.json')
-  ];
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
-    }
+  if (googleCredentialsStatic && googleCredentialsStatic.client_email) {
+    return googleCredentialsStatic;
   }
-  throw new Error('Nenhuma credencial Google (GOOGLE_CREDENTIALS) encontrada.');
+  throw new Error('Nenhuma credencial Google encontrada.');
 }
 
 async function getAccessToken() {
