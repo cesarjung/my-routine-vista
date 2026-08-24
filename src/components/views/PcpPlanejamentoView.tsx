@@ -3011,14 +3011,14 @@ export const PcpPlanejamentoView = () => {
                       {/* Etapas da Obra para este Dia (Multiseleção) */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-foreground flex items-center gap-1">
-                          <Tag className="w-3.5 h-3.5 text-primary" /> Etapas:
+                          <Tag className="w-3.5 h-3.5 text-primary" /> Etapas (Col M):
                         </span>
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button variant="outline" size="sm" className="h-7 text-xs font-semibold bg-background px-2.5 max-w-[250px]">
                               <span className="truncate">
                                 {etapasDoDia.length === 0
-                                  ? 'Todas as Etapas (Desmarcado)'
+                                  ? 'Selecionar Etapas (Col M)...'
                                   : etapasDoDia.length === etapasDisponiveis.length
                                   ? 'Todas as Etapas'
                                   : etapasDoDia.join('/')}
@@ -3028,7 +3028,7 @@ export const PcpPlanejamentoView = () => {
                           </PopoverTrigger>
                           <PopoverContent className="w-[260px] p-3 text-xs" align="start">
                             <div className="flex items-center justify-between pb-2 border-b border-border mb-2 font-bold">
-                              <span>Etapas ({dia.nomeDia})</span>
+                              <span>Etapas da Programação (Col M)</span>
                               <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => setDiasEtapasMap(prev => ({ ...prev, [dia.id]: [] }))}
@@ -3202,9 +3202,6 @@ export const PcpPlanejamentoView = () => {
 
                           if (filtroLvDoDia === 'SOMENTE_LV' && !isLv) return false;
                           if (filtroLvDoDia === 'SEM_LV' && isLv) return false;
-                          if (etapasDoDia.length > 0 && i.etapaPrevista && !etapasDoDia.includes(i.etapaPrevista)) {
-                            return false;
-                          }
                           return true;
                         });
                         const itemsSelecionados = itemsDoPonto.filter(i => i.selected);
