@@ -121,6 +121,14 @@ export const ETAPAS_PADRAO = [
   'TREINAMENTO'
 ];
 
+// LISTA DE ETAPAS DAS ATIVIDADES DA BASE DO PRÉ-FECHAMENTO (COLUNA BY)
+export const ETAPAS_ATIVIDADES_PRE_FECHAMENTO = [
+  'ESCAVAÇÃO',
+  'IMPLANTAÇÃO',
+  'LANÇAMENTO DE CABO',
+  'LINHA VIVA'
+];
+
 // Exact Column Header titles from line 4 of Plan_Principal sheet in Google Sheets
 export const EXACT_PLAN_PRINCIPAL_HEADERS = [
   'SELECIONAR', 'DATA', 'Inicio', 'Fim', 'Supervisor', 'Encarregado', 'Equipe', 'Projeto',

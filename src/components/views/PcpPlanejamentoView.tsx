@@ -48,6 +48,7 @@ import {
   usePcpPlanejamentoData,
   UNIDADES_DISPONIVEIS,
   ETAPAS_PADRAO,
+  ETAPAS_ATIVIDADES_PRE_FECHAMENTO,
   ALL_STATUSES,
   DEFAULT_SELECTED_STATUSES,
   PcpObra,
@@ -3315,7 +3316,7 @@ export const PcpPlanejamentoView = () => {
                                                 <SelectValue placeholder="Selecione a Etapa" />
                                               </SelectTrigger>
                                               <SelectContent>
-                                                {etapasDisponiveis.map(et => (
+                                                {ETAPAS_ATIVIDADES_PRE_FECHAMENTO.map(et => (
                                                   <SelectItem key={et} value={et} className="text-xs">
                                                     {et}
                                                   </SelectItem>
