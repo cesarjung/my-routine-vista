@@ -996,8 +996,66 @@ export const PcpPlanejamentoView = () => {
     }
   }, [selectedEquipes, metasPorEquipeMap]);
 
-  // Map of PcpPontoItem[] grouped by Ponto Label (e.g., 'P71' -> items[], 'P72' -> items[])
-  const [pontosGroupedMap, setPontosGroupedMap] = useSessionState<Record<string, PcpPontoItem[]>>('pcp_shared_pontos_grouped_v4', {});
+  // Map of PcpPontoItem[] grouped by Day ID and Ponto Label (e.g., '2026-08-24' -> { 'P1': items[], 'P2': items[] })
+  const [diasPontosGroupedMap, setDiasPontosGroupedMap] = useSessionState<Record<string, Record<string, PcpPontoItem[]>>>('pcp_shared_dias_pontos_grouped_v6', {});
+
+  const getItemsDoPontoNoDia = useCallback((diaId: string, pLabel: string): PcpPontoItem[] => {
+    const pUpper = (pLabel || '').toUpperCase();
+    const dayMap = diasPontosGroupedMap[diaId] || {};
+    if (dayMap[pUpper] && Array.isArray(dayMap[pUpper])) {
+      return dayMap[pUpper];
+    }
+    if (dayMap[pLabel] && Array.isArray(dayMap[pLabel])) {
+      return dayMap[pLabel];
+    }
+
+    const budgetItems = orcamentoPorPontoMap?.get ? orcamentoPorPontoMap.get(pUpper) : undefined;
+    if (budgetItems && Array.isArray(budgetItems) && budgetItems.length > 0) {
+      return budgetItems.map((bItem, bIdx) => {
+        const serv = bItem.servicoPrevisto || 'SERVIÇO';
+        const vUnit = bItem.valorUnitario !== undefined ? bItem.valorUnitario : (bItem.quantidade > 0 ? (bItem.valorEstimado || 0) / bItem.quantidade : 0);
+        const tUnit = bItem.tempoUnitarioMinutos !== undefined ? bItem.tempoUnitarioMinutos : (bItem.quantidade > 0 ? (bItem.tempoMinutos || 15) / bItem.quantidade : 15);
+        return {
+          id: `${diaId}-${pUpper}-${serv.replace(/\s+/g, '_')}-${bIdx}`,
+          ponto: pUpper,
+          servico: serv,
+          codigoMaterial: bItem.codigo,
+          descricaoMaterial: bItem.descricao,
+          qtdOrcadaPonto: bItem.quantidade || 1,
+          etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(serv),
+          quantidade: bItem.quantidade || 1,
+          tempoEstimadoMinutos: bItem.tempoMinutos || 15,
+          valorEstimado: bItem.valorEstimado || 0,
+          valorUnitario: vUnit,
+          tempoUnitarioMinutos: tUnit,
+          selected: false,
+          isBudgeted: true,
+        };
+      });
+    }
+
+    const fallback = (Array.isArray(filteredServicosBase) && filteredServicosBase.length > 0)
+      ? filteredServicosBase[0]
+      : (Array.isArray(servicosBase) && servicosBase.length > 0
+        ? servicosBase[0]
+        : { codigo: 'SIR0000001', servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
+
+    return [{
+      id: `${diaId}-${pUpper}-default-${Date.now()}`,
+      ponto: pUpper,
+      servico: fallback.servico || 'SERVIÇO PADRÃO',
+      codigoMaterial: fallback.codigo,
+      qtdOrcadaPonto: 1,
+      etapaPrevista: inferEtapaFromServico(fallback.servico || ''),
+      quantidade: 1,
+      tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade || 60,
+      valorEstimado: fallback.valorPorUnidade || 100,
+      valorUnitario: fallback.valorPorUnidade || 100,
+      tempoUnitarioMinutos: fallback.tempoMinutosPorUnidade || 60,
+      selected: false,
+      isBudgeted: false,
+    }];
+  }, [diasPontosGroupedMap, orcamentoPorPontoMap, filteredServicosBase, servicosBase]);
 
   // Helper for "Limpar Filtros"
   const handleClearFilters = () => {
@@ -1019,81 +1077,8 @@ export const PcpPlanejamentoView = () => {
         [activeDia.id]: ['P1']
       }));
     }
-    setPontosGroupedMap({});
+    setDiasPontosGroupedMap({});
   };
-
-  // Sync items table grouped by Ponto whenever orcamentoPorPontoMap or pontosDisponiveisDoProjeto changes
-  useEffect(() => {
-    if (!selectedObra) return;
-
-    setPontosGroupedMap(prevMap => {
-      const currentPrevMap = prevMap || {};
-      const nextMap: Record<string, PcpPontoItem[]> = { ...currentPrevMap };
-
-      // Coletar todos os pontos possíveis: do projeto, dos dias programados, ou do mapa de orçamento
-      const allLabels = new Set<string>();
-      (pontosDisponiveisDoProjeto || []).forEach(p => allLabels.add(p.toUpperCase()));
-      Object.values(diasPontosMap || {}).forEach(pts => (pts || []).forEach(p => allLabels.add(p.toUpperCase())));
-      if (orcamentoPorPontoMap?.keys) {
-        for (const k of orcamentoPorPontoMap.keys()) {
-          allLabels.add(k.toUpperCase());
-        }
-      }
-      if (allLabels.size === 0) allLabels.add('P1');
-
-      allLabels.forEach(pLabelUpper => {
-        if (!pLabelUpper) return;
-        const budgetItems = orcamentoPorPontoMap?.get ? orcamentoPorPontoMap.get(pLabelUpper) : undefined;
-        const existingItems = currentPrevMap[pLabelUpper] || [];
-        const existingSelectedMap = new Map(existingItems.map(i => [i.servico || i.id, i.selected]));
-
-        if (budgetItems && Array.isArray(budgetItems) && budgetItems.length > 0) {
-          nextMap[pLabelUpper] = budgetItems.map((bItem, bIdx) => {
-            const serv = bItem.servicoPrevisto || 'SERVIÇO';
-            const wasSelected = existingSelectedMap.has(serv) ? existingSelectedMap.get(serv)! : false;
-            return {
-              id: `${pLabelUpper}-${serv.replace(/\s+/g, '_')}-${bIdx}`,
-              ponto: pLabelUpper,
-              servico: serv,
-              codigoMaterial: bItem.codigo,
-              descricaoMaterial: bItem.descricao,
-              qtdOrcadaPonto: bItem.quantidade || 1,
-              etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(serv),
-              quantidade: bItem.quantidade || 1,
-              tempoEstimadoMinutos: bItem.tempoMinutos || 15,
-              valorEstimado: bItem.valorEstimado || 0,
-              selected: wasSelected,
-              isBudgeted: true,
-            };
-          });
-        } else if (existingItems.length > 0) {
-          nextMap[pLabelUpper] = existingItems;
-        } else {
-          // Sem orçamento — cria linha em branco com fallback
-          const fallback = (Array.isArray(filteredServicosBase) && filteredServicosBase.length > 0)
-            ? filteredServicosBase[0]
-            : (Array.isArray(servicosBase) && servicosBase.length > 0
-              ? servicosBase[0]
-              : { codigo: 'SIR0000001', servico: 'SERVIÇO PADRÃO', tempoMinutosPorUnidade: 60, valorPorUnidade: 100 });
-          nextMap[pLabelUpper] = [{
-            id: `${pLabelUpper}-default-${Date.now()}`,
-            ponto: pLabelUpper,
-            servico: fallback.servico || 'SERVIÇO PADRÃO',
-            codigoMaterial: fallback.codigo,
-            qtdOrcadaPonto: 1,
-            etapaPrevista: inferEtapaFromServico(fallback.servico || ''),
-            quantidade: 1,
-            tempoEstimadoMinutos: fallback.tempoMinutosPorUnidade || 60,
-            valorEstimado: fallback.valorPorUnidade || 100,
-            selected: false,
-            isBudgeted: false,
-          }];
-        }
-      });
-
-      return nextMap;
-    });
-  }, [pontosDisponiveisDoProjeto, diasPontosMap, orcamentoPorPontoMap, selectedObra, servicosBase, filteredServicosBase]);
 
   // Toggle multi-select status filter
   const handleToggleStatus = (statusName: string) => {
@@ -1385,8 +1370,8 @@ export const PcpPlanejamentoView = () => {
     const servicoName = nextAvailableServico?.servico || 'SERVIÇO PADRÃO';
 
     const newActivity: PcpPontoItem = {
-      id: `${pontoLabelTarget}-manual-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      ponto: pontoLabelTarget,
+      id: `${diaId}-${pUpper}-manual-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      ponto: pUpper,
       servico: servicoName,
       codigoMaterial: nextAvailableServico?.codigo,
       qtdOrcadaPonto: 1, // Coluna F: Qtd Prevista
@@ -1400,26 +1385,34 @@ export const PcpPlanejamentoView = () => {
       isBudgeted: false, // Inserida pelo botão -> dá acesso à lista completa
     };
 
-    setPontosGroupedMap(prev => {
-      const prevGroup = prev || {};
-      const currentList = Array.isArray(prevGroup[pontoLabelTarget]) ? [...prevGroup[pontoLabelTarget]] : [];
+    setDiasPontosGroupedMap(prev => {
+      const prevAll = prev || {};
+      const prevDayMap = prevAll[diaId] || {};
+      const currentList = prevDayMap[pUpper] || getItemsDoPontoNoDia(diaId, pUpper);
       return {
-        ...prevGroup,
-        [pontoLabelTarget]: [...currentList, newActivity]
+        ...prevAll,
+        [diaId]: {
+          ...prevDayMap,
+          [pUpper]: [...currentList, newActivity]
+        }
       };
     });
   };
 
-  // Handle updating an activity row in a specific Ponto Card
-  const handleUpdateAtividade = (pontoLabelTarget: string, itemIdOrIndex: string | number, field: keyof PcpPontoItem, value: any) => {
-    setPontosGroupedMap(prev => {
-      const prevGroup = prev || {};
-      const items = Array.isArray(prevGroup[pontoLabelTarget]) ? [...prevGroup[pontoLabelTarget]] : [];
+  // Handle updating an activity row in a specific Ponto Card for a specific day
+  const handleUpdateAtividade = (diaId: string, pontoLabelTarget: string, itemIdOrIndex: string | number, field: keyof PcpPontoItem, value: any) => {
+    const pUpper = (pontoLabelTarget || '').toUpperCase();
+    setDiasPontosGroupedMap(prev => {
+      const prevAll = prev || {};
+      const prevDayMap = prevAll[diaId] || {};
+      const currentList = prevDayMap[pUpper] || getItemsDoPontoNoDia(diaId, pUpper);
+      const items = [...currentList];
+
       const itemIndex = typeof itemIdOrIndex === 'number'
         ? itemIdOrIndex
         : items.findIndex(i => i.id === itemIdOrIndex);
 
-      if (itemIndex === -1 || !items[itemIndex]) return prevGroup;
+      if (itemIndex === -1 || !items[itemIndex]) return prevAll;
 
       const target = { ...items[itemIndex] };
       const safeBase = Array.isArray(servicosBase) ? servicosBase : [];
@@ -1455,43 +1448,54 @@ export const PcpPlanejamentoView = () => {
 
       items[itemIndex] = target;
       return {
-        ...prevGroup,
-        [pontoLabelTarget]: items
+        ...prevAll,
+        [diaId]: {
+          ...prevDayMap,
+          [pUpper]: items
+        }
       };
     });
   };
 
-  // Handle removing an activity row from a Ponto Card
-  const handleRemoveAtividade = (pontoLabelTarget: string, itemIdOrIndex: string | number) => {
-    setPontosGroupedMap(prev => {
-      const items = prev[pontoLabelTarget] ? [...prev[pontoLabelTarget]] : [];
+  // Handle removing an activity row from a Ponto Card in a specific day
+  const handleRemoveAtividade = (diaId: string, pontoLabelTarget: string, itemIdOrIndex: string | number) => {
+    const pUpper = (pontoLabelTarget || '').toUpperCase();
+    setDiasPontosGroupedMap(prev => {
+      const prevAll = prev || {};
+      const prevDayMap = prevAll[diaId] || {};
+      const currentList = prevDayMap[pUpper] || getItemsDoPontoNoDia(diaId, pUpper);
+      const items = [...currentList];
+
       const itemIndex = typeof itemIdOrIndex === 'number'
         ? itemIdOrIndex
         : items.findIndex(i => i.id === itemIdOrIndex);
 
-      if (itemIndex === -1) return prev;
+      if (itemIndex === -1) return prevAll;
       items.splice(itemIndex, 1);
       return {
-        ...prev,
-        [pontoLabelTarget]: items
+        ...prevAll,
+        [diaId]: {
+          ...prevDayMap,
+          [pUpper]: items
+        }
       };
     });
   };
-
-
 
   // Flattened list of ALL items across all selected point cards in the ACTIVE DAY
   const allPontosListFlat = useMemo(() => {
     const list: PcpPontoItem[] = [];
     const labels = Array.isArray(selectedPontosLabels) ? selectedPontosLabels : [];
-    const grouped = pontosGroupedMap || {};
+    const dayId = activeDia?.id;
+    if (!dayId) return list;
     labels.forEach(pLabel => {
-      if (pLabel && Array.isArray(grouped[pLabel])) {
-        list.push(...grouped[pLabel]);
+      const items = getItemsDoPontoNoDia(dayId, pLabel);
+      if (Array.isArray(items)) {
+        list.push(...items);
       }
     });
     return list;
-  }, [selectedPontosLabels, pontosGroupedMap]);
+  }, [selectedPontosLabels, activeDia?.id, getItemsDoPontoNoDia]);
 
   // Selected items flat for totals calculation
   const selectedItemsFlat = useMemo(() => {
@@ -1588,8 +1592,9 @@ export const PcpPlanejamentoView = () => {
 
     const itensDoDia: PcpPontoItem[] = [];
     pontosDoDia.forEach((p: string) => {
-      if (pontosGroupedMap[p]) {
-        itensDoDia.push(...pontosGroupedMap[p]);
+      const items = getItemsDoPontoNoDia(dia.id, p);
+      if (Array.isArray(items)) {
+        itensDoDia.push(...items);
       }
     });
 
@@ -1660,8 +1665,9 @@ export const PcpPlanejamentoView = () => {
       for (const d of diasComPontos) {
         const itensDoDia: PcpPontoItem[] = [];
         d.pontos.forEach(p => {
-          if (pontosGroupedMap[p]) {
-            itensDoDia.push(...pontosGroupedMap[p]);
+          const items = getItemsDoPontoNoDia(d.id, p);
+          if (Array.isArray(items)) {
+            itensDoDia.push(...items);
           }
         });
 
@@ -1802,7 +1808,7 @@ export const PcpPlanejamentoView = () => {
     const nextDiasEtapasMap = { ...diasEtapasMap };
     const nextDiasPesMap = { ...diasPesMap };
     const nextDiasTemposCompMap = { ...diasTemposCompMap };
-    const nextPontosGroupedMap = { ...pontosGroupedMap };
+    const nextDiasPontosGroupedMap = { ...diasPontosGroupedMap };
 
     plansToLoad.forEach(plan => {
       // Localiza o dia em diasProgramados pela dataCompleta (ex: 21/09/2026) ou dataStr
@@ -1831,6 +1837,9 @@ export const PcpPlanejamentoView = () => {
           tempoSaidaBaseMin: plan.tempoSaidaBaseMin || tempoSaidaBasePadrao,
           tempoSegurancaMin: plan.tempoSegurancaMin || tempoSegurancaPadrao,
         };
+        if (!nextDiasPontosGroupedMap[dayId]) {
+          nextDiasPontosGroupedMap[dayId] = {};
+        }
       }
 
       // Popula atividades por ponto e marca selected = true
@@ -1851,7 +1860,7 @@ export const PcpPlanejamentoView = () => {
           const valorEst = vUnit > 0 ? vUnit * a.quantidade : (matchedBudget?.valorEstimado || 0);
 
           combinedItems.push({
-            id: `loaded-${pUpper}-${aIdx}`,
+            id: `loaded-${dayId || 'day'}-${pUpper}-${aIdx}`,
             ponto: pUpper,
             servico: a.servico,
             codigoMaterial: matchedBudget?.codigo || '',
@@ -1874,7 +1883,7 @@ export const PcpPlanejamentoView = () => {
           );
           if (!alreadyAdded) {
             combinedItems.push({
-              id: `${pUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
+              id: `${dayId || 'day'}-${pUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
               ponto: pUpper,
               servico: bItem.servicoPrevisto || 'SERVIÇO',
               codigoMaterial: bItem.codigo,
@@ -1892,7 +1901,10 @@ export const PcpPlanejamentoView = () => {
           }
         });
 
-        nextPontosGroupedMap[pUpper] = combinedItems;
+        if (dayId) {
+          if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
+          nextDiasPontosGroupedMap[dayId][pUpper] = combinedItems;
+        }
       });
     });
 
@@ -1900,7 +1912,7 @@ export const PcpPlanejamentoView = () => {
     setDiasEtapasMap(nextDiasEtapasMap);
     setDiasPesMap(nextDiasPesMap);
     setDiasTemposCompMap(nextDiasTemposCompMap);
-    setPontosGroupedMap(nextPontosGroupedMap);
+    setDiasPontosGroupedMap(nextDiasPontosGroupedMap);
 
     if (firstPlan.metaEquipeValor && firstPlan.metaEquipeValor > 0) {
       setMetaEquipeInput(firstPlan.metaEquipeValor);
@@ -3186,7 +3198,7 @@ export const PcpPlanejamentoView = () => {
                 <TableBody>
                   {diasProgramados.map(d => {
                     const isActive = d.id === activeDia?.id;
-                    const itensDoDia = d.pontos.flatMap(p => (pontosGroupedMap[p] || []).filter(item => item.selected));
+                    const itensDoDia = d.pontos.flatMap(p => getItemsDoPontoNoDia(d.id, p).filter(item => item.selected));
                     const tempoAtiv = itensDoDia.reduce((acc, item) => acc + (item.tempoEstimadoMinutos || 0), 0);
                     const tempoSaidaBaseDia = diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
                     const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
@@ -3722,26 +3734,7 @@ export const PcpPlanejamentoView = () => {
                     <div className="space-y-4 pt-1">
                       {pontosDoDia.map(pLabel => {
                         const pUpper = (pLabel || '').toUpperCase();
-                        let itemsDoPontoRaw = pontosGroupedMap[pUpper] || pontosGroupedMap[pLabel] || [];
-                        if (itemsDoPontoRaw.length === 0 && orcamentoPorPontoMap?.get) {
-                          const budget = orcamentoPorPontoMap.get(pUpper);
-                          if (budget && budget.length > 0) {
-                            itemsDoPontoRaw = budget.map((bItem, bIdx) => ({
-                              id: `${pUpper}-${(bItem.servicoPrevisto || '').replace(/\s+/g, '_')}-${bIdx}`,
-                              ponto: pUpper,
-                              servico: bItem.servicoPrevisto || 'SERVIÇO',
-                              codigoMaterial: bItem.codigo,
-                              descricaoMaterial: bItem.descricao,
-                              qtdOrcadaPonto: bItem.quantidade || 1,
-                              etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
-                              quantidade: bItem.quantidade || 1,
-                              tempoEstimadoMinutos: bItem.tempoMinutos || 15,
-                              valorEstimado: bItem.valorEstimado || 0,
-                              selected: false,
-                              isBudgeted: true,
-                            }));
-                          }
-                        }
+                        let itemsDoPontoRaw = getItemsDoPontoNoDia(dia.id, pUpper);
                         const itemsDoPonto = itemsDoPontoRaw.filter(i => {
                           const servUpper = (i.servico || '').toUpperCase();
                           const etapaUpper = (i.etapaPrevista || '').toUpperCase();
@@ -3789,7 +3782,7 @@ export const PcpPlanejamentoView = () => {
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                onClick={() => handleAddAtividadeNoPonto(pLabel)}
+                                onClick={() => handleAddAtividadeNoPonto(dia.id, pLabel)}
                                 className="h-7 gap-1 text-xs font-semibold"
                               >
                                 <Plus className="w-3.5 h-3.5" /> Adicionar Atividade em {pLabel}
@@ -3807,10 +3800,18 @@ export const PcpPlanejamentoView = () => {
                                           onCheckedChange={c => {
                                             const val = Boolean(c);
                                             const idsInFilter = new Set(itemsDoPonto.map(i => i.id));
-                                            setPontosGroupedMap(prev => ({
-                                              ...prev,
-                                              [pLabel]: (prev[pLabel] || []).map(item => idsInFilter.has(item.id) ? { ...item, selected: val } : item)
-                                            }));
+                                            setDiasPontosGroupedMap(prev => {
+                                              const prevAll = prev || {};
+                                              const prevDay = prevAll[dia.id] || {};
+                                              const currentList = prevDay[pUpper] || getItemsDoPontoNoDia(dia.id, pUpper);
+                                              return {
+                                                ...prevAll,
+                                                [dia.id]: {
+                                                  ...prevDay,
+                                                  [pUpper]: currentList.map(item => idsInFilter.has(item.id) ? { ...item, selected: val } : item)
+                                                }
+                                              };
+                                            });
                                           }}
                                         />
                                       </TableHead>
@@ -3846,7 +3847,7 @@ export const PcpPlanejamentoView = () => {
                                           <TableCell className="p-2 text-center">
                                             <Checkbox
                                               checked={item.selected}
-                                              onCheckedChange={c => handleUpdateAtividade(pLabel, item.id, 'selected', Boolean(c))}
+                                              onCheckedChange={c => handleUpdateAtividade(dia.id, pLabel, item.id, 'selected', Boolean(c))}
                                             />
                                           </TableCell>
 
@@ -3858,7 +3859,7 @@ export const PcpPlanejamentoView = () => {
                                               ) : (
                                                 <SearchableServicoSelect
                                                   value={item.servico}
-                                                  onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'servico', val)}
+                                                  onValueChange={val => handleUpdateAtividade(dia.id, pLabel, item.id, 'servico', val)}
                                                   options={filteredServicosBase}
                                                 />
                                               )}
@@ -3874,7 +3875,7 @@ export const PcpPlanejamentoView = () => {
                                           <TableCell className="p-2">
                                             <Select
                                               value={item.etapaPrevista}
-                                              onValueChange={val => handleUpdateAtividade(pLabel, item.id, 'etapaPrevista', val)}
+                                              onValueChange={val => handleUpdateAtividade(dia.id, pLabel, item.id, 'etapaPrevista', val)}
                                             >
                                               <SelectTrigger className="h-7 text-[11px] font-medium bg-background px-2">
                                                 <SelectValue placeholder="Selecione a Etapa" />
@@ -3895,7 +3896,7 @@ export const PcpPlanejamentoView = () => {
                                               step="1"
                                               min="1"
                                               value={item.quantidade}
-                                              onChange={e => handleUpdateAtividade(pLabel, item.id, 'quantidade', e.target.value)}
+                                              onChange={e => handleUpdateAtividade(dia.id, pLabel, item.id, 'quantidade', e.target.value)}
                                               className="h-8 text-xs text-center font-mono font-bold w-16"
                                             />
                                           </TableCell>
@@ -3916,7 +3917,7 @@ export const PcpPlanejamentoView = () => {
                                             <Button
                                               variant="ghost"
                                               size="icon"
-                                              onClick={() => handleRemoveAtividade(pLabel, item.id)}
+                                              onClick={() => handleRemoveAtividade(dia.id, pLabel, item.id)}
                                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                             >
                                               <Trash2 className="w-3.5 h-3.5" />
