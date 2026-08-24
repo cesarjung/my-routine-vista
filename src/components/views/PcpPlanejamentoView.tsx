@@ -365,7 +365,7 @@ const SearchableServicoSelect = ({
 export const PcpPlanejamentoView = () => {
   // State
   // Selected Obra & Filters (Filtros da Carteira)
-  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_shared_selected_obra_v4', '');
+  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_selected_obra_v6', '');
   const [searchObra, setSearchObra] = useSessionState<string>('pcp_shared_search', '');
   const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_shared_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState<boolean>(false);
@@ -405,7 +405,10 @@ export const PcpPlanejamentoView = () => {
     servicosBase
   } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId);
 
-  const selectedObra = useMemo(() => obras.find(o => o.projeto === selectedObraId) || null, [obras, selectedObraId]);
+  const selectedObra = useMemo(() => {
+    if (!selectedObraId || selectedObraId.trim() === '') return null;
+    return obras.find(o => o.projeto === selectedObraId) || null;
+  }, [obras, selectedObraId]);
 
   // Date Range state: Data Início e Data Fim da Programação
   const [dataInicio, setDataInicio] = useSessionState<string>('pcp_shared_data_inicio', format(new Date(), 'yyyy-MM-dd'));
@@ -2013,12 +2016,15 @@ export const PcpPlanejamentoView = () => {
           {/* Unidade */}
           <div className="flex flex-col gap-0.5 w-[140px] shrink-0">
             <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Unidade</span>
-            <Select value={selectedUnidadeId} onValueChange={handleUnidadeChange}>
+            <Select value={selectedUnidadeId || 'LIMPAR'} onValueChange={(val) => handleUnidadeChange(val === 'LIMPAR' ? '' : val)}>
               <SelectTrigger className="h-7 text-[11px] font-semibold bg-background px-2">
                 <Building2 className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
                 <SelectValue placeholder="Selecione Unidade..." />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="LIMPAR" className="text-xs font-semibold text-rose-600 dark:text-rose-400 border-b border-border mb-1 cursor-pointer">
+                  ✕ Limpar Unidade
+                </SelectItem>
                 {UNIDADES_DISPONIVEIS.map(u => (
                   <SelectItem key={u.id} value={u.id} className="text-xs">
                     {u.name}
