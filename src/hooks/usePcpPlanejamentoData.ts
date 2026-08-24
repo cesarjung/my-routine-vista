@@ -334,7 +334,7 @@ export const ALL_STATUSES = [
 export const DEFAULT_SELECTED_STATUSES = ALL_STATUSES.filter(s => s !== 'CONCLUÍDA');
 
 export const usePcpPlanejamentoData = (
-  selectedUnidadeId: string = '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI',
+  selectedUnidadeId: string = '',
   selectedProjetoCode?: string
 ) => {
   const queryClient = useQueryClient();
@@ -343,6 +343,7 @@ export const usePcpPlanejamentoData = (
   const rawCacheQuery = useQuery({
     queryKey: ['pcp-planejamento-cache', selectedUnidadeId],
     queryFn: async () => {
+      if (!selectedUnidadeId) return null;
       const { data, error } = await supabase
         .from('planejamento_cache')
         .select('*')
@@ -352,6 +353,7 @@ export const usePcpPlanejamentoData = (
       if (error) throw error;
       return data;
     },
+    enabled: Boolean(selectedUnidadeId),
     staleTime: 1000 * 60 * 5,
   });
 

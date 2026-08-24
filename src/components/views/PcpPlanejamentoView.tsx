@@ -375,7 +375,7 @@ export const PcpPlanejamentoView = () => {
   const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_shared_prioridade', 'TODAS');
   const [selectedDonoFilter, setSelectedDonoFilter] = useSessionState<string>('pcp_shared_dono', 'TODOS');
   const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useSessionState<string>('pcp_shared_supervisor', 'TODOS');
-  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_shared_unidade', '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'); // Bom Jesus da Lapa
+  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_shared_unidade', '');
   const [newCustomPontoInput, setNewCustomPontoInput] = useState<string>('');
 
   // Alojamentos
@@ -928,19 +928,24 @@ export const PcpPlanejamentoView = () => {
     }
   }, [statusesCarteira]);
 
-  // Reseta / correlaciona todos os filtros da barra superior quando a Unidade mudar
+  const prevUnidadeRef = useRef<string | null>(null);
+
+  // Reseta / correlaciona todos os filtros da barra superior APENAS quando o usuário efetivamente trocar de Unidade
   useEffect(() => {
-    setSelectedSituacao('TODAS');
-    setSelectedMesFilter('TODOS');
-    setSelectedMunicipioFilter('TODOS');
-    setSelectedPrioridadeFilter('TODAS');
-    setSelectedDonoFilter('TODOS');
-    setSelectedSupervisorFilter('TODOS');
-    setSearchObra('');
-    if (statusesCarteira.length > 0) {
-      setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+    if (prevUnidadeRef.current !== null && prevUnidadeRef.current !== selectedUnidadeId) {
+      setSelectedSituacao('TODAS');
+      setSelectedMesFilter('TODOS');
+      setSelectedMunicipioFilter('TODOS');
+      setSelectedPrioridadeFilter('TODAS');
+      setSelectedDonoFilter('TODOS');
+      setSelectedSupervisorFilter('TODOS');
+      setSearchObra('');
+      if (statusesCarteira.length > 0) {
+        setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+      }
     }
-  }, [selectedUnidadeId]);
+    prevUnidadeRef.current = selectedUnidadeId;
+  }, [selectedUnidadeId, statusesCarteira]);
 
   // Sincroniza Obra Selecionada com a Carteira da Unidade
   useEffect(() => {
@@ -1996,7 +2001,7 @@ export const PcpPlanejamentoView = () => {
             <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
               <SelectTrigger className="h-7 text-[11px] font-semibold bg-background px-2">
                 <Building2 className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
-                <SelectValue placeholder="Unidade" />
+                <SelectValue placeholder="Selecione Unidade..." />
               </SelectTrigger>
               <SelectContent>
                 {UNIDADES_DISPONIVEIS.map(u => (
@@ -2258,8 +2263,8 @@ export const PcpPlanejamentoView = () => {
                   <Loader2 className="w-4 h-4 animate-spin" /> Carregando Carteira_Planejador...
                 </div>
               ) : filteredObras.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground text-xs">
-                  Nenhuma obra encontrada para os filtros selecionados.
+                <div className="text-center py-8 text-muted-foreground text-xs">
+                  <p>{!selectedUnidadeId ? 'Selecione uma Unidade no filtro acima para carregar a Carteira de Obras.' : 'Nenhuma obra encontrada para os filtros aplicados.'}</p>
                 </div>
               ) : (
                 filteredObras.map(o => {
