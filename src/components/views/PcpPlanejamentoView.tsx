@@ -1385,8 +1385,8 @@ export const PcpPlanejamentoView = () => {
     }
 
     const etapasDoDia = (diasEtapasMap[dia.id] && diasEtapasMap[dia.id].length > 0)
-      ? diasEtapasMap[dia.id].join(', ')
-      : Array.from(new Set(itensSelecionados.map(i => i.etapaPrevista).filter(Boolean))).join(', ');
+      ? diasEtapasMap[dia.id].join('/')
+      : (selectedObra?.etapa || 'IMPLANTAÇÃO');
 
     const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
     const tempoSaidaBaseDia = diasTemposCompMap[dia.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
@@ -1440,8 +1440,8 @@ export const PcpPlanejamentoView = () => {
         if (itensDoDia.length === 0) continue;
 
         const etapasDoDia = (diasEtapasMap[d.id] && diasEtapasMap[d.id].length > 0)
-          ? diasEtapasMap[d.id].join(', ')
-          : Array.from(new Set(itensDoDia.filter(i => i.selected).map(i => i.etapaPrevista).filter(Boolean))).join(', ');
+          ? diasEtapasMap[d.id].join('/')
+          : (selectedObra?.etapa || 'IMPLANTAÇÃO');
 
         const tempoSaidaBaseDia = diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
         const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
@@ -3021,7 +3021,7 @@ export const PcpPlanejamentoView = () => {
                                   ? 'Todas as Etapas (Desmarcado)'
                                   : etapasDoDia.length === etapasDisponiveis.length
                                   ? 'Todas as Etapas'
-                                  : etapasDoDia.join(', ')}
+                                  : etapasDoDia.join('/')}
                               </span>
                               <ChevronDown className="w-3 h-3 ml-1 opacity-60 shrink-0" />
                             </Button>
@@ -3261,8 +3261,8 @@ export const PcpPlanejamentoView = () => {
                                       <TableHead className="w-[85px] text-center" title="Coluna F: Quantidade Prevista no Orçamento">
                                         Qtd Prev. (Col F)
                                       </TableHead>
-                                      <TableHead className="w-[140px]" title="Coluna M: Etapa Prevista para esta atividade">
-                                        Etapa (Col M)
+                                      <TableHead className="w-[140px]" title="Coluna BY: Etapa da Atividade referente à base do pré-fechamento">
+                                        Etapa (Col BY)
                                       </TableHead>
                                       <TableHead className="w-[85px] text-center">Qtd Prog.</TableHead>
                                       <TableHead className="w-[95px]">Tempo</TableHead>

@@ -802,11 +802,15 @@ export const usePcpPlanejamentoData = (
       const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === form.unidadeId) || UNIDADES_DISPONIVEIS[0];
       const nomeUnidadePlanejadaUpper = unidadeObj.name.toUpperCase(); // Ex: "BOM JESUS DA LAPA"
 
-      // Clean etapa string (strip leading numbers if present, e.g. "1 - IMPLANTAÇÃO" -> "IMPLANTAÇÃO")
+      // Clean etapa geral string (Coluna M - Etapas do Topo do Dia)
+      // Pode ser multiseleção separada por '/' (ex: "IMPLANTAÇÃO/LINHA VIVA")
       let cleanEtapaGeral = (form.etapa || 'IMPLANTAÇÃO').trim();
-      if (/^\d+\s*-\s*/.test(cleanEtapaGeral)) {
-        cleanEtapaGeral = cleanEtapaGeral.replace(/^\d+\s*-\s*/, '').trim();
-      }
+      cleanEtapaGeral = cleanEtapaGeral
+        .split(/[,/]/)
+        .map(e => e.trim().replace(/^\d+\s*-\s*/, '').trim())
+        .filter(Boolean)
+        .join('/');
+      if (!cleanEtapaGeral) cleanEtapaGeral = 'IMPLANTAÇÃO';
 
       // 1. Format compiled string (Col O) matching Prog_TPM Apps Script macro:
       let tempoAtividadesMin = 0;
@@ -864,7 +868,7 @@ export const usePcpPlanejamentoData = (
       const pontosUnicos = Array.from(new Set(selectedPontos.map(p => p.ponto))).sort().join(', ');
       newRow[8] = pontosUnicos;                               // Col I: Resumo de Pontos ("P1, P2")
       newRow[10] = form.obra.municipio;                       // Col K: Município da Obra
-      newRow[12] = cleanEtapaGeral;                           // Col M: Etapa Prevista (sem números na frente)
+      newRow[12] = cleanEtapaGeral;                           // Col M: Etapa(s) Prevista(s) do Topo do Dia separadas por / (ex: IMPLANTAÇÃO/LINHA VIVA)
       newRow[14] = compiledStr;                               // Col O: Compilado de atividades por ponto
 
       // Categorias de Serviços nas Colunas R a AG (17 a 32)
@@ -917,6 +921,16 @@ export const usePcpPlanejamentoData = (
       newRow[67] = `${String(hTot).padStart(2, '0')}:${String(mTot).padStart(2, '0')}:00`; // Col BP (67): Tempo Total Geral Somado
 
       newRow[68] = pctMetaFormatted;                          // Col BQ (68): % Previsto da Meta
+
+      // Coluna BY (76): Etapas referentes às atividades do ponto da base de pré-fechamento separadas por / (ex: Escavação/Implantação)
+      const etapasAtividadesUnicas = Array.from(
+        new Set(
+          selectedPontos
+            .map(p => (p.etapaPrevista || '').replace(/^\d+\s*-\s*/, '').trim())
+            .filter(Boolean)
+        )
+      );
+      newRow[76] = etapasAtividadesUnicas.join('/');          // Col BY (76): Etapa(s) das atividades selecionadas (base pré-fechamento)
 
       // Generate filename with pattern UNIDADE_ddmmhhmm.csv (ex: BJL_16081403.csv)
       const csvFilename = generateCsvFilename(form.unidadeId);
