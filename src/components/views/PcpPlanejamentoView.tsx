@@ -40,7 +40,8 @@ import {
   ChevronsUpDown,
   Home,
   SlidersHorizontal,
-  RotateCcw
+  RotateCcw,
+  Eraser
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
@@ -1887,6 +1888,21 @@ export const PcpPlanejamentoView = () => {
     toast.success(`${plansToLoad.length} planejamento(s) carregado(s) com sucesso no fluxo inverso!`);
   };
 
+  // Handler para limpar todos os planejamentos e pontos em tela
+  const handleLimparTudoEmTela = () => {
+    if (!window.confirm('Deseja realmente limpar todos os pontos, atividades e planejamentos montados na tela?')) {
+      return;
+    }
+    setDiasPontosMap({});
+    setPontosGroupedMap({});
+    setDiasReprogramarMap({});
+    setDiasMotivoReprogramarMap({});
+    setDiasPesMap({});
+    setDiasEtapasMap({});
+    setDiasCustomAlojMap({});
+    toast.success('Planejamento e pontos em tela limpos com sucesso!');
+  };
+
   return (
     <div className="flex flex-col gap-3.5 p-3 sm:p-4 w-full max-w-[1750px] mx-auto min-h-screen bg-background" style={{ zoom: zoomLevel } as React.CSSProperties}>
       {/* Header Banner */}
@@ -1908,7 +1924,7 @@ export const PcpPlanejamentoView = () => {
           </div>
         </div>
 
-        {/* Controles: Carregar Planejamento Existente + Sincronizar Sheets + Zoom + Atualizar */}
+        {/* Controles: Carregar Planejamento Existente + Sincronizar Sheets + Limpar Tela + Zoom + Atualizar */}
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Botão Carregar Planejamento Existente (Fluxo Inverso) */}
           <Button
@@ -1929,6 +1945,16 @@ export const PcpPlanejamentoView = () => {
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
             {isSyncingSheets ? 'Sincronizando...' : 'Sincronizar Sheets'}
+          </Button>
+
+          {/* Botão Limpar Planejamento em Tela */}
+          <Button
+            onClick={handleLimparTudoEmTela}
+            variant="outline"
+            className="h-8 gap-1.5 text-xs font-semibold border-rose-400/40 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800 shadow-2xs"
+            title="Limpar todos os pontos, atividades e planejamentos montados na tela"
+          >
+            <Eraser className="w-3.5 h-3.5" /> Limpar Planejamento em Tela
           </Button>
 
           {/* Zoom Control */}
