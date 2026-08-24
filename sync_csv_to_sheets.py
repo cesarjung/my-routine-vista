@@ -115,12 +115,8 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath):
             logging.warning("CSV sem linhas de dados.")
             return False
 
-        row_cells = lines[1].split(';')
-
-        # Re-build full 78-column array
-        full_row = [''] * 78
-        for idx, val in enumerate(row_cells[:78]):
-            full_row[idx] = val.strip().strip('"')
+        # Process all data lines from the CSV
+        data_lines = lines[1:]
 
         # Find first empty row starting at line 6 (index 5) by checking Column B (Data)
         col_b_values = worksheet.col_values(2)
@@ -135,28 +131,32 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath):
         if target_row_idx is None:
             target_row_idx = len(col_b_values) + 1
 
-        logging.info(f"  [SHEETS] Inserindo dados na Plan_Principal (Linha {target_row_idx}) preservando listas suspensas e caixas de seleção...")
+        logging.info(f"  [SHEETS] Inserindo {len(data_lines)} linha(s) a partir da Linha {target_row_idx} preservando listas suspensas e validações...")
 
         # APENAS ATUALIZA AS CÉLULAS QUE POSSUEM DADOS!
-        # Células vazias NÃO SÃO SOBREPOSTAS para preservar todos os botões de lista suspensa, caixas de seleção e validações pré-existentes.
+        # Células vazias NUNCA são enviadas para preservar 100% dos botões de lista suspensa, caixas de seleção e fórmulas pré-existentes.
         cell_updates = []
-        for c_idx, val in enumerate(full_row):
-            val_str = str(val if val is not None else '').strip()
-            if val_str:
-                col_letter = chr(65+c_idx) if c_idx < 26 else (chr(65+c_idx//26 - 1) + chr(65+c_idx%26))
-                cell_range = f"{col_letter}{target_row_idx}"
-                cell_updates.append({
-                    'range': cell_range,
-                    'values': [[val_str]]
-                })
+        for r_offset, line in enumerate(data_lines):
+            current_row = target_row_idx + r_offset
+            row_cells = line.split(';')
+
+            for c_idx, val in enumerate(row_cells[:78]):
+                val_str = str(val if val is not None else '').strip().strip('"')
+                if val_str:
+                    col_letter = chr(65+c_idx) if c_idx < 26 else (chr(65+c_idx//26 - 1) + chr(65+c_idx%26))
+                    cell_range = f"{col_letter}{current_row}"
+                    cell_updates.append({
+                        'range': cell_range,
+                        'values': [[val_str]]
+                    })
 
         if cell_updates:
-            worksheet.batch_update(cell_updates)
-            logging.info(f"  [SHEETS OK] {len(cell_updates)} células com dados atualizadas na Linha {target_row_idx} da Plan_Principal (listas suspensas preservadas)!")
+            worksheet.batch_update(cell_updates, value_input_option='USER_ENTERED')
+            logging.info(f"  [SHEETS OK] {len(cell_updates)} células com dados atualizadas a partir da Linha {target_row_idx} da Plan_Principal (listas suspensas preservadas)!")
+            return True
         else:
             logging.warning("Nenhuma célula com dados para atualizar.")
-
-        return True
+            return False
 
     except Exception as e:
         err_msg = str(e)
