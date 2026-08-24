@@ -1401,26 +1401,26 @@ export const PcpPlanejamentoView = () => {
     const tempoSaidaBaseDia = diasTemposCompMap[dia.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
     const tempoSegurancaDia = diasTemposCompMap[dia.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
 
-    for (const eq of equipesToSend) {
-      await salvarProgramacao.mutateAsync({
-        unidadeId: selectedUnidadeId,
-        dataProgramacao: dia.dataCompleta,
-        dateObj: dia.dayDate,
-        supervisor,
-        equipe: eq,
-        etapa: etapasDoDia,
-        obra: selectedObra,
-        pontos: itensDoDia,
-        tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
-        tempoSaidaBaseMinutos: tempoSaidaBaseDia,
-        tempoSegurancaMinutos: tempoSegurancaDia,
-        metaEquipeValor: metaEquipeInput,
-      });
-    }
-    toast.success(`Programação de ${dia.nomeDia} enviada para ${equipesToSend.length} equipe(s)!`);
+    const forms: PcpProgramacaoForm[] = equipesToSend.map(eq => ({
+      unidadeId: selectedUnidadeId,
+      dataProgramacao: dia.dataCompleta,
+      dateObj: dia.dayDate,
+      supervisor,
+      equipe: eq,
+      etapa: etapasDoDia,
+      obra: selectedObra,
+      pontos: itensDoDia,
+      tempoDeslocamentoMinutos: dia.tempoTotalDeslocamentoMin,
+      tempoSaidaBaseMinutos: tempoSaidaBaseDia,
+      tempoSegurancaMinutos: tempoSegurancaDia,
+      metaEquipeValor: metaEquipeInput,
+    }));
+
+    await salvarProgramacao.mutateAsync(forms);
+    toast.success(`Programação de ${dia.nomeDia} enviada para ${equipesToSend.length} equipe(s) na Plan_Principal!`);
   };
 
-  // Handle submit ALL programmed days to Plan_Principal (gera uma linha por equipe por dia)
+  // Handle submit ALL programmed days to Plan_Principal (gera uma linha por equipe por dia em lote atômico)
   const [isSavingAll, setIsSavingAll] = useState(false);
   const handleEnviarTodosOsDias = async () => {
     if (!selectedObra) {
@@ -1435,6 +1435,7 @@ export const PcpPlanejamentoView = () => {
     }
 
     const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
+    const allForms: PcpProgramacaoForm[] = [];
 
     try {
       setIsSavingAll(true);
@@ -1456,7 +1457,7 @@ export const PcpPlanejamentoView = () => {
         const tempoSegurancaDia = diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao;
 
         for (const eq of equipesToSend) {
-          await salvarProgramacao.mutateAsync({
+          allForms.push({
             unidadeId: selectedUnidadeId,
             dataProgramacao: d.dataCompleta,
             dateObj: d.dayDate,
@@ -1472,7 +1473,13 @@ export const PcpPlanejamentoView = () => {
           });
         }
       }
-      alert(`Programação de todos os ${diasComPontos.length} dias enviada com sucesso para ${equipesToSend.length} equipe(s) na Plan_Principal!`);
+
+      if (allForms.length > 0) {
+        await salvarProgramacao.mutateAsync(allForms);
+        alert(`Programação de todos os ${diasComPontos.length} dias enviada com sucesso para ${equipesToSend.length} equipe(s) (${allForms.length} linhas geradas na Plan_Principal)!`);
+      } else {
+        alert('Nenhuma atividade marcada para os dias selecionados.');
+      }
     } catch (e) {
       console.error(e);
       alert('Ocorreu um erro ao salvar todos os dias.');

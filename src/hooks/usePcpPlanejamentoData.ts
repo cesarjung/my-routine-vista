@@ -792,7 +792,7 @@ export const usePcpPlanejamentoData = (
     });
   }, [orcamentoPorPontoMap, obras, selectedProjetoCode]);
 
-  // Function to generate filename timestamp format: UNIDADE_ddmmhhmm.csv (ex: BJL_16081403.csv)
+  // Function to generate filename timestamp format: UNIDADE_ddmmhhmmss.csv (ex: BJL_1608140345.csv)
   const generateCsvFilename = (unidadeId: string) => {
     const u = UNIDADES_DISPONIVEIS.find(x => x.id === unidadeId) || UNIDADES_DISPONIVEIS[0];
     const now = new Date();
@@ -800,162 +800,167 @@ export const usePcpPlanejamentoData = (
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const hh = String(now.getHours()).padStart(2, '0');
     const min = String(now.getMinutes()).padStart(2, '0');
-    return `${u.sigla}_${dd}${mm}${hh}${min}.csv`;
+    const sec = String(now.getSeconds()).padStart(2, '0');
+    return `${u.sigla}_${dd}${mm}${hh}${min}${sec}.csv`;
   };
 
-  // Helper to build CSV content string with exact 78 Plan_Principal headers
-  const buildCsvContent = (fullRow: any[]): string => {
-    const formattedValues = fullRow.map(val => {
-      const s = String(val ?? '');
-      if (s.includes(';') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
+  // Helper to build CSV content string with exact 78 Plan_Principal headers for single or multiple rows
+  const buildCsvContent = (rows: any[][]): string => {
+    const lines = rows.map(fullRow => {
+      return fullRow.map(val => {
+        const s = String(val ?? '');
+        if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      }).join(';');
     });
-    return EXACT_PLAN_PRINCIPAL_HEADERS.join(';') + '\n' + formattedValues.join(';');
+    return EXACT_PLAN_PRINCIPAL_HEADERS.join(';') + '\n' + lines.join('\n');
   };
 
-  // Mutation to append new daily schedule to Plan_Principal (with exact Plan_Principal headers, R-AG breakdown, and BL-BQ times)
-  const salvarProgramacao = useMutation({
-    mutationFn: async (form: PcpProgramacaoForm) => {
-      const selectedPontos = form.pontos.filter(p => p.selected);
-      if (selectedPontos.length === 0) {
-        throw new Error('Nenhuma atividade foi selecionada para envio.');
+  // Helper to generate a single 78-column row for a form item
+  const buildPlanPrincipalRow = (form: PcpProgramacaoForm): any[] => {
+    const selectedPontos = form.pontos.filter(p => p.selected);
+    if (selectedPontos.length === 0) {
+      throw new Error(`Nenhuma atividade selecionada para a equipe ${form.equipe} em ${form.dataProgramacao}.`);
+    }
+
+    const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === form.unidadeId) || UNIDADES_DISPONIVEIS[0];
+    const nomeUnidadePlanejadaUpper = unidadeObj.name.toUpperCase();
+
+    let cleanEtapaGeral = (form.etapa || 'IMPLANTAÇÃO').trim();
+    cleanEtapaGeral = cleanEtapaGeral
+      .split(/[,/]/)
+      .map(e => e.trim().replace(/^\d+\s*-\s*/, '').trim())
+      .filter(Boolean)
+      .join('/');
+    if (!cleanEtapaGeral) cleanEtapaGeral = 'IMPLANTAÇÃO';
+
+    let tempoAtividadesMin = 0;
+    let valorTotalAtividades = 0;
+    let qtdPostes = 0;
+    let qtdEstruturas = 0;
+    let qtdCabos = 0;
+    let qtdCavaRocha = 0;
+    let qtdTrafos = 0;
+
+    const blocos = selectedPontos.map(p => {
+      const h = Math.floor(p.tempoEstimadoMinutos / 60);
+      const m = p.tempoEstimadoMinutos % 60;
+      const hrPrevStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      const qtdStr = formatQuantityDisplay(p.quantidade);
+
+      tempoAtividadesMin += p.tempoEstimadoMinutos;
+      valorTotalAtividades += p.valorEstimado;
+
+      let cleanEtapaPonto = (p.etapaPrevista || cleanEtapaGeral).trim();
+      if (/^\d+\s*-\s*/.test(cleanEtapaPonto)) {
+        cleanEtapaPonto = cleanEtapaPonto.replace(/^\d+\s*-\s*/, '').trim();
       }
 
-      const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === form.unidadeId) || UNIDADES_DISPONIVEIS[0];
-      const nomeUnidadePlanejadaUpper = unidadeObj.name.toUpperCase(); // Ex: "BOM JESUS DA LAPA"
+      const s = (p.servico || '').toUpperCase();
+      if (s.includes('POSTE')) {
+        qtdPostes += p.quantidade;
+      } else if (s.includes('ROCHA') || s.includes('CAVA EM ROCHA')) {
+        qtdCavaRocha += p.quantidade;
+      } else if (s.includes('CABO') || s.includes('FIO') || s.includes('CONDUTOR') || s.includes('MULTIPLEX')) {
+        qtdCabos += p.quantidade;
+      } else if (s.includes('TRAFO') || s.includes('TRANSFORMADOR') || s.includes('RELIGADOR')) {
+        qtdTrafos += p.quantidade;
+      } else {
+        qtdEstruturas += p.quantidade;
+      }
 
-      // Clean etapa geral string (Coluna M - Etapas do Topo do Dia)
-      // Pode ser multiseleção separada por '/' (ex: "IMPLANTAÇÃO/LINHA VIVA")
-      let cleanEtapaGeral = (form.etapa || 'IMPLANTAÇÃO').trim();
-      cleanEtapaGeral = cleanEtapaGeral
-        .split(/[,/]/)
-        .map(e => e.trim().replace(/^\d+\s*-\s*/, '').trim())
-        .filter(Boolean)
-        .join('/');
-      if (!cleanEtapaGeral) cleanEtapaGeral = 'IMPLANTAÇÃO';
+      return `${p.ponto} - [${cleanEtapaPonto}] ${p.servico} - Qtd: ${qtdStr} - Hr. Prev: ${hrPrevStr}`;
+    });
 
-      // 1. Format compiled string (Col O) matching Prog_TPM Apps Script macro:
-      let tempoAtividadesMin = 0;
-      let valorTotalAtividades = 0;
+    const compiledStr = blocos.join(' | ');
+    const formattedDateWithDay = formatDateWithWeekday(form.dataProgramacao, form.dateObj);
 
-      let qtdPostes = 0;
-      let qtdEstruturas = 0;
-      let qtdCabos = 0;
-      let qtdCavaRocha = 0;
-      let qtdTrafos = 0;
+    const newRow = new Array(78).fill('');
+    newRow[0] = '';                                         // Col A (0): Leave empty string ""
+    newRow[1] = formattedDateWithDay;                       // Col B: Data
+    newRow[4] = form.supervisor;                            // Col E: Supervisor
+    newRow[6] = form.equipe;                                // Col G: Equipe
+    newRow[7] = form.obra.projeto;                          // Col H: Projeto
 
-      const blocos = selectedPontos.map(p => {
-        const h = Math.floor(p.tempoEstimadoMinutos / 60);
-        const m = p.tempoEstimadoMinutos % 60;
-        const hrPrevStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        const qtdStr = formatQuantityDisplay(p.quantidade);
+    const pontosUnicos = Array.from(new Set(selectedPontos.map(p => p.ponto))).sort().join(', ');
+    newRow[8] = pontosUnicos;                               // Col I: Resumo de Pontos
+    newRow[10] = form.obra.municipio;                       // Col K: Município da Obra
+    newRow[12] = cleanEtapaGeral;                           // Col M: Etapa(s) Prevista(s) do Topo
+    newRow[14] = compiledStr;                               // Col O: Compilado de atividades
 
-        tempoAtividadesMin += p.tempoEstimadoMinutos;
-        valorTotalAtividades += p.valorEstimado;
+    if (qtdCavaRocha > 0) newRow[18] = formatQuantityDisplay(qtdCavaRocha);   // Col S: Cava em Rocha
+    if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);         // Col U: Postes
+    if (qtdEstruturas > 0) newRow[22] = formatQuantityDisplay(qtdEstruturas); // Col W: Estruturas
+    if (qtdCabos > 0) newRow[24] = formatQuantityDisplay(qtdCabos);           // Col Y: Cabos
+    if (qtdTrafos > 0) newRow[29] = formatQuantityDisplay(qtdTrafos);         // Col AD: Trafos/Equipamentos
 
-        let cleanEtapaPonto = (p.etapaPrevista || cleanEtapaGeral).trim();
-        if (/^\d+\s*-\s*/.test(cleanEtapaPonto)) {
-          cleanEtapaPonto = cleanEtapaPonto.replace(/^\d+\s*-\s*/, '').trim();
-        }
+    newRow[36] = 'NÃO';                                     // Col AK (36): ANALISAR PRODUÇÃO?
+    newRow[37] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col AL (37): Valor Planejado
+    
+    const metaVal = form.metaEquipeValor || 4442;
+    newRow[38] = `R$ ${metaVal.toFixed(2)}`;                // Col AM (38): Valor da Meta da Equipe
 
-        const s = (p.servico || '').toUpperCase();
-        if (s.includes('POSTE')) {
-          qtdPostes += p.quantidade;
-        } else if (s.includes('ROCHA') || s.includes('CAVA EM ROCHA')) {
-          qtdCavaRocha += p.quantidade;
-        } else if (s.includes('CABO') || s.includes('FIO') || s.includes('CONDUTOR') || s.includes('MULTIPLEX')) {
-          qtdCabos += p.quantidade;
-        } else if (s.includes('TRAFO') || s.includes('TRANSFORMADOR') || s.includes('RELIGADOR')) {
-          qtdTrafos += p.quantidade;
-        } else {
-          qtdEstruturas += p.quantidade;
-        }
+    const pctMeta = metaVal > 0 ? (valorTotalAtividades / metaVal * 100) : 0;
+    const pctMetaFormatted = `${pctMeta.toFixed(1)}%`;
+    newRow[39] = pctMetaFormatted;                          // Col AN (39): Percentual Planejado da Meta
 
-        return `${p.ponto} - [${cleanEtapaPonto}] ${p.servico} - Qtd: ${qtdStr} - Hr. Prev: ${hrPrevStr}`;
-      });
+    newRow[56] = nomeUnidadePlanejadaUpper;                 // Col BE (56): Unidade Planejada
+    
+    const cleanDateNum = form.dataProgramacao.replace(/\//g, '');
+    newRow[62] = `${form.equipe}_${cleanDateNum}`;          // Col BK: Chave Equipe & Data
 
-      const compiledStr = blocos.join(' | ');
+    const tSaidaBase = form.tempoSaidaBaseMinutos || 15;
+    const tDesloc = form.tempoDeslocamentoMinutos || 30;
+    const tSeg = form.tempoSegurancaMinutos || 15;
 
-      // Format Date with Weekday matching Sirtec Plan_Principal ("16/08/2026 - domingo")
-      const formattedDateWithDay = formatDateWithWeekday(form.dataProgramacao, form.dateObj);
+    const hAtiv = Math.floor(tempoAtividadesMin / 60);
+    const mAtiv = tempoAtividadesMin % 60;
+    newRow[63] = `${String(hAtiv).padStart(2, '0')}:${String(mAtiv).padStart(2, '0')}:00`; // Col BL (63): Tempo de Serviço
 
-      // Create new row format matching exact 78-column Plan_Principal layout:
-      const newRow = new Array(78).fill('');
-      newRow[0] = '';                                         // Col A (0): Leave empty string "" (DO NOT WRITE "FALSE")
-      newRow[1] = formattedDateWithDay;                       // Col B: Data ("16/08/2026 - domingo")
-      newRow[4] = form.supervisor;                            // Col E: Supervisor
-      newRow[6] = form.equipe;                                // Col G: Equipe
-      newRow[7] = form.obra.projeto;                          // Col H: Projeto
+    const hDesl = Math.floor(tDesloc / 60);
+    const mDesl = tDesloc % 60;
+    newRow[64] = `${String(hDesl).padStart(2, '0')}:${String(mDesl).padStart(2, '0')}:00`; // Col BM (64): Tempo Deslocamento
 
-      const pontosUnicos = Array.from(new Set(selectedPontos.map(p => p.ponto))).sort().join(', ');
-      newRow[8] = pontosUnicos;                               // Col I: Resumo de Pontos ("P1, P2")
-      newRow[10] = form.obra.municipio;                       // Col K: Município da Obra
-      newRow[12] = cleanEtapaGeral;                           // Col M: Etapa(s) Prevista(s) do Topo do Dia separadas por / (ex: IMPLANTAÇÃO/LINHA VIVA)
-      newRow[14] = compiledStr;                               // Col O: Compilado de atividades por ponto
+    newRow[65] = `00:${String(tSaidaBase).padStart(2, '0')}:00`;                           // Col BN (65): Tempo Saída Base
 
-      // Categorias de Serviços nas Colunas R a AG (17 a 32)
-      if (qtdCavaRocha > 0) newRow[18] = formatQuantityDisplay(qtdCavaRocha);   // Col S: Cava em Rocha
-      if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);         // Col U: Postes
-      if (qtdEstruturas > 0) newRow[22] = formatQuantityDisplay(qtdEstruturas); // Col W: Estruturas
-      if (qtdCabos > 0) newRow[24] = formatQuantityDisplay(qtdCabos);           // Col Y: Cabos
-      if (qtdTrafos > 0) newRow[29] = formatQuantityDisplay(qtdTrafos);         // Col AD: Trafos/Equipamentos
+    newRow[66] = `00:${String(tSeg).padStart(2, '0')}:00`;                                 // Col BO (66): Tempo Segurança
 
-      // Colunas Calculadas de Produção e Valores (Cols 36-39 / AK-AN)
-      newRow[36] = 'NÃO';                                     // Col AK (36): ANALISAR PRODUÇÃO?
-      newRow[37] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col AL (37): Valor Planejado
-      
-      const metaVal = form.metaEquipeValor || 4442;
-      newRow[38] = `R$ ${metaVal.toFixed(2)}`;                // Col AM (38): Valor da Meta da Equipe
+    const tTotalGeral = tempoAtividadesMin + tDesloc + tSaidaBase + tSeg;
+    const hTot = Math.floor(tTotalGeral / 60);
+    const mTot = tTotalGeral % 60;
+    newRow[67] = `${String(hTot).padStart(2, '0')}:${String(mTot).padStart(2, '0')}:00`; // Col BP (67): Tempo Total Geral Somado
 
-      const pctMeta = metaVal > 0 ? (valorTotalAtividades / metaVal * 100) : 0;
-      const pctMetaFormatted = `${pctMeta.toFixed(1)}%`;
-      newRow[39] = pctMetaFormatted;                          // Col AN (39): Percentual Planejado da Meta
-      // Colunas AO, AP, AQ, AR (40 a 43): Deixadas vazias (não preencher pelo App)
+    newRow[68] = pctMetaFormatted;                          // Col BQ (68): % Previsto da Meta
 
-      newRow[56] = nomeUnidadePlanejadaUpper;                 // Col BE (56): Unidade Planejada em MAIÚSCULAS ("BOM JESUS DA LAPA")
-      
-      const cleanDateNum = form.dataProgramacao.replace(/\//g, '');
-      newRow[62] = `${form.equipe}_${cleanDateNum}`;          // Col BK: Chave Equipe & Data
+    const etapasAtividadesUnicas = Array.from(
+      new Set(
+        selectedPontos
+          .map(p => (p.etapaPrevista || '').replace(/^\d+\s*-\s*/, '').trim())
+          .filter(Boolean)
+      )
+    );
+    newRow[76] = etapasAtividadesUnicas.join('/');          // Col BY (76): Etapas da base do pré-fechamento
 
-      // Tempos Calculados e Meta nas Colunas BL a BQ (63 a 68)
-      const tSaidaBase = form.tempoSaidaBaseMinutos || 15;
-      const tDesloc = form.tempoDeslocamentoMinutos || 30;
-      const tSeg = form.tempoSegurancaMinutos || 15;
+    return newRow;
+  };
 
-      const hAtiv = Math.floor(tempoAtividadesMin / 60);
-      const mAtiv = tempoAtividadesMin % 60;
-      newRow[63] = `${String(hAtiv).padStart(2, '0')}:${String(mAtiv).padStart(2, '0')}:00`; // Col BL (63): Tempo de Serviço / Atividades
+  // Mutation to append new daily schedule(s) to Plan_Principal atomically in a single CSV batch
+  const salvarProgramacao = useMutation({
+    mutationFn: async (formInput: PcpProgramacaoForm | PcpProgramacaoForm[]) => {
+      const formsArray = Array.isArray(formInput) ? formInput : [formInput];
+      if (formsArray.length === 0) {
+        throw new Error('Nenhum dado informado para envio.');
+      }
 
-      const hDesl = Math.floor(tDesloc / 60);
-      const mDesl = tDesloc % 60;
-      newRow[64] = `${String(hDesl).padStart(2, '0')}:${String(mDesl).padStart(2, '0')}:00`; // Col BM (64): Tempo Deslocamento
+      const allNewRows = formsArray.map(form => buildPlanPrincipalRow(form));
+      const firstForm = formsArray[0];
+      const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === firstForm.unidadeId) || UNIDADES_DISPONIVEIS[0];
 
-      newRow[65] = `00:${String(tSaidaBase).padStart(2, '0')}:00`;                           // Col BN (65): Tempo Saída Base
-
-      newRow[66] = `00:${String(tSeg).padStart(2, '0')}:00`;                                 // Col BO (66): Tempo Segurança
-
-      const tTotalGeral = tempoAtividadesMin + tDesloc + tSaidaBase + tSeg;
-      const hTot = Math.floor(tTotalGeral / 60);
-      const mTot = tTotalGeral % 60;
-      newRow[67] = `${String(hTot).padStart(2, '0')}:${String(mTot).padStart(2, '0')}:00`; // Col BP (67): Tempo Total Geral Somado
-
-      newRow[68] = pctMetaFormatted;                          // Col BQ (68): % Previsto da Meta
-
-      // Coluna BY (76): Etapas referentes às atividades do ponto da base de pré-fechamento separadas por / (ex: Escavação/Implantação)
-      const etapasAtividadesUnicas = Array.from(
-        new Set(
-          selectedPontos
-            .map(p => (p.etapaPrevista || '').replace(/^\d+\s*-\s*/, '').trim())
-            .filter(Boolean)
-        )
-      );
-      newRow[76] = etapasAtividadesUnicas.join('/');          // Col BY (76): Etapa(s) das atividades selecionadas (base pré-fechamento)
-
-      // Generate filename with pattern UNIDADE_ddmmhhmm.csv (ex: BJL_16081403.csv)
-      const csvFilename = generateCsvFilename(form.unidadeId);
-      const csvContent = buildCsvContent(newRow);
+      // Generate filename with pattern UNIDADE_ddmmhhmmss.csv
+      const csvFilename = generateCsvFilename(firstForm.unidadeId);
+      const csvContent = buildCsvContent(allNewRows);
 
       // 1. DISPARO IMEDIATO AO BACKEND PARA SALVAR DIRETO NO GOOGLE DRIVE E COLAR NA PLAN_PRINCIPAL DO SHEETS
       try {
@@ -977,13 +982,13 @@ export const usePcpPlanejamentoData = (
         ? JSON.parse(rawCacheQuery.data.principal)
         : [];
 
-      const updatedPrincipal = [...existingPrincipal, newRow];
+      const updatedPrincipal = [...existingPrincipal, ...allNewRows];
 
       const { data, error } = await supabase
         .from('planejamento_cache')
         .upsert(
           {
-            unidade_id: form.unidadeId,
+            unidade_id: firstForm.unidadeId,
             principal: JSON.stringify(updatedPrincipal),
             updated_at: new Date().toISOString(),
           },
@@ -993,7 +998,7 @@ export const usePcpPlanejamentoData = (
         .single();
 
       if (error) throw error;
-      return { data, csvFilename };
+      return { data, csvFilename, totalRows: allNewRows.length };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['pcp-planejamento-cache', selectedUnidadeId] });
