@@ -365,7 +365,7 @@ const SearchableServicoSelect = ({
 export const PcpPlanejamentoView = () => {
   // State
   // Selected Obra & Filters (Filtros da Carteira)
-  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_shared_obra', '');
+  const [selectedObraId, setSelectedObraId] = useSessionState<string>('pcp_shared_selected_obra_v4', '');
   const [searchObra, setSearchObra] = useSessionState<string>('pcp_shared_search', '');
   const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_shared_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState<boolean>(false);
@@ -930,9 +930,25 @@ export const PcpPlanejamentoView = () => {
 
   const prevUnidadeRef = useRef<string | null>(null);
 
+  const handleUnidadeChange = (newUnitId: string) => {
+    setSelectedUnidadeId(newUnitId);
+    setSelectedObraId('');
+    setSelectedSituacao('TODAS');
+    setSelectedMesFilter('TODOS');
+    setSelectedMunicipioFilter('TODOS');
+    setSelectedPrioridadeFilter('TODAS');
+    setSelectedDonoFilter('TODOS');
+    setSelectedSupervisorFilter('TODOS');
+    setSearchObra('');
+    if (statusesCarteira.length > 0) {
+      setSelectedStatuses(statusesCarteira.filter(s => !s.toUpperCase().includes('CONCLU')));
+    }
+  };
+
   // Reseta / correlaciona todos os filtros da barra superior APENAS quando o usuário efetivamente trocar de Unidade
   useEffect(() => {
     if (prevUnidadeRef.current !== null && prevUnidadeRef.current !== selectedUnidadeId) {
+      setSelectedObraId('');
       setSelectedSituacao('TODAS');
       setSelectedMesFilter('TODOS');
       setSelectedMunicipioFilter('TODOS');
@@ -1997,7 +2013,7 @@ export const PcpPlanejamentoView = () => {
           {/* Unidade */}
           <div className="flex flex-col gap-0.5 w-[140px] shrink-0">
             <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider truncate">Unidade</span>
-            <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
+            <Select value={selectedUnidadeId} onValueChange={handleUnidadeChange}>
               <SelectTrigger className="h-7 text-[11px] font-semibold bg-background px-2">
                 <Building2 className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
                 <SelectValue placeholder="Selecione Unidade..." />
