@@ -2057,125 +2057,122 @@ export const PcpPlanejamentoView = () => {
 
                             {/* TOTALIZADOR DO PERÍODO (VISÃO ALOJAMENTOS) */}
                             <div
-                              className="flex items-center py-3 px-3 text-xs font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3] gap-2"
+                              className="flex items-center py-2 px-3 text-xs font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3] gap-2"
                               style={{ borderLeft: '4px solid transparent' }}
                             >
                               <div className="w-[110px] text-[#23211E]">Total acumulado</div>
                               <div className="w-[210px] px-1 text-[#6B6660] text-[11px] font-sans font-medium">
                                 {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
                               </div>
-                              <div className="w-[100px] px-1 text-center font-mono font-bold text-[#23211E]">
+                              <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoIdaMin, 0))}
                               </div>
                               <div className="w-[210px] px-1" />
-                              <div className="w-[100px] px-1 text-center font-mono font-bold text-[#23211E]">
+                              <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoVoltaMin, 0))}
                               </div>
-                              <div className="w-[110px] px-1 text-center font-mono font-bold text-[#23211E]">
+                              <div className="w-[110px] text-center shrink-0 flex items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(totalDeslocamentoPeriodoMin)}
                               </div>
-                              <div className="w-[90px] px-1 text-center font-mono font-bold text-[#23211E]">
+                              <div className="w-[90px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao), 0))}
                               </div>
-                              <div className="w-[90px] px-1 text-center font-mono font-bold text-[#23211E]">
+                              <div className="w-[90px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao), 0))}
                               </div>
-                              <div className="w-[100px] text-right pr-2 font-mono font-bold text-[#23211E]">
+                              <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(totalCompPeriodoMin)}
                               </div>
                             </div>
                           </div>
                         </div>
 
-                        {/* PAINEL LATERAL: RESUMO DO DESLOCAMENTO PREVISTO */}
-                        <div className="w-full xl:w-[320px] shrink-0 border-t xl:border-t-0 xl:border-l border-[#E6E3DD] bg-[#FAF8F5] p-4 flex flex-col gap-3.5">
-                          <div className="flex items-center gap-2.5 pb-2 border-b border-[#E6E3DD]">
-                            <div className="w-8 h-8 rounded-lg bg-[#E07A1F]/10 border border-[#E07A1F]/20 flex items-center justify-center text-[#E07A1F]">
-                              <Navigation className="w-4 h-4" />
+                        {/* PAINEL LATERAL: RESUMO DO DESLOCAMENTO PREVISTO (COMPACTO E MAIS LARGO) */}
+                        <div className="w-full xl:w-[460px] shrink-0 border-t xl:border-t-0 xl:border-l border-[#E6E3DD] bg-[#FAF8F5] p-3.5 flex flex-col justify-between gap-2.5">
+                          <div className="flex items-center justify-between pb-1.5 border-b border-[#E6E3DD]">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-md bg-[#E07A1F]/10 border border-[#E07A1F]/20 flex items-center justify-center text-[#E07A1F]">
+                                <Navigation className="w-3.5 h-3.5" />
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-[#23211E]">Resumo do Deslocamento Previsto</h4>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-[#23211E]">Resumo do Deslocamento</h4>
-                              <p className="text-[11px] text-[#6B6660]">Estimativa total do período</p>
-                            </div>
+                            <span className="text-[10px] text-[#6B6660] font-mono">
+                              {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'}
+                            </span>
                           </div>
 
-                          {/* KPIs em cards 2x2 */}
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
-                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Distância Total</span>
-                              <span className="font-mono font-bold text-sm text-[#23211E] block mt-0.5">
+                          {/* 4 KPIs em linha única horizontal */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                            <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                              <span className="text-[10px] text-[#6B6660] font-medium block">Distância Total</span>
+                              <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
                                 {totalKmGeral > 0 ? `${totalKmGeral} km` : '—'}
                               </span>
-                              <span className="text-[9.5px] font-mono text-[#A39E96]">
-                                {mediaKmDia > 0 ? `~${mediaKmDia} km/dia` : ''}
+                              <span className="text-[9px] font-mono text-[#A39E96]">
+                                {mediaKmDia > 0 ? `~${mediaKmDia}k/d` : ''}
                               </span>
                             </div>
 
-                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
-                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Tempo Desloc.</span>
-                              <span className="font-mono font-bold text-sm text-[#23211E] block mt-0.5" style={{ color: isMediaDeslocamentoAlto ? '#B03028' : '#23211E' }}>
+                            <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                              <span className="text-[10px] text-[#6B6660] font-medium block">Tempo Desloc.</span>
+                              <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5" style={{ color: isMediaDeslocamentoAlto ? '#B03028' : '#23211E' }}>
                                 {formatMinToHours(totalDeslocamentoPeriodoMin)}
                               </span>
-                              <span className="text-[9.5px] font-mono text-[#A39E96]">
-                                {`~${formatMinToHours(mediaMinDeslocDia)}/dia`}
+                              <span className="text-[9px] font-mono text-[#A39E96]">
+                                {`~${formatMinToHours(mediaMinDeslocDia)}/d`}
                               </span>
                             </div>
 
-                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
-                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Ida Acumulada</span>
+                            <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                              <span className="text-[10px] text-[#6B6660] font-medium block">Ida Total</span>
                               <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
                                 {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoIdaMin, 0))}
                               </span>
-                              <span className="text-[9.5px] font-mono text-[#6B6660]">
+                              <span className="text-[9px] font-mono text-[#6B6660]">
                                 {totalKmIda > 0 ? `${Math.round(totalKmIda * 10) / 10} km` : '—'}
                               </span>
                             </div>
 
-                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
-                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Volta Acumulada</span>
+                            <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                              <span className="text-[10px] text-[#6B6660] font-medium block">Volta Total</span>
                               <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
                                 {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoVoltaMin, 0))}
                               </span>
-                              <span className="text-[9.5px] font-mono text-[#6B6660]">
+                              <span className="text-[9px] font-mono text-[#6B6660]">
                                 {totalKmVolta > 0 ? `${Math.round(totalKmVolta * 10) / 10} km` : '—'}
                               </span>
                             </div>
                           </div>
 
-                          {/* Alerta de Deslocamento / Eficiência */}
-                          <div className={`p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
-                            isMediaDeslocamentoAlto
-                              ? 'bg-[#FDF2F0] border-[#F2C0B8] text-[#B03028]'
-                              : 'bg-[#E6F2EA] border-[#A0D4B2] text-[#17794C]'
-                          }`}>
-                            <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                            <div className="text-[11px] leading-tight">
-                              {isMediaDeslocamentoAlto ? (
-                                <>
-                                  <strong>Atenção ao deslocamento:</strong> Média diária de <strong>{formatMinToHours(mediaMinDeslocDia)}</strong> está acima da recomendação operacional (máx 02:00/dia).
-                                </>
-                              ) : (
-                                <>
-                                  <strong>Deslocamento equilibrado:</strong> Média de <strong>{formatMinToHours(mediaMinDeslocDia)}</strong>/dia dentro da janela operacional recomendada.
-                                </>
-                              )}
+                          {/* Linha inferior compacta: Alerta + Alojamentos lado a lado */}
+                          <div className="flex flex-col sm:flex-row items-stretch gap-2 pt-1 border-t border-[#E6E3DD]">
+                            {/* Alerta de Deslocamento */}
+                            <div className={`flex-1 p-2 rounded-lg border text-xs flex items-center gap-1.5 ${
+                              isMediaDeslocamentoAlto
+                                ? 'bg-[#FDF2F0] border-[#F2C0B8] text-[#B03028]'
+                                : 'bg-[#E6F2EA] border-[#A0D4B2] text-[#17794C]'
+                            }`}>
+                              <Info className="w-3.5 h-3.5 shrink-0" />
+                              <span className="text-[10.5px] leading-tight">
+                                {isMediaDeslocamentoAlto
+                                  ? <>Média <strong>{formatMinToHours(mediaMinDeslocDia)}/dia</strong> acima do teto de 02:00.</>
+                                  : <>Média <strong>{formatMinToHours(mediaMinDeslocDia)}/dia</strong> dentro da janela ideal.</>
+                                }
+                              </span>
                             </div>
-                          </div>
 
-                          {/* Alojamentos do Período */}
-                          <div className="space-y-1.5 pt-2 border-t border-[#E6E3DD]">
-                            <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#5C574F] block">
-                              Alojamentos Utilizados ({alojamentosUsadosList.length})
-                            </span>
-                            <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto pr-1">
+                            {/* Alojamentos */}
+                            <div className="flex items-center gap-1 flex-wrap">
                               {alojamentosUsadosList.map(aloj => (
-                                <div
+                                <span
                                   key={aloj}
-                                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-[#DEDAD3] text-[11px] font-medium text-[#23211E]"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white border border-[#DEDAD3] text-[10.5px] font-medium text-[#23211E]"
                                 >
                                   <Building2 className="w-3 h-3 text-[#E07A1F] shrink-0" />
-                                  <span className="truncate">{aloj}</span>
-                                </div>
+                                  <span className="truncate max-w-[130px]">{aloj}</span>
+                                </span>
                               ))}
                             </div>
                           </div>

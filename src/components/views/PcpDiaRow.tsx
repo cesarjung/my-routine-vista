@@ -580,7 +580,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Total Complementar */}
-          <div className="w-[100px] shrink-0 text-right pr-2 font-mono font-bold text-[#23211E] text-xs">
+          <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#E6E3DD] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
             {formatMinToHours(tempoSaidaBaseMin + tempoSegurancaMin + deslocamentoMin)}
           </div>
         </div>
