@@ -1897,6 +1897,8 @@ export const PcpPlanejamentoView = () => {
                             tempoSegurancaMin={sSeg}
                             tempoIdaMin={disp.tempoIdaMin}
                             tempoVoltaMin={disp.tempoVoltaMin}
+                            distIdaKm={disp.distIdaKm}
+                            distVoltaKm={disp.distVoltaKm}
                             isIdaManual={disp.isManualIda}
                             isVoltaManual={disp.isManualVolta}
                             origemAloj={disp.origemNome}
@@ -1955,20 +1957,20 @@ export const PcpPlanejamentoView = () => {
 
                   {/* CABEÇALHO DA GRADE: VISÃO ALOJAMENTOS */}
                   {viewMode === 'alojamentos' && (
-                    <div style={{ minWidth: '1060px' }}>
+                    <div style={{ minWidth: '1080px' }}>
                       <div
                         className="flex items-center py-2.5 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
                         style={{ borderLeft: '4px solid transparent' }}
                       >
                         <div className="w-[130px]">Dia</div>
                         <div className="w-[220px] px-1">Saída (ida)</div>
-                        <div className="w-[75px] px-1 text-center">Ida</div>
+                        <div className="w-[85px] px-1 text-center">Ida (hh:mm / km)</div>
                         <div className="w-[220px] px-1">Retorno (volta)</div>
-                        <div className="w-[75px] px-1 text-center">Volta</div>
-                        <div className="w-[110px] px-1 text-center">Desloc.</div>
-                        <div className="w-[85px] px-1 text-center">Saída base</div>
-                        <div className="w-[85px] px-1 text-center">Segurança</div>
-                        <div className="flex-1 text-right pr-2">Total comp.</div>
+                        <div className="w-[85px] px-1 text-center">Volta (hh:mm / km)</div>
+                        <div className="w-[110px] px-1 text-center">Desloc. (hh:mm / km)</div>
+                        <div className="w-[85px] px-1 text-center">Saída base (hh:mm)</div>
+                        <div className="w-[85px] px-1 text-center">Segurança (hh:mm)</div>
+                        <div className="flex-1 text-right pr-2">Total comp. (hh:mm)</div>
                       </div>
 
                       {/* LINHAS DOS DIAS NA VISÃO ALOJAMENTOS */}
@@ -2001,6 +2003,8 @@ export const PcpPlanejamentoView = () => {
                             tempoSegurancaMin={sSeg}
                             tempoIdaMin={disp.tempoIdaMin}
                             tempoVoltaMin={disp.tempoVoltaMin}
+                            distIdaKm={disp.distIdaKm}
+                            distVoltaKm={disp.distVoltaKm}
                             isIdaManual={disp.isManualIda}
                             isVoltaManual={disp.isManualVolta}
                             origemAloj={disp.origemNome}
@@ -2035,14 +2039,19 @@ export const PcpPlanejamentoView = () => {
                         style={{ borderLeft: '4px solid transparent' }}
                       >
                         <div className="w-[130px] text-[#23211E]">Total acumulado</div>
-                        <div className="w-[590px] px-1 text-[#6B6660] text-xs">
+                        <div className="w-[610px] px-1 text-[#6B6660] text-xs font-medium">
                           {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
                         </div>
-                        <div className="w-[110px] px-1 text-center text-[#23211E]">
+                        <div className="w-[110px] px-1 text-center font-mono font-bold text-[#23211E]">
                           {formatMinToHours(totalDeslocamentoPeriodoMin)}
                         </div>
-                        <div className="w-[170px] px-1" />
-                        <div className="flex-1 text-right pr-2 text-[#23211E]">
+                        <div className="w-[85px] px-1 text-center font-mono font-bold text-[#23211E]">
+                          {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao), 0))}
+                        </div>
+                        <div className="w-[85px] px-1 text-center font-mono font-bold text-[#23211E]">
+                          {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao), 0))}
+                        </div>
+                        <div className="flex-1 text-right pr-2 font-mono font-bold text-[#23211E]">
                           {formatMinToHours(totalCompPeriodoMin)}
                         </div>
                       </div>

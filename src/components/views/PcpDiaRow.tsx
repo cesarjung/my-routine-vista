@@ -108,6 +108,8 @@ interface PcpDiaRowProps {
   isVoltaManual: boolean;
   origemAloj: string;
   destinoAloj: string;
+  distIdaKm?: number;
+  distVoltaKm?: number;
   isTrocaAloj: boolean;
   filteredServicosBase: ServicoBase[];
   // Handlers
@@ -152,6 +154,8 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   tempoSegurancaMin,
   tempoIdaMin,
   tempoVoltaMin,
+  distIdaKm,
+  distVoltaKm,
   isIdaManual,
   isVoltaManual,
   origemAloj,
@@ -198,8 +202,6 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   const deslocamentoMin = tempoIdaMin + tempoVoltaMin;
   const tempoTotalMin = tempoSaidaBaseMin + tempoIdaMin + tempoSegurancaMin + tempoServicoMin + tempoVoltaMin;
   const tempoTotalHoras = tempoTotalMin / 60;
-  const tempoServicoHoras = tempoServicoMin / 60;
-  const deslocamentoHoras = deslocamentoMin / 60;
   const pctMeta = metaEquipeDia > 0 ? Math.round((valorPlanejado / metaEquipeDia) * 100) : 0;
   const situacao = getSituacaoDia(pontosAtivos.length, tempoTotalHoras, pctMeta);
 
@@ -210,8 +212,8 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   const pctServ = Math.min(100, (tempoServicoMin / 780) * 100);
   const pctVolta = Math.min(100, (tempoVoltaMin / 780) * 100);
 
-  const isDeslocamentoAlto = deslocamentoHoras > 2.0;
-  const isServicoBaixo = tempoServicoHoras < 7.0 && pontosAtivos.length > 0;
+  const isDeslocamentoAlto = deslocamentoMin > 120; // > 02:00
+  const isServicoBaixo = tempoServicoMin < 420 && pontosAtivos.length > 0; // < 07:00
 
   return (
     <div className="border-b border-[#E6E3DD] transition-colors">
@@ -250,38 +252,38 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                   borderLeft: '1.5px dashed rgba(23, 121, 76, 0.5)',
                   borderRight: '1.5px dashed rgba(23, 121, 76, 0.5)'
                 }}
-                title="Janela ideal de jornada: 8h a 10h"
+                title="Janela ideal de jornada: 08:00 a 10:00"
               />
 
               {/* Segmentos na ordem fixa */}
               {tempoSaidaBaseMin > 0 && (
                 <div
                   style={{ width: `${pctSaida}%`, backgroundColor: '#23211E' }}
-                  title={`Tempo de saída: ${(tempoSaidaBaseMin / 60).toFixed(1).replace('.', ',')}h`}
+                  title={`Saída: ${formatMinToHours(tempoSaidaBaseMin)}`}
                 />
               )}
               {tempoIdaMin > 0 && (
                 <div
                   style={{ width: `${pctIda}%`, backgroundColor: '#E07A1F' }}
-                  title={`Deslocamento de ida: ${(tempoIdaMin / 60).toFixed(1).replace('.', ',')}h`}
+                  title={`Ida: ${formatMinToHours(tempoIdaMin)}${distIdaKm ? ` (${distIdaKm} km)` : ''}`}
                 />
               )}
               {tempoSegurancaMin > 0 && (
                 <div
                   style={{ width: `${pctSeg}%`, backgroundColor: '#A39E96' }}
-                  title={`Procedimentos de segurança: ${(tempoSegurancaMin / 60).toFixed(1).replace('.', ',')}h`}
+                  title={`Segurança: ${formatMinToHours(tempoSegurancaMin)}`}
                 />
               )}
               {tempoServicoMin > 0 && (
                 <div
                   style={{ width: `${pctServ}%`, backgroundColor: '#C0392E' }}
-                  title={`Tempo em serviço: ${(tempoServicoMin / 60).toFixed(1).replace('.', ',')}h`}
+                  title={`Serviço: ${formatMinToHours(tempoServicoMin)}`}
                 />
               )}
               {tempoVoltaMin > 0 && (
                 <div
                   style={{ width: `${pctVolta}%`, backgroundColor: '#F5BE84' }}
-                  title={`Deslocamento de volta: ${(tempoVoltaMin / 60).toFixed(1).replace('.', ',')}h`}
+                  title={`Volta: ${formatMinToHours(tempoVoltaMin)}${distVoltaKm ? ` (${distVoltaKm} km)` : ''}`}
                 />
               )}
             </div>
@@ -292,18 +294,18 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#C0392E' }} />
                 <span className="text-[#6B6660]">serviço:</span>
                 <strong style={{ color: isServicoBaixo ? '#B03028' : '#23211E' }}>
-                  {tempoServicoHoras.toFixed(1).replace('.', ',')}h
+                  {formatMinToHours(tempoServicoMin)}
                 </strong>
-                <span className="text-[#A39E96]">mín 7,0h</span>
+                <span className="text-[#A39E96]">mín 07:00</span>
               </span>
 
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#E07A1F' }} />
                 <span className="text-[#6B6660]">ida e volta:</span>
                 <strong style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}>
-                  {deslocamentoHoras.toFixed(1).replace('.', ',')}h
+                  {formatMinToHours(deslocamentoMin)}
                 </strong>
-                <span className="text-[#A39E96]">máx 2,0h</span>
+                <span className="text-[#A39E96]">máx 02:00</span>
               </span>
             </div>
           </div>
@@ -381,8 +383,8 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             </Select>
           </div>
 
-          {/* Ida (minutos) */}
-          <div className="w-[75px] px-1 shrink-0">
+          {/* Ida (tempo hh:mm e km) */}
+          <div className="w-[85px] px-1 shrink-0">
             <div className="relative">
               <Input
                 type="number"
@@ -397,6 +399,10 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                   Manual
                 </span>
               )}
+            </div>
+            <div className="flex items-center justify-between text-[10px] font-mono text-[#6B6660] mt-0.5 px-0.5">
+              <span>{formatMinToHours(tempoIdaMin)}</span>
+              <span>{distIdaKm !== undefined && distIdaKm > 0 ? `${distIdaKm} km` : '—'}</span>
             </div>
           </div>
 
@@ -419,8 +425,8 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             </Select>
           </div>
 
-          {/* Volta (minutos) */}
-          <div className="w-[75px] px-1 shrink-0">
+          {/* Volta (tempo hh:mm e km) */}
+          <div className="w-[85px] px-1 shrink-0">
             <div className="relative">
               <Input
                 type="number"
@@ -436,17 +442,26 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                 </span>
               )}
             </div>
+            <div className="flex items-center justify-between text-[10px] font-mono text-[#6B6660] mt-0.5 px-0.5">
+              <span>{formatMinToHours(tempoVoltaMin)}</span>
+              <span>{distVoltaKm !== undefined && distVoltaKm > 0 ? `${distVoltaKm} km` : '—'}</span>
+            </div>
           </div>
 
-          {/* Deslocamento Total */}
-          <div
-            className="w-[110px] font-mono font-bold text-center px-1 shrink-0 text-sm"
-            style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}
-          >
-            {formatMinToHours(deslocamentoMin)}
+          {/* Deslocamento Total (hh:mm e km) */}
+          <div className="w-[110px] text-center px-1 shrink-0">
+            <div
+              className="font-mono font-bold text-sm"
+              style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}
+            >
+              {formatMinToHours(deslocamentoMin)}
+            </div>
+            <div className="text-[10px] font-mono text-[#6B6660]">
+              {(distIdaKm || 0) + (distVoltaKm || 0) > 0 ? `${Math.round(((distIdaKm || 0) + (distVoltaKm || 0)) * 10) / 10} km` : '—'}
+            </div>
           </div>
 
-          {/* Saída da Base (min) */}
+          {/* Saída da Base (minutos / hh:mm) */}
           <div className="w-[85px] px-1 shrink-0">
             <Input
               type="number"
@@ -456,9 +471,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               onChange={e => handleUpdateDiaTempoComp(dia.id, 'saidaBase', parseInt(e.target.value, 10) || 0)}
               className="h-8 text-xs text-center font-mono bg-white border-[#DEDAD3]"
             />
+            <div className="text-center text-[10px] font-mono text-[#6B6660] mt-0.5">
+              {formatMinToHours(tempoSaidaBaseMin)}
+            </div>
           </div>
 
-          {/* Segurança (min) */}
+          {/* Segurança (minutos / hh:mm) */}
           <div className="w-[85px] px-1 shrink-0">
             <Input
               type="number"
@@ -468,6 +486,9 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               onChange={e => handleUpdateDiaTempoComp(dia.id, 'seguranca', parseInt(e.target.value, 10) || 0)}
               className="h-8 text-xs text-center font-mono bg-white border-[#DEDAD3]"
             />
+            <div className="text-center text-[10px] font-mono text-[#6B6660] mt-0.5">
+              {formatMinToHours(tempoSegurancaMin)}
+            </div>
           </div>
 
           {/* Total Complementar */}
