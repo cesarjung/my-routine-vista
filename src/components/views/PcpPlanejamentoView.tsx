@@ -1923,7 +1923,7 @@ export const PcpPlanejamentoView = () => {
       return;
     }
     setDiasPontosMap({});
-    setPontosGroupedMap({});
+    setDiasPontosGroupedMap({});
     setDiasReprogramarMap({});
     setDiasMotivoReprogramarMap({});
     setDiasPesMap({});
