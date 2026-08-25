@@ -1113,33 +1113,23 @@ export const usePcpPlanejamentoData = (
         throw new Error(apiData?.error || `Falha ao gravar no Google Sheets/Drive (Status HTTP ${apiRes.status})`);
       }
 
-      // 2. Atualizar cache local do Supabase
-      const existingPrincipal: any[][] = rawCacheQuery.data?.principal
-        ? JSON.parse(rawCacheQuery.data.principal)
-        : [];
+      // 2. Dispara sincronização em segundo plano do cache da unidade para manter Supabase idêntico ao Google Sheets
+      try {
+        await fetch('/api/sync-pcp-cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ unitSigla: unidadeObj.sigla }),
+        });
+      } catch (syncErr) {
+        console.warn('Sync cache disparado com aviso:', syncErr);
+      }
 
-      const updatedPrincipal = [...existingPrincipal, ...allNewRows];
-
-      const { data, error } = await supabase
-        .from('planejamento_cache')
-        .upsert(
-          {
-            unidade_id: firstForm.unidadeId,
-            principal: JSON.stringify(updatedPrincipal),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'unidade_id' }
-        )
-        .select()
-        .single();
-
-      if (error) throw error;
-      return { data, csvFilename, totalRows: allNewRows.length };
+      return { csvFilename, totalRows: allNewRows.length };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['pcp-planejamento-cache', selectedUnidadeId] });
       queryClient.invalidateQueries({ queryKey: ['planejamento-cache-raw'] });
-      toast.success(`Programação gravada com sucesso! CSV ${result.csvFilename} enviado ao Drive e colado na Plan_Principal!`);
+      toast.success(`Programação gravada com sucesso! CSV ${result.csvFilename} enviado ao Drive e processado na Plan_Principal!`);
     },
     onError: (err: any) => {
       console.error('Erro ao salvar programação no PCP:', err);

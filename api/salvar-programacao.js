@@ -138,6 +138,23 @@ function getColumnLetter(colIndex) {
   return `${first}${second}`;
 }
 
+function extractDate(str) {
+  if (!str) return '';
+  const m = String(str).match(/(\d{2}\/\d{2}\/\d{4})/);
+  if (m) return m[1];
+  const m2 = String(str).match(/(\d{4}-\d{2}-\d{2})/);
+  if (m2) {
+    const parts = m2[1].split('-');
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return String(str).trim();
+}
+
+function cleanCode(code) {
+  if (!code) return '';
+  return String(code).trim().toUpperCase().replace(/^[BP]-/, '').replace(/[^A-Z0-9]/g, '');
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -170,118 +187,178 @@ export default async function handler(req, res) {
       dataLines = rawLines.slice(1);
     }
 
-    // Identify keys in Col BK (index 62)
-    const keysToReplace = new Set();
-    dataLines.forEach(line => {
-      const cells = line.split(';');
-      const bkVal = (cells[62] || '').trim().replace(/^"|"$/g, '');
-      if (bkVal) keysToReplace.add(bkVal);
-    });
+    // 3. Read current full Plan_Principal (Col A to BZ)
+    const readRowsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Plan_Principal!A1:BZ`;
+    const allRowsRes = await fetch(readRowsUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const allRowsData = await allRowsRes.json();
+    const allRows = allRowsData.values || [];
 
-    // 3. Read current Plan_Principal column B (index 2) and BK (index 63)
-    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?ranges=Plan_Principal!B1:B&ranges=Plan_Principal!BK1:BK`;
-    const readRes = await fetch(readUrl, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const readData = await readRes.json();
-    const colBValues = (readData.valueRanges && readData.valueRanges[0]?.values) || [];
-    const colBKValues = (readData.valueRanges && readData.valueRanges[1]?.values) || [];
-
-    // Find existing rows to replace
-    const rowsToRemove = [];
-    colBKValues.forEach((row, idx) => {
-      if (idx < 5) return; // Header rows 1-5
-      const val = (row[0] || '').trim();
-      if (val && keysToReplace.has(val)) {
-        rowsToRemove.push(idx + 1); // 1-indexed
+    // Helper: find first empty row index (0-indexed in allRows, starting at row 6 / index 5)
+    const findFirstEmptyRowIndex = (rowsArray) => {
+      for (let i = 5; i < rowsArray.length; i++) {
+        const r = rowsArray[i];
+        const valB = (r && r[1]) ? String(r[1]).trim() : '';
+        const valG = (r && r[6]) ? String(r[6]).trim() : '';
+        const valH = (r && r[7]) ? String(r[7]).trim() : '';
+        if (!valB && !valG && !valH) {
+          return i;
+        }
       }
-    });
+      return Math.max(5, rowsArray.length);
+    };
 
-    // Handle Reprogramadas if needed
-    if (rowsToRemove.length > 0 && reprogramar) {
-      const readRowsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Plan_Principal!A1:BZ`;
-      const allRowsRes = await fetch(readRowsUrl, { headers: { Authorization: `Bearer ${token}` } });
-      const allRowsData = await allRowsRes.json();
-      const allRows = allRowsData.values || [];
+    const rangesToClear = [];
+    const cellUpdates = [];
+    const reprogUpdates = [];
 
-      // Find first empty row in Reprogramadas (Col B)
-      const readReprogUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Reprogramadas!B1:B`;
-      const readReprogRes = await fetch(readReprogUrl, { headers: { Authorization: `Bearer ${token}` } });
-      const readReprogData = await readReprogRes.json();
-      const reprogB = readReprogData.values || [];
-      let targetReprogRow = 6;
-      for (let i = 5; i < reprogB.length; i++) {
-        if (!reprogB[i] || !reprogB[i][0] || !reprogB[i][0].trim()) {
-          targetReprogRow = i + 1;
+    // If reprogramming, check Reprogramadas tab to find target starting row
+    let targetReprogRow = 6;
+    if (reprogramar) {
+      try {
+        const readReprogUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Reprogramadas!B1:B`;
+        const readReprogRes = await fetch(readReprogUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const readReprogData = await readReprogRes.json();
+        const reprogB = readReprogData.values || [];
+        for (let i = 5; i < reprogB.length; i++) {
+          if (!reprogB[i] || !reprogB[i][0] || !reprogB[i][0].trim()) {
+            targetReprogRow = i + 1;
+            break;
+          }
+        }
+        if (targetReprogRow <= 5) targetReprogRow = Math.max(6, reprogB.length + 1);
+      } catch (e) {
+        console.error('Erro ao ler aba Reprogramadas:', e);
+      }
+    }
+
+    // 4. Process each new dataLine according to business rules
+    dataLines.forEach((line) => {
+      const rowCells = line.split(';');
+      const novaDataStr = extractDate(rowCells[1]);
+      const novaEquipe = String(rowCells[6] || '').trim().toUpperCase();
+      const novoProjeto = cleanCode(rowCells[7]);
+      const novaChaveBk = String(rowCells[62] || '').trim().replace(/^"|"$/g, '');
+
+      // Search for existing matching row in allRows (row 6 onwards)
+      let existingRowIdx = -1;
+      for (let i = 5; i < allRows.length; i++) {
+        const r = allRows[i] || [];
+        const existChaveBk = String(r[62] || '').trim();
+        const existEquipe = String(r[6] || '').trim().toUpperCase();
+        const existDataStr = extractDate(r[1]);
+
+        if (
+          (novaChaveBk && existChaveBk && existChaveBk === novaChaveBk) ||
+          (novaEquipe && existEquipe === novaEquipe && novaDataStr && existDataStr === novaDataStr)
+        ) {
+          existingRowIdx = i;
           break;
         }
       }
-      if (targetReprogRow <= 5) targetReprogRow = Math.max(6, reprogB.length + 1);
 
-      const reprogUpdates = [];
-      rowsToRemove.forEach((rNum, offset) => {
-        const existingRow = allRows[rNum - 1] || [];
-        const copyRow = [...existingRow];
-        while (copyRow.length <= 46) copyRow.push('');
-        if (motivo) copyRow[46] = String(motivo).trim();
+      const hasExistingRow = existingRowIdx !== -1;
+      const existProjeto = hasExistingRow ? cleanCode(allRows[existingRowIdx][7]) : '';
+      const isSameObra = hasExistingRow && (existProjeto === novoProjeto);
+      const existingRowNumber = existingRowIdx + 1; // 1-indexed for sheets
 
-        const destRow = targetReprogRow + offset;
-        copyRow.forEach((val, cIdx) => {
-          const valStr = String(val ?? '').trim();
-          if (valStr) {
-            reprogUpdates.push({
-              range: `Reprogramadas!${getColumnLetter(cIdx)}${destRow}`,
-              values: [[valStr]]
-            });
+      let targetRowNumber;
+
+      if (reprogramar) {
+        // === CASO 1: REPROGRAMAR MARCADO ===
+        // 1. Se existir programação anterior, copia para a aba Reprogramadas e apaga a original da Plan_Principal
+        if (hasExistingRow) {
+          const oldRowData = allRows[existingRowIdx] || [];
+          const copyRow = [...oldRowData];
+          while (copyRow.length <= 46) copyRow.push('');
+          if (motivo) copyRow[46] = String(motivo).trim();
+
+          const destReprogRow = targetReprogRow;
+          targetReprogRow++;
+
+          copyRow.forEach((val, cIdx) => {
+            const valStr = String(val ?? '').trim();
+            if (valStr) {
+              reprogUpdates.push({
+                range: `Reprogramadas!${getColumnLetter(cIdx)}${destReprogRow}`,
+                values: [[valStr]]
+              });
+            }
+          });
+
+          // Limpa a linha original em Plan_Principal
+          rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
+          allRows[existingRowIdx] = []; // marca como vazia em memória
+        }
+
+        // 2. Lança a nova programação na primeira linha em branco de Plan_Principal
+        const blankIdx = findFirstEmptyRowIndex(allRows);
+        targetRowNumber = blankIdx + 1;
+        while (allRows.length <= blankIdx) allRows.push([]);
+        allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+
+      } else {
+        // === CASO 2: REPROGRAMAR NÃO MARCADO (Alteração na própria programação) ===
+        if (hasExistingRow && isSameObra) {
+          // 2A: Mesma obra e mesma data -> sobrescreve e mantém na mesma linha
+          targetRowNumber = existingRowNumber;
+          rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
+          allRows[existingRowIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+        } else {
+          // 2B: Obra diferente no mesmo dia -> apaga a linha anterior e lança na primeira em branco
+          if (hasExistingRow) {
+            rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
+            allRows[existingRowIdx] = []; // marca como vazia em memória
           }
-        });
-      });
-
-      if (reprogUpdates.length > 0) {
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            valueInputOption: 'USER_ENTERED',
-            data: reprogUpdates
-          })
-        });
+          const blankIdx = findFirstEmptyRowIndex(allRows);
+          targetRowNumber = blankIdx + 1;
+          while (allRows.length <= blankIdx) allRows.push([]);
+          allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+        }
       }
-    }
 
-    // Find first empty row in Column B (Data) starting at row 6 (index 5)
-    let targetRow = -1;
-    for (let i = 5; i < colBValues.length; i++) {
-      const row = colBValues[i];
-      const val = (row && row[0]) ? String(row[0]).trim() : '';
-      if (!val) {
-        targetRow = i + 1;
-        break;
-      }
-    }
-    if (targetRow === -1 || targetRow <= 5) {
-      targetRow = Math.max(6, colBValues.length + 1);
-    }
-
-    // 4. Update non-empty cells in Plan_Principal (preserving dropdowns & validations)
-    const cellUpdates = [];
-    dataLines.forEach((line, rOffset) => {
-      const currentRow = targetRow + rOffset;
-      const rowCells = line.split(';');
+      // Adiciona células a serem gravadas na Plan_Principal
       rowCells.slice(0, 78).forEach((val, cIdx) => {
         const valStr = String(val ?? '').trim().replace(/^"|"$/g, '');
         if (valStr) {
           cellUpdates.push({
-            range: `Plan_Principal!${getColumnLetter(cIdx)}${currentRow}`,
+            range: `Plan_Principal!${getColumnLetter(cIdx)}${targetRowNumber}`,
             values: [[valStr]]
           });
         }
       });
     });
 
+    // 5. Executa gravações em Reprogramadas (se houver)
+    if (reprogUpdates.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          valueInputOption: 'USER_ENTERED',
+          data: reprogUpdates
+        })
+      });
+    }
+
+    // 6. Executa limpeza das linhas antigas/substituídas em Plan_Principal (se houver)
+    if (rangesToClear.length > 0) {
+      const uniqueRanges = Array.from(new Set(rangesToClear));
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ranges: uniqueRanges
+        })
+      });
+    }
+
+    // 7. Executa gravação das novas programações em Plan_Principal
     if (cellUpdates.length > 0) {
       const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
         method: 'POST',
@@ -302,7 +379,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: `Programação gravada com sucesso na Plan_Principal da unidade ${unitSigla} (a partir da linha ${targetRow}) e salva no Drive!`
+      message: `Programação processada e gravada com sucesso na unidade ${unitSigla}!`
     });
   } catch (err) {
     console.error('Erro na API salvar-programacao:', err);
