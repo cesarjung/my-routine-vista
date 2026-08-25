@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Search,
   Plus,
@@ -40,9 +40,11 @@ import {
   DEFAULT_SELECTED_STATUSES,
   PcpObra,
   PcpPontoItem,
+  PcpProgramacaoForm,
   ServicoBase,
   ParsedPlanejamentoExistente,
-  MaterialPontoBudget
+  MaterialPontoBudget,
+  MOTIVOS_REPROGRAMACAO_COL_AU
 } from '@/hooks/usePcpPlanejamentoData';
 import {
   Dialog,
@@ -98,6 +100,10 @@ function formatMinToHours(minutes: number): string {
 
 export const PcpPlanejamentoView = () => {
   // Filtros da Carteira
+  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>(
+    'pcp_shared_unidade',
+    UNIDADES_DISPONIVEIS[0]?.id || '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'
+  );
   const [selectedObraId, setSelectedObraId] = useState<string>('');
   const [searchObra, setSearchObra] = useSessionState<string>('pcp_shared_search', '');
   const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_shared_statuses', DEFAULT_SELECTED_STATUSES);
@@ -108,7 +114,6 @@ export const PcpPlanejamentoView = () => {
   const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_shared_prioridade', 'TODAS');
   const [selectedDonoFilter, setSelectedDonoFilter] = useSessionState<string>('pcp_shared_dono', 'TODOS');
   const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useSessionState<string>('pcp_shared_supervisor', 'TODOS');
-  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>('pcp_shared_unidade', '');
 
   // Alojamentos
   const { alojamentos } = useAlojamentos();
@@ -128,12 +133,17 @@ export const PcpPlanejamentoView = () => {
     donosCarteira,
     supervisoresCarteira,
     statusesCarteira,
+    metasPorEquipeMap,
     orcamentoPontosQuery,
     orcamentoPorPontoMap,
     pontosDisponiveisDoProjeto,
     salvarProgramacao,
     servicosBase
   } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId);
+
+  const selectedUnidadeObj = useMemo(() => {
+    return UNIDADES_DISPONIVEIS.find(u => u.id === selectedUnidadeId) || UNIDADES_DISPONIVEIS[0];
+  }, [selectedUnidadeId]);
 
   const selectedObra = useMemo(() => {
     if (!selectedObraId || selectedObraId.trim() === '') return null;
@@ -151,6 +161,16 @@ export const PcpPlanejamentoView = () => {
   const [tempoSaidaBasePadrao, setTempoSaidaBasePadrao] = useSessionState<number>('pcp_tempo_saida_base_padrao_v1', 15);
   const [tempoSegurancaPadrao, setTempoSegurancaPadrao] = useSessionState<number>('pcp_tempo_seguranca_padrao_v1', 15);
   const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
+
+  // Sincroniza meta com a equipe selecionada
+  useEffect(() => {
+    if (selectedEquipes.length > 0 && selectedEquipes[0] && metasPorEquipeMap) {
+      const eqMeta = metasPorEquipeMap.get(selectedEquipes[0].toUpperCase());
+      if (eqMeta && eqMeta > 0) {
+        setMetaEquipeInput(eqMeta);
+      }
+    }
+  }, [selectedEquipes, metasPorEquipeMap]);
 
   // Visão Ativa: Jornada vs Alojamentos
   const [viewMode, setViewMode] = useSessionState<'jornada' | 'alojamentos'>('pcp_view_mode_v2', 'jornada');
@@ -188,10 +208,28 @@ export const PcpPlanejamentoView = () => {
 
   // Alojamento Padrão Nome
   const alojamentoPadrao = useMemo(() => {
-    if (!selectedAlojamentoId || selectedAlojamentoId === 'nenhum') return 'Base Bom Jesus da Lapa';
+    if (!selectedAlojamentoId || selectedAlojamentoId === 'nenhum') {
+      return selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base Bom Jesus da Lapa';
+    }
     const found = alojamentos.find(a => a.id === selectedAlojamentoId);
-    return found ? found.nome : 'Base Bom Jesus da Lapa';
-  }, [alojamentos, selectedAlojamentoId]);
+    return found ? found.nome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base Bom Jesus da Lapa');
+  }, [alojamentos, selectedAlojamentoId, selectedUnidadeObj]);
+
+  // Handler de troca de unidade com reset
+  const handleUnidadeChange = (newUnitId: string) => {
+    setSelectedUnidadeId(newUnitId);
+    setSelectedObraId('');
+    setSelectedSituacao('TODAS');
+    setSelectedMesFilter('TODOS');
+    setSelectedMunicipioFilter('TODOS');
+    setSelectedPrioridadeFilter('TODAS');
+    setSelectedDonoFilter('TODOS');
+    setSelectedSupervisorFilter('TODOS');
+    setSearchObra('');
+    setDiasPontosMap({});
+    setDiasPontosGroupedMap({});
+    toast.success('Unidade alterada com sucesso.');
+  };
 
   // Lista de Dias Programados
   const diasProgramados = useMemo(() => {
@@ -245,38 +283,63 @@ export const PcpPlanejamentoView = () => {
 
   // Obras Filtradas
   const filteredObras = useMemo(() => {
-    return obras.filter(obra => {
+    const list = Array.isArray(obras) ? obras : [];
+    const statuses = Array.isArray(selectedStatuses) ? selectedStatuses : [];
+
+    return list.filter(o => {
+      if (!o) return false;
+
+      // 1. Situação
+      if (selectedSituacao !== 'TODAS' && o.situacao !== selectedSituacao) {
+        return false;
+      }
+
+      // 2. Status
+      if (statuses.length > 0) {
+        const stUpper = (o.statusExecucao || (o as any).status || '').trim().toUpperCase();
+        const matches = statuses.some(s => stUpper === (s || '').toUpperCase());
+        if (!matches) return false;
+      }
+
+      // 3. Mês / Carteira
+      if (selectedMesFilter !== 'TODOS') {
+        const targetM = (selectedMesFilter || '').trim().toLowerCase();
+        const hasMonth = (o.meses || []).some(m => (m || '').trim().toLowerCase() === targetM) ||
+                         (o.carteirasStr || '').trim().toLowerCase().includes(targetM);
+        if (!hasMonth) return false;
+      }
+
+      // 4. Município
+      if (selectedMunicipioFilter !== 'TODOS' && (o.municipio || '').toUpperCase() !== (selectedMunicipioFilter || '').toUpperCase()) {
+        return false;
+      }
+
+      // 5. Prioridade
+      if (selectedPrioridadeFilter !== 'TODAS' && (o.prioridade || '').toUpperCase() !== (selectedPrioridadeFilter || '').toUpperCase()) {
+        return false;
+      }
+
+      // 6. Dono da Obra
+      const dono = (o.donoDaObra || (o as any).donoObra || '');
+      if (selectedDonoFilter !== 'TODOS' && dono.toUpperCase() !== (selectedDonoFilter || '').toUpperCase()) {
+        return false;
+      }
+
+      // 7. Supervisor
+      if (selectedSupervisorFilter !== 'TODOS' && (o.supervisor || '').toUpperCase() !== (selectedSupervisorFilter || '').toUpperCase()) {
+        return false;
+      }
+
+      // 8. Busca Texto
       if (searchObra.trim()) {
-        const q = searchObra.toLowerCase();
-        const matchesProj = obra.projeto.toLowerCase().includes(q);
-        const matchesDesc = obra.descricao.toLowerCase().includes(q);
-        const matchesMun = obra.municipio.toLowerCase().includes(q);
-        const matchesDono = (obra.donoObra || '').toLowerCase().includes(q);
+        const q = searchObra.toLowerCase().trim();
+        const matchesProj = (o.projeto || '').toLowerCase().includes(q);
+        const matchesDesc = (o.nomeProjeto || (o as any).descricao || '').toLowerCase().includes(q);
+        const matchesMun = (o.municipio || '').toLowerCase().includes(q);
+        const matchesDono = dono.toLowerCase().includes(q);
         if (!matchesProj && !matchesDesc && !matchesMun && !matchesDono) return false;
       }
-      if (selectedSituacao !== 'TODAS') {
-        const sit = obra.situacao ? obra.situacao.toUpperCase() : 'APTA';
-        if (sit !== selectedSituacao.toUpperCase()) return false;
-      }
-      if (selectedStatuses.length > 0 && selectedStatuses.length < ALL_STATUSES.length) {
-        const statusUpper = (obra.status || 'SEM PROGR.').toUpperCase();
-        if (!selectedStatuses.includes(statusUpper)) return false;
-      }
-      if (selectedMesFilter !== 'TODOS') {
-        if ((obra.mesCarteira || '').toUpperCase() !== selectedMesFilter.toUpperCase()) return false;
-      }
-      if (selectedMunicipioFilter !== 'TODOS') {
-        if ((obra.municipio || '').toUpperCase() !== selectedMunicipioFilter.toUpperCase()) return false;
-      }
-      if (selectedPrioridadeFilter !== 'TODAS') {
-        if ((obra.prioridade || '').toUpperCase() !== selectedPrioridadeFilter.toUpperCase()) return false;
-      }
-      if (selectedDonoFilter !== 'TODOS') {
-        if ((obra.donoObra || '').toUpperCase() !== selectedDonoFilter.toUpperCase()) return false;
-      }
-      if (selectedSupervisorFilter !== 'TODOS') {
-        if ((obra.supervisor || '').toUpperCase() !== selectedSupervisorFilter.toUpperCase()) return false;
-      }
+
       return true;
     });
   }, [
@@ -307,7 +370,7 @@ export const PcpPlanejamentoView = () => {
         codigoMaterial: bItem.codigo,
         descricaoMaterial: bItem.descricao,
         qtdOrcadaPonto: bItem.quantidade || 1,
-        etapaPrevista: bItem.etapaPrevista || inferEtapaFromServico(bItem.servicoPrevisto || ''),
+        etapaPrevista: bItem.etapaPrevista || 'IMPLANTAÇÃO',
         quantidade: bItem.quantidade || 1,
         valorUnitario: bItem.valorUnitario,
         tempoEstimadoMinutos: bItem.tempoMinutos || 15,
@@ -665,7 +728,7 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Envio de Programação
+  // Envio de Programação (usando salvarProgramacao.mutateAsync)
   const handleEnviarPlanPrincipalDia = async (diaId: string) => {
     if (!selectedObra) {
       toast.error('Nenhuma obra selecionada para enviar.');
@@ -687,8 +750,7 @@ export const PcpPlanejamentoView = () => {
     }
 
     try {
-      toast.loading(`Enviando programação de ${diaTarget.dataStr}...`, { id: 'save-day' });
-      await salvarProgramacao({
+      const formPayload: PcpProgramacaoForm = {
         unidadeId: selectedUnidadeId,
         dataProgramacao: diaTarget.dataCompleta,
         dateObj: diaTarget.dateObj,
@@ -700,10 +762,13 @@ export const PcpPlanejamentoView = () => {
         isPes: diasPesMap[diaId] || false,
         reprogramar: diasReprogramarMap[diaId] || false,
         motivoReprogramacao: diasMotivoReprogramarMap[diaId] || '',
-      });
-      toast.success(`Programação de ${diaTarget.dataStr} enviada com sucesso!`, { id: 'save-day' });
+        metaEquipeValor: metaEquipeInput,
+      };
+
+      await salvarProgramacao.mutateAsync([formPayload]);
+      toast.success(`Programação de ${diaTarget.dataStr} enviada com sucesso para a Plan_Principal!`);
     } catch (err: any) {
-      toast.error(`Erro ao enviar dia: ${err.message || 'Erro inesperado'}`, { id: 'save-day' });
+      toast.error(`Erro ao enviar dia: ${err.message || 'Erro inesperado'}`);
     }
   };
 
@@ -723,30 +788,38 @@ export const PcpPlanejamentoView = () => {
     }
 
     try {
-      toast.loading(`Enviando ${diasComAtividades.length} dia(s) programado(s)...`, { id: 'save-all' });
+      const allForms: PcpProgramacaoForm[] = [];
+      const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
+
       for (const d of diasComAtividades) {
         const pts = diasPontosMap[d.id] || [];
         const allActs: PcpPontoItem[] = [];
         pts.forEach(p => {
           allActs.push(...getItemsDoPontoNoDia(d.id, p).filter(i => i.selected));
         });
-        await salvarProgramacao({
-          unidadeId: selectedUnidadeId,
-          dataProgramacao: d.dataCompleta,
-          dateObj: d.dateObj,
-          supervisor,
-          equipe: selectedEquipes[0] || 'EH156',
-          etapa: (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
-          obra: selectedObra,
-          pontos: allActs,
-          isPes: diasPesMap[d.id] || false,
-          reprogramar: diasReprogramarMap[d.id] || false,
-          motivoReprogramacao: diasMotivoReprogramarMap[d.id] || '',
-        });
+
+        for (const eq of equipesToSend) {
+          allForms.push({
+            unidadeId: selectedUnidadeId,
+            dataProgramacao: d.dataCompleta,
+            dateObj: d.dateObj,
+            supervisor,
+            equipe: eq,
+            etapa: (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
+            obra: selectedObra,
+            pontos: allActs,
+            isPes: diasPesMap[d.id] || false,
+            reprogramar: diasReprogramarMap[d.id] || false,
+            motivoReprogramacao: diasMotivoReprogramarMap[d.id] || '',
+            metaEquipeValor: metaEquipeInput,
+          });
+        }
       }
-      toast.success('Todos os dias programados foram enviados com sucesso!', { id: 'save-all' });
+
+      await salvarProgramacao.mutateAsync(allForms);
+      toast.success(`Programação de todos os ${diasComAtividades.length} dias enviada com sucesso para a Plan_Principal!`);
     } catch (err: any) {
-      toast.error(`Erro ao enviar dias: ${err.message || 'Erro inesperado'}`, { id: 'save-all' });
+      toast.error(`Erro ao enviar dias: ${err.message || 'Erro inesperado'}`);
     }
   };
 
@@ -765,15 +838,25 @@ export const PcpPlanejamentoView = () => {
     toast.success('Planejamento e pontos em tela limpos com sucesso.');
   };
 
-  // Sincronizar Google Sheets
+  // Sincronizar Google Sheets via API
   const handleSyncFromGoogleSheets = async () => {
     try {
-      toast.loading('Sincronizando planilha do Google Sheets...', { id: 'sync-sheets' });
-      await rawCacheQuery.refetch();
-      await orcamentoPontosQuery.refetch();
-      toast.success('Dados sincronizados com o Google Sheets.', { id: 'sync-sheets' });
+      toast.loading('Sincronizando planilha do Google Sheets no Supabase...', { id: 'sync-sheets' });
+      const res = await fetch('/api/sync-pcp-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unidadeId: selectedUnidadeId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await rawCacheQuery.refetch();
+        await orcamentoPontosQuery.refetch();
+        toast.success('Planilha do Google Sheets sincronizada com sucesso!', { id: 'sync-sheets' });
+      } else {
+        toast.error('Erro ao sincronizar: ' + (data.error || 'Erro desconhecido'), { id: 'sync-sheets' });
+      }
     } catch (e: any) {
-      toast.error('Erro ao sincronizar: ' + e.message, { id: 'sync-sheets' });
+      toast.error('Falha na comunicação com o servidor: ' + e.message, { id: 'sync-sheets' });
     }
   };
 
@@ -809,7 +892,7 @@ export const PcpPlanejamentoView = () => {
       }
       if (dayId) {
         nextDiasPontosMap[dayId] = plan.pontos.length > 0 ? plan.pontos : [];
-        if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
+        if (!nextDiasPontedMap(nextDiasPontosGroupedMap, dayId)) nextDiasPontosGroupedMap[dayId] = {};
       }
 
       plan.pontos.forEach(pLabel => {
@@ -856,6 +939,11 @@ export const PcpPlanejamentoView = () => {
     setSelectedExistingPlanKeys([]);
     toast.success(`${plansToLoad.length} ${plansToLoad.length === 1 ? 'planejamento carregado' : 'planejamentos carregados'} com sucesso.`);
   };
+
+  // Helper para verificar chave de objeto com segurança
+  function nextDiasPontedMap(map: Record<string, any>, key: string) {
+    return Boolean(map && map[key]);
+  }
 
   // Resumo de Status do Fluxo para as Pílulas do Header
   const diasSemPontosCount = diasProgramados.filter(d => (diasPontosMap[d.id] || []).length === 0).length;
@@ -944,7 +1032,7 @@ export const PcpPlanejamentoView = () => {
               </span>
               <div className="flex items-center gap-2.5 mt-1">
                 <h1 className="text-[18px] font-bold text-[#23211E] leading-tight">
-                  {selectedObra ? `${selectedObra.projeto} · ${selectedObra.municipio}` : 'Selecione uma obra'}
+                  {selectedObra ? `${selectedObra.projeto} · ${selectedObra.municipio}` : (selectedUnidadeObj ? `Unidade: ${selectedUnidadeObj.name} (Selecione uma Obra)` : 'Selecione uma obra')}
                 </h1>
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-[#F2F0EC] text-[#5C574F] border border-[#DEDAD3]">
                   Ambiente local
@@ -1055,15 +1143,15 @@ export const PcpPlanejamentoView = () => {
       {/* 3.2 BARRA DE FILTROS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         {/* Unidade */}
-        <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
+        <Select value={selectedUnidadeId} onValueChange={handleUnidadeChange}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedUnidadeId ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Unidade</span>
-            <SelectValue placeholder="Selecione" />
+            <span className="truncate">{selectedUnidadeObj?.name || 'Selecione a Unidade'}</span>
           </SelectTrigger>
           <SelectContent>
             {UNIDADES_DISPONIVEIS.map(u => (
-              <SelectItem key={u.id} value={u.id} className="text-xs">
-                {u.nome}
+              <SelectItem key={u.id} value={u.id} className="text-xs font-semibold">
+                {u.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1076,9 +1164,9 @@ export const PcpPlanejamentoView = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="APTA" className="text-xs">Apta</SelectItem>
-            <SelectItem value="INAPTA" className="text-xs">Inapta</SelectItem>
-            <SelectItem value="TODAS" className="text-xs">Todas</SelectItem>
+            <SelectItem value="APTA" className="text-xs font-semibold text-emerald-600">Apta</SelectItem>
+            <SelectItem value="INAPTA" className="text-xs font-semibold text-rose-600">Inapta</SelectItem>
+            <SelectItem value="TODAS" className="text-xs font-semibold">Todas</SelectItem>
           </SelectContent>
         </Select>
 
@@ -1136,9 +1224,9 @@ export const PcpPlanejamentoView = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="TODOS" className="text-xs">Todos os meses</SelectItem>
+            <SelectItem value="TODOS" className="text-xs font-semibold">Todos os meses ({obras.length})</SelectItem>
             {mesesCarteira.map(m => (
-              <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+              <SelectItem key={m} value={m} className="text-xs font-mono">{m}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -1150,7 +1238,7 @@ export const PcpPlanejamentoView = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="TODOS" className="text-xs">Todos os municípios</SelectItem>
+            <SelectItem value="TODOS" className="text-xs font-semibold">Todos os municípios</SelectItem>
             {municipiosCarteira.map(mun => (
               <SelectItem key={mun} value={mun} className="text-xs">{mun}</SelectItem>
             ))}
@@ -1164,7 +1252,7 @@ export const PcpPlanejamentoView = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="TODAS" className="text-xs">Todas</SelectItem>
+            <SelectItem value="TODAS" className="text-xs font-semibold">Todas as prioridades</SelectItem>
             {prioridadesCarteira.map(p => (
               <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
             ))}
@@ -1178,7 +1266,7 @@ export const PcpPlanejamentoView = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="TODOS" className="text-xs">Todos os donos</SelectItem>
+            <SelectItem value="TODOS" className="text-xs font-semibold">Todos os donos</SelectItem>
             {donosCarteira.map(d => (
               <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>
             ))}
@@ -1192,7 +1280,7 @@ export const PcpPlanejamentoView = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="TODOS" className="text-xs">Todos os supervisores</SelectItem>
+            <SelectItem value="TODOS" className="text-xs font-semibold">Todos os supervisores</SelectItem>
             {supervisoresCarteira.map(s => (
               <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
             ))}
@@ -1238,7 +1326,21 @@ export const PcpPlanejamentoView = () => {
             <div className="h-[440px] overflow-y-auto space-y-2 pr-0.5 custom-scrollbar">
               {filteredObras.length === 0 ? (
                 <div className="text-center py-12 text-xs text-[#A39E96]">
-                  Nenhuma obra encontrada.
+                  {obras.length === 0 ? (
+                    <div className="space-y-2">
+                      <p>Nenhuma obra carregada para esta unidade.</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleSyncFromGoogleSheets}
+                        className="text-xs font-semibold text-[#E07A1F] border-[#E8C9A0]"
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" /> Sincronizar Sheets
+                      </Button>
+                    </div>
+                  ) : (
+                    'Nenhuma obra corresponde aos filtros ativos.'
+                  )}
                 </div>
               ) : (
                 filteredObras.map(obra => {
@@ -1258,7 +1360,7 @@ export const PcpPlanejamentoView = () => {
                         </span>
                       </div>
 
-                      <p className="text-xs text-[#5C574F] truncate mt-1">{obra.descricao}</p>
+                      <p className="text-xs text-[#5C574F] truncate mt-1">{obra.nomeProjeto || (obra as any).descricao}</p>
 
                       <div className="flex items-center justify-between text-[11px] text-[#A39E96] mt-1.5 pt-1.5 border-t border-[#E6E3DD]/60">
                         <span className="truncate">{obra.municipio}</span>
@@ -1346,11 +1448,11 @@ export const PcpPlanejamentoView = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold text-base text-[#E07A1F]">{selectedObra.projeto}</span>
-                  <span className="text-sm font-bold text-[#23211E]">— {selectedObra.descricao}</span>
+                  <span className="text-sm font-bold text-[#23211E]">— {selectedObra.nomeProjeto || (selectedObra as any).descricao}</span>
                 </div>
                 <div className="flex items-center gap-4 text-xs text-[#6B6660] mt-1 font-medium">
                   <span>Município: <strong className="text-[#23211E]">{selectedObra.municipio}</strong></span>
-                  <span>Dono: <strong className="text-[#23211E]">{selectedObra.donoObra || 'Não informado'}</strong></span>
+                  <span>Dono: <strong className="text-[#23211E]">{selectedObra.donoDaObra || (selectedObra as any).donoObra || 'Não informado'}</strong></span>
                 </div>
               </div>
 
@@ -1385,7 +1487,7 @@ export const PcpPlanejamentoView = () => {
                 <SelectValue placeholder="Base Bom Jesus da Lapa" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="nenhum" className="text-xs">Base Bom Jesus da Lapa</SelectItem>
+                <SelectItem value="nenhum" className="text-xs">{selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base Bom Jesus da Lapa'}</SelectItem>
                 {alojamentos.map(a => (
                   <SelectItem key={a.id} value={a.id} className="text-xs">{a.nome}</SelectItem>
                 ))}
