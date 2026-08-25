@@ -452,12 +452,13 @@ export const usePcpPlanejamentoData = (
            }
         }
 
+        // Prioriza o Valor Contratual / Valor com Fator K da Unidade (Coluna AT / Index 45)
         let valor = 0;
-        if (valStr) {
-           valor = parseFloat(valStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
-        }
-        if (valor === 0 && valKStr) {
+        if (valKStr) {
            valor = parseFloat(valKStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+        }
+        if (valor === 0 && valStr) {
+           valor = parseFloat(valStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
         }
 
         lista.push({
