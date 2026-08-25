@@ -1564,51 +1564,44 @@ export const PcpPlanejamentoView = () => {
           ) : (
             <>
               {/* 1. Faixa da Obra Selecionada */}
-              <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-base text-[#E07A1F]">{selectedObra.projeto}</span>
-                    <span className="text-sm font-bold text-[#23211E]">— {selectedObra.nomeProjeto || (selectedObra as any).descricao}</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-[#6B6660] mt-1 font-medium">
-                    <span>Município: <strong className="text-[#23211E]">{selectedObra.municipio}</strong></span>
-                    <span>Dono: <strong className="text-[#23211E]">{selectedObra.donoDaObra || (selectedObra as any).donoObra || 'Não informado'}</strong></span>
-                  </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-bold text-sm text-[#E07A1F]">{selectedObra.projeto}</span>
+                  <span className="text-sm font-bold text-[#23211E]">{selectedObra.nomeProjeto || (selectedObra as any).descricao}</span>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs font-mono font-semibold bg-[#F7F6F3] px-3.5 py-2 rounded-lg border border-[#E6E3DD] shrink-0">
-                  <span className="text-[#6B6660]">Meta diária da equipe:</span>
-                  <span className="text-[#17794C] text-sm font-bold">
-                    R$ {metaEquipeInput.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
+                <div className="text-xs text-[#6B6660] font-medium shrink-0">
+                  <span>Dono {selectedObra.donoDaObra || (selectedObra as any).donoObra || 'Coelba'}</span>
+                  <span className="mx-1.5">·</span>
+                  <span>meta diária <strong className="text-[#23211E] font-mono">R$ {metaEquipeInput.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
                 </div>
               </div>
 
-              {/* 2. Parâmetros (Chips numa linha) */}
-              <div className="bg-white rounded-xl border border-[#E6E3DD] p-3 shadow-2xs flex flex-wrap items-center gap-2.5 text-xs">
+              {/* 2. Parâmetros (Chips horizontais em linha única) */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
                 {/* Equipe */}
                 <Select value={selectedEquipes[0] || 'EH156'} onValueChange={val => setSelectedEquipes([val])}>
-                  <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
-                    <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Equipe</span>
-                    <SelectValue />
+                  <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
+                    <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">EQUIPE</span>
+                    <span className="font-mono font-bold text-[#23211E]">{selectedEquipes[0] || 'EH156'}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {equipesDisponiveis.map(eq => (
-                      <SelectItem key={eq} value={eq} className="text-xs">{eq}</SelectItem>
+                      <SelectItem key={eq} value={eq} className="text-xs font-mono font-semibold">{eq}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
                 {/* Base / Alojamento Padrão */}
                 <Select value={selectedAlojamentoId} onValueChange={setSelectedAlojamentoId}>
-                  <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
-                    <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Alojamento</span>
-                    <SelectValue placeholder="Base" />
+                  <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
+                    <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">BASE OU ALOJAMENTO PADRÃO</span>
+                    <span className="font-semibold text-[#23211E]">{alojamentoPadrao}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nenhum" className="text-xs">{selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base'}</SelectItem>
+                    <SelectItem value="nenhum" className="text-xs font-semibold">{selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base'}</SelectItem>
                     {alojamentos.map(a => (
-                      <SelectItem key={a.id} value={a.id} className="text-xs">{a.nome}</SelectItem>
+                      <SelectItem key={a.id} value={a.id} className="text-xs font-semibold">{a.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1616,10 +1609,12 @@ export const PcpPlanejamentoView = () => {
                 {/* Período com Popover */}
                 <Popover open={isDataRangeOpen} onOpenChange={setIsDataRangeOpen}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold">
-                      <CalendarIcon className="w-3.5 h-3.5 text-[#5C574F]" />
-                      <span className="text-[11px] uppercase text-[#A39E96]">Período:</span>
-                      <span className="font-mono">{format(safeParseDate(dataInicio), 'dd/MM')} a {format(safeParseDate(dataFim), 'dd/MM')}</span>
+                    <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold gap-1.5 w-auto">
+                      <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">PERÍODO</span>
+                      <span className="font-mono font-bold text-[#23211E]">
+                        {format(safeParseDate(dataInicio), 'dd/MM')} a {format(safeParseDate(dataFim), 'dd/MM')}
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 opacity-50 ml-0.5" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-3.5 bg-white" align="start">
@@ -1650,31 +1645,31 @@ export const PcpPlanejamentoView = () => {
                 </Popover>
 
                 {/* Saída Base Padrão */}
-                <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
-                  <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Saída base:</span>
+                <div className="inline-flex items-center gap-1.5 bg-white border border-[#DEDAD3] rounded-lg shadow-2xs px-3 h-8 text-xs">
+                  <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">SAÍDA DA BASE PADRÃO</span>
                   <input
                     type="number"
                     min="0"
                     step="5"
                     value={tempoSaidaBasePadrao}
                     onChange={e => setTempoSaidaBasePadrao(parseInt(e.target.value, 10) || 0)}
-                    className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
+                    className="w-7 text-center text-xs font-mono font-bold bg-transparent focus:outline-none text-[#23211E]"
                   />
-                  <span className="text-[#A39E96] text-[11px]">min</span>
+                  <span className="text-[#23211E] text-xs font-semibold">min</span>
                 </div>
 
                 {/* Segurança Padrão */}
-                <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
-                  <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Segurança:</span>
+                <div className="inline-flex items-center gap-1.5 bg-white border border-[#DEDAD3] rounded-lg shadow-2xs px-3 h-8 text-xs">
+                  <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">SEGURANÇA PADRÃO</span>
                   <input
                     type="number"
                     min="0"
                     step="5"
                     value={tempoSegurancaPadrao}
                     onChange={e => setTempoSegurancaPadrao(parseInt(e.target.value, 10) || 0)}
-                    className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
+                    className="w-7 text-center text-xs font-mono font-bold bg-transparent focus:outline-none text-[#23211E]"
                   />
-                  <span className="text-[#A39E96] text-[11px]">min</span>
+                  <span className="text-[#23211E] text-xs font-semibold">min</span>
                 </div>
               </div>
 
