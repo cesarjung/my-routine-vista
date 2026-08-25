@@ -1524,6 +1524,19 @@ export const PcpPlanejamentoView = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Observação Original Completa de Campo retrátil */}
+                {currentRisk?.observacoesOriginais && (
+                  <details className="mt-2 text-[11px] text-[#5C574F] border-t border-[#E6E3DD] pt-2 group">
+                    <summary className="font-semibold text-[#E07A1F] hover:text-[#C0392E] cursor-pointer transition-colors list-none flex items-center justify-between">
+                      <span>Ver anotação completa de campo</span>
+                      <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180 opacity-70" />
+                    </summary>
+                    <div className="mt-2 p-2.5 rounded-lg bg-[#F7F6F3] border border-[#E6E3DD] text-[#23211E] font-mono text-[11px] leading-relaxed whitespace-pre-wrap select-text max-h-[200px] overflow-y-auto">
+                      {currentRisk.observacoesOriginais}
+                    </div>
+                  </details>
+                )}
               </div>
             </div>
           )}
