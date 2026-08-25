@@ -32,7 +32,6 @@ import {
   DollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useSessionState } from '@/hooks/useSessionState';
 import {
   usePcpPlanejamentoData,
   UNIDADES_DISPONIVEIS,
@@ -73,6 +72,50 @@ import { useVistoriaRisk } from '@/hooks/usePcpAiPlanner';
 import { toast } from 'sonner';
 import { PcpDiaRow } from './PcpDiaRow';
 
+// In-memory session store (persiste entre trocas de rotas/seções no SPA, reseta no F5 / logout)
+const inMemoryPcpStore: Record<string, any> = {};
+const inMemoryPcpListeners: Record<string, Set<(value: any) => void>> = {};
+
+function useInMemorySessionState<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [state, setState] = useState<T>(() => {
+    if (key in inMemoryPcpStore) {
+      return inMemoryPcpStore[key];
+    }
+    inMemoryPcpStore[key] = initialValue;
+    return initialValue;
+  });
+
+  useEffect(() => {
+    if (!inMemoryPcpListeners[key]) {
+      inMemoryPcpListeners[key] = new Set();
+    }
+    inMemoryPcpListeners[key].add(setState);
+
+    return () => {
+      inMemoryPcpListeners[key].delete(setState);
+    };
+  }, [key]);
+
+  const setValue: React.Dispatch<React.SetStateAction<T>> = useCallback((value) => {
+    setState((prevState) => {
+      const valueToStore = value instanceof Function ? (value as (val: T) => T)(prevState) : value;
+      inMemoryPcpStore[key] = valueToStore;
+
+      if (inMemoryPcpListeners[key]) {
+        inMemoryPcpListeners[key].forEach(listener => {
+          if (listener !== setState) {
+            listener(valueToStore);
+          }
+        });
+      }
+
+      return valueToStore;
+    });
+  }, [key]);
+
+  return [state, setValue];
+}
+
 function safeParseDate(val?: any): Date {
   if (!val) return new Date();
   if (val instanceof Date && !isNaN(val.getTime())) return val;
@@ -99,21 +142,29 @@ function formatMinToHours(minutes: number): string {
 }
 
 export const PcpPlanejamentoView = () => {
-  // Filtros da Carteira
-  const [selectedUnidadeId, setSelectedUnidadeId] = useSessionState<string>(
-    'pcp_shared_unidade',
-    UNIDADES_DISPONIVEIS[0]?.id || '1rj2V7CxbZwkan63eCeLkH9G00Gi041IZNC6vwEgq6yI'
-  );
-  const [selectedObraId, setSelectedObraId] = useState<string>('');
-  const [searchObra, setSearchObra] = useSessionState<string>('pcp_shared_search', '');
-  const [selectedStatuses, setSelectedStatuses] = useSessionState<string[]>('pcp_shared_statuses', DEFAULT_SELECTED_STATUSES);
+  // Limpeza de session storage legado ao inicializar
+  useEffect(() => {
+    try {
+      Object.keys(window.sessionStorage).forEach(k => {
+        if (k.startsWith('pcp_')) {
+          window.sessionStorage.removeItem(k);
+        }
+      });
+    } catch {}
+  }, []);
+
+  // Filtros da Carteira - Inicia 100% Vazio no F5 / Logout
+  const [selectedUnidadeId, setSelectedUnidadeId] = useInMemorySessionState<string>('pcp_mem_unidade', '');
+  const [selectedObraId, setSelectedObraId] = useInMemorySessionState<string>('pcp_mem_obra', '');
+  const [searchObra, setSearchObra] = useInMemorySessionState<string>('pcp_mem_search', '');
+  const [selectedStatuses, setSelectedStatuses] = useInMemorySessionState<string[]>('pcp_mem_statuses', DEFAULT_SELECTED_STATUSES);
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState<boolean>(false);
-  const [selectedSituacao, setSelectedSituacao] = useSessionState<string>('pcp_shared_situacao', 'APTA');
-  const [selectedMesFilter, setSelectedMesFilter] = useSessionState<string>('pcp_shared_mes', 'TODOS');
-  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useSessionState<string>('pcp_shared_municipio', 'TODOS');
-  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useSessionState<string>('pcp_shared_prioridade', 'TODAS');
-  const [selectedDonoFilter, setSelectedDonoFilter] = useSessionState<string>('pcp_shared_dono', 'TODOS');
-  const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useSessionState<string>('pcp_shared_supervisor', 'TODOS');
+  const [selectedSituacao, setSelectedSituacao] = useInMemorySessionState<string>('pcp_mem_situacao', 'TODAS');
+  const [selectedMesFilter, setSelectedMesFilter] = useInMemorySessionState<string>('pcp_mem_mes', 'TODOS');
+  const [selectedMunicipioFilter, setSelectedMunicipioFilter] = useInMemorySessionState<string>('pcp_mem_municipio', 'TODOS');
+  const [selectedPrioridadeFilter, setSelectedPrioridadeFilter] = useInMemorySessionState<string>('pcp_mem_prioridade', 'TODAS');
+  const [selectedDonoFilter, setSelectedDonoFilter] = useInMemorySessionState<string>('pcp_mem_dono', 'TODOS');
+  const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useInMemorySessionState<string>('pcp_mem_supervisor', 'TODOS');
 
   // Alojamentos
   const { alojamentos } = useAlojamentos();
@@ -142,7 +193,8 @@ export const PcpPlanejamentoView = () => {
   } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId);
 
   const selectedUnidadeObj = useMemo(() => {
-    return UNIDADES_DISPONIVEIS.find(u => u.id === selectedUnidadeId) || UNIDADES_DISPONIVEIS[0];
+    if (!selectedUnidadeId) return null;
+    return UNIDADES_DISPONIVEIS.find(u => u.id === selectedUnidadeId) || null;
   }, [selectedUnidadeId]);
 
   const selectedObra = useMemo(() => {
@@ -151,15 +203,15 @@ export const PcpPlanejamentoView = () => {
   }, [obras, selectedObraId]);
 
   // Período
-  const [dataInicio, setDataInicio] = useSessionState<string>('pcp_shared_data_inicio', format(new Date(), 'yyyy-MM-dd'));
-  const [dataFim, setDataFim] = useSessionState<string>('pcp_shared_data_fim', format(addDays(new Date(), 2), 'yyyy-MM-dd'));
+  const [dataInicio, setDataInicio] = useInMemorySessionState<string>('pcp_mem_data_inicio', format(new Date(), 'yyyy-MM-dd'));
+  const [dataFim, setDataFim] = useInMemorySessionState<string>('pcp_mem_data_fim', format(addDays(new Date(), 2), 'yyyy-MM-dd'));
   const [isDataRangeOpen, setIsDataRangeOpen] = useState<boolean>(false);
 
   // Parâmetros Gerais
   const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
-  const [selectedEquipes, setSelectedEquipes] = useSessionState<string[]>('pcp_shared_selected_equipes_v3', ['EH156']);
-  const [tempoSaidaBasePadrao, setTempoSaidaBasePadrao] = useSessionState<number>('pcp_tempo_saida_base_padrao_v1', 15);
-  const [tempoSegurancaPadrao, setTempoSegurancaPadrao] = useSessionState<number>('pcp_tempo_seguranca_padrao_v1', 15);
+  const [selectedEquipes, setSelectedEquipes] = useInMemorySessionState<string[]>('pcp_mem_selected_equipes', ['EH156']);
+  const [tempoSaidaBasePadrao, setTempoSaidaBasePadrao] = useInMemorySessionState<number>('pcp_mem_tempo_saida_base', 15);
+  const [tempoSegurancaPadrao, setTempoSegurancaPadrao] = useInMemorySessionState<number>('pcp_mem_tempo_seguranca', 15);
   const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
 
   // Sincroniza meta com a equipe selecionada
@@ -173,21 +225,21 @@ export const PcpPlanejamentoView = () => {
   }, [selectedEquipes, metasPorEquipeMap]);
 
   // Visão Ativa: Jornada vs Alojamentos
-  const [viewMode, setViewMode] = useSessionState<'jornada' | 'alojamentos'>('pcp_view_mode_v2', 'jornada');
+  const [viewMode, setViewMode] = useInMemorySessionState<'jornada' | 'alojamentos'>('pcp_mem_view_mode', 'jornada');
   // Dias Expandidos
-  const [expandedDayIds, setExpandedDayIds] = useSessionState<string[]>('pcp_expanded_day_ids_v2', []);
+  const [expandedDayIds, setExpandedDayIds] = useInMemorySessionState<string[]>('pcp_mem_expanded_day_ids', []);
 
   // Mapas por Dia
-  const [diasPontosMap, setDiasPontosMap] = useSessionState<Record<string, string[]>>('pcp_shared_dias_pontos_map', {});
-  const [diasTemposCompMap, setDiasTemposCompMap] = useSessionState<Record<string, { tempoSaidaBaseMin?: number, tempoSegurancaMin?: number }>>('pcp_dias_tempos_comp_map_v1', {});
-  const [diasPesMap, setDiasPesMap] = useSessionState<Record<string, boolean>>('pcp_dias_pes_map_v2', {});
-  const [diasReprogramarMap, setDiasReprogramarMap] = useSessionState<Record<string, boolean>>('pcp_dias_reprogramar_map_v1', {});
-  const [diasMotivoReprogramarMap, setDiasMotivoReprogramarMap] = useSessionState<Record<string, string>>('pcp_dias_motivo_reprog_map_v1', {});
-  const [diasCustomAlojMap, setDiasCustomAlojMap] = useSessionState<Record<string, { origem?: string, destino?: string, tempoIdaMin?: number, tempoVoltaMin?: number, manualIda?: boolean, manualVolta?: boolean }>>('pcp_dias_custom_aloj_v3', {});
-  const [diasPontosGroupedMap, setDiasPontosGroupedMap] = useSessionState<Record<string, Record<string, PcpPontoItem[]>>>('pcp_dias_pontos_grouped_v3', {});
-  const [diasEtapasMap, setDiasEtapasMap] = useSessionState<Record<string, string[]>>('pcp_dias_etapas_map_v1', {});
-  const [diasFiltroLvMap, setDiasFiltroLvMap] = useSessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_dias_filtro_lv_map_v1', {});
-  const [diasExtrasList, setDiasExtrasList] = useSessionState<string[]>('pcp_dias_extras_v1', []);
+  const [diasPontosMap, setDiasPontosMap] = useInMemorySessionState<Record<string, string[]>>('pcp_mem_dias_pontos_map', {});
+  const [diasTemposCompMap, setDiasTemposCompMap] = useInMemorySessionState<Record<string, { tempoSaidaBaseMin?: number, tempoSegurancaMin?: number }>>('pcp_mem_tempos_comp', {});
+  const [diasPesMap, setDiasPesMap] = useInMemorySessionState<Record<string, boolean>>('pcp_mem_pes_map', {});
+  const [diasReprogramarMap, setDiasReprogramarMap] = useInMemorySessionState<Record<string, boolean>>('pcp_mem_reprog_map', {});
+  const [diasMotivoReprogramarMap, setDiasMotivoReprogramarMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_motivo_reprog', {});
+  const [diasCustomAlojMap, setDiasCustomAlojMap] = useInMemorySessionState<Record<string, { origem?: string, destino?: string, tempoIdaMin?: number, tempoVoltaMin?: number, manualIda?: boolean, manualVolta?: boolean }>>('pcp_mem_custom_aloj', {});
+  const [diasPontosGroupedMap, setDiasPontosGroupedMap] = useInMemorySessionState<Record<string, Record<string, PcpPontoItem[]>>>('pcp_mem_pontos_grouped', {});
+  const [diasEtapasMap, setDiasEtapasMap] = useInMemorySessionState<Record<string, string[]>>('pcp_mem_etapas_map', {});
+  const [diasFiltroLvMap, setDiasFiltroLvMap] = useInMemorySessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_mem_filtro_lv', {});
+  const [diasExtrasList, setDiasExtrasList] = useInMemorySessionState<string[]>('pcp_mem_dias_extras', []);
 
   // Modal Carregar Planejamento
   const [isCarregarPlanModalOpen, setIsCarregarPlanModalOpen] = useState(false);
@@ -198,7 +250,7 @@ export const PcpPlanejamentoView = () => {
   const [searchExistingPlan, setSearchExistingPlan] = useState<string>('');
 
   // Zoom
-  const [zoomLevel, setZoomLevel] = useSessionState<number>('pcp_zoom_level', 1.0);
+  const [zoomLevel, setZoomLevel] = useInMemorySessionState<number>('pcp_mem_zoom_level', 1.0);
   const handleZoomIn = () => setZoomLevel(prev => Math.min(1.5, Math.round((prev + 0.1) * 10) / 10));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(0.7, Math.round((prev - 0.1) * 10) / 10));
   const handleResetZoom = () => setZoomLevel(1.0);
@@ -209,10 +261,10 @@ export const PcpPlanejamentoView = () => {
   // Alojamento Padrão Nome
   const alojamentoPadrao = useMemo(() => {
     if (!selectedAlojamentoId || selectedAlojamentoId === 'nenhum') {
-      return selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base Bom Jesus da Lapa';
+      return selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base';
     }
     const found = alojamentos.find(a => a.id === selectedAlojamentoId);
-    return found ? found.nome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base Bom Jesus da Lapa');
+    return found ? found.nome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base');
   }, [alojamentos, selectedAlojamentoId, selectedUnidadeObj]);
 
   // Handler de troca de unidade com reset
@@ -283,6 +335,7 @@ export const PcpPlanejamentoView = () => {
 
   // Obras Filtradas
   const filteredObras = useMemo(() => {
+    if (!selectedUnidadeId) return [];
     const list = Array.isArray(obras) ? obras : [];
     const statuses = Array.isArray(selectedStatuses) ? selectedStatuses : [];
 
@@ -343,6 +396,7 @@ export const PcpPlanejamentoView = () => {
       return true;
     });
   }, [
+    selectedUnidadeId,
     obras,
     searchObra,
     selectedSituacao,
@@ -828,6 +882,7 @@ export const PcpPlanejamentoView = () => {
     if (!window.confirm('Deseja realmente limpar todos os pontos, atividades e planejamentos montados na tela?')) {
       return;
     }
+    setSelectedObraId('');
     setDiasPontosMap({});
     setDiasPontosGroupedMap({});
     setDiasReprogramarMap({});
@@ -840,6 +895,10 @@ export const PcpPlanejamentoView = () => {
 
   // Sincronizar Google Sheets via API
   const handleSyncFromGoogleSheets = async () => {
+    if (!selectedUnidadeId) {
+      toast.error('Selecione uma unidade antes de sincronizar.');
+      return;
+    }
     try {
       toast.loading('Sincronizando planilha do Google Sheets no Supabase...', { id: 'sync-sheets' });
       const res = await fetch('/api/sync-pcp-cache', {
@@ -892,7 +951,7 @@ export const PcpPlanejamentoView = () => {
       }
       if (dayId) {
         nextDiasPontosMap[dayId] = plan.pontos.length > 0 ? plan.pontos : [];
-        if (!nextDiasPontedMap(nextDiasPontosGroupedMap, dayId)) nextDiasPontosGroupedMap[dayId] = {};
+        if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
       }
 
       plan.pontos.forEach(pLabel => {
@@ -939,11 +998,6 @@ export const PcpPlanejamentoView = () => {
     setSelectedExistingPlanKeys([]);
     toast.success(`${plansToLoad.length} ${plansToLoad.length === 1 ? 'planejamento carregado' : 'planejamentos carregados'} com sucesso.`);
   };
-
-  // Helper para verificar chave de objeto com segurança
-  function nextDiasPontedMap(map: Record<string, any>, key: string) {
-    return Boolean(map && map[key]);
-  }
 
   // Resumo de Status do Fluxo para as Pílulas do Header
   const diasSemPontosCount = diasProgramados.filter(d => (diasPontosMap[d.id] || []).length === 0).length;
@@ -1032,7 +1086,11 @@ export const PcpPlanejamentoView = () => {
               </span>
               <div className="flex items-center gap-2.5 mt-1">
                 <h1 className="text-[18px] font-bold text-[#23211E] leading-tight">
-                  {selectedObra ? `${selectedObra.projeto} · ${selectedObra.municipio}` : (selectedUnidadeObj ? `Unidade: ${selectedUnidadeObj.name} (Selecione uma Obra)` : 'Selecione uma obra')}
+                  {selectedObra
+                    ? `${selectedObra.projeto} · ${selectedObra.municipio}`
+                    : selectedUnidadeObj
+                      ? `Unidade: ${selectedUnidadeObj.name} (Selecione uma obra)`
+                      : 'Selecione uma unidade'}
                 </h1>
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-[#F2F0EC] text-[#5C574F] border border-[#DEDAD3]">
                   Ambiente local
@@ -1109,32 +1167,36 @@ export const PcpPlanejamentoView = () => {
           </div>
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-[#17794C]" />
+            <span className={`w-2 h-2 rounded-full ${selectedUnidadeObj ? 'bg-[#17794C]' : 'bg-[#C9A227]'}`} />
             <span className="text-[#5C574F]">Equipe e período:</span>
             <strong className="text-[#23211E]">
-              {selectedEquipes.join(', ')} · {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} · {alojamentoPadrao}
+              {selectedUnidadeObj ? `${selectedEquipes.join(', ')} · ${diasProgramados.length} ${diasProgramados.length === 1 ? 'dia' : 'dias'} · ${alojamentoPadrao}` : 'selecione a unidade'}
             </strong>
           </div>
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
-            <span className={`w-2 h-2 rounded-full ${diasSemPontosCount === 0 ? 'bg-[#17794C]' : 'bg-[#C9A227]'}`} />
+            <span className={`w-2 h-2 rounded-full ${selectedObra ? (diasSemPontosCount === 0 ? 'bg-[#17794C]' : 'bg-[#C9A227]') : 'bg-[#A39E96]'}`} />
             <span className="text-[#5C574F]">Distribuição:</span>
             <strong className="text-[#23211E]">
-              {diasSemPontosCount === 0
-                ? 'todos os dias com pontos'
-                : diasSemPontosCount === 1
-                  ? '1 dia ainda sem pontos'
-                  : `${diasSemPontosCount} dias ainda sem pontos`}
+              {!selectedObra
+                ? 'aguardando obra'
+                : diasSemPontosCount === 0
+                  ? 'todos os dias com pontos'
+                  : diasSemPontosCount === 1
+                    ? '1 dia ainda sem pontos'
+                    : `${diasSemPontosCount} dias ainda sem pontos`}
             </strong>
           </div>
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
-            <span className={`w-2 h-2 rounded-full ${diasAcima10hCount > 0 ? 'bg-[#C0392E]' : 'bg-[#17794C]'}`} />
+            <span className={`w-2 h-2 rounded-full ${selectedObra ? (diasAcima10hCount > 0 ? 'bg-[#C0392E]' : 'bg-[#17794C]') : 'bg-[#A39E96]'}`} />
             <span className="text-[#5C574F]">Envio:</span>
-            <strong className={diasAcima10hCount > 0 ? 'text-[#B03028]' : 'text-[#17794C]'}>
-              {diasAcima10hCount > 0
-                ? `${diasAcima10hCount} ${diasAcima10hCount === 1 ? 'dia acima de 10h' : 'dias acima de 10h'}`
-                : 'pronto para enviar'}
+            <strong className={!selectedObra ? 'text-[#A39E96]' : (diasAcima10hCount > 0 ? 'text-[#B03028]' : 'text-[#17794C]')}>
+              {!selectedObra
+                ? 'aguardando obra'
+                : diasAcima10hCount > 0
+                  ? `${diasAcima10hCount} ${diasAcima10hCount === 1 ? 'dia acima de 10h' : 'dias acima de 10h'}`
+                  : 'pronto para enviar'}
             </strong>
           </div>
         </div>
@@ -1143,12 +1205,15 @@ export const PcpPlanejamentoView = () => {
       {/* 3.2 BARRA DE FILTROS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         {/* Unidade */}
-        <Select value={selectedUnidadeId} onValueChange={handleUnidadeChange}>
+        <Select value={selectedUnidadeId || 'SELECIONE'} onValueChange={val => handleUnidadeChange(val === 'SELECIONE' ? '' : val)}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedUnidadeId ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Unidade</span>
-            <span className="truncate">{selectedUnidadeObj?.name || 'Selecione a Unidade'}</span>
+            <span className="truncate">{selectedUnidadeObj?.name || 'Selecione a Unidade...'}</span>
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="SELECIONE" className="text-xs text-[#A39E96] font-medium">
+              — Limpar / Nenhuma —
+            </SelectItem>
             {UNIDADES_DISPONIVEIS.map(u => (
               <SelectItem key={u.id} value={u.id} className="text-xs font-semibold">
                 {u.name}
@@ -1158,7 +1223,7 @@ export const PcpPlanejamentoView = () => {
         </Select>
 
         {/* Situação */}
-        <Select value={selectedSituacao} onValueChange={setSelectedSituacao}>
+        <Select value={selectedSituacao} onValueChange={setSelectedSituacao} disabled={!selectedUnidadeId}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedSituacao !== 'TODAS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Situação</span>
             <SelectValue />
@@ -1176,6 +1241,7 @@ export const PcpPlanejamentoView = () => {
             <Button
               variant="outline"
               size="sm"
+              disabled={!selectedUnidadeId}
               className={`h-8 text-xs border font-medium ${selectedStatuses.length < ALL_STATUSES.length ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}
             >
               <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Status</span>
@@ -1218,7 +1284,7 @@ export const PcpPlanejamentoView = () => {
         </Popover>
 
         {/* Mês */}
-        <Select value={selectedMesFilter} onValueChange={setSelectedMesFilter}>
+        <Select value={selectedMesFilter} onValueChange={setSelectedMesFilter} disabled={!selectedUnidadeId}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedMesFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Mês</span>
             <SelectValue />
@@ -1232,7 +1298,7 @@ export const PcpPlanejamentoView = () => {
         </Select>
 
         {/* Município */}
-        <Select value={selectedMunicipioFilter} onValueChange={setSelectedMunicipioFilter}>
+        <Select value={selectedMunicipioFilter} onValueChange={setSelectedMunicipioFilter} disabled={!selectedUnidadeId}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedMunicipioFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Município</span>
             <SelectValue />
@@ -1246,7 +1312,7 @@ export const PcpPlanejamentoView = () => {
         </Select>
 
         {/* Prioridade */}
-        <Select value={selectedPrioridadeFilter} onValueChange={setSelectedPrioridadeFilter}>
+        <Select value={selectedPrioridadeFilter} onValueChange={setSelectedPrioridadeFilter} disabled={!selectedUnidadeId}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedPrioridadeFilter !== 'TODAS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Prioridade</span>
             <SelectValue />
@@ -1260,7 +1326,7 @@ export const PcpPlanejamentoView = () => {
         </Select>
 
         {/* Dono */}
-        <Select value={selectedDonoFilter} onValueChange={setSelectedDonoFilter}>
+        <Select value={selectedDonoFilter} onValueChange={setSelectedDonoFilter} disabled={!selectedUnidadeId}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedDonoFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Dono</span>
             <SelectValue />
@@ -1274,7 +1340,7 @@ export const PcpPlanejamentoView = () => {
         </Select>
 
         {/* Supervisor */}
-        <Select value={selectedSupervisorFilter} onValueChange={setSelectedSupervisorFilter}>
+        <Select value={selectedSupervisorFilter} onValueChange={setSelectedSupervisorFilter} disabled={!selectedUnidadeId}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedSupervisorFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
             <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Supervisor</span>
             <SelectValue />
@@ -1317,14 +1383,21 @@ export const PcpPlanejamentoView = () => {
               <input
                 placeholder="Buscar código, município..."
                 value={searchObra}
+                disabled={!selectedUnidadeId}
                 onChange={e => setSearchObra(e.target.value)}
-                className="w-full h-8 pl-8 pr-2 text-xs rounded-md border border-[#DEDAD3] bg-[#F7F6F3] focus:outline-none focus:ring-1 focus:ring-[#E07A1F] font-mono"
+                className="w-full h-8 pl-8 pr-2 text-xs rounded-md border border-[#DEDAD3] bg-[#F7F6F3] focus:outline-none focus:ring-1 focus:ring-[#E07A1F] font-mono disabled:opacity-50"
               />
             </div>
 
             {/* Lista Rolável de Obras (440px) */}
             <div className="h-[440px] overflow-y-auto space-y-2 pr-0.5 custom-scrollbar">
-              {filteredObras.length === 0 ? (
+              {!selectedUnidadeId ? (
+                <div className="flex flex-col items-center justify-center h-full py-16 text-center text-xs text-[#A39E96] space-y-2">
+                  <Building2 className="w-8 h-8 text-[#DEDAD3] stroke-1" />
+                  <p className="font-medium text-[#6B6660]">Nenhuma unidade selecionada</p>
+                  <p className="text-[11px] text-[#A39E96]">Selecione uma unidade no filtro acima para carregar a carteira.</p>
+                </div>
+              ) : filteredObras.length === 0 ? (
                 <div className="text-center py-12 text-xs text-[#A39E96]">
                   {obras.length === 0 ? (
                     <div className="space-y-2">
@@ -1442,453 +1515,472 @@ export const PcpPlanejamentoView = () => {
 
         {/* COLUNA DIREITA (CONTEÚDO PRINCIPAL) */}
         <main className="space-y-3.5">
-          {/* 1. Faixa da Obra Selecionada */}
-          {selectedObra && (
-            <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Mensagem se nenhuma obra foi selecionada */}
+          {!selectedObra ? (
+            <div className="bg-white rounded-xl border border-[#E6E3DD] p-12 text-center shadow-2xs space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#FBF5EC] border border-[#E8C9A0] flex items-center justify-center mx-auto text-[#E07A1F]">
+                <Layers className="w-6 h-6" />
+              </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-base text-[#E07A1F]">{selectedObra.projeto}</span>
-                  <span className="text-sm font-bold text-[#23211E]">— {selectedObra.nomeProjeto || (selectedObra as any).descricao}</span>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-[#6B6660] mt-1 font-medium">
-                  <span>Município: <strong className="text-[#23211E]">{selectedObra.municipio}</strong></span>
-                  <span>Dono: <strong className="text-[#23211E]">{selectedObra.donoDaObra || (selectedObra as any).donoObra || 'Não informado'}</strong></span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs font-mono font-semibold bg-[#F7F6F3] px-3.5 py-2 rounded-lg border border-[#E6E3DD] shrink-0">
-                <span className="text-[#6B6660]">Meta diária da equipe:</span>
-                <span className="text-[#17794C] text-sm font-bold">
-                  R$ {metaEquipeInput.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+                <h3 className="text-sm font-bold text-[#23211E]">
+                  {!selectedUnidadeId ? 'Selecione uma unidade no topo' : 'Selecione uma obra na carteira à esquerda'}
+                </h3>
+                <p className="text-xs text-[#6B6660] max-w-md mx-auto mt-1">
+                  {!selectedUnidadeId
+                    ? 'Escolha a sua unidade operacional acima para carregar a carteira de projetos disponíveis.'
+                    : `Escolha uma das ${filteredObras.length} obras da carteira para visualizar a jornada, distribuir os pontos e montar o planejamento.`}
+                </p>
               </div>
             </div>
-          )}
+          ) : (
+            <>
+              {/* 1. Faixa da Obra Selecionada */}
+              <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-base text-[#E07A1F]">{selectedObra.projeto}</span>
+                    <span className="text-sm font-bold text-[#23211E]">— {selectedObra.nomeProjeto || (selectedObra as any).descricao}</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-[#6B6660] mt-1 font-medium">
+                    <span>Município: <strong className="text-[#23211E]">{selectedObra.municipio}</strong></span>
+                    <span>Dono: <strong className="text-[#23211E]">{selectedObra.donoDaObra || (selectedObra as any).donoObra || 'Não informado'}</strong></span>
+                  </div>
+                </div>
 
-          {/* 2. Parâmetros (Chips numa linha) */}
-          <div className="bg-white rounded-xl border border-[#E6E3DD] p-3 shadow-2xs flex flex-wrap items-center gap-2.5 text-xs">
-            {/* Equipe */}
-            <Select value={selectedEquipes[0] || 'EH156'} onValueChange={val => setSelectedEquipes([val])}>
-              <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
-                <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Equipe</span>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {equipesDisponiveis.map(eq => (
-                  <SelectItem key={eq} value={eq} className="text-xs">{eq}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <div className="flex items-center gap-2 text-xs font-mono font-semibold bg-[#F7F6F3] px-3.5 py-2 rounded-lg border border-[#E6E3DD] shrink-0">
+                  <span className="text-[#6B6660]">Meta diária da equipe:</span>
+                  <span className="text-[#17794C] text-sm font-bold">
+                    R$ {metaEquipeInput.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
 
-            {/* Base / Alojamento Padrão */}
-            <Select value={selectedAlojamentoId} onValueChange={setSelectedAlojamentoId}>
-              <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
-                <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Alojamento</span>
-                <SelectValue placeholder="Base Bom Jesus da Lapa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nenhum" className="text-xs">{selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base Bom Jesus da Lapa'}</SelectItem>
-                {alojamentos.map(a => (
-                  <SelectItem key={a.id} value={a.id} className="text-xs">{a.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {/* 2. Parâmetros (Chips numa linha) */}
+              <div className="bg-white rounded-xl border border-[#E6E3DD] p-3 shadow-2xs flex flex-wrap items-center gap-2.5 text-xs">
+                {/* Equipe */}
+                <Select value={selectedEquipes[0] || 'EH156'} onValueChange={val => setSelectedEquipes([val])}>
+                  <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
+                    <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Equipe</span>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {equipesDisponiveis.map(eq => (
+                      <SelectItem key={eq} value={eq} className="text-xs">{eq}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            {/* Período com Popover */}
-            <Popover open={isDataRangeOpen} onOpenChange={setIsDataRangeOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold">
-                  <CalendarIcon className="w-3.5 h-3.5 text-[#5C574F]" />
-                  <span className="text-[11px] uppercase text-[#A39E96]">Período:</span>
-                  <span className="font-mono">{format(safeParseDate(dataInicio), 'dd/MM')} a {format(safeParseDate(dataFim), 'dd/MM')}</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-3.5 bg-white" align="start">
-                <div className="space-y-2.5 text-xs">
-                  <span className="font-bold text-[#23211E] block">Definir período do planejamento</span>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <span className="text-[11px] text-[#A39E96] block mb-1">Data início</span>
-                      <input
-                        type="date"
-                        value={dataInicio}
-                        onChange={e => setDataInicio(e.target.value)}
-                        className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
-                      />
+                {/* Base / Alojamento Padrão */}
+                <Select value={selectedAlojamentoId} onValueChange={setSelectedAlojamentoId}>
+                  <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
+                    <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Alojamento</span>
+                    <SelectValue placeholder="Base" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nenhum" className="text-xs">{selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base'}</SelectItem>
+                    {alojamentos.map(a => (
+                      <SelectItem key={a.id} value={a.id} className="text-xs">{a.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Período com Popover */}
+                <Popover open={isDataRangeOpen} onOpenChange={setIsDataRangeOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold">
+                      <CalendarIcon className="w-3.5 h-3.5 text-[#5C574F]" />
+                      <span className="text-[11px] uppercase text-[#A39E96]">Período:</span>
+                      <span className="font-mono">{format(safeParseDate(dataInicio), 'dd/MM')} a {format(safeParseDate(dataFim), 'dd/MM')}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3.5 bg-white" align="start">
+                    <div className="space-y-2.5 text-xs">
+                      <span className="font-bold text-[#23211E] block">Definir período do planejamento</span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <span className="text-[11px] text-[#A39E96] block mb-1">Data início</span>
+                          <input
+                            type="date"
+                            value={dataInicio}
+                            onChange={e => setDataInicio(e.target.value)}
+                            className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-[#A39E96] block mb-1">Data fim</span>
+                          <input
+                            type="date"
+                            value={dataFim}
+                            onChange={e => setDataFim(e.target.value)}
+                            className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[11px] text-[#A39E96] block mb-1">Data fim</span>
-                      <input
-                        type="date"
-                        value={dataFim}
-                        onChange={e => setDataFim(e.target.value)}
-                        className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
-                      />
-                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Saída Base Padrão */}
+                <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
+                  <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Saída base:</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={tempoSaidaBasePadrao}
+                    onChange={e => setTempoSaidaBasePadrao(parseInt(e.target.value, 10) || 0)}
+                    className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
+                  />
+                  <span className="text-[#A39E96] text-[11px]">min</span>
+                </div>
+
+                {/* Segurança Padrão */}
+                <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
+                  <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Segurança:</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={tempoSegurancaPadrao}
+                    onChange={e => setTempoSegurancaPadrao(parseInt(e.target.value, 10) || 0)}
+                    className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
+                  />
+                  <span className="text-[#A39E96] text-[11px]">min</span>
+                </div>
+              </div>
+
+              {/* 3. CARD CENTRAL "DIAS PROGRAMADOS" */}
+              <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
+                {/* Cabeçalho do Card */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 px-4 bg-[#FBFAF7] border-b border-[#E6E3DD] min-h-[50px]">
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-sm font-bold text-[#23211E]">
+                      Dias programados ({diasProgramados.length})
+                    </h2>
+
+                    {/* Legenda das 5 Etapas da Barra (Somente na Visão Jornada) */}
+                    {viewMode === 'jornada' && (
+                      <div className="hidden md:flex items-center gap-3 text-[11px] font-mono text-[#5C574F]">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#23211E' }} /> Saída
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E07A1F' }} /> Ida
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#A39E96' }} /> Segurança
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C0392E' }} /> Serviço
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#F5BE84' }} /> Volta
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Alternador de Visão: Jornada | Alojamentos */}
+                  <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('jornada')}
+                      className={`px-4 py-1.5 rounded transition-all ${viewMode === 'jornada' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                    >
+                      Jornada
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('alojamentos')}
+                      className={`px-4 py-1.5 rounded transition-all ${viewMode === 'alojamentos' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                    >
+                      Alojamentos
+                    </button>
                   </div>
                 </div>
-              </PopoverContent>
-            </Popover>
 
-            {/* Saída Base Padrão */}
-            <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
-              <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Saída base:</span>
-              <input
-                type="number"
-                min="0"
-                step="5"
-                value={tempoSaidaBasePadrao}
-                onChange={e => setTempoSaidaBasePadrao(parseInt(e.target.value, 10) || 0)}
-                className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
-              />
-              <span className="text-[#A39E96] text-[11px]">min</span>
-            </div>
-
-            {/* Segurança Padrão */}
-            <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
-              <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Segurança:</span>
-              <input
-                type="number"
-                min="0"
-                step="5"
-                value={tempoSegurancaPadrao}
-                onChange={e => setTempoSegurancaPadrao(parseInt(e.target.value, 10) || 0)}
-                className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
-              />
-              <span className="text-[#A39E96] text-[11px]">min</span>
-            </div>
-          </div>
-
-          {/* 3. CARD CENTRAL "DIAS PROGRAMADOS" */}
-          <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-            {/* Cabeçalho do Card */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 px-4 bg-[#FBFAF7] border-b border-[#E6E3DD] min-h-[50px]">
-              <div className="flex items-center gap-4">
-                <h2 className="text-sm font-bold text-[#23211E]">
-                  Dias programados ({diasProgramados.length})
-                </h2>
-
-                {/* Legenda das 5 Etapas da Barra (Somente na Visão Jornada) */}
-                {viewMode === 'jornada' && (
-                  <div className="hidden md:flex items-center gap-3 text-[11px] font-mono text-[#5C574F]">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#23211E' }} /> Saída
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E07A1F' }} /> Ida
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#A39E96' }} /> Segurança
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C0392E' }} /> Serviço
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#F5BE84' }} /> Volta
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Alternador de Visão: Jornada | Alojamentos */}
-              <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('jornada')}
-                  className={`px-4 py-1.5 rounded transition-all ${viewMode === 'jornada' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
-                >
-                  Jornada
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('alojamentos')}
-                  className={`px-4 py-1.5 rounded transition-all ${viewMode === 'alojamentos' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
-                >
-                  Alojamentos
-                </button>
-              </div>
-            </div>
-
-            {/* GRADE DA TABELA DE DIAS (Wrapper Único com Overflow Horizontal) */}
-            <div className="overflow-x-auto">
-              {/* CABEÇALHO DA GRADE: VISÃO JORNADA */}
-              {viewMode === 'jornada' && (
-                <div style={{ minWidth: '1040px' }}>
-                  {/* Linha 1 de Cabeçalho: Rótulos */}
-                  <div
-                    className="flex items-center py-2.5 px-2 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
-                    style={{ borderLeft: '4px solid transparent' }}
-                  >
-                    <div className="w-[30px]" />
-                    <div className="w-[125px]">Dia</div>
-                    <div className="w-[85px]">Pontos</div>
-                    <div className="flex-1 min-w-[280px] px-3">Ocupação da jornada</div>
-                    <div className="w-[70px] text-right pr-2">Total</div>
-                    <div className="w-[110px] text-right pr-2">Planejado</div>
-                    <div className="w-[70px] text-right pr-2">% Meta</div>
-                    <div className="w-[90px] text-center">Situação</div>
-                    <div className="w-[100px] text-center">Marcações</div>
-                  </div>
-
-                  {/* Linha 2 de Cabeçalho: Régua de Horas */}
-                  <div
-                    className="flex items-center py-1.5 px-2 text-[10px] font-mono text-[#A39E96] bg-[#FBFAF7] border-b border-[#E6E3DD]"
-                    style={{ borderLeft: '4px solid transparent' }}
-                  >
-                    <div className="w-[240px] shrink-0" />
-                    <div className="flex-1 min-w-[280px] px-3 relative h-3.5">
-                      <span className="absolute left-0 top-0">0h</span>
-                      <span
-                        className="absolute top-0 font-bold text-[#17794C]"
-                        style={{ left: `${(480 / 780) * 100}%` }}
+                {/* GRADE DA TABELA DE DIAS (Wrapper Único com Overflow Horizontal) */}
+                <div className="overflow-x-auto">
+                  {/* CABEÇALHO DA GRADE: VISÃO JORNADA */}
+                  {viewMode === 'jornada' && (
+                    <div style={{ minWidth: '1040px' }}>
+                      {/* Linha 1 de Cabeçalho: Rótulos */}
+                      <div
+                        className="flex items-center py-2.5 px-2 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
+                        style={{ borderLeft: '4px solid transparent' }}
                       >
-                        8h
-                      </span>
-                      <span
-                        className="absolute top-0 font-bold text-[#B03028]"
-                        style={{ left: `${(600 / 780) * 100}%` }}
+                        <div className="w-[30px]" />
+                        <div className="w-[125px]">Dia</div>
+                        <div className="w-[85px]">Pontos</div>
+                        <div className="flex-1 min-w-[280px] px-3">Ocupação da jornada</div>
+                        <div className="w-[70px] text-right pr-2">Total</div>
+                        <div className="w-[110px] text-right pr-2">Planejado</div>
+                        <div className="w-[70px] text-right pr-2">% Meta</div>
+                        <div className="w-[90px] text-center">Situação</div>
+                        <div className="w-[100px] text-center">Marcações</div>
+                      </div>
+
+                      {/* Linha 2 de Cabeçalho: Régua de Horas */}
+                      <div
+                        className="flex items-center py-1.5 px-2 text-[10px] font-mono text-[#A39E96] bg-[#FBFAF7] border-b border-[#E6E3DD]"
+                        style={{ borderLeft: '4px solid transparent' }}
                       >
-                        10h
-                      </span>
-                      <span className="absolute right-0 top-0">13h</span>
-                    </div>
-                    <div className="w-[440px] shrink-0" />
-                  </div>
+                        <div className="w-[240px] shrink-0" />
+                        <div className="flex-1 min-w-[280px] px-3 relative h-3.5">
+                          <span className="absolute left-0 top-0">0h</span>
+                          <span
+                            className="absolute top-0 font-bold text-[#17794C]"
+                            style={{ left: `${(480 / 780) * 100}%` }}
+                          >
+                            8h
+                          </span>
+                          <span
+                            className="absolute top-0 font-bold text-[#B03028]"
+                            style={{ left: `${(600 / 780) * 100}%` }}
+                          >
+                            10h
+                          </span>
+                          <span className="absolute right-0 top-0">13h</span>
+                        </div>
+                        <div className="w-[440px] shrink-0" />
+                      </div>
 
-                  {/* LINHAS DOS DIAS */}
-                  {diasProgramados.map(dia => {
-                    const isExpanded = expandedDayIds.includes(dia.id);
-                    const customAl = diasCustomAlojMap[dia.id];
-                    const tComp = diasTemposCompMap[dia.id];
-                    const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
-                    const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
-                    const ida = customAl?.tempoIdaMin ?? 40;
-                    const volta = customAl?.tempoVoltaMin ?? 40;
-                    const orig = customAl?.origem || alojamentoPadrao;
-                    const dest = customAl?.destino || alojamentoPadrao;
+                      {/* LINHAS DOS DIAS */}
+                      {diasProgramados.map(dia => {
+                        const isExpanded = expandedDayIds.includes(dia.id);
+                        const customAl = diasCustomAlojMap[dia.id];
+                        const tComp = diasTemposCompMap[dia.id];
+                        const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+                        const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+                        const ida = customAl?.tempoIdaMin ?? 40;
+                        const volta = customAl?.tempoVoltaMin ?? 40;
+                        const orig = customAl?.origem || alojamentoPadrao;
+                        const dest = customAl?.destino || alojamentoPadrao;
 
-                    return (
-                      <PcpDiaRow
-                        key={dia.id}
-                        dia={dia}
-                        totalDias={diasProgramados.length}
-                        isExpanded={isExpanded}
-                        onToggleExpand={() => handleToggleExpandDay(dia.id)}
-                        viewMode="jornada"
-                        pontosDoDia={diasPontosMap[dia.id] || []}
-                        pontosDisponiveis={pontosDisponiveisDoProjeto}
-                        orcamentoPorPontoMap={orcamentoPorPontoMap}
-                        getItemsDoPontoNoDia={getItemsDoPontoNoDia}
-                        alojamentosDisponiveis={alojamentos}
-                        metaEquipeDia={metaEquipeInput}
-                        etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
-                        isPesDia={diasPesMap[dia.id] || false}
-                        isReprogramarDia={diasReprogramarMap[dia.id] || false}
-                        motivoReprogramarDia={diasMotivoReprogramarMap[dia.id] || ''}
-                        filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
-                        tempoSaidaBaseMin={sBase}
-                        tempoSegurancaMin={sSeg}
-                        tempoIdaMin={ida}
-                        tempoVoltaMin={volta}
-                        isIdaManual={Boolean(customAl?.manualIda)}
-                        isVoltaManual={Boolean(customAl?.manualVolta)}
-                        origemAloj={orig}
-                        destinoAloj={dest}
-                        isTrocaAloj={orig !== dest}
-                        filteredServicosBase={servicosBase}
-                        handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
-                        handleUpdateDiaTempo={handleUpdateDiaTempo}
-                        handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
-                        handleUpdateDiaDate={handleUpdateDiaDate}
-                        handleRemoveDia={handleRemoveDia}
-                        handleToggleReprogramarDia={handleToggleReprogramarDia}
-                        handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [dId]: mot }))}
-                        handleTogglePesDia={handleTogglePesDia}
-                        handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [dId]: [et] }))}
-                        handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [dId]: f }))}
-                        handleTogglePontoNoDia={handleTogglePontoNoDia}
-                        handleSelectAllPontosNoDia={handleSelectAllPontosNoDia}
-                        handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
-                        handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
-                        handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
-                        handleUpdateAtividade={handleUpdateAtividade}
-                        handleRemoveAtividade={handleRemoveAtividade}
-                        handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
-                      />
-                    );
-                  })}
+                        return (
+                          <PcpDiaRow
+                            key={dia.id}
+                            dia={dia}
+                            totalDias={diasProgramados.length}
+                            isExpanded={isExpanded}
+                            onToggleExpand={() => handleToggleExpandDay(dia.id)}
+                            viewMode="jornada"
+                            pontosDoDia={diasPontosMap[dia.id] || []}
+                            pontosDisponiveis={pontosDisponiveisDoProjeto}
+                            orcamentoPorPontoMap={orcamentoPorPontoMap}
+                            getItemsDoPontoNoDia={getItemsDoPontoNoDia}
+                            alojamentosDisponiveis={alojamentos}
+                            metaEquipeDia={metaEquipeInput}
+                            etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
+                            isPesDia={diasPesMap[dia.id] || false}
+                            isReprogramarDia={diasReprogramarMap[dia.id] || false}
+                            motivoReprogramarDia={diasMotivoReprogramarMap[dia.id] || ''}
+                            filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
+                            tempoSaidaBaseMin={sBase}
+                            tempoSegurancaMin={sSeg}
+                            tempoIdaMin={ida}
+                            tempoVoltaMin={volta}
+                            isIdaManual={Boolean(customAl?.manualIda)}
+                            isVoltaManual={Boolean(customAl?.manualVolta)}
+                            origemAloj={orig}
+                            destinoAloj={dest}
+                            isTrocaAloj={orig !== dest}
+                            filteredServicosBase={servicosBase}
+                            handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
+                            handleUpdateDiaTempo={handleUpdateDiaTempo}
+                            handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
+                            handleUpdateDiaDate={handleUpdateDiaDate}
+                            handleRemoveDia={handleRemoveDia}
+                            handleToggleReprogramarDia={handleToggleReprogramarDia}
+                            handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [dId]: mot }))}
+                            handleTogglePesDia={handleTogglePesDia}
+                            handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [dId]: [et] }))}
+                            handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [dId]: f }))}
+                            handleTogglePontoNoDia={handleTogglePontoNoDia}
+                            handleSelectAllPontosNoDia={handleSelectAllPontosNoDia}
+                            handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
+                            handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
+                            handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
+                            handleUpdateAtividade={handleUpdateAtividade}
+                            handleRemoveAtividade={handleRemoveAtividade}
+                            handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
+                          />
+                        );
+                      })}
 
-                  {/* TOTALIZADOR DO PERÍODO (VISÃO JORNADA) */}
-                  <div
-                    className="flex items-center py-3 px-2 text-sm font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
-                    style={{ borderLeft: '4px solid transparent' }}
-                  >
-                    <div className="w-[30px]" />
-                    <div className="w-[125px] text-[#23211E]">Total do período</div>
-                    <div className="w-[85px] text-[#5C574F]">
-                      {totalPontosPeriodo} {totalPontosPeriodo === 1 ? 'ponto' : 'pontos'}
+                      {/* TOTALIZADOR DO PERÍODO (VISÃO JORNADA) */}
+                      <div
+                        className="flex items-center py-3 px-2 text-sm font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
+                        style={{ borderLeft: '4px solid transparent' }}
+                      >
+                        <div className="w-[30px]" />
+                        <div className="w-[125px] text-[#23211E]">Total do período</div>
+                        <div className="w-[85px] text-[#5C574F]">
+                          {totalPontosPeriodo} {totalPontosPeriodo === 1 ? 'ponto' : 'pontos'}
+                        </div>
+                        <div className="flex-1 min-w-[280px] px-3 text-[#6B6660] text-xs">
+                          {diasProgramados.length} {diasProgramados.length === 1 ? 'dia programado' : 'dias programados'}
+                        </div>
+                        <div className="w-[70px] text-right pr-2 text-[#23211E]">
+                          {formatMinToHours(totalHorasPeriodoMin)}
+                        </div>
+                        <div className="w-[110px] text-right pr-2 text-[#17794C]">
+                          R$ {totalValorPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div className="w-[70px] text-right pr-2 text-[#17794C]">
+                          {pctMetaTotal}%
+                        </div>
+                        <div className="w-[90px]" />
+                        <div className="w-[100px]" />
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-[280px] px-3 text-[#6B6660] text-xs">
-                      {diasProgramados.length} {diasProgramados.length === 1 ? 'dia programado' : 'dias programados'}
+                  )}
+
+                  {/* CABEÇALHO DA GRADE: VISÃO ALOJAMENTOS */}
+                  {viewMode === 'alojamentos' && (
+                    <div style={{ minWidth: '1060px' }}>
+                      <div
+                        className="flex items-center py-2.5 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
+                        style={{ borderLeft: '4px solid transparent' }}
+                      >
+                        <div className="w-[130px]">Dia</div>
+                        <div className="w-[220px] px-1">Saída (ida)</div>
+                        <div className="w-[75px] px-1 text-center">Ida</div>
+                        <div className="w-[220px] px-1">Retorno (volta)</div>
+                        <div className="w-[75px] px-1 text-center">Volta</div>
+                        <div className="w-[110px] px-1 text-center">Desloc.</div>
+                        <div className="w-[85px] px-1 text-center">Saída base</div>
+                        <div className="w-[85px] px-1 text-center">Segurança</div>
+                        <div className="flex-1 text-right pr-2">Total comp.</div>
+                      </div>
+
+                      {/* LINHAS DOS DIAS NA VISÃO ALOJAMENTOS */}
+                      {diasProgramados.map(dia => {
+                        const customAl = diasCustomAlojMap[dia.id];
+                        const tComp = diasTemposCompMap[dia.id];
+                        const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+                        const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+                        const ida = customAl?.tempoIdaMin ?? 40;
+                        const volta = customAl?.tempoVoltaMin ?? 40;
+                        const orig = customAl?.origem || alojamentoPadrao;
+                        const dest = customAl?.destino || alojamentoPadrao;
+
+                        return (
+                          <PcpDiaRow
+                            key={dia.id}
+                            dia={dia}
+                            totalDias={diasProgramados.length}
+                            isExpanded={false}
+                            onToggleExpand={() => {}}
+                            viewMode="alojamentos"
+                            pontosDoDia={diasPontosMap[dia.id] || []}
+                            pontosDisponiveis={pontosDisponiveisDoProjeto}
+                            orcamentoPorPontoMap={orcamentoPorPontoMap}
+                            getItemsDoPontoNoDia={getItemsDoPontoNoDia}
+                            alojamentosDisponiveis={alojamentos}
+                            metaEquipeDia={metaEquipeInput}
+                            etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
+                            isPesDia={diasPesMap[dia.id] || false}
+                            isReprogramarDia={diasReprogramarMap[dia.id] || false}
+                            motivoReprogramarDia={diasMotivoReprogramarMap[dia.id] || ''}
+                            filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
+                            tempoSaidaBaseMin={sBase}
+                            tempoSegurancaMin={sSeg}
+                            tempoIdaMin={ida}
+                            tempoVoltaMin={volta}
+                            isIdaManual={Boolean(customAl?.manualIda)}
+                            isVoltaManual={Boolean(customAl?.manualVolta)}
+                            origemAloj={orig}
+                            destinoAloj={dest}
+                            isTrocaAloj={orig !== dest}
+                            filteredServicosBase={servicosBase}
+                            handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
+                            handleUpdateDiaTempo={handleUpdateDiaTempo}
+                            handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
+                            handleUpdateDiaDate={handleUpdateDiaDate}
+                            handleRemoveDia={handleRemoveDia}
+                            handleToggleReprogramarDia={handleToggleReprogramarDia}
+                            handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [dId]: mot }))}
+                            handleTogglePesDia={handleTogglePesDia}
+                            handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [dId]: [et] }))}
+                            handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [dId]: f }))}
+                            handleTogglePontoNoDia={handleTogglePontoNoDia}
+                            handleSelectAllPontosNoDia={handleSelectAllPontosNoDia}
+                            handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
+                            handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
+                            handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
+                            handleUpdateAtividade={handleUpdateAtividade}
+                            handleRemoveAtividade={handleRemoveAtividade}
+                            handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
+                          />
+                        );
+                      })}
+
+                      {/* TOTALIZADOR DO PERÍODO (VISÃO ALOJAMENTOS) */}
+                      <div
+                        className="flex items-center py-3 px-3 text-sm font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
+                        style={{ borderLeft: '4px solid transparent' }}
+                      >
+                        <div className="w-[130px] text-[#23211E]">Total acumulado</div>
+                        <div className="w-[590px] px-1 text-[#6B6660] text-xs">
+                          {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
+                        </div>
+                        <div className="w-[110px] px-1 text-center text-[#23211E]">
+                          {formatMinToHours(totalDeslocamentoPeriodoMin)}
+                        </div>
+                        <div className="w-[170px] px-1" />
+                        <div className="flex-1 text-right pr-2 text-[#23211E]">
+                          {formatMinToHours(totalCompPeriodoMin)}
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-[70px] text-right pr-2 text-[#23211E]">
-                      {formatMinToHours(totalHorasPeriodoMin)}
-                    </div>
-                    <div className="w-[110px] text-right pr-2 text-[#17794C]">
-                      R$ {totalValorPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                    <div className="w-[70px] text-right pr-2 text-[#17794C]">
-                      {pctMetaTotal}%
-                    </div>
-                    <div className="w-[90px]" />
-                    <div className="w-[100px]" />
-                  </div>
+                  )}
                 </div>
-              )}
 
-              {/* CABEÇALHO DA GRADE: VISÃO ALOJAMENTOS */}
-              {viewMode === 'alojamentos' && (
-                <div style={{ minWidth: '1060px' }}>
-                  <div
-                    className="flex items-center py-2.5 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
-                    style={{ borderLeft: '4px solid transparent' }}
-                  >
-                    <div className="w-[130px]">Dia</div>
-                    <div className="w-[220px] px-1">Saída (ida)</div>
-                    <div className="w-[75px] px-1 text-center">Ida</div>
-                    <div className="w-[220px] px-1">Retorno (volta)</div>
-                    <div className="w-[75px] px-1 text-center">Volta</div>
-                    <div className="w-[110px] px-1 text-center">Desloc.</div>
-                    <div className="w-[85px] px-1 text-center">Saída base</div>
-                    <div className="w-[85px] px-1 text-center">Segurança</div>
-                    <div className="flex-1 text-right pr-2">Total comp.</div>
+                {/* RODAPÉ DO CARD "DIAS PROGRAMADOS" */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 px-4 bg-[#FBFAF7] border-t border-[#E6E3DD]">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {viewMode === 'jornada' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={expandedDayIds.length === diasProgramados.length ? handleCollapseAll : handleExpandAll}
+                        className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] font-semibold"
+                      >
+                        {expandedDayIds.length === diasProgramados.length ? 'Recolher todos' : 'Expandir todos'}
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddDiaExtra}
+                      className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#E07A1F]" /> Adicionar dia extra
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDistribuirPontosAuto}
+                      className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-[#E07A1F]" /> Distribuir pontos
+                    </Button>
                   </div>
 
-                  {/* LINHAS DOS DIAS NA VISÃO ALOJAMENTOS */}
-                  {diasProgramados.map(dia => {
-                    const customAl = diasCustomAlojMap[dia.id];
-                    const tComp = diasTemposCompMap[dia.id];
-                    const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
-                    const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
-                    const ida = customAl?.tempoIdaMin ?? 40;
-                    const volta = customAl?.tempoVoltaMin ?? 40;
-                    const orig = customAl?.origem || alojamentoPadrao;
-                    const dest = customAl?.destino || alojamentoPadrao;
-
-                    return (
-                      <PcpDiaRow
-                        key={dia.id}
-                        dia={dia}
-                        totalDias={diasProgramados.length}
-                        isExpanded={false}
-                        onToggleExpand={() => {}}
-                        viewMode="alojamentos"
-                        pontosDoDia={diasPontosMap[dia.id] || []}
-                        pontosDisponiveis={pontosDisponiveisDoProjeto}
-                        orcamentoPorPontoMap={orcamentoPorPontoMap}
-                        getItemsDoPontoNoDia={getItemsDoPontoNoDia}
-                        alojamentosDisponiveis={alojamentos}
-                        metaEquipeDia={metaEquipeInput}
-                        etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
-                        isPesDia={diasPesMap[dia.id] || false}
-                        isReprogramarDia={diasReprogramarMap[dia.id] || false}
-                        motivoReprogramarDia={diasMotivoReprogramarMap[dia.id] || ''}
-                        filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
-                        tempoSaidaBaseMin={sBase}
-                        tempoSegurancaMin={sSeg}
-                        tempoIdaMin={ida}
-                        tempoVoltaMin={volta}
-                        isIdaManual={Boolean(customAl?.manualIda)}
-                        isVoltaManual={Boolean(customAl?.manualVolta)}
-                        origemAloj={orig}
-                        destinoAloj={dest}
-                        isTrocaAloj={orig !== dest}
-                        filteredServicosBase={servicosBase}
-                        handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
-                        handleUpdateDiaTempo={handleUpdateDiaTempo}
-                        handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
-                        handleUpdateDiaDate={handleUpdateDiaDate}
-                        handleRemoveDia={handleRemoveDia}
-                        handleToggleReprogramarDia={handleToggleReprogramarDia}
-                        handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [dId]: mot }))}
-                        handleTogglePesDia={handleTogglePesDia}
-                        handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [dId]: [et] }))}
-                        handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [dId]: f }))}
-                        handleTogglePontoNoDia={handleTogglePontoNoDia}
-                        handleSelectAllPontosNoDia={handleSelectAllPontosNoDia}
-                        handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
-                        handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
-                        handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
-                        handleUpdateAtividade={handleUpdateAtividade}
-                        handleRemoveAtividade={handleRemoveAtividade}
-                        handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
-                      />
-                    );
-                  })}
-
-                  {/* TOTALIZADOR DO PERÍODO (VISÃO ALOJAMENTOS) */}
-                  <div
-                    className="flex items-center py-3 px-3 text-sm font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
-                    style={{ borderLeft: '4px solid transparent' }}
-                  >
-                    <div className="w-[130px] text-[#23211E]">Total acumulado</div>
-                    <div className="w-[590px] px-1 text-[#6B6660] text-xs">
-                      {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
-                    </div>
-                    <div className="w-[110px] px-1 text-center text-[#23211E]">
-                      {formatMinToHours(totalDeslocamentoPeriodoMin)}
-                    </div>
-                    <div className="w-[170px] px-1" />
-                    <div className="flex-1 text-right pr-2 text-[#23211E]">
-                      {formatMinToHours(totalCompPeriodoMin)}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* RODAPÉ DO CARD "DIAS PROGRAMADOS" */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 px-4 bg-[#FBFAF7] border-t border-[#E6E3DD]">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {viewMode === 'jornada' && (
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={expandedDayIds.length === diasProgramados.length ? handleCollapseAll : handleExpandAll}
-                    className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] font-semibold"
+                    onClick={handleEnviarTodosOsDias}
+                    className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs"
                   >
-                    {expandedDayIds.length === diasProgramados.length ? 'Recolher todos' : 'Expandir todos'}
+                    <Send className="w-4 h-4" /> Enviar todos os dias ({diasProgramados.length})
                   </Button>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddDiaExtra}
-                  className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold"
-                >
-                  <Plus className="w-3.5 h-3.5 text-[#E07A1F]" /> Adicionar dia extra
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDistribuirPontosAuto}
-                  className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#E07A1F]" /> Distribuir pontos
-                </Button>
+                </div>
               </div>
-
-              <Button
-                size="sm"
-                onClick={handleEnviarTodosOsDias}
-                className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs"
-              >
-                <Send className="w-4 h-4" /> Enviar todos os dias ({diasProgramados.length})
-              </Button>
-            </div>
-          </div>
+            </>
+          )}
         </main>
       </div>
 
