@@ -745,7 +745,7 @@ export const usePcpPlanejamentoData = (
       const batchSize = 1000;
       let hasMore = true;
 
-      while (hasMore && from < 20000) {
+      while (hasMore && from < 100000) {
         const { data: pageData, error } = await supabase
           .from('atividades_por_ponto')
           .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara, unidade_medida')
@@ -783,7 +783,7 @@ export const usePcpPlanejamentoData = (
       from = 0;
       hasMore = true;
       let dataProjetoAll: any[] = [];
-      while (hasMore && from < 20000) {
+      while (hasMore && from < 100000) {
         const { data: dataProjeto, error } = await supabase
           .from('atividades_por_ponto')
           .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara')
@@ -965,7 +965,7 @@ export const usePcpPlanejamentoData = (
     // Se a obra não tiver pontos orçados no pré-fechamento, usa os postes disponíveis da carteira como fallback
     if (setPontos.size === 0) {
       const selectedObra = obras.find(o => o.projeto === selectedProjetoCode);
-      const qtdPostes = Math.min(50, Math.max(1, selectedObra?.qtdPostesDisponiveis || 1));
+      const qtdPostes = Math.max(1, selectedObra?.qtdPostesDisponiveis || 1);
       for (let i = 1; i <= qtdPostes; i++) {
         setPontos.add(`P${i}`);
       }
