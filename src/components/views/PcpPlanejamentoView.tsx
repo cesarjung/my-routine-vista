@@ -29,7 +29,8 @@ import {
   Building2,
   MapPin,
   Clock,
-  DollarSign
+  DollarSign,
+  Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -1956,116 +1957,232 @@ export const PcpPlanejamentoView = () => {
                     </div>
                   )}
 
-                  {/* CABEÇALHO DA GRADE: VISÃO ALOJAMENTOS */}
-                  {viewMode === 'alojamentos' && (
-                    <div style={{ minWidth: '1040px' }}>
-                      <div
-                        className="flex items-center py-2 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD] gap-2"
-                        style={{ borderLeft: '4px solid transparent' }}
-                      >
-                        <div className="w-[110px]">Dia</div>
-                        <div className="w-[210px] px-1">Saída (ida)</div>
-                        <div className="w-[100px] px-1 text-center">Ida (hh:mm / km)</div>
-                        <div className="w-[210px] px-1">Retorno (volta)</div>
-                        <div className="w-[100px] px-1 text-center">Volta (hh:mm / km)</div>
-                        <div className="w-[110px] px-1 text-center">Desloc. (hh:mm / km)</div>
-                        <div className="w-[90px] px-1 text-center">Saída base (hh:mm)</div>
-                        <div className="w-[90px] px-1 text-center">Segurança (hh:mm)</div>
-                        <div className="w-[100px] text-right pr-2">Total comp. (hh:mm)</div>
+                  {/* VISÃO ALOJAMENTOS COM PAINEL LATERAL DE RESUMO */}
+                  {viewMode === 'alojamentos' && (() => {
+                    const totalKmIda = diasProgramados.reduce((acc, d, i) => acc + (getDayDisplacement(d.id, i, diasProgramados.length).distIdaKm || 0), 0);
+                    const totalKmVolta = diasProgramados.reduce((acc, d, i) => acc + (getDayDisplacement(d.id, i, diasProgramados.length).distVoltaKm || 0), 0);
+                    const totalKmGeral = Math.round((totalKmIda + totalKmVolta) * 10) / 10;
+                    const mediaKmDia = diasProgramados.length > 0 ? Math.round((totalKmGeral / diasProgramados.length) * 10) / 10 : 0;
+                    const mediaMinDeslocDia = diasProgramados.length > 0 ? Math.round(totalDeslocamentoPeriodoMin / diasProgramados.length) : 0;
+                    const isMediaDeslocamentoAlto = mediaMinDeslocDia > 120;
+
+                    const alojamentosUsadosSet = new Set<string>();
+                    diasProgramados.forEach((d, i) => {
+                      const disp = getDayDisplacement(d.id, i, diasProgramados.length);
+                      if (disp.origemNome) alojamentosUsadosSet.add(disp.origemNome);
+                      if (disp.destinoNome) alojamentosUsadosSet.add(disp.destinoNome);
+                    });
+                    const alojamentosUsadosList = Array.from(alojamentosUsadosSet);
+
+                    return (
+                      <div className="flex flex-col xl:flex-row items-stretch">
+                        {/* TABELA DE ALOJAMENTOS */}
+                        <div className="flex-1 overflow-x-auto">
+                          <div style={{ minWidth: '1040px' }}>
+                            <div
+                              className="flex items-center py-2 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD] gap-2"
+                              style={{ borderLeft: '4px solid transparent' }}
+                            >
+                              <div className="w-[110px]">Dia</div>
+                              <div className="w-[210px] px-1">Saída (ida)</div>
+                              <div className="w-[100px] px-1 text-center">Ida (hh:mm / km)</div>
+                              <div className="w-[210px] px-1">Retorno (volta)</div>
+                              <div className="w-[100px] px-1 text-center">Volta (hh:mm / km)</div>
+                              <div className="w-[110px] px-1 text-center">Desloc. (hh:mm / km)</div>
+                              <div className="w-[90px] px-1 text-center">Saída base (hh:mm)</div>
+                              <div className="w-[90px] px-1 text-center">Segurança (hh:mm)</div>
+                              <div className="w-[100px] text-right pr-2">Total comp. (hh:mm)</div>
+                            </div>
+
+                            {/* LINHAS DOS DIAS NA VISÃO ALOJAMENTOS */}
+                            {diasProgramados.map((dia, idx) => {
+                              const tComp = diasTemposCompMap[dia.id];
+                              const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+                              const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+                              const disp = getDayDisplacement(dia.id, idx, diasProgramados.length);
+
+                              return (
+                                <PcpDiaRow
+                                  key={dia.id}
+                                  dia={dia}
+                                  totalDias={diasProgramados.length}
+                                  isExpanded={false}
+                                  onToggleExpand={() => {}}
+                                  viewMode="alojamentos"
+                                  pontosDoDia={diasPontosMap[dia.id] || []}
+                                  pontosDisponiveis={pontosDisponiveisDoProjeto}
+                                  orcamentoPorPontoMap={orcamentoPorPontoMap}
+                                  getItemsDoPontoNoDia={getItemsDoPontoNoDia}
+                                  alojamentosDisponiveis={alojamentosDaUnidade}
+                                  metaEquipeDia={metaEquipeInput}
+                                  etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
+                                  isPesDia={diasPesMap[dia.id] || false}
+                                  isReprogramarDia={diasReprogramarMap[dia.id] || false}
+                                  motivoReprogramarDia={diasMotivoReprogramarMap[dia.id] || ''}
+                                  filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
+                                  tempoSaidaBaseMin={sBase}
+                                  tempoSegurancaMin={sSeg}
+                                  tempoIdaMin={disp.tempoIdaMin}
+                                  tempoVoltaMin={disp.tempoVoltaMin}
+                                  distIdaKm={disp.distIdaKm}
+                                  distVoltaKm={disp.distVoltaKm}
+                                  baseNome={unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}
+                                  isIdaManual={disp.isManualIda}
+                                  isVoltaManual={disp.isManualVolta}
+                                  origemAloj={disp.origemNome}
+                                  destinoAloj={disp.destinoNome}
+                                  isTrocaAloj={disp.origemNome !== disp.destinoNome}
+                                  filteredServicosBase={servicosBase}
+                                  handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
+                                  handleUpdateDiaTempo={handleUpdateDiaTempo}
+                                  handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
+                                  handleUpdateDiaDate={handleUpdateDiaDate}
+                                  handleRemoveDia={handleRemoveDia}
+                                  handleToggleReprogramarDia={handleToggleReprogramarDia}
+                                  handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [dId]: mot }))}
+                                  handleTogglePesDia={handleTogglePesDia}
+                                  handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [dId]: [et] }))}
+                                  handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [dId]: f }))}
+                                  handleTogglePontoNoDia={handleTogglePontoNoDia}
+                                  handleSelectAllPontosNoDia={handleSelectAllPontosNoDia}
+                                  handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
+                                  handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
+                                  handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
+                                  handleUpdateAtividade={handleUpdateAtividade}
+                                  handleRemoveAtividade={handleRemoveAtividade}
+                                  handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
+                                />
+                              );
+                            })}
+
+                            {/* TOTALIZADOR DO PERÍODO (VISÃO ALOJAMENTOS) */}
+                            <div
+                              className="flex items-center py-3 px-3 text-xs font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3] gap-2"
+                              style={{ borderLeft: '4px solid transparent' }}
+                            >
+                              <div className="w-[110px] text-[#23211E]">Total acumulado</div>
+                              <div className="w-[210px] px-1 text-[#6B6660] text-[11px] font-sans font-medium">
+                                {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
+                              </div>
+                              <div className="w-[100px] px-1 text-center font-mono font-bold text-[#23211E]">
+                                {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoIdaMin, 0))}
+                              </div>
+                              <div className="w-[210px] px-1" />
+                              <div className="w-[100px] px-1 text-center font-mono font-bold text-[#23211E]">
+                                {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoVoltaMin, 0))}
+                              </div>
+                              <div className="w-[110px] px-1 text-center font-mono font-bold text-[#23211E]">
+                                {formatMinToHours(totalDeslocamentoPeriodoMin)}
+                              </div>
+                              <div className="w-[90px] px-1 text-center font-mono font-bold text-[#23211E]">
+                                {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao), 0))}
+                              </div>
+                              <div className="w-[90px] px-1 text-center font-mono font-bold text-[#23211E]">
+                                {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao), 0))}
+                              </div>
+                              <div className="w-[100px] text-right pr-2 font-mono font-bold text-[#23211E]">
+                                {formatMinToHours(totalCompPeriodoMin)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* PAINEL LATERAL: RESUMO DO DESLOCAMENTO PREVISTO */}
+                        <div className="w-full xl:w-[320px] shrink-0 border-t xl:border-t-0 xl:border-l border-[#E6E3DD] bg-[#FAF8F5] p-4 flex flex-col gap-3.5">
+                          <div className="flex items-center gap-2.5 pb-2 border-b border-[#E6E3DD]">
+                            <div className="w-8 h-8 rounded-lg bg-[#E07A1F]/10 border border-[#E07A1F]/20 flex items-center justify-center text-[#E07A1F]">
+                              <Navigation className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-[#23211E]">Resumo do Deslocamento</h4>
+                              <p className="text-[11px] text-[#6B6660]">Estimativa total do período</p>
+                            </div>
+                          </div>
+
+                          {/* KPIs em cards 2x2 */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
+                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Distância Total</span>
+                              <span className="font-mono font-bold text-sm text-[#23211E] block mt-0.5">
+                                {totalKmGeral > 0 ? `${totalKmGeral} km` : '—'}
+                              </span>
+                              <span className="text-[9.5px] font-mono text-[#A39E96]">
+                                {mediaKmDia > 0 ? `~${mediaKmDia} km/dia` : ''}
+                              </span>
+                            </div>
+
+                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
+                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Tempo Desloc.</span>
+                              <span className="font-mono font-bold text-sm text-[#23211E] block mt-0.5" style={{ color: isMediaDeslocamentoAlto ? '#B03028' : '#23211E' }}>
+                                {formatMinToHours(totalDeslocamentoPeriodoMin)}
+                              </span>
+                              <span className="text-[9.5px] font-mono text-[#A39E96]">
+                                {`~${formatMinToHours(mediaMinDeslocDia)}/dia`}
+                              </span>
+                            </div>
+
+                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
+                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Ida Acumulada</span>
+                              <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
+                                {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoIdaMin, 0))}
+                              </span>
+                              <span className="text-[9.5px] font-mono text-[#6B6660]">
+                                {totalKmIda > 0 ? `${Math.round(totalKmIda * 10) / 10} km` : '—'}
+                              </span>
+                            </div>
+
+                            <div className="bg-white rounded-lg p-2.5 border border-[#E6E3DD] shadow-2xs">
+                              <span className="text-[10.5px] text-[#6B6660] font-medium block">Volta Acumulada</span>
+                              <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
+                                {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoVoltaMin, 0))}
+                              </span>
+                              <span className="text-[9.5px] font-mono text-[#6B6660]">
+                                {totalKmVolta > 0 ? `${Math.round(totalKmVolta * 10) / 10} km` : '—'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Alerta de Deslocamento / Eficiência */}
+                          <div className={`p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+                            isMediaDeslocamentoAlto
+                              ? 'bg-[#FDF2F0] border-[#F2C0B8] text-[#B03028]'
+                              : 'bg-[#E6F2EA] border-[#A0D4B2] text-[#17794C]'
+                          }`}>
+                            <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <div className="text-[11px] leading-tight">
+                              {isMediaDeslocamentoAlto ? (
+                                <>
+                                  <strong>Atenção ao deslocamento:</strong> Média diária de <strong>{formatMinToHours(mediaMinDeslocDia)}</strong> está acima da recomendação operacional (máx 02:00/dia).
+                                </>
+                              ) : (
+                                <>
+                                  <strong>Deslocamento equilibrado:</strong> Média de <strong>{formatMinToHours(mediaMinDeslocDia)}</strong>/dia dentro da janela operacional recomendada.
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Alojamentos do Período */}
+                          <div className="space-y-1.5 pt-2 border-t border-[#E6E3DD]">
+                            <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#5C574F] block">
+                              Alojamentos Utilizados ({alojamentosUsadosList.length})
+                            </span>
+                            <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto pr-1">
+                              {alojamentosUsadosList.map(aloj => (
+                                <div
+                                  key={aloj}
+                                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-[#DEDAD3] text-[11px] font-medium text-[#23211E]"
+                                >
+                                  <Building2 className="w-3 h-3 text-[#E07A1F] shrink-0" />
+                                  <span className="truncate">{aloj}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-
-                      {/* LINHAS DOS DIAS NA VISÃO ALOJAMENTOS */}
-                      {diasProgramados.map((dia, idx) => {
-                        const tComp = diasTemposCompMap[dia.id];
-                        const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
-                        const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
-                        const disp = getDayDisplacement(dia.id, idx, diasProgramados.length);
-
-                        return (
-                          <PcpDiaRow
-                            key={dia.id}
-                            dia={dia}
-                            totalDias={diasProgramados.length}
-                            isExpanded={false}
-                            onToggleExpand={() => {}}
-                            viewMode="alojamentos"
-                            pontosDoDia={diasPontosMap[dia.id] || []}
-                            pontosDisponiveis={pontosDisponiveisDoProjeto}
-                            orcamentoPorPontoMap={orcamentoPorPontoMap}
-                            getItemsDoPontoNoDia={getItemsDoPontoNoDia}
-                            alojamentosDisponiveis={alojamentosDaUnidade}
-                            metaEquipeDia={metaEquipeInput}
-                            etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
-                            isPesDia={diasPesMap[dia.id] || false}
-                            isReprogramarDia={diasReprogramarMap[dia.id] || false}
-                            motivoReprogramarDia={diasMotivoReprogramarMap[dia.id] || ''}
-                            filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
-                            tempoSaidaBaseMin={sBase}
-                            tempoSegurancaMin={sSeg}
-                            tempoIdaMin={disp.tempoIdaMin}
-                            tempoVoltaMin={disp.tempoVoltaMin}
-                            distIdaKm={disp.distIdaKm}
-                            distVoltaKm={disp.distVoltaKm}
-                            baseNome={unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}
-                            isIdaManual={disp.isManualIda}
-                            isVoltaManual={disp.isManualVolta}
-                            origemAloj={disp.origemNome}
-                            destinoAloj={disp.destinoNome}
-                            isTrocaAloj={disp.origemNome !== disp.destinoNome}
-                            filteredServicosBase={servicosBase}
-                            handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
-                            handleUpdateDiaTempo={handleUpdateDiaTempo}
-                            handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
-                            handleUpdateDiaDate={handleUpdateDiaDate}
-                            handleRemoveDia={handleRemoveDia}
-                            handleToggleReprogramarDia={handleToggleReprogramarDia}
-                            handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [dId]: mot }))}
-                            handleTogglePesDia={handleTogglePesDia}
-                            handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [dId]: [et] }))}
-                            handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [dId]: f }))}
-                            handleTogglePontoNoDia={handleTogglePontoNoDia}
-                            handleSelectAllPontosNoDia={handleSelectAllPontosNoDia}
-                            handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
-                            handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
-                            handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
-                            handleUpdateAtividade={handleUpdateAtividade}
-                            handleRemoveAtividade={handleRemoveAtividade}
-                            handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
-                          />
-                        );
-                      })}
-
-                      {/* TOTALIZADOR DO PERÍODO (VISÃO ALOJAMENTOS) */}
-                      <div
-                        className="flex items-center py-3 px-3 text-xs font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3] gap-2"
-                        style={{ borderLeft: '4px solid transparent' }}
-                      >
-                        <div className="w-[110px] text-[#23211E]">Total acumulado</div>
-                        <div className="w-[210px] px-1 text-[#6B6660] text-[11px] font-sans font-medium">
-                          {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
-                        </div>
-                        <div className="w-[100px] px-1 text-center font-mono font-bold text-[#23211E]">
-                          {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoIdaMin, 0))}
-                        </div>
-                        <div className="w-[210px] px-1" />
-                        <div className="w-[100px] px-1 text-center font-mono font-bold text-[#23211E]">
-                          {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoVoltaMin, 0))}
-                        </div>
-                        <div className="w-[110px] px-1 text-center font-mono font-bold text-[#23211E]">
-                          {formatMinToHours(totalDeslocamentoPeriodoMin)}
-                        </div>
-                        <div className="w-[90px] px-1 text-center font-mono font-bold text-[#23211E]">
-                          {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao), 0))}
-                        </div>
-                        <div className="w-[90px] px-1 text-center font-mono font-bold text-[#23211E]">
-                          {formatMinToHours(diasProgramados.reduce((acc, d) => acc + (diasTemposCompMap[d.id]?.tempoSegurancaMin ?? tempoSegurancaPadrao), 0))}
-                        </div>
-                        <div className="w-[100px] text-right pr-2 font-mono font-bold text-[#23211E]">
-                          {formatMinToHours(totalCompPeriodoMin)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* RODAPÉ DO CARD "DIAS PROGRAMADOS" */}
