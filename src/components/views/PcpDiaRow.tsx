@@ -356,23 +356,23 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
       {/* LINHA FECHADA: VISÃO ALOJAMENTOS */}
       {viewMode === 'alojamentos' && (
         <div
-          className="flex items-center py-2.5 px-3 text-xs select-none hover:bg-[#FBF5EC]/50 transition-colors gap-2"
+          className="flex items-center py-2 px-3 text-xs select-none hover:bg-[#FBF5EC]/50 transition-colors gap-2"
           style={{
             borderLeft: `4px solid ${isDeslocamentoAlto ? '#C0392E' : isTrocaAloj ? '#C9A227' : '#E6E3DD'}`
           }}
         >
           {/* Dia */}
-          <div className="w-[110px] font-semibold text-[#23211E] text-sm shrink-0">
+          <div className="w-[110px] font-semibold text-[#23211E] text-xs shrink-0">
             <span className="capitalize">{dia.nomeDia.slice(0, 3)}</span>, {dia.dataStr}
           </div>
 
           {/* Saída (Alojamento de Origem) */}
-          <div className="flex-1 min-w-[180px] shrink-0">
+          <div className="w-[210px] shrink-0">
             <Select
               value={origemAloj}
               onValueChange={val => handleUpdateDiaAlojamento(dia.id, 'origem', val)}
             >
-              <SelectTrigger className="h-9 text-xs bg-white border-[#DEDAD3] font-medium">
+              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3] font-medium px-2.5 truncate">
                 <SelectValue placeholder="Selecione alojamento de saída" />
               </SelectTrigger>
               <SelectContent>
@@ -391,12 +391,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Ida (tempo hh:mm e km) */}
-          <div className="w-[110px] shrink-0">
+          <div className="w-[100px] shrink-0">
             <Popover>
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs group"
+                  className="w-full h-8 px-1.5 rounded border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs group"
                   title="Clique para alterar tempo de ida"
                 >
                   <div className="flex items-center gap-1">
@@ -404,12 +404,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                       {formatMinToHours(tempoIdaMin)}
                     </span>
                     {isIdaManual && (
-                      <span className="text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
+                      <span className="text-[7.5px] px-0.5 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
                         M
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] font-mono text-[#6B6660] leading-none">
+                  <span className="text-[9.5px] font-mono text-[#6B6660] leading-none">
                     {distIdaKm !== undefined && distIdaKm > 0 ? `${distIdaKm} km` : '—'}
                   </span>
                 </button>
@@ -435,12 +435,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Retorno (Alojamento de Destino) */}
-          <div className="flex-1 min-w-[180px] shrink-0">
+          <div className="w-[210px] shrink-0">
             <Select
               value={destinoAloj}
               onValueChange={val => handleUpdateDiaAlojamento(dia.id, 'destino', val)}
             >
-              <SelectTrigger className="h-9 text-xs bg-white border-[#DEDAD3] font-medium">
+              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3] font-medium px-2.5 truncate">
                 <SelectValue placeholder="Selecione alojamento de retorno" />
               </SelectTrigger>
               <SelectContent>
@@ -459,12 +459,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Volta (tempo hh:mm e km) */}
-          <div className="w-[110px] shrink-0">
+          <div className="w-[100px] shrink-0">
             <Popover>
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs group"
+                  className="w-full h-8 px-1.5 rounded border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs group"
                   title="Clique para alterar tempo de volta"
                 >
                   <div className="flex items-center gap-1">
@@ -472,12 +472,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                       {formatMinToHours(tempoVoltaMin)}
                     </span>
                     {isVoltaManual && (
-                      <span className="text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
+                      <span className="text-[7.5px] px-0.5 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
                         M
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] font-mono text-[#6B6660] leading-none">
+                  <span className="text-[9.5px] font-mono text-[#6B6660] leading-none">
                     {distVoltaKm !== undefined && distVoltaKm > 0 ? `${distVoltaKm} km` : '—'}
                   </span>
                 </button>
@@ -503,29 +503,29 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Deslocamento Total (hh:mm e km) */}
-          <div className="w-[120px] text-center shrink-0 flex flex-col items-center justify-center h-9 bg-[#F7F6F3] rounded-md border border-[#E6E3DD]">
+          <div className="w-[110px] text-center shrink-0 flex flex-col items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#E6E3DD]">
             <div
               className="font-mono font-bold text-xs"
               style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}
             >
               {formatMinToHours(deslocamentoMin)}
             </div>
-            <div className="text-[10px] font-mono text-[#6B6660] leading-none">
+            <div className="text-[9.5px] font-mono text-[#6B6660] leading-none">
               {(distIdaKm || 0) + (distVoltaKm || 0) > 0 ? `${Math.round(((distIdaKm || 0) + (distVoltaKm || 0)) * 10) / 10} km` : '—'}
             </div>
           </div>
 
           {/* Saída da Base */}
-          <div className="w-[95px] shrink-0">
+          <div className="w-[90px] shrink-0">
             <Popover>
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs font-mono font-bold text-xs text-[#23211E]"
+                  className="w-full h-8 px-1.5 rounded border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs font-mono font-bold text-xs text-[#23211E]"
                   title="Clique para alterar saída da base"
                 >
                   <span>{formatMinToHours(tempoSaidaBaseMin)}</span>
-                  <span className="text-[9.5px] font-normal text-[#A39E96] leading-none">{tempoSaidaBaseMin} min</span>
+                  <span className="text-[9px] font-normal text-[#A39E96] leading-none">{tempoSaidaBaseMin} min</span>
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-44 p-3 bg-white" align="center">
@@ -548,16 +548,16 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Segurança */}
-          <div className="w-[95px] shrink-0">
+          <div className="w-[90px] shrink-0">
             <Popover>
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs font-mono font-bold text-xs text-[#23211E]"
+                  className="w-full h-8 px-1.5 rounded border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs font-mono font-bold text-xs text-[#23211E]"
                   title="Clique para alterar procedimentos de segurança"
                 >
                   <span>{formatMinToHours(tempoSegurancaMin)}</span>
-                  <span className="text-[9.5px] font-normal text-[#A39E96] leading-none">{tempoSegurancaMin} min</span>
+                  <span className="text-[9px] font-normal text-[#A39E96] leading-none">{tempoSegurancaMin} min</span>
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-44 p-3 bg-white" align="center">
@@ -580,7 +580,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Total Complementar */}
-          <div className="w-[110px] shrink-0 text-right pr-2 font-mono font-bold text-[#23211E] text-sm">
+          <div className="w-[100px] shrink-0 text-right pr-2 font-mono font-bold text-[#23211E] text-xs">
             {formatMinToHours(tempoSaidaBaseMin + tempoSegurancaMin + deslocamentoMin)}
           </div>
         </div>
