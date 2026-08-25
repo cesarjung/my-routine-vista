@@ -320,6 +320,32 @@ export interface ServicoBase {
   valorPorUnidade: number;
 }
 
+export const sortPontosAndVaos = (a: string, b: string): number => {
+  const isVaoA = (a || '').toUpperCase().startsWith('V');
+  const isVaoB = (b || '').toUpperCase().startsWith('V');
+  
+  if (!isVaoA && isVaoB) return -1;
+  if (isVaoA && !isVaoB) return 1;
+
+  if (isVaoA && isVaoB) {
+    const matchA = a.match(/V(\d+)(?:-(\d+))?/i);
+    const matchB = b.match(/V(\d+)(?:-(\d+))?/i);
+    const startA = matchA ? parseInt(matchA[1], 10) : 0;
+    const startB = matchB ? parseInt(matchB[1], 10) : 0;
+    if (startA !== startB) return startA - startB;
+    const endA = matchA && matchA[2] ? parseInt(matchA[2], 10) : 0;
+    const endB = matchB && matchB[2] ? parseInt(matchB[2], 10) : 0;
+    return endA - endB;
+  }
+
+  const matchA = a.match(/P(\d+)/i);
+  const matchB = b.match(/P(\d+)/i);
+  if (matchA && matchB) {
+    return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
+  }
+
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+};
 
 // Status reais da aba Carteira_Planejador (coluna L / index 11)
 export const ALL_STATUSES = [
@@ -701,7 +727,7 @@ export const usePcpPlanejamentoData = (
   }, [rawCacheQuery.data?.bd_metas, programacoesAtivas]);
 
   // Query point-by-point ATIVIDADES (from centralized ATIVIDADES_POR_PONTO_BASE sheet)
-  // Primary: atividades_por_ponto table (clean activity data)
+  // Primary: atividades_por_ponto table with pagination (clean activity data)
   // Fallback: materiais_por_ponto (raw materials — used only if primary is empty)
   const orcamentoPontosQuery = useQuery({
     queryKey: ['pcp-orcamento-pontos', selectedProjetoCode],
@@ -710,42 +736,73 @@ export const usePcpPlanejamentoData = (
       if (!selectedProjetoCode) return [];
 
       let cleanCode = selectedProjetoCode.trim();
-      if (!cleanCode.startsWith('B-')) {
-        cleanCode = `B-${cleanCode}`;
+      const rawNum = cleanCode.replace(/^[A-Z]-/, '').trim();
+      const codeVariants = Array.from(new Set([cleanCode, `B-${rawNum}`, `B-0${rawNum}`, rawNum, `0${rawNum}`]));
+
+      // === PRIMARY: atividades_por_ponto com busca paginada ===
+      let allAtivs: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      let hasMore = true;
+
+      while (hasMore && from < 20000) {
+        const { data: pageData, error } = await supabase
+          .from('atividades_por_ponto')
+          .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara, unidade_medida')
+          .in('com_mascara', codeVariants)
+          .range(from, from + batchSize - 1);
+
+        if (error || !pageData || pageData.length === 0) {
+          hasMore = false;
+        } else {
+          allAtivs.push(...pageData);
+          if (pageData.length < batchSize) {
+            hasMore = false;
+          } else {
+            from += batchSize;
+          }
+        }
       }
 
-      // === PRIMARY: atividades_por_ponto (ATIVIDADES_POR_PONTO_BASE) ===
-      const { data: dataAtiv, error: errAtiv } = await supabase
-        .from('atividades_por_ponto')
-        .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara, unidade_medida')
-        .eq('com_mascara', cleanCode)
-        .limit(2000);
-
-      if (dataAtiv && dataAtiv.length > 0) {
-        // Mark records as coming from the clean atividades source
-        return dataAtiv.map((r: any) => ({ ...r, _source: 'atividades' }));
+      if (allAtivs.length > 0) {
+        return allAtivs.map((r: any) => ({ ...r, _source: 'atividades' }));
       }
 
       // === FALLBACK: materiais_por_ponto (raw materials, older source) ===
       const { data: dataComMascara } = await supabase
         .from('materiais_por_ponto')
         .select('*')
-        .eq('com_mascara', cleanCode)
-        .limit(1000);
+        .in('com_mascara', codeVariants)
+        .limit(2000);
 
       if (dataComMascara && dataComMascara.length > 0) {
         return dataComMascara.map((r: any) => ({ ...r, _source: 'materiais' }));
       }
 
-      // Last fallback: raw project code without prefix
-      const rawNum = selectedProjetoCode.replace(/^[A-Z]-/, '').trim();
-      const { data: dataProjeto } = await supabase
-        .from('atividades_por_ponto')
-        .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara')
-        .eq('projeto', rawNum)
-        .limit(2000);
+      // Last fallback: raw project code query
+      from = 0;
+      hasMore = true;
+      let dataProjetoAll: any[] = [];
+      while (hasMore && from < 20000) {
+        const { data: dataProjeto, error } = await supabase
+          .from('atividades_por_ponto')
+          .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara')
+          .in('projeto', codeVariants)
+          .range(from, from + batchSize - 1);
 
-      return (dataProjeto || []).map((r: any) => ({ ...r, _source: 'atividades' }));
+        if (error || !dataProjeto || dataProjeto.length === 0) {
+          hasMore = false;
+        } else {
+          dataProjetoAll.push(...dataProjeto);
+          if (dataProjeto.length < batchSize) {
+            hasMore = false;
+          } else {
+            from += batchSize;
+          }
+        }
+      }
+
+      return (dataProjetoAll || []).map((r: any) => ({ ...r, _source: 'atividades' }));
     },
     staleTime: 1000 * 60 * 10,
   });
@@ -901,22 +958,20 @@ export const usePcpPlanejamentoData = (
     return map;
   }, [orcamentoPontosQuery.data, servicosBase]);
 
-  // Unique budgeted point labels for the selected project (e.g. ['P1', 'P2', 'P3', 'P4', 'P5'])
+  // Unique budgeted point labels for the selected project (e.g. ['P1', 'P2', ..., 'V1-2', 'V2-3', ...])
   const pontosDisponiveisDoProjeto = useMemo(() => {
     const setPontos = new Set<string>(orcamentoPorPontoMap.keys());
 
-    // Se a obra tem X postes na carteira (ex: 5 postes), garante que P1..P5 existam na lista de opções
-    const selectedObra = obras.find(o => o.projeto === selectedProjetoCode);
-    const qtdPostes = Math.min(50, Math.max(1, selectedObra?.qtdPostesDisponiveis || 1));
-    for (let i = 1; i <= qtdPostes; i++) {
-      setPontos.add(`P${i}`);
+    // Se a obra não tiver pontos orçados no pré-fechamento, usa os postes disponíveis da carteira como fallback
+    if (setPontos.size === 0) {
+      const selectedObra = obras.find(o => o.projeto === selectedProjetoCode);
+      const qtdPostes = Math.min(50, Math.max(1, selectedObra?.qtdPostesDisponiveis || 1));
+      for (let i = 1; i <= qtdPostes; i++) {
+        setPontos.add(`P${i}`);
+      }
     }
 
-    return Array.from(setPontos).sort((a, b) => {
-      const numA = parseInt(a.replace(/\D/g, '')) || 0;
-      const numB = parseInt(b.replace(/\D/g, '')) || 0;
-      return numA - numB;
-    });
+    return Array.from(setPontos).sort(sortPontosAndVaos);
   }, [orcamentoPorPontoMap, obras, selectedProjetoCode]);
 
   // Function to generate filename timestamp format: UNIDADE_ddmmhhmmss.csv (ex: BJL_1608140345.csv)
