@@ -71,6 +71,19 @@ import { useAlojamentos } from '@/hooks/useAlojamentos';
 import { useVistoriaRisk } from '@/hooks/usePcpAiPlanner';
 import { toast } from 'sonner';
 import { PcpDiaRow } from './PcpDiaRow';
+import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
+
+function calcDistanceKM(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 // In-memory session store (persiste entre trocas de rotas/seções no SPA, reseta no F5 / logout)
 const inMemoryPcpStore: Record<string, any> = {};
@@ -268,19 +281,99 @@ export const PcpPlanejamentoView = () => {
     ? riskCache[selectedObra.projeto]
     : null;
 
+  // Informações da Base e Alojamentos da Unidade Ativa
+  const unidadeAtivaInfo = useMemo(() => {
+    return UNIDADES_PLANEJAMENTO.find(u => u.id === selectedUnidadeId) || null;
+  }, [selectedUnidadeId]);
+
+  const alojamentosDaUnidade = useMemo(() => {
+    if (!selectedUnidadeId) return [];
+    return alojamentos.filter(a => a.unidadeId === selectedUnidadeId);
+  }, [alojamentos, selectedUnidadeId]);
+
   // Alojamento Padrão Nome
   const alojamentoPadrao = useMemo(() => {
     if (!selectedAlojamentoId || selectedAlojamentoId === 'nenhum') {
-      return selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base';
+      return unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base');
     }
-    const found = alojamentos.find(a => a.id === selectedAlojamentoId);
-    return found ? found.nome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base');
-  }, [alojamentos, selectedAlojamentoId, selectedUnidadeObj]);
+    const found = alojamentosDaUnidade.find(a => a.id === selectedAlojamentoId || a.nome === selectedAlojamentoId);
+    return found ? found.nome : (unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : 'Base');
+  }, [alojamentosDaUnidade, selectedAlojamentoId, selectedUnidadeObj, unidadeAtivaInfo]);
+
+  // Cálculo Automático de Deslocamento e Alojamentos por Dia
+  const FATOR_ESTRADA = 1.25;
+  const fatorCaminhaoMult = 1.30;
+
+  const getDayDisplacement = useCallback((diaId: string, idx: number, totalDias: number) => {
+    let defaultOrigemId = 'BASE';
+    let defaultDestinoId = 'BASE';
+
+    if (selectedAlojamentoId && selectedAlojamentoId !== 'nenhum') {
+      if (totalDias === 1) {
+        defaultOrigemId = 'BASE';
+        defaultDestinoId = 'BASE';
+      } else if (idx === 0) {
+        defaultOrigemId = 'BASE';
+        defaultDestinoId = selectedAlojamentoId;
+      } else if (idx === totalDias - 1) {
+        defaultOrigemId = selectedAlojamentoId;
+        defaultDestinoId = 'BASE';
+      } else {
+        defaultOrigemId = selectedAlojamentoId;
+        defaultDestinoId = selectedAlojamentoId;
+      }
+    }
+
+    const customAl = diasCustomAlojMap[diaId] || {};
+    const finalOrigemId = customAl.origem || defaultOrigemId;
+    const finalDestinoId = customAl.destino || defaultDestinoId;
+
+    const baseInfo = unidadeAtivaInfo || UNIDADES_PLANEJAMENTO[1];
+    const alojList = alojamentosDaUnidade;
+
+    const origemObj = finalOrigemId === 'BASE' || finalOrigemId === baseInfo.baseNome
+      ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
+      : (alojList.find(a => a.id === finalOrigemId || a.nome === finalOrigemId) || { id: finalOrigemId, nome: finalOrigemId, latitude: null, longitude: null });
+
+    const destinoObj = finalDestinoId === 'BASE' || finalDestinoId === baseInfo.baseNome
+      ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
+      : (alojList.find(a => a.id === finalDestinoId || a.nome === finalDestinoId) || { id: finalDestinoId, nome: finalDestinoId, latitude: null, longitude: null });
+
+    let distIdaKm = 0;
+    let calcTempoIdaMin = 15;
+    if (origemObj.latitude && origemObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
+      distIdaKm = Math.round(calcDistanceKM(origemObj.latitude, origemObj.longitude, selectedObra.latitude, selectedObra.longitude) * FATOR_ESTRADA * 10) / 10;
+      calcTempoIdaMin = Math.max(5, Math.round(distIdaKm * 1.33 * fatorCaminhaoMult));
+    }
+
+    let distVoltaKm = 0;
+    let calcTempoVoltaMin = 15;
+    if (destinoObj.latitude && destinoObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
+      distVoltaKm = Math.round(calcDistanceKM(selectedObra.latitude, selectedObra.longitude, destinoObj.latitude, destinoObj.longitude) * FATOR_ESTRADA * 10) / 10;
+      calcTempoVoltaMin = Math.max(5, Math.round(distVoltaKm * 1.33 * fatorCaminhaoMult));
+    }
+
+    const tempoIdaMin = (customAl.tempoIdaMin !== undefined && customAl.manualIda) ? customAl.tempoIdaMin : calcTempoIdaMin;
+    const tempoVoltaMin = (customAl.tempoVoltaMin !== undefined && customAl.manualVolta) ? customAl.tempoVoltaMin : calcTempoVoltaMin;
+
+    return {
+      origemNome: origemObj.nome,
+      destinoNome: destinoObj.nome,
+      distIdaKm,
+      tempoIdaMin,
+      distVoltaKm,
+      tempoVoltaMin,
+      tempoTotalDeslocamentoMin: tempoIdaMin + tempoVoltaMin,
+      isManualIda: Boolean(customAl.manualIda),
+      isManualVolta: Boolean(customAl.manualVolta),
+    };
+  }, [selectedAlojamentoId, diasCustomAlojMap, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra]);
 
   // Handler de troca de unidade com reset
   const handleUnidadeChange = (newUnitId: string) => {
     setSelectedUnidadeId(newUnitId);
     setSelectedObraId('');
+    setSelectedAlojamentoId('nenhum');
     setSelectedSituacao('TODAS');
     setSelectedMesFilter('TODOS');
     setSelectedMunicipioFilter('TODOS');
@@ -1027,16 +1120,16 @@ export const PcpPlanejamentoView = () => {
   let totalDeslocamentoPeriodoMin = 0;
   let totalCompPeriodoMin = 0;
 
-  diasProgramados.forEach(d => {
+  diasProgramados.forEach((d, idx) => {
     const pts = diasPontosMap[d.id] || [];
     totalPontosPeriodo += pts.length;
 
     const tComp = diasTemposCompMap[d.id];
     const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
     const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
-    const customAl = diasCustomAlojMap[d.id];
-    const ida = customAl?.tempoIdaMin ?? 40;
-    const volta = customAl?.tempoVoltaMin ?? 40;
+    const disp = getDayDisplacement(d.id, idx, diasProgramados.length);
+    const ida = disp.tempoIdaMin;
+    const volta = disp.tempoVoltaMin;
 
     let servMin = 0;
     pts.forEach(p => {
@@ -1599,8 +1692,8 @@ export const PcpPlanejamentoView = () => {
                     <span className="font-semibold text-[#23211E]">{alojamentoPadrao}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nenhum" className="text-xs font-semibold">{selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base'}</SelectItem>
-                    {alojamentos.map(a => (
+                    <SelectItem value="nenhum" className="text-xs font-semibold">{unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}</SelectItem>
+                    {alojamentosDaUnidade.map(a => (
                       <SelectItem key={a.id} value={a.id} className="text-xs font-semibold">{a.nome}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1673,57 +1766,61 @@ export const PcpPlanejamentoView = () => {
                 </div>
               </div>
 
-              {/* 3. CARD CENTRAL "DIAS PROGRAMADOS" */}
+              {/* 3. Grade Principal de Programação */}
               <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-                {/* Cabeçalho do Card */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 px-4 bg-[#FBFAF7] border-b border-[#E6E3DD] min-h-[50px]">
-                  <div className="flex items-center gap-4">
-                    <h2 className="text-sm font-bold text-[#23211E]">
+                {/* Linha Superior da Grade: Título e Alternador de Visões */}
+                <div className="p-3 border-b border-[#E6E3DD] flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-[#23211E]">
                       Dias programados ({diasProgramados.length})
-                    </h2>
-
-                    {/* Legenda das 5 Etapas da Barra (Somente na Visão Jornada) */}
-                    {viewMode === 'jornada' && (
-                      <div className="hidden md:flex items-center gap-3 text-[11px] font-mono text-[#5C574F]">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#23211E' }} /> Saída
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E07A1F' }} /> Ida
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#A39E96' }} /> Segurança
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C0392E' }} /> Serviço
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#F5BE84' }} /> Volta
-                        </span>
-                      </div>
-                    )}
+                    </span>
+                    {/* Legenda de cores */}
+                    <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#6B6660] ml-2">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-[#3B82F6]" /> Saída
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-[#E07A1F]" /> Ida
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-[#0D9488]" /> Segurança
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-[#C0392E]" /> Serviço
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-[#F59E0B]" /> Volta
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Alternador de Visão: Jornada | Alojamentos */}
-                  <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-bold">
+                  {/* Segmented Controller: Jornada vs Alojamentos */}
+                  <div className="inline-flex rounded-lg border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold">
                     <button
                       type="button"
                       onClick={() => setViewMode('jornada')}
-                      className={`px-4 py-1.5 rounded transition-all ${viewMode === 'jornada' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                      className={`px-3 py-1 rounded-md transition-all ${
+                        viewMode === 'jornada'
+                          ? 'bg-white text-[#23211E] shadow-2xs'
+                          : 'text-[#6B6660] hover:text-[#23211E]'
+                      }`}
                     >
                       Jornada
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('alojamentos')}
-                      className={`px-4 py-1.5 rounded transition-all ${viewMode === 'alojamentos' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                      className={`px-3 py-1 rounded-md transition-all ${
+                        viewMode === 'alojamentos'
+                          ? 'bg-white text-[#23211E] shadow-2xs'
+                          : 'text-[#6B6660] hover:text-[#23211E]'
+                      }`}
                     >
                       Alojamentos
                     </button>
                   </div>
                 </div>
 
-                {/* GRADE DA TABELA DE DIAS (Wrapper Único com Overflow Horizontal) */}
                 <div className="overflow-x-auto">
                   {/* CABEÇALHO DA GRADE: VISÃO JORNADA */}
                   {viewMode === 'jornada' && (
@@ -1770,16 +1867,12 @@ export const PcpPlanejamentoView = () => {
                       </div>
 
                       {/* LINHAS DOS DIAS */}
-                      {diasProgramados.map(dia => {
+                      {diasProgramados.map((dia, idx) => {
                         const isExpanded = expandedDayIds.includes(dia.id);
-                        const customAl = diasCustomAlojMap[dia.id];
                         const tComp = diasTemposCompMap[dia.id];
                         const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
                         const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
-                        const ida = customAl?.tempoIdaMin ?? 40;
-                        const volta = customAl?.tempoVoltaMin ?? 40;
-                        const orig = customAl?.origem || alojamentoPadrao;
-                        const dest = customAl?.destino || alojamentoPadrao;
+                        const disp = getDayDisplacement(dia.id, idx, diasProgramados.length);
 
                         return (
                           <PcpDiaRow
@@ -1793,7 +1886,7 @@ export const PcpPlanejamentoView = () => {
                             pontosDisponiveis={pontosDisponiveisDoProjeto}
                             orcamentoPorPontoMap={orcamentoPorPontoMap}
                             getItemsDoPontoNoDia={getItemsDoPontoNoDia}
-                            alojamentosDisponiveis={alojamentos}
+                            alojamentosDisponiveis={alojamentosDaUnidade}
                             metaEquipeDia={metaEquipeInput}
                             etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
                             isPesDia={diasPesMap[dia.id] || false}
@@ -1802,13 +1895,13 @@ export const PcpPlanejamentoView = () => {
                             filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
                             tempoSaidaBaseMin={sBase}
                             tempoSegurancaMin={sSeg}
-                            tempoIdaMin={ida}
-                            tempoVoltaMin={volta}
-                            isIdaManual={Boolean(customAl?.manualIda)}
-                            isVoltaManual={Boolean(customAl?.manualVolta)}
-                            origemAloj={orig}
-                            destinoAloj={dest}
-                            isTrocaAloj={orig !== dest}
+                            tempoIdaMin={disp.tempoIdaMin}
+                            tempoVoltaMin={disp.tempoVoltaMin}
+                            isIdaManual={disp.isManualIda}
+                            isVoltaManual={disp.isManualVolta}
+                            origemAloj={disp.origemNome}
+                            destinoAloj={disp.destinoNome}
+                            isTrocaAloj={disp.origemNome !== disp.destinoNome}
                             filteredServicosBase={servicosBase}
                             handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
                             handleUpdateDiaTempo={handleUpdateDiaTempo}
@@ -1879,15 +1972,11 @@ export const PcpPlanejamentoView = () => {
                       </div>
 
                       {/* LINHAS DOS DIAS NA VISÃO ALOJAMENTOS */}
-                      {diasProgramados.map(dia => {
-                        const customAl = diasCustomAlojMap[dia.id];
+                      {diasProgramados.map((dia, idx) => {
                         const tComp = diasTemposCompMap[dia.id];
                         const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
                         const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
-                        const ida = customAl?.tempoIdaMin ?? 40;
-                        const volta = customAl?.tempoVoltaMin ?? 40;
-                        const orig = customAl?.origem || alojamentoPadrao;
-                        const dest = customAl?.destino || alojamentoPadrao;
+                        const disp = getDayDisplacement(dia.id, idx, diasProgramados.length);
 
                         return (
                           <PcpDiaRow
@@ -1901,7 +1990,7 @@ export const PcpPlanejamentoView = () => {
                             pontosDisponiveis={pontosDisponiveisDoProjeto}
                             orcamentoPorPontoMap={orcamentoPorPontoMap}
                             getItemsDoPontoNoDia={getItemsDoPontoNoDia}
-                            alojamentosDisponiveis={alojamentos}
+                            alojamentosDisponiveis={alojamentosDaUnidade}
                             metaEquipeDia={metaEquipeInput}
                             etapaGeralDia={diasEtapasMap[dia.id] || ['IMPLANTAÇÃO']}
                             isPesDia={diasPesMap[dia.id] || false}
@@ -1910,13 +1999,13 @@ export const PcpPlanejamentoView = () => {
                             filtroLvDoDia={diasFiltroLvMap[dia.id] || 'COMPLETO'}
                             tempoSaidaBaseMin={sBase}
                             tempoSegurancaMin={sSeg}
-                            tempoIdaMin={ida}
-                            tempoVoltaMin={volta}
-                            isIdaManual={Boolean(customAl?.manualIda)}
-                            isVoltaManual={Boolean(customAl?.manualVolta)}
-                            origemAloj={orig}
-                            destinoAloj={dest}
-                            isTrocaAloj={orig !== dest}
+                            tempoIdaMin={disp.tempoIdaMin}
+                            tempoVoltaMin={disp.tempoVoltaMin}
+                            isIdaManual={disp.isManualIda}
+                            isVoltaManual={disp.isManualVolta}
+                            origemAloj={disp.origemNome}
+                            destinoAloj={disp.destinoNome}
+                            isTrocaAloj={disp.origemNome !== disp.destinoNome}
                             filteredServicosBase={servicosBase}
                             handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
                             handleUpdateDiaTempo={handleUpdateDiaTempo}
