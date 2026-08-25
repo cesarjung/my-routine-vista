@@ -1418,7 +1418,8 @@ export const PcpPlanejamentoView = () => {
         if (found) {
           target.valorUnitario = found.valorPorUnidade;
           target.tempoUnitarioMinutos = found.tempoMinutosPorUnidade;
-          target.tempoEstimadoMinutos = Math.round(found.tempoMinutosPorUnidade * target.quantidade);
+          const baseTempo = Math.round(found.tempoMinutosPorUnidade * target.quantidade);
+          target.tempoEstimadoMinutos = baseTempo + (target.usaRetro ? (target.tempoRetroMinutos ?? 30) : 0);
           target.valorEstimado = Math.round(found.valorPorUnidade * target.quantidade * 100) / 100;
         }
       } else if (field === 'quantidade') {
@@ -1430,8 +1431,21 @@ export const PcpPlanejamentoView = () => {
         target.quantidade = qty;
         target.valorUnitario = unitVal;
         target.tempoUnitarioMinutos = unitTempo;
-        target.tempoEstimadoMinutos = Math.round(unitTempo * qty);
+        const baseTempo = Math.round(unitTempo * qty);
+        target.tempoEstimadoMinutos = baseTempo + (target.usaRetro ? (target.tempoRetroMinutos ?? 30) : 0);
         target.valorEstimado = Math.round(unitVal * qty * 100) / 100;
+      } else if (field === 'usaRetro') {
+        target.usaRetro = Boolean(value);
+        if (target.tempoRetroMinutos === undefined) target.tempoRetroMinutos = 30;
+        const unitTempo = target.tempoUnitarioMinutos !== undefined ? target.tempoUnitarioMinutos : 25;
+        const baseTempo = Math.round(unitTempo * target.quantidade);
+        target.tempoEstimadoMinutos = baseTempo + (target.usaRetro ? target.tempoRetroMinutos : 0);
+      } else if (field === 'tempoRetroMinutos') {
+        const retroMin = Math.max(0, parseInt(String(value), 10) || 0);
+        target.tempoRetroMinutos = retroMin;
+        const unitTempo = target.tempoUnitarioMinutos !== undefined ? target.tempoUnitarioMinutos : 25;
+        const baseTempo = Math.round(unitTempo * target.quantidade);
+        target.tempoEstimadoMinutos = baseTempo + (target.usaRetro ? retroMin : 0);
       } else if (field === 'qtdOrcadaPonto') {
         target.qtdOrcadaPonto = Math.max(0.1, Number(value) || 1);
       } else if (field === 'etapaPrevista') {
@@ -3846,16 +3860,46 @@ export const PcpPlanejamentoView = () => {
                                           </TableCell>
 
                                           <TableCell className="p-2">
-                                            <div className="flex items-center gap-2">
-                                              <Wrench className="w-3.5 h-3.5 text-primary shrink-0" />
-                                              {item.isBudgeted ? (
-                                                <span className="font-semibold text-xs text-foreground">{item.servico}</span>
-                                              ) : (
-                                                <SearchableServicoSelect
-                                                  value={item.servico}
-                                                  onValueChange={val => handleUpdateAtividade(dia.id, pLabel, item.id, 'servico', val)}
-                                                  options={filteredServicosBase}
-                                                />
+                                            <div className="flex flex-col gap-1">
+                                              <div className="flex items-center gap-2">
+                                                <Wrench className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                {item.isBudgeted ? (
+                                                  <span className="font-semibold text-xs text-foreground">{item.servico}</span>
+                                                ) : (
+                                                  <SearchableServicoSelect
+                                                    value={item.servico}
+                                                    onValueChange={val => handleUpdateAtividade(dia.id, pLabel, item.id, 'servico', val)}
+                                                    options={filteredServicosBase}
+                                                  />
+                                                )}
+                                              </div>
+
+                                              {/* Se a atividade tiver a palavra CAVA, exibe o toggle de Retroescavadeira com tempo adicional personalizável (padrão 30min) */}
+                                              {((item.servico || '').toUpperCase().includes('CAVA') || (item.descricaoMaterial || '').toUpperCase().includes('CAVA')) && (
+                                                <div className="flex items-center gap-2 mt-0.5 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-md text-[11px] w-fit shadow-2xs">
+                                                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-amber-800 dark:text-amber-300 font-semibold">
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={Boolean(item.usaRetro)}
+                                                      onChange={e => handleUpdateAtividade(dia.id, pLabel, item.id, 'usaRetro', e.target.checked)}
+                                                      className="rounded border-amber-400 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 cursor-pointer"
+                                                    />
+                                                    <span>🚜 Retroescavadeira</span>
+                                                  </label>
+                                                  <div className="flex items-center gap-1 pl-1.5 border-l border-amber-500/30">
+                                                    <span className="text-muted-foreground text-[10px]">+</span>
+                                                    <Input
+                                                      type="number"
+                                                      min="0"
+                                                      step="5"
+                                                      value={item.tempoRetroMinutos !== undefined ? item.tempoRetroMinutos : 30}
+                                                      onChange={e => handleUpdateAtividade(dia.id, pLabel, item.id, 'tempoRetroMinutos', e.target.value)}
+                                                      disabled={!item.usaRetro}
+                                                      className={`h-5 w-12 px-1 text-[11px] text-center font-mono font-bold ${!item.usaRetro ? 'opacity-40 bg-muted/20' : 'bg-background text-amber-800 dark:text-amber-300 border-amber-400'}`}
+                                                    />
+                                                    <span className="text-muted-foreground text-[10px]">min</span>
+                                                  </div>
+                                                </div>
                                               )}
                                             </div>
                                           </TableCell>
@@ -3896,7 +3940,14 @@ export const PcpPlanejamentoView = () => {
                                           </TableCell>
 
                                           <TableCell className="p-2 font-mono text-muted-foreground font-semibold">
-                                            {formatMinToHours(item.tempoEstimadoMinutos)}
+                                            <div className="flex flex-col">
+                                              <span>{formatMinToHours(item.tempoEstimadoMinutos)}</span>
+                                              {item.usaRetro && (
+                                                <span className="text-[10px] text-amber-700 dark:text-amber-400 font-normal">
+                                                  (+{item.tempoRetroMinutos ?? 30}m retro)
+                                                </span>
+                                              )}
+                                            </div>
                                           </TableCell>
 
                                           <TableCell className="p-2 font-mono text-muted-foreground font-semibold text-right">

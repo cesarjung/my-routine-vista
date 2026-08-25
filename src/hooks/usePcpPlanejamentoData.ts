@@ -40,6 +40,8 @@ export interface PcpPontoItem {
   tempoUnitarioMinutos?: number;// Ex: 15 min
   selected: boolean;            // Checkbox se vai incluir no envio
   isBudgeted?: boolean;         // True se veio do orçamento do ponto
+  usaRetro?: boolean;          // Checkbox se usa Retro na Cava
+  tempoRetroMinutos?: number;  // Tempo adicional da Retro (padrão 30 min)
 }
 
 export interface PcpProgramacaoForm {
