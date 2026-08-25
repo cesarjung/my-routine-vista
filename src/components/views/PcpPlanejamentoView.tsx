@@ -256,7 +256,17 @@ export const PcpPlanejamentoView = () => {
   const handleResetZoom = () => setZoomLevel(1.0);
 
   // Análise de Risco da Vistoria
-  const vistoriaRisk = useVistoriaRisk(selectedObra?.projeto);
+  const { analyzeRisk, riskCache, loadingRisk } = useVistoriaRisk(selectedObra?.projeto || null);
+
+  useEffect(() => {
+    if (selectedObra?.projeto) {
+      analyzeRisk(selectedObra.projeto);
+    }
+  }, [selectedObra?.projeto, analyzeRisk]);
+
+  const currentRisk = (selectedObra?.projeto && riskCache[selectedObra.projeto])
+    ? riskCache[selectedObra.projeto]
+    : null;
 
   // Alojamento Padrão Nome
   const alojamentoPadrao = useMemo(() => {
@@ -1490,23 +1500,29 @@ export const PcpPlanejamentoView = () => {
               <div className="pt-2.5 border-t border-[#E6E3DD] space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[#5C574F] font-semibold">Vistoria</span>
-                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FBF2DA] text-[#A06A16]">
-                    {vistoriaRisk.nivelRisco || 'Risco Laranja'}
+                  <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold ${
+                    currentRisk?.classificacao === 'Vermelho'
+                      ? 'bg-[#F9E4E1] text-[#B03028]'
+                      : currentRisk?.classificacao === 'Laranja'
+                        ? 'bg-[#FBF2DA] text-[#A06A16]'
+                        : 'bg-[#E6F2EA] text-[#17794C]'
+                  }`}>
+                    {currentRisk ? `Risco ${currentRisk.classificacao}` : 'Sem impedimentos'}
                   </span>
                 </div>
                 <div className="space-y-1 text-[#6B6660] text-[11.5px]">
-                  <div className="flex items-start gap-1.5">
-                    <span className="text-[#E07A1F]">●</span>
-                    <span className="truncate">{vistoriaRisk.itensRelevantes[0]?.texto || 'Obra de médio/grande porte'}</span>
-                  </div>
-                  <div className="flex items-start gap-1.5">
-                    <span className="text-[#17794C]">●</span>
-                    <span className="truncate">{vistoriaRisk.itensRelevantes[1]?.texto || 'Solo arenoso com apoio'}</span>
-                  </div>
-                  <div className="flex items-start gap-1.5">
-                    <span className="text-[#C0392E]">●</span>
-                    <span className="truncate">{vistoriaRisk.itensRelevantes[2]?.texto || 'Necessidade de podas em ramal'}</span>
-                  </div>
+                  {currentRisk?.pontosDetalhados && currentRisk.pontosDetalhados.length > 0 ? (
+                    currentRisk.pontosDetalhados.slice(0, 3).map((pt, pIdx) => (
+                      <div key={pIdx} className="flex items-start gap-1.5">
+                        <span className={pt.isCritico ? 'text-[#C0392E]' : 'text-[#E07A1F]'}>●</span>
+                        <span className="truncate">{pt.texto}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[11.5px] text-[#A39E96]">
+                      {currentRisk?.alerta || 'Nenhum impeditivo crítico registrado na vistoria.'}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
