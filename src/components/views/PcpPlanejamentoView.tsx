@@ -445,6 +445,26 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
+  const handleTogglePesDia = (diaId: string) => {
+    setDiasPesMap(prev => ({
+      ...prev,
+      [diaId]: !prev[diaId]
+    }));
+  };
+
+  const handleToggleReprogramarDia = (diaId: string) => {
+    setDiasReprogramarMap(prev => {
+      const nextVal = !prev[diaId];
+      if (nextVal && !diasMotivoReprogramarMap[diaId]) {
+        setDiasMotivoReprogramarMap(m => ({ ...m, [diaId]: 'CHUVA' }));
+      }
+      return {
+        ...prev,
+        [diaId]: nextVal
+      };
+    });
+  };
+
   // Handlers de Pontos
   const handleTogglePontoNoDia = (diaId: string, pontoLabel: string) => {
     setDiasPontosMap(prev => {
