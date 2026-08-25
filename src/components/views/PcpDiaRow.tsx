@@ -110,6 +110,7 @@ interface PcpDiaRowProps {
   destinoAloj: string;
   distIdaKm?: number;
   distVoltaKm?: number;
+  baseNome?: string;
   isTrocaAloj: boolean;
   filteredServicosBase: ServicoBase[];
   // Handlers
@@ -156,6 +157,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   tempoVoltaMin,
   distIdaKm,
   distVoltaKm,
+  baseNome,
   isIdaManual,
   isVoltaManual,
   origemAloj,
@@ -354,27 +356,32 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
       {/* LINHA FECHADA: VISÃO ALOJAMENTOS */}
       {viewMode === 'alojamentos' && (
         <div
-          className="flex items-center py-2.5 px-3 text-xs select-none hover:bg-[#FBF5EC]/50 transition-colors"
+          className="flex items-center py-2.5 px-3 text-xs select-none hover:bg-[#FBF5EC]/50 transition-colors gap-2"
           style={{
             borderLeft: `4px solid ${isDeslocamentoAlto ? '#C0392E' : isTrocaAloj ? '#C9A227' : '#E6E3DD'}`
           }}
         >
           {/* Dia */}
-          <div className="w-[130px] font-semibold text-[#23211E] text-sm shrink-0">
+          <div className="w-[110px] font-semibold text-[#23211E] text-sm shrink-0">
             <span className="capitalize">{dia.nomeDia.slice(0, 3)}</span>, {dia.dataStr}
           </div>
 
           {/* Saída (Alojamento de Origem) */}
-          <div className="w-[220px] px-1 shrink-0">
+          <div className="flex-1 min-w-[180px] shrink-0">
             <Select
               value={origemAloj}
               onValueChange={val => handleUpdateDiaAlojamento(dia.id, 'origem', val)}
             >
-              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3]">
+              <SelectTrigger className="h-9 text-xs bg-white border-[#DEDAD3] font-medium">
                 <SelectValue placeholder="Selecione alojamento de saída" />
               </SelectTrigger>
               <SelectContent>
-                {alojamentosDisponiveis.map(a => (
+                {baseNome && (
+                  <SelectItem value={baseNome} className="text-xs font-semibold">
+                    {baseNome}
+                  </SelectItem>
+                )}
+                {alojamentosDisponiveis.filter(a => a.nome !== baseNome).map(a => (
                   <SelectItem key={a.id} value={a.nome} className="text-xs">
                     {a.nome}
                   </SelectItem>
@@ -384,39 +391,65 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Ida (tempo hh:mm e km) */}
-          <div className="w-[85px] px-1 shrink-0">
-            <div className="relative">
-              <Input
-                type="number"
-                min="0"
-                step="5"
-                value={tempoIdaMin}
-                onChange={e => handleUpdateDiaTempo(dia.id, 'ida', parseInt(e.target.value, 10) || 0)}
-                className="h-8 text-xs text-center font-mono font-semibold bg-white border-[#DEDAD3]"
-              />
-              {isIdaManual && (
-                <span className="absolute -top-1.5 -right-1 text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
-                  Manual
-                </span>
-              )}
-            </div>
-            <div className="flex items-center justify-between text-[10px] font-mono text-[#6B6660] mt-0.5 px-0.5">
-              <span>{formatMinToHours(tempoIdaMin)}</span>
-              <span>{distIdaKm !== undefined && distIdaKm > 0 ? `${distIdaKm} km` : '—'}</span>
-            </div>
+          <div className="w-[110px] shrink-0">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs group"
+                  title="Clique para alterar tempo de ida"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono font-bold text-xs text-[#23211E]">
+                      {formatMinToHours(tempoIdaMin)}
+                    </span>
+                    {isIdaManual && (
+                      <span className="text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
+                        M
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-mono text-[#6B6660] leading-none">
+                    {distIdaKm !== undefined && distIdaKm > 0 ? `${distIdaKm} km` : '—'}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-3 bg-white" align="center">
+                <div className="space-y-2 text-xs">
+                  <span className="font-bold text-[#23211E] block">Tempo de Ida</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={tempoIdaMin}
+                      onChange={e => handleUpdateDiaTempo(dia.id, 'ida', parseInt(e.target.value, 10) || 0)}
+                      className="h-8 text-xs font-mono font-bold text-center"
+                    />
+                    <span className="text-xs font-mono text-[#6B6660]">min</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-[#A39E96] block">Equivale a {formatMinToHours(tempoIdaMin)}</span>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Retorno (Alojamento de Destino) */}
-          <div className="w-[220px] px-1 shrink-0">
+          <div className="flex-1 min-w-[180px] shrink-0">
             <Select
               value={destinoAloj}
               onValueChange={val => handleUpdateDiaAlojamento(dia.id, 'destino', val)}
             >
-              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3]">
+              <SelectTrigger className="h-9 text-xs bg-white border-[#DEDAD3] font-medium">
                 <SelectValue placeholder="Selecione alojamento de retorno" />
               </SelectTrigger>
               <SelectContent>
-                {alojamentosDisponiveis.map(a => (
+                {baseNome && (
+                  <SelectItem value={baseNome} className="text-xs font-semibold">
+                    {baseNome}
+                  </SelectItem>
+                )}
+                {alojamentosDisponiveis.filter(a => a.nome !== baseNome).map(a => (
                   <SelectItem key={a.id} value={a.nome} className="text-xs">
                     {a.nome}
                   </SelectItem>
@@ -426,73 +459,128 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Volta (tempo hh:mm e km) */}
-          <div className="w-[85px] px-1 shrink-0">
-            <div className="relative">
-              <Input
-                type="number"
-                min="0"
-                step="5"
-                value={tempoVoltaMin}
-                onChange={e => handleUpdateDiaTempo(dia.id, 'volta', parseInt(e.target.value, 10) || 0)}
-                className="h-8 text-xs text-center font-mono font-semibold bg-white border-[#DEDAD3]"
-              />
-              {isVoltaManual && (
-                <span className="absolute -top-1.5 -right-1 text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
-                  Manual
-                </span>
-              )}
-            </div>
-            <div className="flex items-center justify-between text-[10px] font-mono text-[#6B6660] mt-0.5 px-0.5">
-              <span>{formatMinToHours(tempoVoltaMin)}</span>
-              <span>{distVoltaKm !== undefined && distVoltaKm > 0 ? `${distVoltaKm} km` : '—'}</span>
-            </div>
+          <div className="w-[110px] shrink-0">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs group"
+                  title="Clique para alterar tempo de volta"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono font-bold text-xs text-[#23211E]">
+                      {formatMinToHours(tempoVoltaMin)}
+                    </span>
+                    {isVoltaManual && (
+                      <span className="text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
+                        M
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-mono text-[#6B6660] leading-none">
+                    {distVoltaKm !== undefined && distVoltaKm > 0 ? `${distVoltaKm} km` : '—'}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-3 bg-white" align="center">
+                <div className="space-y-2 text-xs">
+                  <span className="font-bold text-[#23211E] block">Tempo de Volta</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={tempoVoltaMin}
+                      onChange={e => handleUpdateDiaTempo(dia.id, 'volta', parseInt(e.target.value, 10) || 0)}
+                      className="h-8 text-xs font-mono font-bold text-center"
+                    />
+                    <span className="text-xs font-mono text-[#6B6660]">min</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-[#A39E96] block">Equivale a {formatMinToHours(tempoVoltaMin)}</span>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Deslocamento Total (hh:mm e km) */}
-          <div className="w-[110px] text-center px-1 shrink-0">
+          <div className="w-[120px] text-center shrink-0 flex flex-col items-center justify-center h-9 bg-[#F7F6F3] rounded-md border border-[#E6E3DD]">
             <div
-              className="font-mono font-bold text-sm"
+              className="font-mono font-bold text-xs"
               style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}
             >
               {formatMinToHours(deslocamentoMin)}
             </div>
-            <div className="text-[10px] font-mono text-[#6B6660]">
+            <div className="text-[10px] font-mono text-[#6B6660] leading-none">
               {(distIdaKm || 0) + (distVoltaKm || 0) > 0 ? `${Math.round(((distIdaKm || 0) + (distVoltaKm || 0)) * 10) / 10} km` : '—'}
             </div>
           </div>
 
-          {/* Saída da Base (minutos / hh:mm) */}
-          <div className="w-[85px] px-1 shrink-0">
-            <Input
-              type="number"
-              min="0"
-              step="5"
-              value={tempoSaidaBaseMin}
-              onChange={e => handleUpdateDiaTempoComp(dia.id, 'saidaBase', parseInt(e.target.value, 10) || 0)}
-              className="h-8 text-xs text-center font-mono bg-white border-[#DEDAD3]"
-            />
-            <div className="text-center text-[10px] font-mono text-[#6B6660] mt-0.5">
-              {formatMinToHours(tempoSaidaBaseMin)}
-            </div>
+          {/* Saída da Base */}
+          <div className="w-[95px] shrink-0">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs font-mono font-bold text-xs text-[#23211E]"
+                  title="Clique para alterar saída da base"
+                >
+                  <span>{formatMinToHours(tempoSaidaBaseMin)}</span>
+                  <span className="text-[9.5px] font-normal text-[#A39E96] leading-none">{tempoSaidaBaseMin} min</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-3 bg-white" align="center">
+                <div className="space-y-2 text-xs">
+                  <span className="font-bold text-[#23211E] block">Saída da Base</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={tempoSaidaBaseMin}
+                      onChange={e => handleUpdateDiaTempoComp(dia.id, 'saidaBase', parseInt(e.target.value, 10) || 0)}
+                      className="h-8 text-xs font-mono font-bold text-center"
+                    />
+                    <span className="text-xs font-mono text-[#6B6660]">min</span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
-          {/* Segurança (minutos / hh:mm) */}
-          <div className="w-[85px] px-1 shrink-0">
-            <Input
-              type="number"
-              min="0"
-              step="5"
-              value={tempoSegurancaMin}
-              onChange={e => handleUpdateDiaTempoComp(dia.id, 'seguranca', parseInt(e.target.value, 10) || 0)}
-              className="h-8 text-xs text-center font-mono bg-white border-[#DEDAD3]"
-            />
-            <div className="text-center text-[10px] font-mono text-[#6B6660] mt-0.5">
-              {formatMinToHours(tempoSegurancaMin)}
-            </div>
+          {/* Segurança */}
+          <div className="w-[95px] shrink-0">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full h-9 px-2 rounded-md border border-[#DEDAD3] bg-white hover:bg-[#FBF5EC] transition-colors flex flex-col items-center justify-center cursor-pointer shadow-2xs font-mono font-bold text-xs text-[#23211E]"
+                  title="Clique para alterar procedimentos de segurança"
+                >
+                  <span>{formatMinToHours(tempoSegurancaMin)}</span>
+                  <span className="text-[9.5px] font-normal text-[#A39E96] leading-none">{tempoSegurancaMin} min</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-3 bg-white" align="center">
+                <div className="space-y-2 text-xs">
+                  <span className="font-bold text-[#23211E] block">Segurança</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={tempoSegurancaMin}
+                      onChange={e => handleUpdateDiaTempoComp(dia.id, 'seguranca', parseInt(e.target.value, 10) || 0)}
+                      className="h-8 text-xs font-mono font-bold text-center"
+                    />
+                    <span className="text-xs font-mono text-[#6B6660]">min</span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Total Complementar */}
-          <div className="flex-1 font-mono font-bold text-right pr-2 text-[#23211E] text-sm">
+          <div className="w-[110px] shrink-0 text-right pr-2 font-mono font-bold text-[#23211E] text-sm">
             {formatMinToHours(tempoSaidaBaseMin + tempoSegurancaMin + deslocamentoMin)}
           </div>
         </div>
