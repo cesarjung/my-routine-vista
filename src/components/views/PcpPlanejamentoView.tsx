@@ -179,7 +179,7 @@ export const PcpPlanejamentoView = () => {
 
   // Zoom
   const [zoomLevel, setZoomLevel] = useSessionState<number>('pcp_zoom_level', 1.0);
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(1.4, Math.round((prev + 0.1) * 10) / 10));
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(1.5, Math.round((prev + 0.1) * 10) / 10));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(0.7, Math.round((prev - 0.1) * 10) / 10));
   const handleResetZoom = () => setZoomLevel(1.0);
 
@@ -382,7 +382,6 @@ export const PcpPlanejamentoView = () => {
     if (diasExtrasList.includes(diaId)) {
       setDiasExtrasList(prev => prev.map(d => d === diaId ? newId : d));
     }
-    // Transfere mapeamento de pontos se mudou o ID
     if (newId !== diaId) {
       setDiasPontosMap(prev => {
         const next = { ...prev };
@@ -778,7 +777,7 @@ export const PcpPlanejamentoView = () => {
     }
   };
 
-  // Carregar Planejamentos Selecionados no Fluxo Inverso
+  // Carregar Planejamentos Selecionados
   const handleCarregarPlanejamentosSelecionados = (plansToLoad: ParsedPlanejamentoExistente[]) => {
     if (!plansToLoad || plansToLoad.length === 0) {
       toast.error('Nenhum planejamento selecionado para carregar.');
@@ -930,65 +929,65 @@ export const PcpPlanejamentoView = () => {
 
   return (
     <div
-      className="flex flex-col gap-3 p-3 sm:p-4 w-full max-w-[1780px] mx-auto min-h-screen bg-[#F7F6F3] text-[#23211E] font-sans antialiased"
+      className="flex flex-col gap-3.5 p-3.5 sm:p-5 w-full min-h-screen bg-[#F7F6F3] text-[#23211E] font-sans antialiased"
       style={{ zoom: zoomLevel } as React.CSSProperties}
     >
       {/* 3.1 HEADER FIXO */}
-      <header className="sticky top-0 z-30 bg-[#F7F6F3]/95 backdrop-blur border border-[#E6E3DD] rounded-xl p-3 shadow-xs space-y-2.5">
+      <header className="sticky top-0 z-30 bg-[#F7F6F3]/95 backdrop-blur border border-[#E6E3DD] rounded-xl p-3.5 shadow-xs space-y-3">
         {/* Linha 1: Título e Ações */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-[3px] h-7 bg-gradient-to-b from-[#E07A1F] to-[#E07A1F]/30 rounded-full shrink-0" />
+            <div className="w-[3.5px] h-8 bg-gradient-to-b from-[#E07A1F] to-[#E07A1F]/30 rounded-full shrink-0" />
             <div>
-              <span className="text-[9.5px] uppercase tracking-[0.11em] font-mono text-[#A39E96] block leading-none">
+              <span className="text-[11px] uppercase tracking-[0.12em] font-mono text-[#A39E96] block leading-none font-semibold">
                 MÓDULO PCP · PLANEJAMENTO
               </span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <h1 className="text-[16px] font-bold text-[#23211E] leading-tight">
+              <div className="flex items-center gap-2.5 mt-1">
+                <h1 className="text-[18px] font-bold text-[#23211E] leading-tight">
                   {selectedObra ? `${selectedObra.projeto} · ${selectedObra.municipio}` : 'Selecione uma obra'}
                 </h1>
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-[#F2F0EC] text-[#5C574F] border border-[#DEDAD3]">
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-[#F2F0EC] text-[#5C574F] border border-[#DEDAD3]">
                   Ambiente local
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Botões de Ação do Header (27px de altura) */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Botões de Ação do Header */}
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsCarregarPlanModalOpen(true)}
-              className="h-[27px] px-2.5 text-[11px] font-medium bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] hover:border-[#E8C9A0]"
+              className="h-[32px] px-3.5 text-xs font-semibold bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] hover:border-[#E8C9A0] shadow-2xs"
             >
-              <FileSpreadsheet className="w-3 h-3 mr-1 text-[#E07A1F]" /> Carregar planejamento
+              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-[#E07A1F]" /> Carregar planejamento
             </Button>
 
             <Button
               variant="outline"
               size="sm"
               onClick={handleSyncFromGoogleSheets}
-              className="h-[27px] px-2.5 text-[11px] font-medium bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC]"
+              className="h-[32px] px-3.5 text-xs font-semibold bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] shadow-2xs"
             >
-              <RefreshCw className="w-3 h-3 mr-1 text-[#5C574F]" /> Sincronizar Sheets
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5 text-[#5C574F]" /> Sincronizar Sheets
             </Button>
 
             <Button
               variant="outline"
               size="sm"
               onClick={handleLimparTudoEmTela}
-              className="h-[27px] px-2.5 text-[11px] font-medium bg-white border-[#DEDAD3] text-[#A39E96] hover:text-[#C0392E] hover:bg-[#F9E4E1]/50"
+              className="h-[32px] px-3.5 text-xs font-semibold bg-white border-[#DEDAD3] text-[#A39E96] hover:text-[#C0392E] hover:bg-[#F9E4E1]/50 shadow-2xs"
             >
-              <Eraser className="w-3 h-3 mr-1" /> Limpar tela
+              <Eraser className="w-3.5 h-3.5 mr-1.5" /> Limpar tela
             </Button>
 
             {/* Controle de Zoom */}
-            <div className="inline-flex items-center rounded-md border border-[#DEDAD3] bg-white h-[27px] px-1 text-[11px] font-mono">
+            <div className="inline-flex items-center rounded-md border border-[#DEDAD3] bg-white h-[32px] px-1 text-xs font-mono font-bold shadow-2xs">
               <button
                 type="button"
                 onClick={handleZoomOut}
-                className="px-1.5 text-[#6B6660] hover:text-[#23211E] font-bold"
+                className="px-2 text-[#6B6660] hover:text-[#23211E] font-bold text-sm"
                 title="Diminuir zoom"
               >
                 −
@@ -1004,7 +1003,7 @@ export const PcpPlanejamentoView = () => {
               <button
                 type="button"
                 onClick={handleZoomIn}
-                className="px-1.5 text-[#6B6660] hover:text-[#23211E] font-bold"
+                className="px-2 text-[#6B6660] hover:text-[#23211E] font-bold text-sm"
                 title="Aumentar zoom"
               >
                 +
@@ -1013,24 +1012,24 @@ export const PcpPlanejamentoView = () => {
           </div>
         </div>
 
-        {/* Linha 2: Pílulas de Etapas do Fluxo (22px de altura) */}
-        <div className="flex items-center gap-2 overflow-x-auto text-[10.5px] font-medium pt-1 border-t border-[#E6E3DD]/70">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
-            <span className={`w-1.5 h-1.5 rounded-full ${selectedObra ? 'bg-[#17794C]' : 'bg-[#C9A227]'}`} />
+        {/* Linha 2: Pílulas de Etapas do Fluxo */}
+        <div className="flex items-center gap-2.5 overflow-x-auto text-xs font-medium pt-1 border-t border-[#E6E3DD]/70">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
+            <span className={`w-2 h-2 rounded-full ${selectedObra ? 'bg-[#17794C]' : 'bg-[#C9A227]'}`} />
             <span className="text-[#5C574F]">Obra:</span>
-            <strong className="text-[#23211E] font-mono">{selectedObra ? `${selectedObra.projeto} selecionada` : 'nenhuma'}</strong>
+            <strong className="text-[#23211E] font-mono font-bold">{selectedObra ? `${selectedObra.projeto} selecionada` : 'nenhuma'}</strong>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#17794C]" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-[#17794C]" />
             <span className="text-[#5C574F]">Equipe e período:</span>
             <strong className="text-[#23211E]">
               {selectedEquipes.join(', ')} · {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} · {alojamentoPadrao}
             </strong>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
-            <span className={`w-1.5 h-1.5 rounded-full ${diasSemPontosCount === 0 ? 'bg-[#17794C]' : 'bg-[#C9A227]'}`} />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
+            <span className={`w-2 h-2 rounded-full ${diasSemPontosCount === 0 ? 'bg-[#17794C]' : 'bg-[#C9A227]'}`} />
             <span className="text-[#5C574F]">Distribuição:</span>
             <strong className="text-[#23211E]">
               {diasSemPontosCount === 0
@@ -1041,8 +1040,8 @@ export const PcpPlanejamentoView = () => {
             </strong>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
-            <span className={`w-1.5 h-1.5 rounded-full ${diasAcima10hCount > 0 ? 'bg-[#C0392E]' : 'bg-[#17794C]'}`} />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E6E3DD] whitespace-nowrap shadow-2xs">
+            <span className={`w-2 h-2 rounded-full ${diasAcima10hCount > 0 ? 'bg-[#C0392E]' : 'bg-[#17794C]'}`} />
             <span className="text-[#5C574F]">Envio:</span>
             <strong className={diasAcima10hCount > 0 ? 'text-[#B03028]' : 'text-[#17794C]'}>
               {diasAcima10hCount > 0
@@ -1053,12 +1052,12 @@ export const PcpPlanejamentoView = () => {
         </div>
       </header>
 
-      {/* 3.2 BARRA DE FILTROS (Chips de 28px) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+      {/* 3.2 BARRA DE FILTROS */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         {/* Unidade */}
         <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
-          <SelectTrigger className={`h-7 text-xs border ${selectedUnidadeId ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
-            <span className="text-[10px] uppercase text-[#A39E96] mr-1">Unidade</span>
+          <SelectTrigger className={`h-8 text-xs border font-medium ${selectedUnidadeId ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
+            <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Unidade</span>
             <SelectValue placeholder="Selecione" />
           </SelectTrigger>
           <SelectContent>
@@ -1072,8 +1071,8 @@ export const PcpPlanejamentoView = () => {
 
         {/* Situação */}
         <Select value={selectedSituacao} onValueChange={setSelectedSituacao}>
-          <SelectTrigger className={`h-7 text-xs border ${selectedSituacao !== 'TODAS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
-            <span className="text-[10px] uppercase text-[#A39E96] mr-1">Situação</span>
+          <SelectTrigger className={`h-8 text-xs border font-medium ${selectedSituacao !== 'TODAS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
+            <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Situação</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1083,22 +1082,22 @@ export const PcpPlanejamentoView = () => {
           </SelectContent>
         </Select>
 
-        {/* Status (Popover Multiselect) */}
+        {/* Status */}
         <Popover open={isStatusPopoverOpen} onOpenChange={setIsStatusPopoverOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              className={`h-7 text-xs border ${selectedStatuses.length < ALL_STATUSES.length ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}
+              className={`h-8 text-xs border font-medium ${selectedStatuses.length < ALL_STATUSES.length ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}
             >
-              <span className="text-[10px] uppercase text-[#A39E96] mr-1">Status</span>
+              <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Status</span>
               <span>({selectedStatuses.length})</span>
-              <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
+              <ChevronDown className="w-3.5 h-3.5 ml-1.5 opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[200px] p-2 bg-white" align="start">
-            <div className="space-y-1 text-xs">
-              <div className="flex items-center justify-between pb-1 border-b border-[#E6E3DD] text-[10px] font-semibold text-[#5C574F]">
+          <PopoverContent className="w-[220px] p-2.5 bg-white" align="start">
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#E6E3DD] text-xs font-bold text-[#5C574F]">
                 <span>Status da carteira</span>
                 <button
                   type="button"
@@ -1111,7 +1110,7 @@ export const PcpPlanejamentoView = () => {
               {ALL_STATUSES.map(st => {
                 const isChecked = selectedStatuses.includes(st);
                 return (
-                  <label key={st} className="flex items-center gap-2 p-1 rounded hover:bg-[#FBF5EC] cursor-pointer">
+                  <label key={st} className="flex items-center gap-2 p-1.5 rounded hover:bg-[#FBF5EC] cursor-pointer">
                     <input
                       type="checkbox"
                       checked={isChecked}
@@ -1120,7 +1119,7 @@ export const PcpPlanejamentoView = () => {
                           prev.includes(st) ? prev.filter(x => x !== st) : [...prev, st]
                         );
                       }}
-                      className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-3.5 w-3.5"
+                      className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4"
                     />
                     <span>{st}</span>
                   </label>
@@ -1132,8 +1131,8 @@ export const PcpPlanejamentoView = () => {
 
         {/* Mês */}
         <Select value={selectedMesFilter} onValueChange={setSelectedMesFilter}>
-          <SelectTrigger className={`h-7 text-xs border ${selectedMesFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
-            <span className="text-[10px] uppercase text-[#A39E96] mr-1">Mês</span>
+          <SelectTrigger className={`h-8 text-xs border font-medium ${selectedMesFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
+            <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Mês</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1146,8 +1145,8 @@ export const PcpPlanejamentoView = () => {
 
         {/* Município */}
         <Select value={selectedMunicipioFilter} onValueChange={setSelectedMunicipioFilter}>
-          <SelectTrigger className={`h-7 text-xs border ${selectedMunicipioFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
-            <span className="text-[10px] uppercase text-[#A39E96] mr-1">Município</span>
+          <SelectTrigger className={`h-8 text-xs border font-medium ${selectedMunicipioFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
+            <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Município</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1160,8 +1159,8 @@ export const PcpPlanejamentoView = () => {
 
         {/* Prioridade */}
         <Select value={selectedPrioridadeFilter} onValueChange={setSelectedPrioridadeFilter}>
-          <SelectTrigger className={`h-7 text-xs border ${selectedPrioridadeFilter !== 'TODAS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
-            <span className="text-[10px] uppercase text-[#A39E96] mr-1">Prioridade</span>
+          <SelectTrigger className={`h-8 text-xs border font-medium ${selectedPrioridadeFilter !== 'TODAS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
+            <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Prioridade</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1174,8 +1173,8 @@ export const PcpPlanejamentoView = () => {
 
         {/* Dono */}
         <Select value={selectedDonoFilter} onValueChange={setSelectedDonoFilter}>
-          <SelectTrigger className={`h-7 text-xs border ${selectedDonoFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
-            <span className="text-[10px] uppercase text-[#A39E96] mr-1">Dono</span>
+          <SelectTrigger className={`h-8 text-xs border font-medium ${selectedDonoFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
+            <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Dono</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1188,8 +1187,8 @@ export const PcpPlanejamentoView = () => {
 
         {/* Supervisor */}
         <Select value={selectedSupervisorFilter} onValueChange={setSelectedSupervisorFilter}>
-          <SelectTrigger className={`h-7 text-xs border ${selectedSupervisorFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-semibold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
-            <span className="text-[10px] uppercase text-[#A39E96] mr-1">Supervisor</span>
+          <SelectTrigger className={`h-8 text-xs border font-medium ${selectedSupervisorFilter !== 'TODOS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
+            <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Supervisor</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1205,40 +1204,40 @@ export const PcpPlanejamentoView = () => {
           variant="ghost"
           size="sm"
           onClick={handleClearFilters}
-          className="h-7 px-2 text-xs text-[#A39E96] hover:text-[#23211E] whitespace-nowrap"
+          className="h-8 px-3 text-xs font-semibold text-[#A39E96] hover:text-[#23211E] whitespace-nowrap"
         >
           Limpar filtros
         </Button>
       </div>
 
-      {/* 3.3 GRID PRINCIPAL: 2 COLUNAS (280px | 1fr) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-3.5 items-start">
+      {/* 3.3 GRID PRINCIPAL: 2 COLUNAS (330px | 1fr) */}
+      <div className="grid grid-cols-1 xl:grid-cols-[330px_1fr] gap-4 items-start">
         {/* COLUNA ESQUERDA (FIXA / STICKY) */}
-        <aside className="space-y-3 lg:sticky lg:top-[120px]">
+        <aside className="space-y-3.5 xl:sticky xl:top-[125px]">
           {/* Card 1: Carteira de Obras */}
-          <div className="bg-white rounded-xl border border-[#E6E3DD] p-3 shadow-2xs space-y-2">
+          <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#23211E] flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-[#E07A1F]" /> Carteira de obras
+                <Building2 className="w-4 h-4 text-[#E07A1F]" /> Carteira de obras
               </span>
-              <span className="text-[10.5px] font-mono text-[#5C574F]">({filteredObras.length})</span>
+              <span className="text-xs font-mono font-bold text-[#5C574F]">({filteredObras.length})</span>
             </div>
 
             {/* Busca de Obra */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#A39E96]" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#A39E96]" />
               <input
                 placeholder="Buscar código, município..."
                 value={searchObra}
                 onChange={e => setSearchObra(e.target.value)}
-                className="w-full h-7 pl-8 pr-2 text-xs rounded-md border border-[#DEDAD3] bg-[#F7F6F3] focus:outline-none focus:ring-1 focus:ring-[#E07A1F] font-mono"
+                className="w-full h-8 pl-8 pr-2 text-xs rounded-md border border-[#DEDAD3] bg-[#F7F6F3] focus:outline-none focus:ring-1 focus:ring-[#E07A1F] font-mono"
               />
             </div>
 
-            {/* Lista Rolável de Obras (392px) */}
-            <div className="h-[392px] overflow-y-auto space-y-1.5 pr-0.5 custom-scrollbar">
+            {/* Lista Rolável de Obras (440px) */}
+            <div className="h-[440px] overflow-y-auto space-y-2 pr-0.5 custom-scrollbar">
               {filteredObras.length === 0 ? (
-                <div className="text-center py-8 text-xs text-[#A39E96]">
+                <div className="text-center py-12 text-xs text-[#A39E96]">
                   Nenhuma obra encontrada.
                 </div>
               ) : (
@@ -1250,22 +1249,22 @@ export const PcpPlanejamentoView = () => {
                     <div
                       key={obra.projeto}
                       onClick={() => handleSelectObra(obra.projeto)}
-                      className={`p-2 rounded-lg border text-xs cursor-pointer transition-all ${isSelected ? 'bg-[#FBF5EC] border-[#E8C9A0] shadow-2xs' : 'bg-white border-[#E6E3DD] hover:border-[#DEDAD3]'}`}
+                      className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${isSelected ? 'bg-[#FBF5EC] border-[#E8C9A0] shadow-2xs' : 'bg-white border-[#E6E3DD] hover:border-[#DEDAD3]'}`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-[#23211E]">{obra.projeto}</span>
-                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${isApta ? 'bg-[#E6F2EA] text-[#17794C]' : 'bg-[#F9E4E1] text-[#B03028]'}`}>
+                        <span className="font-mono font-bold text-xs text-[#23211E]">{obra.projeto}</span>
+                        <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold ${isApta ? 'bg-[#E6F2EA] text-[#17794C]' : 'bg-[#F9E4E1] text-[#B03028]'}`}>
                           {obra.situacao || 'APTA'}
                         </span>
                       </div>
 
-                      <p className="text-[11px] text-[#5C574F] truncate mt-0.5">{obra.descricao}</p>
+                      <p className="text-xs text-[#5C574F] truncate mt-1">{obra.descricao}</p>
 
-                      <div className="flex items-center justify-between text-[10px] text-[#A39E96] mt-1 pt-1 border-t border-[#E6E3DD]/60">
+                      <div className="flex items-center justify-between text-[11px] text-[#A39E96] mt-1.5 pt-1.5 border-t border-[#E6E3DD]/60">
                         <span className="truncate">{obra.municipio}</span>
                         <div className="flex items-center gap-2 font-mono shrink-0">
-                          <span className="text-[#5B7C99] font-medium">{obra.qtdPostesDisponiveis || 0} post.</span>
-                          <span className="text-[#7E6BA8] font-medium">{obra.qtdCabosDisponiveis || 0} m</span>
+                          <span className="text-[#5B7C99] font-bold">{obra.qtdPostesDisponiveis || 0} post.</span>
+                          <span className="text-[#7E6BA8] font-bold">{obra.qtdCabosDisponiveis || 0} m</span>
                         </div>
                       </div>
                     </div>
@@ -1277,19 +1276,19 @@ export const PcpPlanejamentoView = () => {
 
           {/* Card 2: Saldo da Obra e Análise de Risco */}
           {selectedObra && (
-            <div className="bg-white rounded-xl border border-[#E6E3DD] p-3 shadow-2xs space-y-3">
+            <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs space-y-3.5">
               <span className="text-xs font-bold text-[#23211E] block">Saldo da obra e riscos</span>
 
               {/* Postes e Cabos */}
-              <div className="space-y-2 text-xs">
+              <div className="space-y-2.5 text-xs">
                 <div>
-                  <div className="flex justify-between text-[11px] mb-1">
+                  <div className="flex justify-between text-xs mb-1 font-medium">
                     <span className="text-[#5C574F]">Postes (carteira: {selectedObra.qtdPostesDisponiveis || 0})</span>
                     <span className="font-mono font-bold text-[#5B7C99]">
                       Saldo: {Math.max(0, (selectedObra.qtdPostesDisponiveis || 0) - totalPontosPeriodo)}
                     </span>
                   </div>
-                  <div className="w-full bg-[#F2F0EC] h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-[#F2F0EC] h-2.5 rounded-full overflow-hidden">
                     <div
                       className="bg-[#5B7C99] h-full rounded-full transition-all"
                       style={{
@@ -1300,36 +1299,36 @@ export const PcpPlanejamentoView = () => {
                 </div>
 
                 <div>
-                  <div className="flex justify-between text-[11px] mb-1">
+                  <div className="flex justify-between text-xs mb-1 font-medium">
                     <span className="text-[#5C574F]">Cabos (carteira: {selectedObra.qtdCabosDisponiveis || 0} m)</span>
                     <span className="font-mono font-bold text-[#7E6BA8]">
                       Saldo: {selectedObra.qtdCabosDisponiveis || 0} m
                     </span>
                   </div>
-                  <div className="w-full bg-[#F2F0EC] h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-[#F2F0EC] h-2.5 rounded-full overflow-hidden">
                     <div className="bg-[#7E6BA8] h-full rounded-full" style={{ width: '0%' }} />
                   </div>
                 </div>
               </div>
 
               {/* Resumo da Análise de Risco da Vistoria */}
-              <div className="pt-2 border-t border-[#E6E3DD] space-y-1.5 text-[11px]">
+              <div className="pt-2.5 border-t border-[#E6E3DD] space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#5C574F]">Vistoria</span>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FBF2DA] text-[#A06A16]">
+                  <span className="text-[#5C574F] font-semibold">Vistoria</span>
+                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FBF2DA] text-[#A06A16]">
                     {vistoriaRisk.nivelRisco || 'Risco Laranja'}
                   </span>
                 </div>
-                <div className="space-y-1 text-[#6B6660]">
-                  <div className="flex items-start gap-1">
+                <div className="space-y-1 text-[#6B6660] text-[11.5px]">
+                  <div className="flex items-start gap-1.5">
                     <span className="text-[#E07A1F]">●</span>
                     <span className="truncate">{vistoriaRisk.itensRelevantes[0]?.texto || 'Obra de médio/grande porte'}</span>
                   </div>
-                  <div className="flex items-start gap-1">
+                  <div className="flex items-start gap-1.5">
                     <span className="text-[#17794C]">●</span>
                     <span className="truncate">{vistoriaRisk.itensRelevantes[1]?.texto || 'Solo arenoso com apoio'}</span>
                   </div>
-                  <div className="flex items-start gap-1">
+                  <div className="flex items-start gap-1.5">
                     <span className="text-[#C0392E]">●</span>
                     <span className="truncate">{vistoriaRisk.itensRelevantes[2]?.texto || 'Necessidade de podas em ramal'}</span>
                   </div>
@@ -1340,36 +1339,36 @@ export const PcpPlanejamentoView = () => {
         </aside>
 
         {/* COLUNA DIREITA (CONTEÚDO PRINCIPAL) */}
-        <main className="space-y-3">
+        <main className="space-y-3.5">
           {/* 1. Faixa da Obra Selecionada */}
           {selectedObra && (
-            <div className="bg-white rounded-xl border border-[#E6E3DD] p-3 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-sm text-[#E07A1F]">{selectedObra.projeto}</span>
-                  <span className="text-xs font-semibold text-[#23211E]">— {selectedObra.descricao}</span>
+                  <span className="font-mono font-bold text-base text-[#E07A1F]">{selectedObra.projeto}</span>
+                  <span className="text-sm font-bold text-[#23211E]">— {selectedObra.descricao}</span>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-[#6B6660] mt-0.5">
+                <div className="flex items-center gap-4 text-xs text-[#6B6660] mt-1 font-medium">
                   <span>Município: <strong className="text-[#23211E]">{selectedObra.municipio}</strong></span>
                   <span>Dono: <strong className="text-[#23211E]">{selectedObra.donoObra || 'Não informado'}</strong></span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs font-mono font-semibold bg-[#F7F6F3] px-3 py-1.5 rounded-lg border border-[#E6E3DD] shrink-0">
+              <div className="flex items-center gap-2 text-xs font-mono font-semibold bg-[#F7F6F3] px-3.5 py-2 rounded-lg border border-[#E6E3DD] shrink-0">
                 <span className="text-[#6B6660]">Meta diária da equipe:</span>
-                <span className="text-[#17794C] text-sm">
+                <span className="text-[#17794C] text-sm font-bold">
                   R$ {metaEquipeInput.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
           )}
 
-          {/* 2. Parâmetros (Chips de 26px numa linha) */}
-          <div className="bg-white rounded-xl border border-[#E6E3DD] p-2.5 shadow-2xs flex flex-wrap items-center gap-2 text-xs">
+          {/* 2. Parâmetros (Chips numa linha) */}
+          <div className="bg-white rounded-xl border border-[#E6E3DD] p-3 shadow-2xs flex flex-wrap items-center gap-2.5 text-xs">
             {/* Equipe */}
             <Select value={selectedEquipes[0] || 'EH156'} onValueChange={val => setSelectedEquipes([val])}>
-              <SelectTrigger className="h-[26px] text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E]">
-                <span className="text-[10px] uppercase text-[#A39E96] mr-1">Equipe</span>
+              <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
+                <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Equipe</span>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1381,8 +1380,8 @@ export const PcpPlanejamentoView = () => {
 
             {/* Base / Alojamento Padrão */}
             <Select value={selectedAlojamentoId} onValueChange={setSelectedAlojamentoId}>
-              <SelectTrigger className="h-[26px] text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E]">
-                <span className="text-[10px] uppercase text-[#A39E96] mr-1">Alojamento</span>
+              <SelectTrigger className="h-8 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] font-medium">
+                <span className="text-[11px] uppercase text-[#A39E96] mr-1.5 font-semibold">Alojamento</span>
                 <SelectValue placeholder="Base Bom Jesus da Lapa" />
               </SelectTrigger>
               <SelectContent>
@@ -1396,32 +1395,32 @@ export const PcpPlanejamentoView = () => {
             {/* Período com Popover */}
             <Popover open={isDataRangeOpen} onOpenChange={setIsDataRangeOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-[26px] px-2.5 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] gap-1">
-                  <CalendarIcon className="w-3 h-3 text-[#5C574F]" />
-                  <span className="text-[10px] uppercase text-[#A39E96]">Período:</span>
+                <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-[#F7F6F3] border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold">
+                  <CalendarIcon className="w-3.5 h-3.5 text-[#5C574F]" />
+                  <span className="text-[11px] uppercase text-[#A39E96]">Período:</span>
                   <span className="font-mono">{format(safeParseDate(dataInicio), 'dd/MM')} a {format(safeParseDate(dataFim), 'dd/MM')}</span>
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-3 bg-white" align="start">
-                <div className="space-y-2 text-xs">
-                  <span className="font-semibold text-[#23211E] block">Definir período do planejamento</span>
-                  <div className="grid grid-cols-2 gap-2">
+              <PopoverContent className="w-auto p-3.5 bg-white" align="start">
+                <div className="space-y-2.5 text-xs">
+                  <span className="font-bold text-[#23211E] block">Definir período do planejamento</span>
+                  <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <span className="text-[10px] text-[#A39E96] block">Data início</span>
+                      <span className="text-[11px] text-[#A39E96] block mb-1">Data início</span>
                       <input
                         type="date"
                         value={dataInicio}
                         onChange={e => setDataInicio(e.target.value)}
-                        className="w-full h-7 text-xs border border-[#DEDAD3] rounded px-1.5 font-mono"
+                        className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
                       />
                     </div>
                     <div>
-                      <span className="text-[10px] text-[#A39E96] block">Data fim</span>
+                      <span className="text-[11px] text-[#A39E96] block mb-1">Data fim</span>
                       <input
                         type="date"
                         value={dataFim}
                         onChange={e => setDataFim(e.target.value)}
-                        className="w-full h-7 text-xs border border-[#DEDAD3] rounded px-1.5 font-mono"
+                        className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
                       />
                     </div>
                   </div>
@@ -1430,78 +1429,78 @@ export const PcpPlanejamentoView = () => {
             </Popover>
 
             {/* Saída Base Padrão */}
-            <div className="inline-flex items-center gap-1 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2 h-[26px]">
-              <span className="text-[10px] uppercase text-[#A39E96]">Saída base:</span>
+            <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
+              <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Saída base:</span>
               <input
                 type="number"
                 min="0"
                 step="5"
                 value={tempoSaidaBasePadrao}
                 onChange={e => setTempoSaidaBasePadrao(parseInt(e.target.value, 10) || 0)}
-                className="w-8 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
+                className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
               />
-              <span className="text-[#A39E96] text-[10px]">min</span>
+              <span className="text-[#A39E96] text-[11px]">min</span>
             </div>
 
             {/* Segurança Padrão */}
-            <div className="inline-flex items-center gap-1 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2 h-[26px]">
-              <span className="text-[10px] uppercase text-[#A39E96]">Segurança:</span>
+            <div className="inline-flex items-center gap-1.5 bg-[#F7F6F3] border border-[#DEDAD3] rounded px-2.5 h-8">
+              <span className="text-[11px] uppercase text-[#A39E96] font-semibold">Segurança:</span>
               <input
                 type="number"
                 min="0"
                 step="5"
                 value={tempoSegurancaPadrao}
                 onChange={e => setTempoSegurancaPadrao(parseInt(e.target.value, 10) || 0)}
-                className="w-8 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
+                className="w-9 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
               />
-              <span className="text-[#A39E96] text-[10px]">min</span>
+              <span className="text-[#A39E96] text-[11px]">min</span>
             </div>
           </div>
 
           {/* 3. CARD CENTRAL "DIAS PROGRAMADOS" */}
           <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-            {/* Cabeçalho do Card (Máximo 45px) */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 px-3 bg-[#FBFAF7] border-b border-[#E6E3DD] min-h-[45px]">
-              <div className="flex items-center gap-3">
-                <h2 className="text-xs font-bold text-[#23211E]">
+            {/* Cabeçalho do Card */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 px-4 bg-[#FBFAF7] border-b border-[#E6E3DD] min-h-[50px]">
+              <div className="flex items-center gap-4">
+                <h2 className="text-sm font-bold text-[#23211E]">
                   Dias programados ({diasProgramados.length})
                 </h2>
 
                 {/* Legenda das 5 Etapas da Barra (Somente na Visão Jornada) */}
                 {viewMode === 'jornada' && (
-                  <div className="hidden md:flex items-center gap-2.5 text-[10px] font-mono text-[#5C574F]">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#23211E' }} /> Saída
+                  <div className="hidden md:flex items-center gap-3 text-[11px] font-mono text-[#5C574F]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#23211E' }} /> Saída
                     </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#E07A1F' }} /> Ida
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E07A1F' }} /> Ida
                     </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#A39E96' }} /> Segurança
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#A39E96' }} /> Segurança
                     </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#C0392E' }} /> Serviço
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C0392E' }} /> Serviço
                     </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#F5BE84' }} /> Volta
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#F5BE84' }} /> Volta
                     </span>
                   </div>
                 )}
               </div>
 
               {/* Alternador de Visão: Jornada | Alojamentos */}
-              <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold">
+              <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setViewMode('jornada')}
-                  className={`px-3 py-1 rounded transition-all ${viewMode === 'jornada' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                  className={`px-4 py-1.5 rounded transition-all ${viewMode === 'jornada' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
                 >
                   Jornada
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode('alojamentos')}
-                  className={`px-3 py-1 rounded transition-all ${viewMode === 'alojamentos' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                  className={`px-4 py-1.5 rounded transition-all ${viewMode === 'alojamentos' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
                 >
                   Alojamentos
                 </button>
@@ -1512,30 +1511,30 @@ export const PcpPlanejamentoView = () => {
             <div className="overflow-x-auto">
               {/* CABEÇALHO DA GRADE: VISÃO JORNADA */}
               {viewMode === 'jornada' && (
-                <div style={{ minWidth: '984px' }}>
+                <div style={{ minWidth: '1040px' }}>
                   {/* Linha 1 de Cabeçalho: Rótulos */}
                   <div
-                    className="flex items-center py-2 px-1 text-[9.5px] uppercase tracking-wider font-semibold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
-                    style={{ borderLeft: '3px solid transparent' }}
+                    className="flex items-center py-2.5 px-2 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
+                    style={{ borderLeft: '4px solid transparent' }}
                   >
-                    <div className="w-[26px]" />
-                    <div className="w-[108px]">Dia</div>
-                    <div className="w-[76px]">Pontos</div>
-                    <div className="flex-1 min-w-[268px] px-2">Ocupação da jornada</div>
-                    <div className="w-[62px] text-right pr-2">Total</div>
-                    <div className="w-[96px] text-right pr-2">Planejado</div>
-                    <div className="w-[62px] text-right pr-2">% Meta</div>
-                    <div className="w-[78px] text-center">Situação</div>
-                    <div className="w-[96px] text-center">Marcações</div>
+                    <div className="w-[30px]" />
+                    <div className="w-[125px]">Dia</div>
+                    <div className="w-[85px]">Pontos</div>
+                    <div className="flex-1 min-w-[280px] px-3">Ocupação da jornada</div>
+                    <div className="w-[70px] text-right pr-2">Total</div>
+                    <div className="w-[110px] text-right pr-2">Planejado</div>
+                    <div className="w-[70px] text-right pr-2">% Meta</div>
+                    <div className="w-[90px] text-center">Situação</div>
+                    <div className="w-[100px] text-center">Marcações</div>
                   </div>
 
                   {/* Linha 2 de Cabeçalho: Régua de Horas */}
                   <div
-                    className="flex items-center py-1 px-1 text-[9px] font-mono text-[#A39E96] bg-[#FBFAF7] border-b border-[#E6E3DD]"
-                    style={{ borderLeft: '3px solid transparent' }}
+                    className="flex items-center py-1.5 px-2 text-[10px] font-mono text-[#A39E96] bg-[#FBFAF7] border-b border-[#E6E3DD]"
+                    style={{ borderLeft: '4px solid transparent' }}
                   >
-                    <div className="w-[210px] shrink-0" />
-                    <div className="flex-1 min-w-[268px] px-2 relative h-3">
+                    <div className="w-[240px] shrink-0" />
+                    <div className="flex-1 min-w-[280px] px-3 relative h-3.5">
                       <span className="absolute left-0 top-0">0h</span>
                       <span
                         className="absolute top-0 font-bold text-[#17794C]"
@@ -1551,7 +1550,7 @@ export const PcpPlanejamentoView = () => {
                       </span>
                       <span className="absolute right-0 top-0">13h</span>
                     </div>
-                    <div className="w-[394px] shrink-0" />
+                    <div className="w-[440px] shrink-0" />
                   </div>
 
                   {/* LINHAS DOS DIAS */}
@@ -1619,47 +1618,47 @@ export const PcpPlanejamentoView = () => {
 
                   {/* TOTALIZADOR DO PERÍODO (VISÃO JORNADA) */}
                   <div
-                    className="flex items-center py-2 px-1 text-xs font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
-                    style={{ borderLeft: '3px solid transparent' }}
+                    className="flex items-center py-3 px-2 text-sm font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
+                    style={{ borderLeft: '4px solid transparent' }}
                   >
-                    <div className="w-[26px]" />
-                    <div className="w-[108px] text-[#23211E]">Total do período</div>
-                    <div className="w-[76px] text-[#5C574F]">
+                    <div className="w-[30px]" />
+                    <div className="w-[125px] text-[#23211E]">Total do período</div>
+                    <div className="w-[85px] text-[#5C574F]">
                       {totalPontosPeriodo} {totalPontosPeriodo === 1 ? 'ponto' : 'pontos'}
                     </div>
-                    <div className="flex-1 min-w-[268px] px-2 text-[#6B6660] text-[11px]">
+                    <div className="flex-1 min-w-[280px] px-3 text-[#6B6660] text-xs">
                       {diasProgramados.length} {diasProgramados.length === 1 ? 'dia programado' : 'dias programados'}
                     </div>
-                    <div className="w-[62px] text-right pr-2 text-[#23211E]">
+                    <div className="w-[70px] text-right pr-2 text-[#23211E]">
                       {formatMinToHours(totalHorasPeriodoMin)}
                     </div>
-                    <div className="w-[96px] text-right pr-2 text-[#17794C]">
+                    <div className="w-[110px] text-right pr-2 text-[#17794C]">
                       R$ {totalValorPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div className="w-[62px] text-right pr-2 text-[#17794C]">
+                    <div className="w-[70px] text-right pr-2 text-[#17794C]">
                       {pctMetaTotal}%
                     </div>
-                    <div className="w-[78px]" />
-                    <div className="w-[96px]" />
+                    <div className="w-[90px]" />
+                    <div className="w-[100px]" />
                   </div>
                 </div>
               )}
 
               {/* CABEÇALHO DA GRADE: VISÃO ALOJAMENTOS */}
               {viewMode === 'alojamentos' && (
-                <div style={{ minWidth: '1000px' }}>
+                <div style={{ minWidth: '1060px' }}>
                   <div
-                    className="flex items-center py-2 px-2 text-[9.5px] uppercase tracking-wider font-semibold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
-                    style={{ borderLeft: '3px solid transparent' }}
+                    className="flex items-center py-2.5 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
+                    style={{ borderLeft: '4px solid transparent' }}
                   >
-                    <div className="w-[120px]">Dia</div>
-                    <div className="w-[200px] px-1">Saída (ida)</div>
-                    <div className="w-[70px] px-1 text-center">Ida</div>
-                    <div className="w-[200px] px-1">Retorno (volta)</div>
-                    <div className="w-[70px] px-1 text-center">Volta</div>
-                    <div className="w-[100px] px-1 text-center">Desloc.</div>
-                    <div className="w-[80px] px-1 text-center">Saída base</div>
-                    <div className="w-[80px] px-1 text-center">Segurança</div>
+                    <div className="w-[130px]">Dia</div>
+                    <div className="w-[220px] px-1">Saída (ida)</div>
+                    <div className="w-[75px] px-1 text-center">Ida</div>
+                    <div className="w-[220px] px-1">Retorno (volta)</div>
+                    <div className="w-[75px] px-1 text-center">Volta</div>
+                    <div className="w-[110px] px-1 text-center">Desloc.</div>
+                    <div className="w-[85px] px-1 text-center">Saída base</div>
+                    <div className="w-[85px] px-1 text-center">Segurança</div>
                     <div className="flex-1 text-right pr-2">Total comp.</div>
                   </div>
 
@@ -1727,17 +1726,17 @@ export const PcpPlanejamentoView = () => {
 
                   {/* TOTALIZADOR DO PERÍODO (VISÃO ALOJAMENTOS) */}
                   <div
-                    className="flex items-center py-2 px-2 text-xs font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
-                    style={{ borderLeft: '3px solid transparent' }}
+                    className="flex items-center py-3 px-3 text-sm font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3]"
+                    style={{ borderLeft: '4px solid transparent' }}
                   >
-                    <div className="w-[120px] text-[#23211E]">Total acumulado</div>
-                    <div className="w-[540px] px-1 text-[#6B6660]">
+                    <div className="w-[130px] text-[#23211E]">Total acumulado</div>
+                    <div className="w-[590px] px-1 text-[#6B6660] text-xs">
                       {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
                     </div>
-                    <div className="w-[100px] px-1 text-center text-[#23211E]">
+                    <div className="w-[110px] px-1 text-center text-[#23211E]">
                       {formatMinToHours(totalDeslocamentoPeriodoMin)}
                     </div>
-                    <div className="w-[160px] px-1" />
+                    <div className="w-[170px] px-1" />
                     <div className="flex-1 text-right pr-2 text-[#23211E]">
                       {formatMinToHours(totalCompPeriodoMin)}
                     </div>
@@ -1747,14 +1746,14 @@ export const PcpPlanejamentoView = () => {
             </div>
 
             {/* RODAPÉ DO CARD "DIAS PROGRAMADOS" */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-[#FBFAF7] border-t border-[#E6E3DD]">
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 px-4 bg-[#FBFAF7] border-t border-[#E6E3DD]">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 {viewMode === 'jornada' && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={expandedDayIds.length === diasProgramados.length ? handleCollapseAll : handleExpandAll}
-                    className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#23211E]"
+                    className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] font-semibold"
                   >
                     {expandedDayIds.length === diasProgramados.length ? 'Recolher todos' : 'Expandir todos'}
                   </Button>
@@ -1764,7 +1763,7 @@ export const PcpPlanejamentoView = () => {
                   variant="outline"
                   size="sm"
                   onClick={handleAddDiaExtra}
-                  className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1"
+                  className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold"
                 >
                   <Plus className="w-3.5 h-3.5 text-[#E07A1F]" /> Adicionar dia extra
                 </Button>
@@ -1773,7 +1772,7 @@ export const PcpPlanejamentoView = () => {
                   variant="outline"
                   size="sm"
                   onClick={handleDistribuirPontosAuto}
-                  className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1"
+                  className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1.5 font-semibold"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[#E07A1F]" /> Distribuir pontos
                 </Button>
@@ -1782,9 +1781,9 @@ export const PcpPlanejamentoView = () => {
               <Button
                 size="sm"
                 onClick={handleEnviarTodosOsDias}
-                className="h-8 px-4 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs"
+                className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs"
               >
-                <Send className="w-3.5 h-3.5" /> Enviar todos os dias ({diasProgramados.length})
+                <Send className="w-4 h-4" /> Enviar todos os dias ({diasProgramados.length})
               </Button>
             </div>
           </div>
@@ -1806,17 +1805,17 @@ export const PcpPlanejamentoView = () => {
           {/* Filtros e Busca do Modal */}
           <div className="p-3 bg-[#F7F6F3] border-b border-[#E6E3DD] flex flex-wrap items-center gap-2 text-xs">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#A39E96]" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#A39E96]" />
               <input
                 placeholder="Buscar projeto, equipe, data..."
                 value={searchExistingPlan}
                 onChange={e => setSearchExistingPlan(e.target.value)}
-                className="w-full h-7 pl-8 pr-2 text-xs rounded border border-[#DEDAD3] bg-white font-mono"
+                className="w-full h-8 pl-8 pr-2 text-xs rounded border border-[#DEDAD3] bg-white font-mono"
               />
             </div>
 
             <Select value={filterEquipeExistingPlan} onValueChange={setFilterEquipeExistingPlan}>
-              <SelectTrigger className="h-7 text-xs bg-white border-[#DEDAD3]">
+              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3]">
                 <SelectValue placeholder="Todas as equipes" />
               </SelectTrigger>
               <SelectContent>
@@ -1827,7 +1826,7 @@ export const PcpPlanejamentoView = () => {
               </SelectContent>
             </Select>
 
-            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-[#5C574F]">
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-[#5C574F] font-medium">
               <input
                 type="checkbox"
                 checked={filterOnlyCurrentObra}
@@ -1841,19 +1840,19 @@ export const PcpPlanejamentoView = () => {
           {/* Lista de Planejamentos */}
           <div className="flex-1 overflow-y-auto p-3 max-h-[400px]">
             {filteredExistingPlans.length === 0 ? (
-              <div className="text-center py-10 text-xs text-[#A39E96]">
+              <div className="text-center py-12 text-xs text-[#A39E96]">
                 Nenhum planejamento existente encontrado com os filtros aplicados.
               </div>
             ) : (
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="bg-[#F2F0EC] text-[#5C574F] text-[10px] uppercase border-b border-[#E6E3DD]">
-                    <th className="p-2 w-[32px]"></th>
-                    <th className="p-2">Data</th>
-                    <th className="p-2">Equipe</th>
-                    <th className="p-2">Projeto</th>
-                    <th className="p-2">Pontos</th>
-                    <th className="p-2 text-right">Valor</th>
+                  <tr className="bg-[#F2F0EC] text-[#5C574F] text-[10px] uppercase border-b border-[#E6E3DD] font-semibold">
+                    <th className="p-2.5 w-[36px]"></th>
+                    <th className="p-2.5">Data</th>
+                    <th className="p-2.5">Equipe</th>
+                    <th className="p-2.5">Projeto</th>
+                    <th className="p-2.5">Pontos</th>
+                    <th className="p-2.5 text-right">Valor</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E6E3DD]">
@@ -1871,7 +1870,7 @@ export const PcpPlanejamentoView = () => {
                         }}
                         className={`hover:bg-[#FBF5EC] cursor-pointer ${isChecked ? 'bg-[#FBF5EC]' : ''}`}
                       >
-                        <td className="p-2 text-center">
+                        <td className="p-2.5 text-center">
                           <input
                             type="checkbox"
                             checked={isChecked}
@@ -1879,11 +1878,11 @@ export const PcpPlanejamentoView = () => {
                             className="rounded border-[#DEDAD3] text-[#E07A1F]"
                           />
                         </td>
-                        <td className="p-2 font-mono font-medium text-[#23211E]">{plan.dataCompleta}</td>
-                        <td className="p-2 font-mono">{plan.equipe}</td>
-                        <td className="p-2 font-mono font-bold text-[#E07A1F]">{plan.projeto}</td>
-                        <td className="p-2 font-mono text-[#5C574F]">{plan.pontosStr || `${plan.pontos.length} pontos`}</td>
-                        <td className="p-2 text-right font-mono font-semibold text-[#17794C]">
+                        <td className="p-2.5 font-mono font-bold text-[#23211E]">{plan.dataCompleta}</td>
+                        <td className="p-2.5 font-mono">{plan.equipe}</td>
+                        <td className="p-2.5 font-mono font-bold text-[#E07A1F]">{plan.projeto}</td>
+                        <td className="p-2.5 font-mono text-[#5C574F]">{plan.pontosStr || `${plan.pontos.length} pontos`}</td>
+                        <td className="p-2.5 text-right font-mono font-semibold text-[#17794C]">
                           R$ {plan.valorPlanejadoTotal?.toFixed(2) || '0.00'}
                         </td>
                       </tr>
@@ -1895,8 +1894,8 @@ export const PcpPlanejamentoView = () => {
           </div>
 
           {/* Rodapé do Modal */}
-          <div className="p-3 border-t border-[#E6E3DD] bg-[#FBFAF7] flex items-center justify-between">
-            <span className="text-xs text-[#6B6660]">
+          <div className="p-3.5 border-t border-[#E6E3DD] bg-[#FBFAF7] flex items-center justify-between">
+            <span className="text-xs text-[#6B6660] font-medium">
               {selectedExistingPlanKeys.length} {selectedExistingPlanKeys.length === 1 ? 'selecionado' : 'selecionados'}
             </span>
 
@@ -1905,7 +1904,7 @@ export const PcpPlanejamentoView = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsCarregarPlanModalOpen(false)}
-                className="h-7 text-xs"
+                className="h-8 text-xs"
               >
                 Cancelar
               </Button>
@@ -1918,7 +1917,7 @@ export const PcpPlanejamentoView = () => {
                   );
                   handleCarregarPlanejamentosSelecionados(plansToLoad);
                 }}
-                className="h-7 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 font-semibold"
+                className="h-8 px-3.5 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 font-bold"
               >
                 Carregar selecionados ({selectedExistingPlanKeys.length})
               </Button>

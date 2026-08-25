@@ -219,36 +219,36 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
       {viewMode === 'jornada' && (
         <div
           onClick={onToggleExpand}
-          className="flex items-center cursor-pointer hover:bg-[#FBF5EC]/40 transition-colors py-2 px-1 text-xs select-none"
-          style={{ borderLeft: `3px solid ${situacao.forte}` }}
+          className="flex items-center cursor-pointer hover:bg-[#FBF5EC]/50 transition-colors py-3 px-2 text-sm select-none"
+          style={{ borderLeft: `4px solid ${situacao.forte}` }}
         >
           {/* Seta de expansão */}
-          <div className="w-[26px] flex items-center justify-center text-[#A39E96]">
-            {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-[#23211E]" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          <div className="w-[30px] flex items-center justify-center text-[#A39E96]">
+            {isExpanded ? <ChevronDown className="w-4 h-4 text-[#23211E]" /> : <ChevronRight className="w-4 h-4" />}
           </div>
 
           {/* Dia e data */}
-          <div className="w-[108px] font-medium text-[#23211E] shrink-0">
+          <div className="w-[125px] font-semibold text-[#23211E] shrink-0">
             <span className="capitalize">{dia.nomeDia.slice(0, 3)}</span>, {dia.dataStr}
           </div>
 
           {/* Pontos */}
-          <div className="w-[76px] font-mono text-[#5C574F] shrink-0">
+          <div className="w-[85px] font-mono text-xs text-[#5C574F] shrink-0">
             {pontosAtivos.length === 1 ? '1 ponto' : `${pontosAtivos.length} pontos`}
           </div>
 
           {/* Ocupação da Jornada (Barra de 0 a 13h) */}
-          <div className="flex-1 min-w-[268px] px-2">
-            <div className="relative h-[14px] bg-[#F4F2EE] rounded-[4px] overflow-hidden flex shadow-inner">
+          <div className="flex-1 min-w-[280px] px-3">
+            <div className="relative h-[18px] bg-[#F4F2EE] rounded-md overflow-hidden flex shadow-inner">
               {/* Janela Alvo de 8h a 10h */}
               <div
                 className="absolute top-0 bottom-0 pointer-events-none"
                 style={{
                   left: `${(480 / 780) * 100}%`,
                   width: `${(120 / 780) * 100}%`,
-                  backgroundColor: 'rgba(23, 121, 76, 0.13)',
-                  borderLeft: '1px dashed rgba(23, 121, 76, 0.4)',
-                  borderRight: '1px dashed rgba(23, 121, 76, 0.4)'
+                  backgroundColor: 'rgba(23, 121, 76, 0.15)',
+                  borderLeft: '1.5px dashed rgba(23, 121, 76, 0.5)',
+                  borderRight: '1.5px dashed rgba(23, 121, 76, 0.5)'
                 }}
                 title="Janela ideal de jornada: 8h a 10h"
               />
@@ -287,9 +287,9 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             </div>
 
             {/* Leituras auxiliares abaixo da barra */}
-            <div className="flex items-center gap-3 mt-1 text-[10px] font-mono">
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#C0392E' }} />
+            <div className="flex items-center gap-4 mt-1.5 text-xs font-mono">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#C0392E' }} />
                 <span className="text-[#6B6660]">serviço:</span>
                 <strong style={{ color: isServicoBaixo ? '#B03028' : '#23211E' }}>
                   {tempoServicoHoras.toFixed(1).replace('.', ',')}h
@@ -297,8 +297,8 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                 <span className="text-[#A39E96]">mín 7,0h</span>
               </span>
 
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#E07A1F' }} />
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#E07A1F' }} />
                 <span className="text-[#6B6660]">ida e volta:</span>
                 <strong style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}>
                   {deslocamentoHoras.toFixed(1).replace('.', ',')}h
@@ -309,24 +309,24 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Total de Horas */}
-          <div className="w-[62px] font-mono font-bold text-right pr-2 shrink-0" style={{ color: situacao.texto }}>
+          <div className="w-[70px] font-mono font-bold text-right pr-2 shrink-0 text-sm" style={{ color: situacao.texto }}>
             {formatMinToHours(tempoTotalMin)}
           </div>
 
           {/* Planejado */}
-          <div className="w-[96px] font-mono text-right pr-2 font-medium text-[#23211E] shrink-0">
+          <div className="w-[110px] font-mono text-right pr-2 font-semibold text-[#23211E] shrink-0 text-sm">
             R$ {valorPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
 
           {/* % Meta */}
-          <div className="w-[62px] font-mono font-bold text-right pr-2 shrink-0" style={{ color: situacao.texto }}>
+          <div className="w-[70px] font-mono font-bold text-right pr-2 shrink-0 text-sm" style={{ color: situacao.texto }}>
             {pctMeta}%
           </div>
 
           {/* Situação */}
-          <div className="w-[78px] text-center shrink-0">
+          <div className="w-[90px] text-center shrink-0">
             <span
-              className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-tight"
+              className="inline-block px-2.5 py-1 rounded-md text-[11px] font-bold tracking-tight shadow-2xs"
               style={{ backgroundColor: situacao.fundo, color: situacao.texto }}
             >
               {situacao.rotulo}
@@ -334,14 +334,14 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Marcações (REPROG / PES) */}
-          <div className="w-[96px] flex items-center justify-center gap-1 shrink-0">
+          <div className="w-[100px] flex items-center justify-center gap-1 shrink-0">
             {isReprogramarDia && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]">
                 REPROG
               </span>
             )}
             {isPesDia && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]">
                 PES
               </span>
             )}
@@ -352,23 +352,23 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
       {/* LINHA FECHADA: VISÃO ALOJAMENTOS */}
       {viewMode === 'alojamentos' && (
         <div
-          className="flex items-center py-2 px-2 text-xs select-none hover:bg-[#FBF5EC]/40 transition-colors"
+          className="flex items-center py-2.5 px-3 text-xs select-none hover:bg-[#FBF5EC]/50 transition-colors"
           style={{
-            borderLeft: `3px solid ${isDeslocamentoAlto ? '#C0392E' : isTrocaAloj ? '#C9A227' : '#E6E3DD'}`
+            borderLeft: `4px solid ${isDeslocamentoAlto ? '#C0392E' : isTrocaAloj ? '#C9A227' : '#E6E3DD'}`
           }}
         >
           {/* Dia */}
-          <div className="w-[120px] font-medium text-[#23211E] shrink-0">
+          <div className="w-[130px] font-semibold text-[#23211E] text-sm shrink-0">
             <span className="capitalize">{dia.nomeDia.slice(0, 3)}</span>, {dia.dataStr}
           </div>
 
           {/* Saída (Alojamento de Origem) */}
-          <div className="w-[200px] px-1 shrink-0">
+          <div className="w-[220px] px-1 shrink-0">
             <Select
               value={origemAloj}
               onValueChange={val => handleUpdateDiaAlojamento(dia.id, 'origem', val)}
             >
-              <SelectTrigger className="h-7 text-xs bg-white border-[#DEDAD3]">
+              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3]">
                 <SelectValue placeholder="Selecione alojamento de saída" />
               </SelectTrigger>
               <SelectContent>
@@ -382,7 +382,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Ida (minutos) */}
-          <div className="w-[70px] px-1 shrink-0">
+          <div className="w-[75px] px-1 shrink-0">
             <div className="relative">
               <Input
                 type="number"
@@ -390,7 +390,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                 step="5"
                 value={tempoIdaMin}
                 onChange={e => handleUpdateDiaTempo(dia.id, 'ida', parseInt(e.target.value, 10) || 0)}
-                className="h-7 text-xs text-center font-mono font-semibold bg-white border-[#DEDAD3]"
+                className="h-8 text-xs text-center font-mono font-semibold bg-white border-[#DEDAD3]"
               />
               {isIdaManual && (
                 <span className="absolute -top-1.5 -right-1 text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
@@ -401,12 +401,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Retorno (Alojamento de Destino) */}
-          <div className="w-[200px] px-1 shrink-0">
+          <div className="w-[220px] px-1 shrink-0">
             <Select
               value={destinoAloj}
               onValueChange={val => handleUpdateDiaAlojamento(dia.id, 'destino', val)}
             >
-              <SelectTrigger className="h-7 text-xs bg-white border-[#DEDAD3]">
+              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3]">
                 <SelectValue placeholder="Selecione alojamento de retorno" />
               </SelectTrigger>
               <SelectContent>
@@ -420,7 +420,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Volta (minutos) */}
-          <div className="w-[70px] px-1 shrink-0">
+          <div className="w-[75px] px-1 shrink-0">
             <div className="relative">
               <Input
                 type="number"
@@ -428,7 +428,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                 step="5"
                 value={tempoVoltaMin}
                 onChange={e => handleUpdateDiaTempo(dia.id, 'volta', parseInt(e.target.value, 10) || 0)}
-                className="h-7 text-xs text-center font-mono font-semibold bg-white border-[#DEDAD3]"
+                className="h-8 text-xs text-center font-mono font-semibold bg-white border-[#DEDAD3]"
               />
               {isVoltaManual && (
                 <span className="absolute -top-1.5 -right-1 text-[8px] px-1 bg-[#FBF2DA] text-[#A06A16] font-bold rounded">
@@ -440,38 +440,38 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
 
           {/* Deslocamento Total */}
           <div
-            className="w-[100px] font-mono font-bold text-center px-1 shrink-0"
+            className="w-[110px] font-mono font-bold text-center px-1 shrink-0 text-sm"
             style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}
           >
             {formatMinToHours(deslocamentoMin)}
           </div>
 
           {/* Saída da Base (min) */}
-          <div className="w-[80px] px-1 shrink-0">
+          <div className="w-[85px] px-1 shrink-0">
             <Input
               type="number"
               min="0"
               step="5"
               value={tempoSaidaBaseMin}
               onChange={e => handleUpdateDiaTempoComp(dia.id, 'saidaBase', parseInt(e.target.value, 10) || 0)}
-              className="h-7 text-xs text-center font-mono bg-white border-[#DEDAD3]"
+              className="h-8 text-xs text-center font-mono bg-white border-[#DEDAD3]"
             />
           </div>
 
           {/* Segurança (min) */}
-          <div className="w-[80px] px-1 shrink-0">
+          <div className="w-[85px] px-1 shrink-0">
             <Input
               type="number"
               min="0"
               step="5"
               value={tempoSegurancaMin}
               onChange={e => handleUpdateDiaTempoComp(dia.id, 'seguranca', parseInt(e.target.value, 10) || 0)}
-              className="h-7 text-xs text-center font-mono bg-white border-[#DEDAD3]"
+              className="h-8 text-xs text-center font-mono bg-white border-[#DEDAD3]"
             />
           </div>
 
           {/* Total Complementar */}
-          <div className="flex-1 font-mono font-bold text-right pr-2 text-[#23211E]">
+          <div className="flex-1 font-mono font-bold text-right pr-2 text-[#23211E] text-sm">
             {formatMinToHours(tempoSaidaBaseMin + tempoSegurancaMin + deslocamentoMin)}
           </div>
         </div>
@@ -479,18 +479,18 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
 
       {/* CONTAINER EXPANDIDO DO DIA */}
       {isExpanded && (
-        <div className="bg-[#FBFAF7] p-3.5 border-t border-[#E6E3DD] space-y-3.5 animate-in fade-in-50 duration-200">
+        <div className="bg-[#FBFAF7] p-4 border-t border-[#E6E3DD] space-y-4 animate-in fade-in-50 duration-200">
           {/* 1. Barra de Configuração do Dia */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-[#E6E3DD]">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-[#F2F0EC] text-[#23211E]">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#E6E3DD]">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-[#F2F0EC] text-[#23211E] border border-[#DEDAD3]">
                 Dia {dia.index} de {totalDias}
               </span>
 
               {/* Data com Popover de Calendário */}
               <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs font-mono bg-white border-[#DEDAD3] gap-1.5">
+                  <Button variant="outline" size="sm" className="h-8 px-3 text-xs font-mono bg-white border-[#DEDAD3] gap-1.5 font-semibold">
                     <CalendarIcon className="w-3.5 h-3.5 text-[#5C574F]" />
                     {format(dia.dateObj, "dd/MM/yyyy (EEE)", { locale: ptBR })}
                   </Button>
@@ -512,13 +512,13 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               </Popover>
 
               {/* Toggle Reprogramar + Motivo */}
-              <div className="flex items-center gap-1.5 ml-1">
-                <label className="flex items-center gap-1 cursor-pointer select-none text-xs text-[#23211E]">
+              <div className="flex items-center gap-2 ml-1">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-medium text-[#23211E]">
                   <input
                     type="checkbox"
                     checked={Boolean(isReprogramarDia)}
                     onChange={() => handleToggleReprogramarDia(dia.id)}
-                    className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-3.5 w-3.5"
+                    className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4"
                   />
                   <span>Reprogramar</span>
                 </label>
@@ -528,7 +528,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                     value={motivoReprogramarDia || MOTIVOS_REPROGRAMACAO_COL_AU[0]}
                     onValueChange={val => handleSelectMotivoReprogramarDia(dia.id, val)}
                   >
-                    <SelectTrigger className="h-7 text-[11px] max-w-[200px] bg-white border-[#E8C9A0] text-[#A06A16]">
+                    <SelectTrigger className="h-8 text-xs max-w-[220px] bg-white border-[#E8C9A0] text-[#A06A16] font-semibold">
                       <SelectValue placeholder="Selecione motivo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -543,36 +543,36 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               </div>
 
               {/* Toggle PES */}
-              <label className="flex items-center gap-1 cursor-pointer select-none text-xs text-[#23211E] ml-1">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-medium text-[#23211E] ml-1">
                 <input
                   type="checkbox"
                   checked={Boolean(isPesDia)}
                   onChange={() => handleTogglePesDia(dia.id)}
-                  className="rounded border-[#DEDAD3] text-[#17794C] focus:ring-[#17794C] h-3.5 w-3.5"
+                  className="rounded border-[#DEDAD3] text-[#17794C] focus:ring-[#17794C] h-4 w-4"
                 />
                 <span>PES</span>
               </label>
 
               {/* Segmented Filtro LV do Dia */}
-              <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-[10px] font-semibold ml-1">
+              <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold ml-1">
                 <button
                   type="button"
                   onClick={() => handleSetFiltroLvNoDia(dia.id, 'COMPLETO')}
-                  className={`px-2 py-0.5 rounded ${filtroLvDoDia === 'COMPLETO' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                  className={`px-2.5 py-1 rounded ${filtroLvDoDia === 'COMPLETO' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
                 >
                   Completo
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSetFiltroLvNoDia(dia.id, 'SOMENTE_LV')}
-                  className={`px-2 py-0.5 rounded ${filtroLvDoDia === 'SOMENTE_LV' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                  className={`px-2.5 py-1 rounded ${filtroLvDoDia === 'SOMENTE_LV' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
                 >
                   Somente LV
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSetFiltroLvNoDia(dia.id, 'SEM_LV')}
-                  className={`px-2 py-0.5 rounded ${filtroLvDoDia === 'SEM_LV' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
+                  className={`px-2.5 py-1 rounded ${filtroLvDoDia === 'SEM_LV' ? 'bg-white text-[#23211E] shadow-2xs font-bold' : 'text-[#6B6660] hover:text-[#23211E]'}`}
                 >
                   Sem LV
                 </button>
@@ -584,60 +584,60 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               variant="ghost"
               size="sm"
               onClick={() => handleRemoveDia(dia.id)}
-              className="h-7 px-2 text-xs text-[#A39E96] hover:text-[#C0392E] hover:bg-[#F9E4E1]/40"
+              className="h-8 px-2.5 text-xs text-[#A39E96] hover:text-[#C0392E] hover:bg-[#F9E4E1]/50"
               title="Excluir este dia"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
 
           {/* 2. Trajeto em 6 Células */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-white p-2.5 rounded-lg border border-[#E6E3DD] text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 bg-white p-3 rounded-xl border border-[#E6E3DD] text-xs shadow-2xs">
             <div>
-              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block">Saída (ida)</span>
-              <strong className="text-[#23211E] truncate block">{origemAloj || 'Não definido'}</strong>
-              <span className="font-mono text-[#5C574F]">{formatMinToHours(tempoIdaMin)}</span>
+              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block font-semibold">Saída (ida)</span>
+              <strong className="text-[#23211E] text-xs truncate block mt-0.5">{origemAloj || 'Não definido'}</strong>
+              <span className="font-mono text-xs text-[#5C574F]">{formatMinToHours(tempoIdaMin)}</span>
             </div>
             <div>
-              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block">Retorno (volta)</span>
-              <strong className="text-[#23211E] truncate block">{destinoAloj || 'Não definido'}</strong>
-              <span className="font-mono text-[#5C574F]">{formatMinToHours(tempoVoltaMin)}</span>
+              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block font-semibold">Retorno (volta)</span>
+              <strong className="text-[#23211E] text-xs truncate block mt-0.5">{destinoAloj || 'Não definido'}</strong>
+              <span className="font-mono text-xs text-[#5C574F]">{formatMinToHours(tempoVoltaMin)}</span>
             </div>
             <div>
-              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block">Deslocamento</span>
-              <strong className="font-mono text-sm block" style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}>
+              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block font-semibold">Deslocamento</span>
+              <strong className="font-mono text-sm block mt-0.5" style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}>
                 {formatMinToHours(deslocamentoMin)}
               </strong>
               <span className="text-[10px] text-[#A39E96]">máx 02:00</span>
             </div>
             <div>
-              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block">Saída da Base</span>
-              <strong className="font-mono text-sm block text-[#23211E]">{formatMinToHours(tempoSaidaBaseMin)}</strong>
+              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block font-semibold">Saída da Base</span>
+              <strong className="font-mono text-sm block mt-0.5 text-[#23211E]">{formatMinToHours(tempoSaidaBaseMin)}</strong>
             </div>
             <div>
-              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block">Segurança</span>
-              <strong className="font-mono text-sm block text-[#23211E]">{formatMinToHours(tempoSegurancaMin)}</strong>
+              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block font-semibold">Segurança</span>
+              <strong className="font-mono text-sm block mt-0.5 text-[#23211E]">{formatMinToHours(tempoSegurancaMin)}</strong>
             </div>
             <div>
-              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block">Total Previsto</span>
-              <strong className="font-mono text-sm block text-[#23211E]">{formatMinToHours(tempoTotalMin)}</strong>
+              <span className="text-[10px] text-[#A39E96] uppercase tracking-wider block font-semibold">Total Previsto</span>
+              <strong className="font-mono text-sm block mt-0.5 text-[#23211E]">{formatMinToHours(tempoTotalMin)}</strong>
             </div>
           </div>
 
           {/* 3. Seleção de Pontos do Dia */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-[#5C574F]">Pontos do dia:</span>
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-[#5C574F]">Pontos do dia:</span>
               {pontosAtivos.map(pLabel => (
                 <span
                   key={pLabel}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-[#FBF5EC] text-[#23211E] border border-[#E8C9A0]"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-[#FBF5EC] text-[#23211E] border border-[#E8C9A0] shadow-2xs"
                 >
                   {pLabel}
                   <button
                     type="button"
                     onClick={() => handleTogglePontoNoDia(dia.id, pLabel)}
-                    className="text-[#A39E96] hover:text-[#C0392E] ml-0.5"
+                    className="text-[#A39E96] hover:text-[#C0392E] font-bold ml-1"
                   >
                     ×
                   </button>
@@ -647,15 +647,15 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               {/* Seletor Dropdown de Pontos */}
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-6 px-2 text-xs bg-white border-[#DEDAD3]">
-                    <Plus className="w-3 h-3 mr-1" /> Adicionar ponto
+                  <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3]">
+                    <Plus className="w-3.5 h-3.5 mr-1 text-[#E07A1F]" /> Adicionar ponto
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-2 bg-white" align="start">
+                <PopoverContent className="w-[300px] p-2.5 bg-white" align="start">
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between pb-1 border-b border-[#E6E3DD] text-[11px]">
-                      <span className="font-semibold text-[#23211E]">Pontos da obra</span>
-                      <div className="flex items-center gap-2 text-[#E07A1F]">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-[#E6E3DD] text-xs">
+                      <span className="font-bold text-[#23211E]">Pontos da obra</span>
+                      <div className="flex items-center gap-2 text-[#E07A1F] font-semibold">
                         <button type="button" onClick={() => handleSelectAllPontosNoDia(dia.id)} className="hover:underline">
                           Todos
                         </button>
@@ -665,16 +665,16 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                         </button>
                       </div>
                     </div>
-                    <div className="max-h-[220px] overflow-y-auto space-y-1">
+                    <div className="max-h-[240px] overflow-y-auto space-y-1">
                       {pontosDisponiveis.map(p => {
                         const isChecked = pontosAtivos.includes(p);
                         return (
-                          <label key={p} className="flex items-center gap-2 p-1 rounded hover:bg-[#FBF5EC]/60 cursor-pointer text-xs font-mono">
+                          <label key={p} className="flex items-center gap-2 p-1.5 rounded hover:bg-[#FBF5EC]/60 cursor-pointer text-xs font-mono">
                             <input
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => handleTogglePontoNoDia(dia.id, p)}
-                              className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-3.5 w-3.5"
+                              className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4"
                             />
                             <span>{p}</span>
                           </label>
@@ -697,7 +697,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                       setCustomPontoInput('');
                     }
                   }}
-                  className="h-6 w-24 text-xs font-mono bg-white border-[#DEDAD3]"
+                  className="h-7 w-28 text-xs font-mono bg-white border-[#DEDAD3]"
                 />
                 {customPontoInput.trim() && (
                   <Button
@@ -707,7 +707,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                       handleAddCustomPontoNoDia(dia.id, customPontoInput.trim());
                       setCustomPontoInput('');
                     }}
-                    className="h-6 px-1.5 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90"
+                    className="h-7 px-2 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 font-bold"
                   >
                     + Add
                   </Button>
@@ -715,7 +715,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-2 text-xs font-medium">
               <button
                 type="button"
                 onClick={() => handleSelectAllPontosNoDia(dia.id)}
@@ -736,11 +736,11 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
 
           {/* 4. Blocos por Ponto e Tabelas de Atividades */}
           {pontosAtivos.length === 0 ? (
-            <div className="text-center py-6 bg-white rounded-lg border border-[#E6E3DD] text-[#A39E96] text-xs">
+            <div className="text-center py-8 bg-white rounded-xl border border-[#E6E3DD] text-[#A39E96] text-xs">
               Nenhum ponto marcado para este dia. Selecione pontos acima para montar a programação.
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {pontosAtivos.map(pLabel => {
                 const itemsDoPonto = getItemsDoPontoNoDia(dia.id, pLabel).filter(item => {
                   const isLv = (item.servico || '').toUpperCase().includes(' LV') || (item.descricaoMaterial || '').toUpperCase().includes(' LV');
@@ -754,38 +754,38 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                 const subValor = itemsSelecionados.reduce((acc, i) => acc + (i.valorEstimado || 0), 0);
 
                 return (
-                  <div key={pLabel} className="bg-white rounded-lg border border-[#E6E3DD] overflow-hidden shadow-2xs">
+                  <div key={pLabel} className="bg-white rounded-xl border border-[#E6E3DD] overflow-hidden shadow-2xs">
                     {/* Cabeçalho do Ponto */}
-                    <div className="flex items-center justify-between px-3 py-2 bg-[#F7F6F3] border-b border-[#E6E3DD]">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-[#E07A1F]">Ponto {pLabel}</span>
-                        <span className="text-[11px] text-[#6B6660]">
+                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#F7F6F3] border-b border-[#E6E3DD]">
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono font-bold text-sm text-[#E07A1F]">Ponto {pLabel}</span>
+                        <span className="text-xs text-[#6B6660]">
                           {itemsSelecionados.length} {itemsSelecionados.length === 1 ? 'atividade selecionada' : 'atividades selecionadas'}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs">
+                      <div className="flex items-center gap-4 text-xs">
                         <span className="font-mono text-[#5C574F]">Tempo: {formatMinToHours(subMinutos)}</span>
-                        <span className="font-mono font-semibold text-[#17794C]">
+                        <span className="font-mono font-bold text-[#17794C] text-sm">
                           R$ {subValor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleAddAtividadeNoPonto(dia.id, pLabel)}
-                          className="h-6 px-2 text-[11px] bg-white border-[#DEDAD3] text-[#23211E] gap-1"
+                          className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1 font-semibold"
                         >
-                          <Plus className="w-3 h-3" /> Adicionar atividade
+                          <Plus className="w-3.5 h-3.5 text-[#E07A1F]" /> Adicionar atividade
                         </Button>
                       </div>
                     </div>
 
                     {/* Tabela de Atividades do Ponto */}
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left" style={{ minWidth: '822px' }}>
+                      <table className="w-full text-xs text-left" style={{ minWidth: '880px' }}>
                         <thead>
-                          <tr className="bg-[#F2F0EC] text-[#5C574F] text-[9.5px] uppercase tracking-wider border-b border-[#E6E3DD]">
-                            <th className="w-[32px] p-2 text-center">
+                          <tr className="bg-[#F2F0EC] text-[#5C574F] text-[10px] uppercase tracking-wider border-b border-[#E6E3DD] font-semibold">
+                            <th className="w-[36px] p-2.5 text-center">
                               <input
                                 type="checkbox"
                                 checked={itemsDoPonto.length > 0 && itemsDoPonto.every(i => i.selected)}
@@ -793,17 +793,17 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                                   const val = e.target.checked;
                                   itemsDoPonto.forEach(i => handleUpdateAtividade(dia.id, pLabel, i.id, 'selected', val));
                                 }}
-                                className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-3.5 w-3.5"
+                                className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4"
                               />
                             </th>
-                            <th className="p-2">Atividade</th>
-                            <th className="w-[140px] p-2">Etapa</th>
-                            <th className="w-[70px] p-2 text-center">Previsto</th>
-                            <th className="w-[95px] p-2 text-center">Programado</th>
-                            <th className="w-[90px] p-2 text-center">Tempo</th>
-                            <th className="w-[95px] p-2 text-right">V. Unit.</th>
-                            <th className="w-[100px] p-2 text-right">Valor</th>
-                            <th className="w-[32px] p-2 text-right"></th>
+                            <th className="p-2.5">Atividade</th>
+                            <th className="w-[150px] p-2.5">Etapa</th>
+                            <th className="w-[75px] p-2.5 text-center">Previsto</th>
+                            <th className="w-[105px] p-2.5 text-center">Programado</th>
+                            <th className="w-[95px] p-2.5 text-center">Tempo</th>
+                            <th className="w-[100px] p-2.5 text-right">V. Unit.</th>
+                            <th className="w-[110px] p-2.5 text-right">Valor</th>
+                            <th className="w-[36px] p-2.5 text-right"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#E6E3DD]">
@@ -823,36 +823,36 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                                 key={item.id}
                                 className={`hover:bg-[#FBF5EC]/30 transition-colors ${!item.selected ? 'opacity-50 bg-[#F7F6F3]/50' : ''}`}
                               >
-                                <td className="p-2 text-center">
+                                <td className="p-2.5 text-center">
                                   <input
                                     type="checkbox"
                                     checked={item.selected}
                                     onChange={e => handleUpdateAtividade(dia.id, pLabel, item.id, 'selected', e.target.checked)}
-                                    className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-3.5 w-3.5 cursor-pointer"
+                                    className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4 cursor-pointer"
                                   />
                                 </td>
 
-                                <td className="p-2">
-                                  <div className="flex flex-col gap-0.5">
+                                <td className="p-2.5">
+                                  <div className="flex flex-col gap-1">
                                     <span className="font-semibold text-xs text-[#23211E]">{item.servico}</span>
                                     {item.codigoMaterial && (
-                                      <span className="font-mono text-[10px] text-[#A39E96]">{item.codigoMaterial}</span>
+                                      <span className="font-mono text-[10.5px] text-[#A39E96]">{item.codigoMaterial}</span>
                                     )}
 
                                     {/* Toggle Retroescavadeira para Cavas */}
                                     {isCava && (
-                                      <div className="flex items-center gap-2 mt-1 bg-[#FBF5EC] border border-[#E8C9A0] px-2 py-0.5 rounded text-[11px] w-fit">
+                                      <div className="flex items-center gap-2 mt-1 bg-[#FBF5EC] border border-[#E8C9A0] px-2.5 py-1 rounded text-xs w-fit shadow-2xs">
                                         <label className="flex items-center gap-1.5 cursor-pointer select-none text-[#A06A16] font-semibold">
                                           <input
                                             type="checkbox"
                                             checked={Boolean(item.usaRetro)}
                                             onChange={e => handleUpdateAtividade(dia.id, pLabel, item.id, 'usaRetro', e.target.checked)}
-                                            className="rounded border-[#E8C9A0] text-[#E07A1F] focus:ring-[#E07A1F] h-3 w-3 cursor-pointer"
+                                            className="rounded border-[#E8C9A0] text-[#E07A1F] focus:ring-[#E07A1F] h-3.5 w-3.5 cursor-pointer"
                                           />
                                           <span>Retro</span>
                                         </label>
-                                        <div className="flex items-center gap-1 pl-1.5 border-l border-[#E8C9A0]">
-                                          <span className="text-[#A39E96] text-[10px]">+</span>
+                                        <div className="flex items-center gap-1 pl-2 border-l border-[#E8C9A0]">
+                                          <span className="text-[#A39E96] text-[11px]">+</span>
                                           <input
                                             type="number"
                                             min="0"
@@ -860,21 +860,21 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                                             value={item.tempoRetroMinutos !== undefined ? item.tempoRetroMinutos : 30}
                                             onChange={e => handleUpdateAtividade(dia.id, pLabel, item.id, 'tempoRetroMinutos', parseInt(e.target.value, 10) || 0)}
                                             disabled={!item.usaRetro}
-                                            className={`h-5 w-10 px-1 text-[11px] text-center font-mono font-bold rounded border ${!item.usaRetro ? 'opacity-40 bg-[#F2F0EC] border-[#DEDAD3]' : 'bg-white text-[#A06A16] border-[#E8C9A0]'}`}
+                                            className={`h-5 w-12 px-1 text-xs text-center font-mono font-bold rounded border ${!item.usaRetro ? 'opacity-40 bg-[#F2F0EC] border-[#DEDAD3]' : 'bg-white text-[#A06A16] border-[#E8C9A0]'}`}
                                           />
-                                          <span className="text-[#A39E96] text-[10px]">min</span>
+                                          <span className="text-[#A39E96] text-[11px]">min</span>
                                         </div>
                                       </div>
                                     )}
                                   </div>
                                 </td>
 
-                                <td className="p-2">
+                                <td className="p-2.5">
                                   <Select
                                     value={item.etapaPrevista}
                                     onValueChange={val => handleUpdateAtividade(dia.id, pLabel, item.id, 'etapaPrevista', val)}
                                   >
-                                    <SelectTrigger className="h-6 text-[11px] bg-white border-[#DEDAD3]">
+                                    <SelectTrigger className="h-7 text-xs bg-white border-[#DEDAD3]">
                                       <SelectValue placeholder="Etapa" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -887,18 +887,18 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                                   </Select>
                                 </td>
 
-                                <td className="p-2 text-center font-mono text-xs text-[#5C574F]">
+                                <td className="p-2.5 text-center font-mono text-xs text-[#5C574F]">
                                   {item.qtdOrcadaPonto}
                                 </td>
 
-                                <td className="p-2 text-center">
+                                <td className="p-2.5 text-center">
                                   <div
-                                    className={`inline-flex items-center rounded border px-1 py-0.5 ${isMenorQuePrevisto ? 'bg-[#FBF2DA] border-[#E8C9A0]' : 'bg-white border-[#DEDAD3]'}`}
+                                    className={`inline-flex items-center rounded border px-1.5 py-0.5 ${isMenorQuePrevisto ? 'bg-[#FBF2DA] border-[#E8C9A0]' : 'bg-white border-[#DEDAD3]'}`}
                                   >
                                     <button
                                       type="button"
                                       onClick={() => handleUpdateAtividade(dia.id, pLabel, item.id, 'quantidade', Math.max(1, item.quantidade - 1))}
-                                      className="px-1 text-[#5C574F] hover:text-[#23211E] font-bold"
+                                      className="px-1.5 text-[#5C574F] hover:text-[#23211E] font-bold text-sm"
                                     >
                                       −
                                     </button>
@@ -908,45 +908,45 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                                       step="1"
                                       value={item.quantidade}
                                       onChange={e => handleUpdateAtividade(dia.id, pLabel, item.id, 'quantidade', parseInt(e.target.value, 10) || 1)}
-                                      className="w-8 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
+                                      className="w-10 text-center text-xs font-mono font-bold bg-transparent focus:outline-none"
                                     />
                                     <button
                                       type="button"
                                       onClick={() => handleUpdateAtividade(dia.id, pLabel, item.id, 'quantidade', item.quantidade + 1)}
-                                      className="px-1 text-[#5C574F] hover:text-[#23211E] font-bold"
+                                      className="px-1.5 text-[#5C574F] hover:text-[#23211E] font-bold text-sm"
                                     >
                                       +
                                     </button>
                                   </div>
                                 </td>
 
-                                <td className="p-2 text-center font-mono text-[#5C574F]">
+                                <td className="p-2.5 text-center font-mono text-[#5C574F]">
                                   <div className="flex flex-col">
-                                    <span>{formatMinToHours(item.tempoEstimadoMinutos)}</span>
+                                    <span className="font-semibold text-xs">{formatMinToHours(item.tempoEstimadoMinutos)}</span>
                                     {item.usaRetro && (
-                                      <span className="text-[9px] text-[#A06A16]">
+                                      <span className="text-[10px] text-[#A06A16]">
                                         (+{item.tempoRetroMinutos ?? 30}m retro)
                                       </span>
                                     )}
                                   </div>
                                 </td>
 
-                                <td className="p-2 text-right font-mono text-[#6B6660]">
+                                <td className="p-2.5 text-right font-mono text-[#6B6660]">
                                   R$ {unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </td>
 
-                                <td className="p-2 text-right font-mono font-semibold text-[#17794C]">
+                                <td className="p-2.5 text-right font-mono font-semibold text-[#17794C]">
                                   R$ {item.valorEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </td>
 
-                                <td className="p-2 text-right">
+                                <td className="p-2.5 text-right">
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveAtividade(dia.id, pLabel, item.id)}
                                     className="text-[#A39E96] hover:text-[#C0392E] transition-colors p-1"
                                     title="Remover atividade"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </td>
                               </tr>
@@ -962,21 +962,21 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           )}
 
           {/* 5. Rodapé do Dia com Avisos e Botão de Enviar Individual */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#E6E3DD]">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-[#E6E3DD]">
             <div className="flex items-center gap-3 text-xs">
               {isDeslocamentoAlto && (
                 <span className="text-[#B03028] font-medium flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Deslocamento acima de 2 horas ({formatMinToHours(deslocamentoMin)})
+                  <AlertCircle className="w-4 h-4" /> Deslocamento acima de 2 horas ({formatMinToHours(deslocamentoMin)})
                 </span>
               )}
               {tempoTotalHoras < 8 && (
                 <span className="text-[#A06A16] font-medium flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Jornada abaixo de 8 horas ({formatMinToHours(tempoTotalMin)})
+                  <AlertCircle className="w-4 h-4" /> Jornada abaixo de 8 horas ({formatMinToHours(tempoTotalMin)})
                 </span>
               )}
               {tempoTotalHoras > 10 && (
                 <span className="text-[#B03028] font-medium flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Jornada acima de 10 horas ({formatMinToHours(tempoTotalMin)})
+                  <AlertCircle className="w-4 h-4" /> Jornada acima de 10 horas ({formatMinToHours(tempoTotalMin)})
                 </span>
               )}
             </div>
@@ -984,7 +984,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             <Button
               size="sm"
               onClick={() => handleEnviarPlanPrincipalDia(dia.id)}
-              className="h-7 px-3 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-1.5 font-semibold"
+              className="h-8 px-3.5 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-1.5 font-bold"
             >
               <Send className="w-3.5 h-3.5" /> Enviar somente este dia
             </Button>
