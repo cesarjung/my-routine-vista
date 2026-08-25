@@ -764,8 +764,8 @@ export const usePcpPlanejamentoData = (
     if (isAtividadesSource) {
       // === PATH 1: ATIVIDADES_POR_PONTO_BASE (clean, direct mapping) ===
       // Each row IS an activity: etapa, descricao, quantidade already correct
-      // Group by ponto, aggregate same descricao within same ponto
-      const pontoMap = new Map<string, Map<string, { qty: number; etapa: string; codigo: string }>>();
+      // Group by ponto, dedup by exact (codigo + descricao + etapa) to prevent summing duplicate batch rows
+      const pontoMap = new Map<string, Map<string, { qty: number; etapa: string; codigo: string; descricao: string }>>();
 
       orcamentoPontosQuery.data.forEach((item: any) => {
         let pontoRaw = String(item.ponto_obra || item.com_ponto_mascara || '').trim();
@@ -785,18 +785,19 @@ export const usePcpPlanejamentoData = (
         if (!pontoMap.has(pontoKey)) pontoMap.set(pontoKey, new Map());
         const atvsMap = pontoMap.get(pontoKey)!;
 
-        if (!atvsMap.has(descricao)) {
-          atvsMap.set(descricao, { qty, etapa, codigo });
-        } else {
-          // Same activity appears multiple times in same ponto: sum quantities
-          atvsMap.get(descricao)!.qty += qty;
+        // Dedup by composite key to protect against duplicate database rows
+        const ativKey = `${codigo}___${descricao}___${etapa}`;
+        if (!atvsMap.has(ativKey)) {
+          atvsMap.set(ativKey, { qty, etapa, codigo, descricao });
         }
       });
 
       pontoMap.forEach((atvsMap, pontoKey) => {
         const list: MaterialPontoBudget[] = [];
-        atvsMap.forEach((info, descricao) => {
+        atvsMap.forEach((info) => {
           const cod = String(info.codigo || '').trim();
+          const descricao = info.descricao;
+          const etapa = info.etapa;
 
           // 1. Match por código da atividade (ex: SIR0000001, SDEMU1004II)
           let foundServ = cod ? servicosBase.find(s => s.codigo && s.codigo === cod) : undefined;
@@ -814,14 +815,14 @@ export const usePcpPlanejamentoData = (
 
           const totalQty = Math.max(1, Math.round(info.qty));
           list.push({
-            id: `${pontoKey}-${descricao.replace(/\s+/g, '_').slice(0, 40)}`,
+            id: `${pontoKey}-${cod || 'NOCOD'}-${descricao.replace(/\s+/g, '_').slice(0, 30)}-${etapa.replace(/\s+/g, '_').slice(0, 15)}`,
             ponto: pontoKey,
             codigo: info.codigo,
             descricao,
             quantidade: totalQty,
             unidade: 'UND',
             servicoPrevisto: descricao, // Use description directly from sheet
-            etapaPrevista: info.etapa,  // Etapa directly from sheet (Col C)
+            etapaPrevista: etapa,       // Etapa directly from sheet (Col C)
             tempoMinutos: Math.round(foundServ.tempoMinutosPorUnidade * totalQty),
             valorEstimado: Math.round(foundServ.valorPorUnidade * totalQty * 100) / 100,
             valorUnitario: foundServ.valorPorUnidade,
