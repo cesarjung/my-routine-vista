@@ -1968,36 +1968,27 @@ export const PcpPlanejamentoView = () => {
 
               {/* 3. Grade Principal de Programação */}
               <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-                {/* Linha Superior da Grade: Título e Alternador de Visões (Fixo e sem wrap que esconda os botões) */}
-                <div className="p-3 border-b border-[#E6E3DD] flex items-center justify-between gap-3 bg-[#FAF8F5]">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                {/* Linha Superior da Grade: Total do Período no Cabeçalho e Alternador de Visões */}
+                <div className="p-2.5 px-3.5 border-b border-[#E6E3DD] flex items-center justify-between gap-3 bg-[#FAF8F5]">
+                  <div className="flex items-center gap-3 flex-wrap min-w-0">
                     <span className="font-bold text-xs text-[#23211E] shrink-0">
-                      Dias programados ({diasProgramados.length})
+                      Total do período
                     </span>
-                    {/* Legenda de cores na visão jornada */}
-                    {viewMode === 'jornada' ? (
-                      <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#6B6660] ml-2">
-                        <span className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#23211E]" /> Saída
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#E07A1F]" /> Ida
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#A39E96]" /> Segurança
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#C0392E]" /> Serviço
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#F5BE84]" /> Volta
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-[11px] text-[#A06A16] font-semibold bg-[#FBF2DA] px-2 py-0.5 rounded border border-[#E8C9A0] ml-2">
-                        Configuração de Alojamentos e Deslocamento
-                      </span>
-                    )}
+                    <span className="text-xs font-mono font-bold text-[#5C574F] bg-white px-2.5 py-1 rounded border border-[#DEDAD3] shadow-2xs">
+                      {totalPontosPeriodo} {totalPontosPeriodo === 1 ? 'ponto' : 'pontos'}
+                    </span>
+                    <span className="text-xs font-mono font-bold text-[#6B6660] bg-white px-2.5 py-1 rounded border border-[#DEDAD3] shadow-2xs">
+                      {diasProgramados.length} {diasProgramados.length === 1 ? 'dia programado' : 'dias programados'}
+                    </span>
+                    <span className="text-xs font-mono font-bold text-[#23211E] bg-white px-2.5 py-1 rounded border border-[#DEDAD3] shadow-2xs">
+                      {formatMinToHours(totalHorasPeriodoMin)}
+                    </span>
+                    <span className="text-xs font-mono font-bold text-[#17794C] bg-[#E6F2EA] px-2.5 py-1 rounded border border-[#A0D4B2] shadow-2xs">
+                      R$ {totalValorPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs font-mono font-bold text-[#17794C] bg-[#E6F2EA] px-2.5 py-1 rounded border border-[#A0D4B2] shadow-2xs">
+                      {pctMetaTotal}%
+                    </span>
                   </div>
 
                   {/* Alternador de Visões: Jornada vs Alojamentos */}
@@ -2041,7 +2032,27 @@ export const PcpPlanejamentoView = () => {
                         <div className="w-[30px]" />
                         <div className="w-[115px]">Dia</div>
                         <div className="w-[80px]">Pontos</div>
-                        <div className="flex-1 min-w-[220px] px-2">Ocupação da jornada</div>
+                        <div className="flex-1 min-w-[220px] px-2 flex items-center justify-between gap-2">
+                          <span className="shrink-0">Ocupação da jornada</span>
+                          {/* Legenda de cores no espaço vazio entre OCUPAÇÃO DA JORNADA e TOTAL */}
+                          <div className="hidden sm:flex items-center gap-3 text-[10.5px] font-semibold text-[#6B6660] normal-case tracking-normal">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#23211E]" /> Saída
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#E07A1F]" /> Ida
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#A39E96]" /> Segurança
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#C0392E]" /> Serviço
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#F5BE84]" /> Volta
+                            </span>
+                          </div>
+                        </div>
                         <div className="w-[65px] text-right pr-2">Total</div>
                         <div className="w-[95px] text-right pr-2">Planejado</div>
                         <div className="w-[65px] text-right pr-2">% Meta</div>
