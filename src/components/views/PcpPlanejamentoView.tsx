@@ -1594,24 +1594,36 @@ export const PcpPlanejamentoView = () => {
               <div className="pt-2.5 border-t border-[#E6E3DD] space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[#5C574F] font-semibold">Vistoria</span>
-                  <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold ${
+                  <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold shadow-2xs ${
                     currentRisk?.classificacao === 'Vermelho'
-                      ? 'bg-[#F9E4E1] text-[#B03028]'
+                      ? 'bg-[#C0392E] text-white'
                       : currentRisk?.classificacao === 'Laranja'
-                        ? 'bg-[#FBF2DA] text-[#A06A16]'
-                        : 'bg-[#E6F2EA] text-[#17794C]'
+                        ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
+                        : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
                   }`}>
                     {currentRisk ? `Risco ${currentRisk.classificacao}` : 'Sem impedimentos'}
                   </span>
                 </div>
-                <div className="space-y-1 text-[#6B6660] text-[11.5px]">
+                <div className="space-y-1.5">
                   {currentRisk?.pontosDetalhados && currentRisk.pontosDetalhados.length > 0 ? (
-                    currentRisk.pontosDetalhados.slice(0, 3).map((pt, pIdx) => (
-                      <div key={pIdx} className="flex items-start gap-1.5">
-                        <span className={pt.isCritico ? 'text-[#C0392E]' : 'text-[#E07A1F]'}>●</span>
-                        <span className="truncate">{pt.texto}</span>
-                      </div>
-                    ))
+                    currentRisk.pontosDetalhados.map((pt, pIdx) => {
+                      const isVermelho = currentRisk.classificacao === 'Vermelho' || pt.isCritico;
+                      return (
+                        <div
+                          key={pIdx}
+                          className={`p-2 rounded-lg text-[11px] leading-snug break-words flex items-start gap-1.5 shadow-2xs transition-colors ${
+                            isVermelho
+                              ? 'bg-[#C0392E] text-white font-semibold'
+                              : currentRisk.classificacao === 'Laranja'
+                                ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0] font-medium'
+                                : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2] font-medium'
+                          }`}
+                        >
+                          <span className={`text-[10px] mt-0.5 shrink-0 ${isVermelho ? 'text-white' : 'text-[#E07A1F]'}`}>●</span>
+                          <span className="break-words whitespace-normal flex-1">{pt.texto}</span>
+                        </div>
+                      );
+                    })
                   ) : (
                     <div className="text-[11.5px] text-[#A39E96]">
                       {currentRisk?.alerta || 'Nenhum impeditivo crítico registrado na vistoria.'}
@@ -1825,7 +1837,7 @@ export const PcpPlanejamentoView = () => {
                 <div className="overflow-x-auto">
                   {/* CABEÇALHO DA GRADE: VISÃO JORNADA */}
                   {viewMode === 'jornada' && (
-                    <div style={{ minWidth: '1040px' }}>
+                    <div style={{ minWidth: '1080px' }}>
                       {/* Linha 1 de Cabeçalho: Rótulos */}
                       <div
                         className="flex items-center py-2.5 px-2 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD]"
@@ -1840,6 +1852,7 @@ export const PcpPlanejamentoView = () => {
                         <div className="w-[70px] text-right pr-2">% Meta</div>
                         <div className="w-[90px] text-center">Situação</div>
                         <div className="w-[100px] text-center">Marcações</div>
+                        <div className="w-[36px] shrink-0" />
                       </div>
 
                       {/* Linha 2 de Cabeçalho: Régua de Horas */}
@@ -1864,7 +1877,7 @@ export const PcpPlanejamentoView = () => {
                           </span>
                           <span className="absolute right-0 top-0">13h</span>
                         </div>
-                        <div className="w-[440px] shrink-0" />
+                        <div className="w-[476px] shrink-0" />
                       </div>
 
                       {/* LINHAS DOS DIAS */}
@@ -1953,6 +1966,7 @@ export const PcpPlanejamentoView = () => {
                         </div>
                         <div className="w-[90px]" />
                         <div className="w-[100px]" />
+                        <div className="w-[36px] shrink-0" />
                       </div>
                     </div>
                   )}
@@ -1978,7 +1992,7 @@ export const PcpPlanejamentoView = () => {
                       <div className="flex flex-col xl:flex-row items-stretch">
                         {/* TABELA DE ALOJAMENTOS */}
                         <div className="flex-1 overflow-x-auto">
-                          <div style={{ minWidth: '1040px' }}>
+                          <div style={{ minWidth: '1080px' }}>
                             <div
                               className="flex items-center py-2 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD] gap-2"
                               style={{ borderLeft: '4px solid transparent' }}
@@ -1991,7 +2005,8 @@ export const PcpPlanejamentoView = () => {
                               <div className="w-[110px] px-1 text-center">Desloc. (hh:mm / km)</div>
                               <div className="w-[90px] px-1 text-center">Saída base (hh:mm)</div>
                               <div className="w-[90px] px-1 text-center">Segurança (hh:mm)</div>
-                              <div className="w-[100px] text-right pr-2">Total comp. (hh:mm)</div>
+                              <div className="w-[100px] text-center">Total comp. (hh:mm)</div>
+                              <div className="w-[36px] shrink-0" />
                             </div>
 
                             {/* LINHAS DOS DIAS NA VISÃO ALOJAMENTOS */}
@@ -2083,6 +2098,7 @@ export const PcpPlanejamentoView = () => {
                               <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(totalCompPeriodoMin)}
                               </div>
+                              <div className="w-[36px] shrink-0" />
                             </div>
                           </div>
                         </div>

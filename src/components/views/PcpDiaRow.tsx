@@ -350,6 +350,21 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
               </span>
             )}
           </div>
+
+          {/* Botão de Excluir Dia */}
+          <div className="w-[36px] flex items-center justify-center shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemoveDia(dia.id);
+              }}
+              className="text-[#A39E96] hover:text-[#C0392E] p-1.5 rounded-md hover:bg-[#FDF2F0] transition-colors"
+              title="Excluir dia de programação"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -582,6 +597,21 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           {/* Total Complementar */}
           <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#E6E3DD] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
             {formatMinToHours(tempoSaidaBaseMin + tempoSegurancaMin + deslocamentoMin)}
+          </div>
+
+          {/* Botão de Excluir Dia */}
+          <div className="w-[36px] flex items-center justify-center shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemoveDia(dia.id);
+              }}
+              className="text-[#A39E96] hover:text-[#C0392E] p-1.5 rounded-md hover:bg-[#FDF2F0] transition-colors"
+              title="Excluir dia de programação"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
