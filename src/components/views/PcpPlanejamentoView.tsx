@@ -1041,21 +1041,18 @@ export const PcpPlanejamentoView = () => {
     const distinctEquipes = Array.from(new Set(plansToLoad.map(p => p.equipe).filter(Boolean)));
     if (distinctEquipes.length > 0) setSelectedEquipes(distinctEquipes);
 
-    // 1. Extrair e ordenar todas as datas dos planejamentos selecionados
+    // 1. Extrair e ordenar todas as datas dos planejamentos selecionados via regex robusto
     const dateMap = new Map<string, Date>(); // key: 'yyyy-MM-dd', value: Date
     plansToLoad.forEach(plan => {
-      let d: Date | null = null;
-      const dStr = plan.dataCompleta || plan.dataStr;
-      if (dStr) {
-        const parts = dStr.split('/');
-        if (parts.length === 3) {
-          d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-        } else if (parts.length === 2) {
-          d = new Date(new Date().getFullYear(), Number(parts[1]) - 1, Number(parts[0]));
-        }
-      }
-      if (d && !isNaN(d.getTime())) {
-        dateMap.set(format(d, 'yyyy-MM-dd'), d);
+      const dStr = plan.dataCompleta || plan.dataStr || '';
+      const match = dStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (match) {
+        const day = Number(match[1]);
+        const month = Number(match[2]);
+        const year = Number(match[3]);
+        const d = new Date(year, month - 1, day);
+        const dayId = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        dateMap.set(dayId, d);
       }
     });
 
@@ -1075,15 +1072,17 @@ export const PcpPlanejamentoView = () => {
 
     plansToLoad.forEach(plan => {
       let dayId = '';
-      const dStr = plan.dataCompleta || plan.dataStr;
-      if (dStr) {
-        const parts = dStr.split('/');
-        if (parts.length === 3) {
-          dayId = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
+      const dStr = plan.dataCompleta || plan.dataStr || '';
+      const match = dStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (match) {
+        const day = Number(match[1]);
+        const month = Number(match[2]);
+        const year = Number(match[3]);
+        dayId = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       }
+
       if (dayId) {
-        nextDiasPontosMap[dayId] = plan.pontos.length > 0 ? plan.pontos : [];
+        nextDiasPontosMap[dayId] = plan.pontos && plan.pontos.length > 0 ? [...plan.pontos] : [];
         if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
       }
 
@@ -1097,20 +1096,30 @@ export const PcpPlanejamentoView = () => {
           const matchedBudget = budgetItems.find(b =>
             (b.servicoPrevisto || '').toUpperCase().includes((a.servico || '').toUpperCase())
           );
-          const vUnit = matchedBudget?.valorUnitario || (a.quantidade > 0 ? (matchedBudget?.valorEstimado ? matchedBudget.valorEstimado / (matchedBudget.quantidade || 1) : 0) : 0);
+          const servBase = servicosBase.find(s =>
+            (s.servico || '').toUpperCase() === (a.servico || '').toUpperCase() ||
+            (a.servico || '').toUpperCase().includes((s.servico || '').toUpperCase()) ||
+            (s.servico || '').toUpperCase().includes((a.servico || '').toUpperCase())
+          );
+
+          const vUnit = matchedBudget?.valorUnitario || servBase?.valorPorUnidade || (a.quantidade > 0 ? (matchedBudget?.valorEstimado ? matchedBudget.valorEstimado / (matchedBudget.quantidade || 1) : 0) : 0);
+          const tUnit = matchedBudget?.tempoUnitarioMinutos || servBase?.tempoMinutosPorUnidade || 15;
+          const tTotal = a.tempoMinutos || (tUnit * (a.quantidade || 1));
+          const vTotal = vUnit > 0 ? vUnit * (a.quantidade || 1) : (matchedBudget?.valorEstimado || 0);
+
           combinedItems.push({
             id: `loaded-${dayId || 'day'}-${pUpper}-${aIdx}`,
             ponto: pUpper,
             servico: a.servico,
-            codigoMaterial: matchedBudget?.codigo || '',
+            codigoMaterial: matchedBudget?.codigo || servBase?.codigo || '',
             descricaoMaterial: matchedBudget?.descricao || a.servico,
             qtdOrcadaPonto: matchedBudget?.quantidade || a.quantidade,
             etapaPrevista: a.etapa || matchedBudget?.etapaPrevista || 'IMPLANTAÇÃO',
             quantidade: a.quantidade,
             valorUnitario: vUnit,
-            tempoEstimadoMinutos: a.tempoMinutos || matchedBudget?.tempoMinutos || 15,
-            tempoUnitarioMinutos: matchedBudget?.tempoUnitarioMinutos || 15,
-            valorEstimado: vUnit > 0 ? vUnit * a.quantidade : (matchedBudget?.valorEstimado || 0),
+            tempoEstimadoMinutos: tTotal,
+            tempoUnitarioMinutos: tUnit,
+            valorEstimado: vTotal,
             selected: true,
             isBudgeted: Boolean(matchedBudget),
             usaRetro: false,
@@ -2376,7 +2385,18 @@ export const PcpPlanejamentoView = () => {
                         <td className="p-2.5 font-mono font-bold text-[#E07A1F]">{plan.projeto}</td>
                         <td className="p-2.5 font-mono text-[#5C574F]">{plan.pontosStr || `${plan.pontos.length} pontos`}</td>
                         <td className="p-2.5 text-right font-mono font-semibold text-[#17794C]">
-                          R$ {plan.valorPlanejadoTotal?.toFixed(2) || '0.00'}
+                          R$ {(
+                            (plan.valorPlanejado && plan.valorPlanejado > 0)
+                              ? plan.valorPlanejado
+                              : (plan.parsedAtividades?.reduce((acc, a) => {
+                                  const servBase = servicosBase.find(s =>
+                                    (s.servico || '').toUpperCase() === (a.servico || '').toUpperCase() ||
+                                    (a.servico || '').toUpperCase().includes((s.servico || '').toUpperCase()) ||
+                                    (s.servico || '').toUpperCase().includes((a.servico || '').toUpperCase())
+                                  );
+                                  return acc + ((servBase?.valorPorUnidade || 0) * (a.quantidade || 1));
+                                }, 0) || 0)
+                          ).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     );
