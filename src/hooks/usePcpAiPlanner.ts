@@ -162,46 +162,6 @@ export function parseVistoriaData(
   // 3. PARSING TEXTUAL DAS OBSERVAÇÕES DE CAMPO (0.1 ou observacoes_vistoria)
   const fullObs = formData?.obs_planejamento || obsTexto || '';
   if (fullObs && fullObs.trim()) {
-    const textUpper = fullObs.toUpperCase();
-
-    const redKeywords = [
-      // Postes e Integridade Estrutural
-      'POSTE QUEBRADO', 'POSTES QUEBRADOS', 'POSTE DANIFICADO', 'POSTES DANIFICADOS',
-      'POSTE RACHADO', 'POSTES RACHADOS', 'POSTE PODRE', 'POSTES PODRES',
-      'POSTE TRINCADO', 'POSTES TRINCADOS', 'POSTE ABALROADO', 'POSTES ABALROADOS',
-      'POSTE INCLINADO', 'POSTES INCLINADOS', 'POSTE TOMBADO', 'POSTES TOMBADOS',
-      'POSTE CAÍDO', 'POSTE CAIDO', 'POSTES CAÍDOS', 'POSTES CAIDOS',
-      'SUBSTITUIÇÃO DE POSTE', 'SUBSTITUICAO DE POSTE', 'SUBSTITUIÇÃO DOS POSTES', 'SUBSTITUICAO DOS POSTES',
-      'SUBSTITUIR POSTE', 'SUBSTITUIR POSTES', 'TROCA DE POSTE', 'TROCA DOS POSTES',
-      'TRINCA', 'TRINCADO', 'FERRAGEM EXPOSTA', 'FERRAGENS EXPOSTAS',
-      'ESTRUTURA CONDENADA', 'ESTRUTURA DANIFICADA', 'ESTRUTURAS DANIFICADAS', 'ESTRUTURA ABALROADA',
-      'RISCO DE QUEDA', 'QUEDA DE POSTE', 'QUEDA DE ESTRUTURA',
-
-      // Elétrica e Segurança Crítica
-      'REDE ENERGIZADA', 'REDE DE ALTA TENSÃO', 'REDE DE ALTA TENSAO', 'ALTA TENSÃO', 'ALTA TENSAO',
-      'MÉDIA TENSÃO', 'MEDIA TENSAO', 'CRUZAMENTO DE REDE', 'CRUZANDO REDE',
-      'FIO PARTIDO', 'FIOS PARTIDOS', 'FIO EXPOSTO', 'FIOS EXPOSTOS', 'FIO CAÍDO', 'FIO CAIDO', 'FIO NO CHÃO', 'FIO NO CHAO',
-      'CABO PARTIDO', 'CABOS PARTIDOS', 'CABO CAÍDO', 'CABO CAIDO', 'CABO NO CHÃO', 'CABO NO CHAO',
-      'CABO ROMPIDO', 'CABOS ROMPIDOS', 'ROMPIMENTO DE CABO', 'ROMPIMENTO DE CABOS',
-      'RISCO DE CHOQUE', 'CHOQUE ELÉTRICO', 'CHOQUE ELETRICO', 'FAÍSCA', 'FAISCA', 'FAISCAMENTO',
-      'CURTO-CIRCUITO', 'CURTO CIRCUITO',
-
-      // Emergência / Gravidade Extrema
-      'CRÍTICO', 'CRITICO', 'PERIGO', 'PERIGOSO', 'EMERGENCIAL', 'EMERGÊNCIA', 'EMERGENCIA',
-      'INTERDITADO', 'INTERDITADA', 'ÁREA DE RISCO', 'AREA DE RISCO'
-    ];
-
-    const orangeKeywords = [
-      'DIFÍCIL ACESSO', 'DIFICIL ACESSO', 'SEM ACESSO', 'ACESSO COMPROMETIDO', 'ACESSO GERAL',
-      'CHUVA', 'CHUVAS', 'CHUVOSOS', 'ATOLAMENTO', 'ATOLAR', 'ATOLEIRO', 'ABRIR CERCA', 'CERCA',
-      'CANCELA', 'CADEADO', 'SOLICITANTE AUSENTE', 'CLIENTE AUSENTE', 'ROCHA', 'PEDRA', 'PEDRAS',
-      'PODA', 'PODAS', 'ALAGADO', 'ALAGADOS', 'ALAGAMENTOS', 'AUTORIZAÇÃO', 'AGENDAMENTO', 
-      'IMPEDIMENTO', 'IMPEDIDA', 'DIVERGÊNCIA', 'DIVERGENCIA', 'AREIA', 'ARENOSO', 'PONTE', 'RETROESCAVADEIRA'
-    ];
-
-    if (redKeywords.some(k => textUpper.includes(k))) isVermelho = true;
-    if (orangeKeywords.some(k => textUpper.includes(k))) isLaranja = true;
-
     const rawParts = fullObs
       .split(/\/\/|\n|\r/)
       .map(p => p.trim())
@@ -209,39 +169,105 @@ export function parseVistoriaData(
 
     rawParts.forEach(part => {
       const pUpper = part.toUpperCase();
+      
+      // 1. Checagem Robusta de Risco Crítico (Vermelho)
+      const hasPosteOrEstrutura = pUpper.includes('POSTE') || pUpper.includes('ESTRUTURA') || pUpper.includes('CRUZETA');
+      const hasDanoEstrutural = (
+        pUpper.includes('RACHAD') || // RACHADO, RACHADURA, RACHADURAS
+        pUpper.includes('TRINC') || // TRINCA, TRINCADO, TRINCAS
+        pUpper.includes('QUEBRAD') || // QUEBRADO, QUEBRADOS
+        pUpper.includes('DANIFICAD') || // DANIFICADO, DANIFICADOS
+        pUpper.includes('PODRE') || // PODRE, PODRES
+        pUpper.includes('ABALROAD') || // ABALROADO
+        pUpper.includes('TOMBAD') ||
+        pUpper.includes('INCLINAD') ||
+        pUpper.includes('CAID') || pUpper.includes('CAÍD') ||
+        pUpper.includes('FERRAGEM EXPOSTA') || pUpper.includes('FERRAGENS EXPOSTAS') ||
+        pUpper.includes('CONDENAD') ||
+        pUpper.includes('SUBSTITU') || // SUBSTITUIÇÃO, SUBSTITUIR
+        pUpper.includes('TROCA')
+      );
+
+      const hasCaboOrFio = pUpper.includes('CABO') || pUpper.includes('FIO') || pUpper.includes('CONDUTOR') || pUpper.includes('REDE');
+      const hasDanoEletrico = (
+        pUpper.includes('PARTID') || // PARTIDO, PARTIDOS
+        pUpper.includes('ROMPID') || // ROMPIDO, ROMPIMENTO
+        pUpper.includes('NO CHÃO') || pUpper.includes('NO CHAO') ||
+        pUpper.includes('EXPOST') || // EXPOSTO
+        pUpper.includes('CAID') || pUpper.includes('CAÍD') ||
+        pUpper.includes('ENERGIZAD') ||
+        pUpper.includes('CRUZANDO') || pUpper.includes('CRUZAMENTO')
+      );
+
+      const isRiscoGraveDireto = (
+        pUpper.includes('FERRAGEM EXPOSTA') ||
+        pUpper.includes('FERRAGENS EXPOSTAS') ||
+        pUpper.includes('RISCO DE QUEDA') ||
+        pUpper.includes('QUEDA DE POSTE') ||
+        pUpper.includes('RISCO DE CHOQUE') ||
+        pUpper.includes('CHOQUE ELÉTRICO') || pUpper.includes('CHOQUE ELETRICO') ||
+        pUpper.includes('CURTO-CIRCUITO') || pUpper.includes('CURTO CIRCUITO') ||
+        pUpper.includes('FAÍSCA') || pUpper.includes('FAISCA') ||
+        pUpper.includes('PERIGO') || pUpper.includes('PERIGOSO') ||
+        pUpper.includes('CRÍTICO') || pUpper.includes('CRITICO') ||
+        pUpper.includes('EMERGENCIAL') || pUpper.includes('EMERGÊNCIA') || pUpper.includes('EMERGENCIA') ||
+        pUpper.includes('INTERDITAD') ||
+        pUpper.includes('ÁREA DE RISCO') || pUpper.includes('AREA DE RISCO')
+      );
+
+      const isCritico = (hasPosteOrEstrutura && hasDanoEstrutural) || (hasCaboOrFio && hasDanoEletrico) || isRiscoGraveDireto;
+      if (isCritico) isVermelho = true;
+
+      // 2. Classificação de Categoria e Ícone
       let categoria: VistoriaPontoDetalhe['categoria'] = 'Geral';
       let icone = '📌';
-      let isCritico = false;
 
-      // Se esta observação específica contém gatilho de risco vermelho
-      if (redKeywords.some(k => pUpper.includes(k))) {
-        isCritico = true;
-      }
-
-      if (
-        pUpper.includes('POSTE') && (pUpper.includes('DANIFICADO') || pUpper.includes('QUEBRADO') || pUpper.includes('SUBSTITU') || pUpper.includes('TRINCA') || pUpper.includes('RACHAD') || pUpper.includes('ABALRO') || pUpper.includes('CAID') || pUpper.includes('CAÍD') || pUpper.includes('INCLINAD')) ||
-        pUpper.includes('FERRAGEM EXPOSTA') || pUpper.includes('RISCO DE CHOQUE') || pUpper.includes('CHOQUE') || 
-        pUpper.includes('FIO') || pUpper.includes('CABO PARTIDO') || pUpper.includes('CABO ROMPIDO') || pUpper.includes('ENERGIZAD') || 
-        pUpper.includes('CRUZANDO') || pUpper.includes('LINHA VIVA') || pUpper.includes('LV') || pUpper.includes('PERIGO') || pUpper.includes('CRITIC')
+      if (isCritico) {
+        categoria = 'Segurança';
+        icone = '🔴';
+      } else if (
+        pUpper.includes('POSTE') || pUpper.includes('ESTRUTURA') || pUpper.includes('CRUZETA') ||
+        pUpper.includes('SEGURANÇA') || pUpper.includes('SEGURANCA')
       ) {
         categoria = 'Segurança';
-        icone = isCritico ? '🔴' : '⚡';
-      } else if (pUpper.includes('TRAFO') || pUpper.includes('TRANSFORMADOR') || pUpper.includes('DESLIGAMENTO') || pUpper.includes('REDE BT') || pUpper.includes('REDE MT') || pUpper.includes('CHAVE') || pUpper.includes('FUSIVEL') || pUpper.includes('GLV')) {
+        icone = '⚠️';
+      } else if (
+        pUpper.includes('TRAFO') || pUpper.includes('TRANSFORMADOR') || pUpper.includes('DESLIGAMENTO') ||
+        pUpper.includes('REDE BT') || pUpper.includes('REDE MT') || pUpper.includes('BT') || pUpper.includes('MT') ||
+        pUpper.includes('CHAVE') || pUpper.includes('FUSIVEL') || pUpper.includes('GLV') || pUpper.includes('LINHA VIVA') || pUpper.includes('LV')
+      ) {
         categoria = 'Rede Elétrica';
         icone = '⚡';
-      } else if (pUpper.includes('SINALIZAÇÃO') || pUpper.includes('SINALIZACAO') || pUpper.includes('CONES') || pUpper.includes('TRANSITO') || pUpper.includes('TRÂNSITO')) {
+      } else if (
+        pUpper.includes('SINALIZAÇÃO') || pUpper.includes('SINALIZACAO') || pUpper.includes('CONES') ||
+        pUpper.includes('TRANSITO') || pUpper.includes('TRÂNSITO')
+      ) {
         categoria = 'Sinalização';
         icone = '🚧';
-      } else if (pUpper.includes('PODA') || pUpper.includes('VEGETAÇÃO') || pUpper.includes('VEGETACAO') || pUpper.includes('ÁRVORE') || pUpper.includes('ARVORE')) {
+      } else if (
+        pUpper.includes('PODA') || pUpper.includes('VEGETAÇÃO') || pUpper.includes('VEGETACAO') ||
+        pUpper.includes('ÁRVORE') || pUpper.includes('ARVORE')
+      ) {
         categoria = 'Podas';
         icone = '🌳';
-      } else if (pUpper.includes('ROCHA') || pUpper.includes('PEDRA') || pUpper.includes('RETROESCAVADEIRA') || pUpper.includes('AREIA') || pUpper.includes('ARENOSO') || pUpper.includes('ESCAVAÇÃO') || pUpper.includes('CANO') || pUpper.includes('ESGOTO') || pUpper.includes('TUBULAÇÃO')) {
+      } else if (
+        pUpper.includes('ROCHA') || pUpper.includes('PEDRA') || pUpper.includes('RETROESCAVADEIRA') ||
+        pUpper.includes('AREIA') || pUpper.includes('ARENOSO') || pUpper.includes('ESCAVAÇÃO') ||
+        pUpper.includes('ESCAVACAO') || pUpper.includes('CANO') || pUpper.includes('ESGOTO') ||
+        pUpper.includes('TUBULAÇÃO') || pUpper.includes('TUBULACAO') || pUpper.includes('SOLO')
+      ) {
         categoria = 'Solo/Escavação';
         icone = '⛏️';
-      } else if (pUpper.includes('ACESSO') || pUpper.includes('PONTE') || pUpper.includes('CERCA') || pUpper.includes('CANCELA') || pUpper.includes('CAMINHÃO') || pUpper.includes('CARRETA') || pUpper.includes('CHUVA') || pUpper.includes('ALAGAM') || pUpper.includes('RUA') || pUpper.includes('ESTRADA') || pUpper.includes('URBANO') || pUpper.includes('RURAL')) {
+      } else if (
+        pUpper.includes('ACESSO') || pUpper.includes('PONTE') || pUpper.includes('CERCA') ||
+        pUpper.includes('CANCELA') || pUpper.includes('CAMINHÃO') || pUpper.includes('CAMINHAO') ||
+        pUpper.includes('CARRETA') || pUpper.includes('CHUVA') || pUpper.includes('ALAGAM') ||
+        pUpper.includes('RUA') || pUpper.includes('ESTRADA') || pUpper.includes('URBANO') ||
+        pUpper.includes('RURAL') || pUpper.includes('VEÍCULO') || pUpper.includes('VEICULO')
+      ) {
         categoria = 'Acesso';
         icone = '🛣️';
-      } else if (pUpper.includes('SEM IMPEDITIVO') || pUpper.includes('LIBERAD') || pUpper.includes('APTA')) {
+      } else if (pUpper.includes('SEM IMPEDITIVO') || pUpper.includes('LIBERAD') || pUpper.includes('APTA') || pUpper.includes('OK')) {
         categoria = 'Status';
         icone = '✅';
       }
