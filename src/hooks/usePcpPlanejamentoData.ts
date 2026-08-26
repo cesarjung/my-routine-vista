@@ -229,39 +229,85 @@ export const formatQuantityDisplay = (qty: number): string => {
 
 // Helper para parsear string compilada da Coluna O da Plan_Principal em itens estruturados
 export const parseCompiledAtividades = (compiledStr: string): ParsedAtividadeItem[] => {
-  if (!compiledStr) return [];
+  if (!compiledStr || !compiledStr.trim()) return [];
   const blocos = compiledStr.split(/\s*\|\s*/);
-  return blocos.map((bloco, idx) => {
-    // Formato padrão: P1 - [ETAPA] SERVICO - Qtd: X - Hr. Prev: hh:mm
-    const m = bloco.match(/^([^-]+?)\s*-\s*(?:\[([^\]]+)\]\s*)?(.+?)\s*-\s*Qtd:\s*([0-9.,]+)\s*-\s*Hr\.\s*Prev:\s*(\d{1,2}):(\d{2})/i);
-    if (m) {
-      const ponto = m[1].trim().toUpperCase();
-      const etapa = (m[2] || 'IMPLANTAÇÃO').trim();
-      const servico = m[3].trim();
-      const qtd = parseFloat(m[4].replace(',', '.')) || 1;
-      const h = parseInt(m[5], 10) || 0;
-      const min = parseInt(m[6], 10) || 0;
-      return {
-        id: `parsed-${ponto}-${idx}`,
-        ponto,
-        etapa,
-        servico,
-        quantidade: qtd,
-        tempoMinutos: h * 60 + min,
-      };
-    } else {
-      const parts = bloco.split(/\s*-\s*/);
-      const ponto = parts[0]?.trim().toUpperCase() || 'P1';
-      return {
-        id: `fallback-${idx}`,
-        ponto,
-        etapa: 'IMPLANTAÇÃO',
-        servico: bloco.trim(),
-        quantidade: 1,
-        tempoMinutos: 15,
-      };
+  const results: ParsedAtividadeItem[] = [];
+
+  blocos.forEach((bloco, idx) => {
+    const raw = bloco.trim();
+    if (!raw || raw === '-') return;
+
+    // 1. Extrair Ponto/Vão do início (ex: "P1 - ...", "V1-2 - ...", "V55-65 - ...")
+    let ponto = 'P1';
+    let restante = raw;
+
+    const pontoMatch = restante.match(/^([P|V]\d+(?:-\d+)?|[A-Z0-9_-]+)\s*-\s*/i);
+    if (pontoMatch) {
+      ponto = pontoMatch[1].trim().toUpperCase();
+      restante = restante.slice(pontoMatch[0].length).trim();
     }
+
+    if (!restante) return;
+
+    // 2. Extrair etapa entre colchetes se houver (ex: "[IMPLANTAÇÃO]")
+    let etapa = 'IMPLANTAÇÃO';
+    const etapaMatch = restante.match(/^\[([^\]]+)\]\s*/);
+    if (etapaMatch) {
+      etapa = etapaMatch[1].trim();
+      restante = restante.slice(etapaMatch[0].length).trim();
+    }
+
+    // 3. Extrair Hr. Prev do final se houver (ex: "- Hr. Prev: 00:15")
+    let tempoMinutos = 15;
+    const hrMatch = restante.match(/-\s*Hr\.?\s*Prev:?\s*(\d{1,2}):(\d{2})/i);
+    if (hrMatch) {
+      const h = parseInt(hrMatch[1], 10) || 0;
+      const m = parseInt(hrMatch[2], 10) || 0;
+      tempoMinutos = h * 60 + m;
+      restante = restante.replace(hrMatch[0], '').trim();
+    }
+
+    // 4. Extrair Qtd do final se houver (ex: "- Qtd: 1" ou "- Qtd: 61.4")
+    let quantidade = 1;
+    const qtdMatch = restante.match(/-\s*Qtd:?\s*([0-9.,]+)/i);
+    if (qtdMatch) {
+      quantidade = parseFloat(qtdMatch[1].replace(',', '.')) || 1;
+      restante = restante.replace(qtdMatch[0], '').trim();
+    }
+
+    // 5. O que restou é a descrição do serviço
+    let servico = restante.replace(/^-+\s*/, '').replace(/\s*-+$/, '').trim();
+    if (!servico) {
+      servico = 'ATIVIDADE PREVISTA';
+    }
+
+    // 6. Inferência de etapa se veio a padrão
+    if (etapa === 'IMPLANTAÇÃO') {
+      const sUpper = servico.toUpperCase();
+      if (sUpper.includes('CABO') || sUpper.includes('CONDUTOR') || sUpper.includes('FIO') || ponto.startsWith('V')) {
+        etapa = 'LANÇAMENTO DE CABO';
+      } else if (sUpper.includes('LV') || sUpper.includes('LINHA VIVA')) {
+        etapa = 'LINHA VIVA';
+      } else if (sUpper.includes('PODA') || sUpper.includes('ÁRVORE') || sUpper.includes('ARVORE')) {
+        etapa = 'PODA';
+      } else if (sUpper.includes('ESCAVA') || sUpper.includes('ROCHA') || sUpper.includes('SOLO')) {
+        etapa = 'ESCAVAÇÃO';
+      } else if (sUpper.includes('DESLIG')) {
+        etapa = 'DESLIGAMENTO';
+      }
+    }
+
+    results.push({
+      id: `parsed-${ponto}-${idx}`,
+      ponto,
+      etapa,
+      servico,
+      quantidade,
+      tempoMinutos,
+    });
   });
+
+  return results;
 };
 
 // Helper to format date with weekday matching Sirtec sheet format: "16/08/2026 - domingo"

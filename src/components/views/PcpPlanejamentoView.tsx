@@ -997,14 +997,14 @@ export const PcpPlanejamentoView = () => {
     toast.success('Planejamento e pontos em tela limpos com sucesso.');
   };
 
-  // Sincronizar Google Sheets via API
+  // Sincronizar Google Sheets via API em Tempo Real
   const handleSyncFromGoogleSheets = async () => {
     if (!selectedUnidadeId) {
       toast.error('Selecione uma unidade antes de sincronizar.');
       return;
     }
     try {
-      toast.loading('Sincronizando planilha do Google Sheets no Supabase...', { id: 'sync-sheets' });
+      toast.loading('Sincronizando planilha do Google Sheets em tempo real...', { id: 'sync-sheets' });
       const res = await fetch('/api/sync-pcp-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1012,9 +1012,11 @@ export const PcpPlanejamentoView = () => {
       });
       const data = await res.json();
       if (data.success) {
+        await queryClient.invalidateQueries({ queryKey: ['pcp-planejamento-cache'] });
+        await queryClient.invalidateQueries({ queryKey: ['pcp-orcamento-pontos'] });
         await rawCacheQuery.refetch();
         await orcamentoPontosQuery.refetch();
-        toast.success('Planilha do Google Sheets sincronizada com sucesso!', { id: 'sync-sheets' });
+        toast.success('Planilha do Google Sheets sincronizada em tempo real!', { id: 'sync-sheets' });
       } else {
         toast.error('Erro ao sincronizar: ' + (data.error || 'Erro desconhecido'), { id: 'sync-sheets' });
       }
@@ -1081,51 +1083,110 @@ export const PcpPlanejamentoView = () => {
         dayId = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       }
 
+      // Reúne todos os pontos do plano (da Coluna I e do compilado da Coluna O)
+      const allPontosSet = new Set<string>();
+      (plan.pontos || []).forEach(p => allPontosSet.add(p.toUpperCase()));
+      (plan.parsedAtividades || []).forEach(a => {
+        if (a.ponto) allPontosSet.add(a.ponto.toUpperCase());
+      });
+
+      const pontosLista = Array.from(allPontosSet);
+
       if (dayId) {
-        nextDiasPontosMap[dayId] = plan.pontos && plan.pontos.length > 0 ? [...plan.pontos] : [];
+        nextDiasPontosMap[dayId] = pontosLista;
         if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
       }
 
-      plan.pontos.forEach(pLabel => {
-        const pUpper = pLabel.toUpperCase();
-        const ativsDoPonto = plan.parsedAtividades.filter(a => a.ponto === pUpper);
+      pontosLista.forEach(pUpper => {
+        const ativsDoPonto = (plan.parsedAtividades || []).filter(a => (a.ponto || '').toUpperCase() === pUpper);
         const budgetItems = orcamentoPorPontoMap.get(pUpper) || [];
         const combinedItems: PcpPontoItem[] = [];
 
-        ativsDoPonto.forEach((a, aIdx) => {
-          const matchedBudget = budgetItems.find(b =>
-            (b.servicoPrevisto || '').toUpperCase().includes((a.servico || '').toUpperCase())
-          );
-          const servBase = servicosBase.find(s =>
-            (s.servico || '').toUpperCase() === (a.servico || '').toUpperCase() ||
-            (a.servico || '').toUpperCase().includes((s.servico || '').toUpperCase()) ||
-            (s.servico || '').toUpperCase().includes((a.servico || '').toUpperCase())
-          );
+        if (ativsDoPonto.length > 0) {
+          ativsDoPonto.forEach((a, aIdx) => {
+            const matchedBudget = budgetItems.find(b =>
+              (b.servicoPrevisto || '').toUpperCase().includes((a.servico || '').toUpperCase())
+            );
+            const servBase = servicosBase.find(s =>
+              (s.servico || '').toUpperCase() === (a.servico || '').toUpperCase() ||
+              (a.servico || '').toUpperCase().includes((s.servico || '').toUpperCase()) ||
+              (s.servico || '').toUpperCase().includes((a.servico || '').toUpperCase())
+            );
 
-          const vUnit = matchedBudget?.valorUnitario || servBase?.valorPorUnidade || (a.quantidade > 0 ? (matchedBudget?.valorEstimado ? matchedBudget.valorEstimado / (matchedBudget.quantidade || 1) : 0) : 0);
-          const tUnit = matchedBudget?.tempoUnitarioMinutos || servBase?.tempoMinutosPorUnidade || 15;
-          const tTotal = a.tempoMinutos || (tUnit * (a.quantidade || 1));
-          const vTotal = vUnit > 0 ? vUnit * (a.quantidade || 1) : (matchedBudget?.valorEstimado || 0);
+            const vUnit = matchedBudget?.valorUnitario || servBase?.valorPorUnidade || (a.quantidade > 0 ? (matchedBudget?.valorEstimado ? matchedBudget.valorEstimado / (matchedBudget.quantidade || 1) : 0) : 0);
+            const tUnit = matchedBudget?.tempoUnitarioMinutos || servBase?.tempoMinutosPorUnidade || 15;
+            const tTotal = a.tempoMinutos || (tUnit * (a.quantidade || 1));
+            const vTotal = vUnit > 0 ? vUnit * (a.quantidade || 1) : (matchedBudget?.valorEstimado || 0);
 
+            combinedItems.push({
+              id: `loaded-${dayId || 'day'}-${pUpper}-${aIdx}`,
+              ponto: pUpper,
+              servico: a.servico,
+              codigoMaterial: matchedBudget?.codigo || servBase?.codigo || '',
+              descricaoMaterial: matchedBudget?.descricao || a.servico,
+              qtdOrcadaPonto: matchedBudget?.quantidade || a.quantidade,
+              etapaPrevista: a.etapa || matchedBudget?.etapaPrevista || (pUpper.startsWith('V') ? 'LANÇAMENTO DE CABO' : 'IMPLANTAÇÃO'),
+              quantidade: a.quantidade,
+              valorUnitario: vUnit,
+              tempoEstimadoMinutos: tTotal,
+              tempoUnitarioMinutos: tUnit,
+              valorEstimado: vTotal,
+              selected: true,
+              isBudgeted: Boolean(matchedBudget),
+              usaRetro: false,
+              tempoRetroMinutos: 30,
+            });
+          });
+        } else if (budgetItems.length > 0) {
+          budgetItems.forEach((bItem, bIdx) => {
+            combinedItems.push({
+              id: `budget-${dayId || 'day'}-${pUpper}-${bIdx}`,
+              ponto: pUpper,
+              servico: bItem.servicoPrevisto || bItem.descricao,
+              codigoMaterial: bItem.codigo,
+              descricaoMaterial: bItem.descricao,
+              qtdOrcadaPonto: bItem.quantidade || 1,
+              etapaPrevista: bItem.etapaPrevista || (pUpper.startsWith('V') ? 'LANÇAMENTO DE CABO' : 'IMPLANTAÇÃO'),
+              quantidade: bItem.quantidade || 1,
+              valorUnitario: bItem.valorUnitario,
+              tempoEstimadoMinutos: bItem.tempoMinutos || 15,
+              tempoUnitarioMinutos: bItem.tempoUnitarioMinutos || 15,
+              valorEstimado: bItem.valorEstimado || 0,
+              selected: true,
+              isBudgeted: true,
+              usaRetro: false,
+              tempoRetroMinutos: 30,
+            });
+          });
+        } else {
+          const isVao = pUpper.startsWith('V');
+          const defaultServico = isVao ? 'LANÇAMENTO DE CABO MULTIPLEXADO' : 'INSTALAR POSTE 9 A 14 METROS';
+          const defaultEtapa = isVao ? 'LANÇAMENTO DE CABO' : 'IMPLANTAÇÃO';
+          const servBase = servicosBase.find(s => s.servico.toUpperCase().includes(defaultServico)) || {
+            codigo: isVao ? 'SIR0000002' : 'SIR0000001',
+            servico: defaultServico,
+            tempoMinutosPorUnidade: isVao ? 20 : 60,
+            valorPorUnidade: isVao ? 50 : 100,
+          };
           combinedItems.push({
-            id: `loaded-${dayId || 'day'}-${pUpper}-${aIdx}`,
+            id: `default-${dayId || 'day'}-${pUpper}-0`,
             ponto: pUpper,
-            servico: a.servico,
-            codigoMaterial: matchedBudget?.codigo || servBase?.codigo || '',
-            descricaoMaterial: matchedBudget?.descricao || a.servico,
-            qtdOrcadaPonto: matchedBudget?.quantidade || a.quantidade,
-            etapaPrevista: a.etapa || matchedBudget?.etapaPrevista || 'IMPLANTAÇÃO',
-            quantidade: a.quantidade,
-            valorUnitario: vUnit,
-            tempoEstimadoMinutos: tTotal,
-            tempoUnitarioMinutos: tUnit,
-            valorEstimado: vTotal,
+            servico: defaultServico,
+            codigoMaterial: servBase.codigo || '',
+            descricaoMaterial: defaultServico,
+            qtdOrcadaPonto: 1,
+            etapaPrevista: defaultEtapa,
+            quantidade: 1,
+            valorUnitario: servBase.valorPorUnidade,
+            tempoEstimadoMinutos: servBase.tempoMinutosPorUnidade,
+            tempoUnitarioMinutos: servBase.tempoMinutosPorUnidade,
+            valorEstimado: servBase.valorPorUnidade,
             selected: true,
-            isBudgeted: Boolean(matchedBudget),
+            isBudgeted: false,
             usaRetro: false,
             tempoRetroMinutos: 30,
           });
-        });
+        }
 
         if (dayId) {
           if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
