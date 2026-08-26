@@ -194,12 +194,14 @@ export default async function handler(req, res) {
     const allRows = allRowsData.values || [];
 
     // Helper: find first empty row index (0-indexed in allRows, starting at row 6 / index 5)
-    const findFirstEmptyRowIndex = (rowsArray) => {
+    const findFirstEmptyRowIndex = (rowsArray, excludeIndices = new Set()) => {
       for (let i = 5; i < rowsArray.length; i++) {
+        if (excludeIndices.has(i)) continue;
         const r = rowsArray[i];
-        const valB = (r && r[1]) ? String(r[1]).trim() : '';
-        const valG = (r && r[6]) ? String(r[6]).trim() : '';
-        const valH = (r && r[7]) ? String(r[7]).trim() : '';
+        if (!r || r.length === 0) return i;
+        const valB = String(r[1] || '').trim();
+        const valG = String(r[6] || '').trim();
+        const valH = String(r[7] || '').trim();
         if (!valB && !valG && !valH) {
           return i;
         }
@@ -210,6 +212,7 @@ export default async function handler(req, res) {
     const rangesToClear = [];
     const cellUpdates = [];
     const reprogUpdates = [];
+    const clearedIndices = new Set();
 
     // If reprogramming, check Reprogramadas tab to find target starting row
     let targetReprogRow = 6;
@@ -238,10 +241,12 @@ export default async function handler(req, res) {
       const novaEquipe = String(rowCells[6] || '').trim().toUpperCase();
       const novoProjeto = cleanCode(rowCells[7]);
       const novaChaveBk = String(rowCells[62] || '').trim().replace(/^"|"$/g, '');
+      const isLineReprog = reprogramar || String(rowCells[0] || '').toUpperCase().includes('REPROG') || String(rowCells[0] || '').toUpperCase() === 'TRUE';
 
       // Search for existing matching row in allRows (row 6 onwards)
       let existingRowIdx = -1;
       for (let i = 5; i < allRows.length; i++) {
+        if (clearedIndices.has(i)) continue;
         const r = allRows[i] || [];
         const existChaveBk = String(r[62] || '').trim();
         const existEquipe = String(r[6] || '').trim().toUpperCase();
@@ -263,14 +268,15 @@ export default async function handler(req, res) {
 
       let targetRowNumber;
 
-      if (reprogramar) {
+      if (isLineReprog) {
         // === CASO 1: REPROGRAMAR MARCADO ===
         // 1. Se existir programação anterior, copia para a aba Reprogramadas e apaga a original da Plan_Principal
         if (hasExistingRow) {
           const oldRowData = allRows[existingRowIdx] || [];
           const copyRow = [...oldRowData];
           while (copyRow.length <= 46) copyRow.push('');
-          if (motivo) copyRow[46] = String(motivo).trim();
+          const motivoLinha = motivo || rowCells[46] || '';
+          if (motivoLinha) copyRow[46] = String(motivoLinha).trim();
 
           const destReprogRow = targetReprogRow;
           targetReprogRow++;
@@ -287,11 +293,12 @@ export default async function handler(req, res) {
 
           // Limpa a linha original em Plan_Principal
           rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
+          clearedIndices.add(existingRowIdx);
           allRows[existingRowIdx] = []; // marca como vazia em memória
         }
 
-        // 2. Lança a nova programação na primeira linha em branco de Plan_Principal
-        const blankIdx = findFirstEmptyRowIndex(allRows);
+        // 2. Lança a nova programação na primeira linha em branco de Plan_Principal (ao final das preenchidas)
+        const blankIdx = findFirstEmptyRowIndex(allRows, clearedIndices);
         targetRowNumber = blankIdx + 1;
         while (allRows.length <= blankIdx) allRows.push([]);
         allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
@@ -307,9 +314,10 @@ export default async function handler(req, res) {
           // 2B: Obra diferente no mesmo dia -> apaga a linha anterior e lança na primeira em branco
           if (hasExistingRow) {
             rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
+            clearedIndices.add(existingRowIdx);
             allRows[existingRowIdx] = []; // marca como vazia em memória
           }
-          const blankIdx = findFirstEmptyRowIndex(allRows);
+          const blankIdx = findFirstEmptyRowIndex(allRows, clearedIndices);
           targetRowNumber = blankIdx + 1;
           while (allRows.length <= blankIdx) allRows.push([]);
           allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
@@ -346,16 +354,38 @@ export default async function handler(req, res) {
     // 6. Executa limpeza das linhas antigas/substituídas em Plan_Principal (se houver)
     if (rangesToClear.length > 0) {
       const uniqueRanges = Array.from(new Set(rangesToClear));
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ranges: uniqueRanges
-        })
-      });
+      try {
+        const clearRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ranges: uniqueRanges
+          })
+        });
+        if (!clearRes.ok) {
+          // Fallback: preenche com strings vazias para limpar os dados
+          const clearUpdates = uniqueRanges.map(r => ({
+            range: r,
+            values: [new Array(78).fill('')]
+          }));
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              valueInputOption: 'USER_ENTERED',
+              data: clearUpdates
+            })
+          });
+        }
+      } catch (clearErr) {
+        console.error('Erro ao limpar ranges em Plan_Principal:', clearErr);
+      }
     }
 
     // 7. Executa gravação das novas programações em Plan_Principal

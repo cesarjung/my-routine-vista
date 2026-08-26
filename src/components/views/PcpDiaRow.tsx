@@ -34,6 +34,7 @@ import {
   ServicoBase,
   MaterialPontoBudget,
   MOTIVOS_REPROGRAMACAO_COL_AU,
+  ETAPAS_PADRAO,
   ETAPAS_ATIVIDADES_PRE_FECHAMENTO,
   inferEtapaFromServico
 } from '@/hooks/usePcpPlanejamentoData';
@@ -722,6 +723,31 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                 />
                 <span>PES</span>
               </label>
+
+              {/* Etapa da Equipe no Dia (Coluna M) */}
+              <div className="flex items-center gap-1.5 ml-1">
+                <span className="text-xs font-semibold text-[#5C574F]">Etapa:</span>
+                <Select
+                  value={etapaGeralDia[0] || 'IMPLANTAÇÃO'}
+                  onValueChange={val => handleToggleEtapaNoDia(dia.id, val)}
+                >
+                  <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3] text-[#23211E] font-semibold min-w-[150px]">
+                    <SelectValue placeholder="Selecione etapa..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {ETAPAS_PADRAO.map(et => (
+                      <SelectItem key={et} value={et} className="text-xs font-medium">
+                        {et}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(etapaGeralDia[0] || '').toUpperCase().includes('DESLOCAMENTO') && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#EBF3FB] text-[#1E5FA8] border border-[#BCE1F9]">
+                    🚗 Deslocamento (envio sem atividades liberado)
+                  </span>
+                )}
+              </div>
 
               {/* Segmented Filtro LV do Dia */}
               <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold ml-1">

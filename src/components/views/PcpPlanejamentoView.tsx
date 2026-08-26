@@ -905,6 +905,9 @@ export const PcpPlanejamentoView = () => {
     const diaTarget = diasProgramados.find(d => d.id === diaId);
     if (!diaTarget) return;
 
+    const etapaGeral = (diasEtapasMap[diaId] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
+    const isDeslocamento = etapaGeral.toUpperCase().includes('DESLOCAMENTO');
+
     const pontosDia = diasPontosMap[diaId] || [];
     const allActivitiesDia: PcpPontoItem[] = [];
     pontosDia.forEach(p => {
@@ -912,8 +915,8 @@ export const PcpPlanejamentoView = () => {
       allActivitiesDia.push(...items.filter(i => i.selected));
     });
 
-    if (allActivitiesDia.length === 0) {
-      toast.error(`O dia ${diaTarget.dataStr} não possui nenhuma atividade marcada.`);
+    if (allActivitiesDia.length === 0 && !isDeslocamento) {
+      toast.error(`O dia ${diaTarget.dataStr} não possui nenhuma atividade marcada. Selecione atividades ou altere a etapa para DESLOCAMENTO.`);
       return;
     }
 
@@ -924,7 +927,7 @@ export const PcpPlanejamentoView = () => {
         dateObj: diaTarget.dateObj,
         supervisor,
         equipe: selectedEquipes[0] || 'EH156',
-        etapaGeral: (diasEtapasMap[diaId] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
+        etapaGeral: etapaGeral,
         obra: selectedObra,
         pontos: allActivitiesDia,
         isPes: diasPesMap[diaId] || false,
@@ -946,13 +949,16 @@ export const PcpPlanejamentoView = () => {
       toast.error('Selecione uma obra antes de enviar.');
       return;
     }
-    const diasComAtividades = diasProgramados.filter(d => {
+    const diasComAtividadesOuDesloc = diasProgramados.filter(d => {
+      const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
+      const isDeslocamento = etapaGeral.toUpperCase().includes('DESLOCAMENTO');
       const pts = diasPontosMap[d.id] || [];
-      return pts.some(p => getItemsDoPontoNoDia(d.id, p).some(i => i.selected));
+      const hasActs = pts.some(p => getItemsDoPontoNoDia(d.id, p).some(i => i.selected));
+      return hasActs || isDeslocamento;
     });
 
-    if (diasComAtividades.length === 0) {
-      toast.error('Nenhum dia possui atividades marcadas para envio.');
+    if (diasComAtividadesOuDesloc.length === 0) {
+      toast.error('Nenhum dia possui atividades marcadas ou etapa de DESLOCAMENTO para envio.');
       return;
     }
 
@@ -960,7 +966,8 @@ export const PcpPlanejamentoView = () => {
       const allForms: PcpProgramacaoForm[] = [];
       const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
 
-      for (const d of diasComAtividades) {
+      for (const d of diasComAtividadesOuDesloc) {
+        const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
         const pts = diasPontosMap[d.id] || [];
         const allActs: PcpPontoItem[] = [];
         pts.forEach(p => {
@@ -974,7 +981,7 @@ export const PcpPlanejamentoView = () => {
             dateObj: d.dateObj,
             supervisor,
             equipe: eq,
-            etapaGeral: (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
+            etapaGeral: etapaGeral,
             obra: selectedObra,
             pontos: allActs,
             isPes: diasPesMap[d.id] || false,
@@ -987,7 +994,7 @@ export const PcpPlanejamentoView = () => {
       }
 
       await salvarProgramacao.mutateAsync(allForms);
-      toast.success(`Programação de todos os ${diasComAtividades.length} dias enviada com sucesso para a Plan_Principal!`);
+      toast.success(`Programação de todos os ${diasComAtividadesOuDesloc.length} dias enviada com sucesso para a Plan_Principal!`);
     } catch (err: any) {
       toast.error(`Erro ao enviar dias: ${err.message || 'Erro inesperado'}`);
     }

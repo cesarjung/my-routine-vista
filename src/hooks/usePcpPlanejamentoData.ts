@@ -1062,7 +1062,7 @@ export const usePcpPlanejamentoData = (
     const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === form.unidadeId) || UNIDADES_DISPONIVEIS[0];
     const nomeUnidadePlanejadaUpper = unidadeObj.name.toUpperCase();
 
-    let cleanEtapaGeral = (form.etapa || 'IMPLANTAÇÃO').trim();
+    let cleanEtapaGeral = (form.etapaGeral || 'IMPLANTAÇÃO').trim();
     cleanEtapaGeral = cleanEtapaGeral
       .split(/[,/]/)
       .map(e => e.trim().replace(/^\d+\s*-\s*/, '').trim())
@@ -1112,7 +1112,7 @@ export const usePcpPlanejamentoData = (
     const formattedDateWithDay = formatDateWithWeekday(form.dataProgramacao, form.dateObj);
 
     const newRow = new Array(78).fill('');
-    newRow[0] = '';                                         // Col A (0): Leave empty string ""
+    newRow[0] = form.reprogramar ? 'REPROGRAMADA' : '';    // Col A (0): Reprog.
     newRow[1] = formattedDateWithDay;                       // Col B: Data
     newRow[4] = form.supervisor;                            // Col E: Supervisor
     newRow[6] = form.equipe;                                // Col G: Equipe
