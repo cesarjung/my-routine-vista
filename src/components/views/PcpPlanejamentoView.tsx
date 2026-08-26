@@ -254,6 +254,7 @@ export const PcpPlanejamentoView = () => {
   const [diasEtapasMap, setDiasEtapasMap] = useInMemorySessionState<Record<string, string[]>>('pcp_mem_etapas_map', {});
   const [diasFiltroLvMap, setDiasFiltroLvMap] = useInMemorySessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_mem_filtro_lv', {});
   const [diasExtrasList, setDiasExtrasList] = useInMemorySessionState<string[]>('pcp_mem_dias_extras', []);
+  const [diasCarregadosList, setDiasCarregadosList] = useInMemorySessionState<string[]>('pcp_mem_dias_carregados', []);
   const [diasPercentualCumprimentoMap, setDiasPercentualCumprimentoMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_perc_cump', {});
   const [diasMotivoDescumprimentoMap, setDiasMotivoDescumprimentoMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_motivo_descump', {});
 
@@ -386,12 +387,35 @@ export const PcpPlanejamentoView = () => {
     setSearchObra('');
     setDiasPontosMap({});
     setDiasPontosGroupedMap({});
+    setDiasCarregadosList([]);
     toast.success('Unidade alterada com sucesso.');
   };
 
   // Lista de Dias Programados
   const diasProgramados = useMemo(() => {
     try {
+      // Se houver dias de planejamentos carregados explicitamente, exibe APENAS estes dias selecionados
+      if (diasCarregadosList && diasCarregadosList.length > 0) {
+        const sortedDays = Array.from(new Set(diasCarregadosList)).sort();
+        return sortedDays.map((dayId, idx) => {
+          const dateObj = safeParseDate(dayId);
+          const nomeDia = format(dateObj, 'EEEE', { locale: ptBR });
+          const dataStr = format(dateObj, 'dd/MM');
+          const dataCompleta = format(dateObj, 'dd/MM/yyyy');
+          return {
+            id: dayId,
+            index: idx + 1,
+            nomeDia: nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1),
+            dataStr,
+            dataCompleta,
+            dateObj,
+            isPes: diasPesMap[dayId] || false,
+            reprogramar: diasReprogramarMap[dayId] || false,
+            motivoReprogramar: diasMotivoReprogramarMap[dayId] || '',
+          };
+        });
+      }
+
       const start = safeParseDate(dataInicio);
       const end = safeParseDate(dataFim);
       if (end < start) return [];
@@ -437,7 +461,7 @@ export const PcpPlanejamentoView = () => {
     } catch {
       return [];
     }
-  }, [dataInicio, dataFim, diasPesMap, diasReprogramarMap, diasMotivoReprogramarMap, diasExtrasList]);
+  }, [diasCarregadosList, dataInicio, dataFim, diasPesMap, diasReprogramarMap, diasMotivoReprogramarMap, diasExtrasList]);
 
   // Obras Filtradas
   const filteredObras = useMemo(() => {
@@ -564,6 +588,8 @@ export const PcpPlanejamentoView = () => {
   const handleSelectObra = (projetoCode: string) => {
     setSelectedObraId(projetoCode);
     setDiasPontosMap({});
+    setDiasPontosGroupedMap({});
+    setDiasCarregadosList([]); // Retorna ao período normal do calendário para a nova obra
   };
 
   const handleClearFilters = () => {
@@ -583,11 +609,18 @@ export const PcpPlanejamentoView = () => {
     const lastDay = diasProgramados.length > 0 ? diasProgramados[diasProgramados.length - 1].dateObj : new Date();
     const nextDate = addDays(lastDay, 1);
     const newId = format(nextDate, 'yyyy-MM-dd');
-    setDiasExtrasList(prev => [...prev, newId]);
+    if (diasCarregadosList.length > 0) {
+      setDiasCarregadosList(prev => [...prev, newId]);
+    } else {
+      setDiasExtrasList(prev => [...prev, newId]);
+    }
     toast.success(`Dia extra (${format(nextDate, 'dd/MM/yyyy')}) adicionado com sucesso.`);
   };
 
   const handleRemoveDia = (diaId: string) => {
+    if (diasCarregadosList.includes(diaId)) {
+      setDiasCarregadosList(prev => prev.filter(d => d !== diaId));
+    }
     if (diasExtrasList.includes(diaId)) {
       setDiasExtrasList(prev => prev.filter(d => d !== diaId));
     }
@@ -1017,6 +1050,7 @@ export const PcpPlanejamentoView = () => {
     setDiasCustomAlojMap({});
     setDiasMotivoDescumprimentoMap({});
     setDiasPercentualCumprimentoMap({});
+    setDiasCarregadosList([]);
     toast.success('Planejamento e pontos em tela limpos com sucesso.');
   };
 
@@ -1083,11 +1117,9 @@ export const PcpPlanejamentoView = () => {
 
     const sortedDayKeys = Array.from(dateMap.keys()).sort();
 
-    // 2. Ajustar o período da tela EXATAMENTE para as datas dos planos carregados
+    // 2. Carregar EXATAMENTE os dias dos planejamentos selecionados sem alterar o calendário de novos planejamentos
     if (sortedDayKeys.length > 0) {
-      setDataInicio(sortedDayKeys[0]);
-      setDataFim(sortedDayKeys[sortedDayKeys.length - 1]);
-      setDiasExtrasList([]);
+      setDiasCarregadosList(sortedDayKeys);
       setExpandedDayIds(sortedDayKeys);
     }
 
@@ -1876,7 +1908,10 @@ export const PcpPlanejamentoView = () => {
                           <input
                             type="date"
                             value={dataInicio}
-                            onChange={e => setDataInicio(e.target.value)}
+                            onChange={e => {
+                              setDataInicio(e.target.value);
+                              setDiasCarregadosList([]);
+                            }}
                             className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
                           />
                         </div>
@@ -1885,7 +1920,10 @@ export const PcpPlanejamentoView = () => {
                           <input
                             type="date"
                             value={dataFim}
-                            onChange={e => setDataFim(e.target.value)}
+                            onChange={e => {
+                              setDataFim(e.target.value);
+                              setDiasCarregadosList([]);
+                            }}
                             className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
                           />
                         </div>
