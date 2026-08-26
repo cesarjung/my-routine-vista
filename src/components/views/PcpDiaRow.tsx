@@ -8,6 +8,7 @@ import {
   Plus,
   Wrench,
   PackageCheck,
+  Search,
   Check,
   RotateCcw,
   Sparkles,
@@ -185,6 +186,13 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
 }) => {
   const [customPontoInput, setCustomPontoInput] = useState('');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isPontosPopoverOpen, setIsPontosPopoverOpen] = useState(false);
+  const [pontoSearchTerm, setPontoSearchTerm] = useState('');
+
+  const filteredPontosDaObra = useMemo(() => {
+    if (!pontoSearchTerm.trim()) return pontosDisponiveis;
+    return pontosDisponiveis.filter(p => p.toLowerCase().includes(pontoSearchTerm.toLowerCase().trim()));
+  }, [pontosDisponiveis, pontoSearchTerm]);
 
   // Cálculos do Dia
   const pontosAtivos = pontosDoDia || [];
@@ -763,82 +771,177 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             </div>
           </div>
 
-          {/* 3. Seleção de Pontos do Dia (Chips Diretos e Visíveis) */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-[#E6E3DD]">
-            <div className="flex flex-wrap items-center gap-1.5 flex-1">
-              <span className="text-xs font-bold text-[#5C574F] mr-1">
-                Pontos da obra ({pontosDisponiveis.length}):
-              </span>
+          {/* 3. Seleção de Pontos do Dia (Dropdown Multiselect com busca e validação) */}
+          <div className="space-y-2 pt-1 border-t border-[#E6E3DD]">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Popover Multiselect de Pontos */}
+                <Popover open={isPontosPopoverOpen} onOpenChange={setIsPontosPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-8 text-xs font-semibold px-3 bg-white border-[#DEDAD3] min-w-[210px] justify-between shadow-2xs text-[#23211E]"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <PackageCheck className="w-3.5 h-3.5 text-[#E07A1F]" />
+                        <span>
+                          {pontosAtivos.length === 0
+                            ? 'Selecionar Pontos do Dia...'
+                            : `${pontosAtivos.length} ponto(s) neste dia`}
+                        </span>
+                      </span>
+                      <ChevronDown className="w-3 h-3 opacity-50 ml-2 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[330px] p-0 bg-white shadow-lg border-[#DEDAD3]" align="start">
+                    {/* Header com busca */}
+                    <div className="p-2 border-b border-[#E6E3DD]">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#A39E96]" />
+                        <input
+                          placeholder="Buscar ponto (P1, P2...)..."
+                          value={pontoSearchTerm}
+                          onChange={e => setPontoSearchTerm(e.target.value)}
+                          className="w-full h-8 pl-8 pr-2 text-xs rounded-md border border-[#DEDAD3] bg-white focus:outline-none focus:ring-1 focus:ring-[#E07A1F] font-mono text-[#23211E]"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
 
-              {/* Chips de todos os pontos disponíveis da obra */}
-              {pontosDisponiveis.map(pLabel => {
-                const isSelected = pontosAtivos.includes(pLabel);
-                return (
-                  <button
-                    key={pLabel}
-                    type="button"
-                    onClick={() => handleTogglePontoNoDia(dia.id, pLabel)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono transition-all cursor-pointer shadow-2xs ${
-                      isSelected
-                        ? 'bg-[#E07A1F] text-white font-bold border border-[#C66512] ring-1 ring-[#E07A1F]/30'
-                        : 'bg-white text-[#5C574F] font-medium border border-[#DEDAD3] hover:border-[#E07A1F] hover:bg-[#FBF5EC] hover:text-[#23211E]'
-                    }`}
-                    title={isSelected ? `Clique para remover ${pLabel} deste dia` : `Clique para incluir ${pLabel} neste dia`}
-                  >
-                    <span>{pLabel}</span>
-                    {isSelected && <Check className="w-3 h-3" />}
-                  </button>
-                );
-              })}
+                    {/* Ações rápidas */}
+                    <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#E6E3DD] text-[11px] bg-[#FAF8F5]">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectAllPontosNoDia(dia.id)}
+                        className="text-[#E07A1F] hover:underline font-bold"
+                      >
+                        Selecionar todos ({pontosDisponiveis.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeselectAllPontosNoDia(dia.id)}
+                        className="text-[#6B6660] hover:text-[#C0392E] hover:underline font-medium"
+                      >
+                        Limpar deste dia
+                      </button>
+                    </div>
 
-              {/* Ponto Customizado Adicional */}
-              <div className="inline-flex items-center gap-1 ml-1.5">
-                <Input
-                  placeholder="+ Outro ponto..."
-                  value={customPontoInput}
-                  onChange={e => setCustomPontoInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && customPontoInput.trim()) {
-                      handleAddCustomPontoNoDia(dia.id, customPontoInput.trim());
-                      setCustomPontoInput('');
-                    }
-                  }}
-                  className="h-7 w-28 text-xs font-mono bg-white border-[#DEDAD3]"
-                />
-                {customPontoInput.trim() && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      handleAddCustomPontoNoDia(dia.id, customPontoInput.trim());
-                      setCustomPontoInput('');
+                    {/* Lista de pontos da obra com scroll */}
+                    <div className="overflow-y-auto max-h-[260px] p-1.5 space-y-0.5">
+                      {filteredPontosDaObra.length === 0 ? (
+                        <p className="text-[11px] text-center text-[#A39E96] py-3 italic">
+                          Nenhum ponto encontrado
+                        </p>
+                      ) : (
+                        filteredPontosDaObra.map(p => {
+                          const isChecked = pontosAtivos.includes(p);
+                          const count = (orcamentoPorPontoMap.get(p) || []).length;
+                          return (
+                            <div
+                              key={p}
+                              onClick={() => handleTogglePontoNoDia(dia.id, p)}
+                              className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-xs select-none ${
+                                isChecked
+                                  ? 'bg-[#FBF5EC] text-[#E07A1F] font-bold'
+                                  : 'hover:bg-[#F7F6F3] text-[#23211E]'
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={() => handleTogglePontoNoDia(dia.id, p)}
+                                className="h-4 w-4 rounded border-[#DEDAD3] data-[state=checked]:bg-[#E07A1F] data-[state=checked]:border-[#E07A1F]"
+                              />
+                              <span className="font-mono font-bold">{p}</span>
+                              <span className="text-[10.5px] text-[#A39E96] ml-auto font-normal">
+                                {count} {count === 1 ? 'ativ. orçada' : 'ativ. orçadas'}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Footer com contador e botão de validação */}
+                    <div className="px-3 py-2 border-t border-[#E6E3DD] text-[11px] text-[#6B6660] flex items-center justify-between bg-[#FAF8F5]">
+                      <span><strong>{pontosAtivos.length}</strong> ponto(s) neste dia</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsPontosPopoverOpen(false)}
+                        className="text-[#E07A1F] hover:underline font-bold cursor-pointer"
+                      >
+                        Confirmar
+                      </button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Input de Ponto Customizado */}
+                <div className="inline-flex items-center gap-1">
+                  <Input
+                    placeholder="Outro Ponto..."
+                    value={customPontoInput}
+                    onChange={e => setCustomPontoInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && customPontoInput.trim()) {
+                        handleAddCustomPontoNoDia(dia.id, customPontoInput.trim());
+                        setCustomPontoInput('');
+                      }
                     }}
-                    className="h-7 px-2 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 font-bold"
-                  >
-                    Add
-                  </Button>
-                )}
+                    className="h-8 w-28 text-xs font-mono bg-white border-[#DEDAD3]"
+                  />
+                  {customPontoInput.trim() && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        handleAddCustomPontoNoDia(dia.id, customPontoInput.trim());
+                        setCustomPontoInput('');
+                      }}
+                      className="h-8 px-2 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 font-bold"
+                    >
+                      Add
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Ações de atalho à direita */}
+              <div className="flex items-center gap-2 text-xs font-medium text-[#6B6660]">
+                <button
+                  type="button"
+                  onClick={() => handleSelectAllPontosNoDia(dia.id)}
+                  className="hover:text-[#E07A1F] underline text-[11.5px]"
+                >
+                  Restaurar todos
+                </button>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={() => handleDeselectAllPontosNoDia(dia.id)}
+                  className="hover:text-[#C0392E] underline text-[11.5px]"
+                >
+                  Limpar
+                </button>
               </div>
             </div>
 
-            {/* Ações Rápidas */}
-            <div className="flex items-center gap-2 text-xs text-[#E07A1F] font-semibold shrink-0">
-              <button
-                type="button"
-                onClick={() => handleSelectAllPontosNoDia(dia.id)}
-                className="hover:underline text-[11px]"
-              >
-                Marcar todos
-              </button>
-              <span className="text-[#DEDAD3]">·</span>
-              <button
-                type="button"
-                onClick={() => handleDeselectAllPontosNoDia(dia.id)}
-                className="text-[#A39E96] hover:text-[#C0392E] hover:underline text-[11px]"
-              >
-                Limpar dia
-              </button>
-            </div>
+            {/* Badges dos Pontos Selecionados neste Dia */}
+            {pontosAtivos.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {pontosAtivos.map(pLabel => (
+                  <Badge
+                    key={pLabel}
+                    variant="secondary"
+                    className="font-mono text-xs px-2.5 py-1 cursor-pointer hover:bg-[#F9E4E1] hover:text-[#C0392E] hover:border-[#F2C0B8] transition-colors font-bold bg-[#FBF5EC] text-[#23211E] border border-[#E8C9A0] shadow-2xs gap-1.5"
+                    onClick={() => handleTogglePontoNoDia(dia.id, pLabel)}
+                    title={`Clique para remover ${pLabel} deste dia`}
+                  >
+                    <span>{pLabel}</span>
+                    <span className="text-[#A39E96] hover:text-[#C0392E] font-bold">×</span>
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 4. Blocos por Ponto e Tabelas de Atividades */}
