@@ -187,7 +187,15 @@ export default async function handler(req, res) {
       dataLines = rawLines.slice(1);
     }
 
-    // 3. Read current full Plan_Principal (Col A to BZ)
+    // 3. Fetch spreadsheet metadata to obtain sheetId of Plan_Principal (for physical row deletion)
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const metaData = await metaRes.json();
+    const planPrincipalSheet = (metaData.sheets || []).find(s => s.properties?.title === 'Plan_Principal');
+    const planPrincipalSheetId = planPrincipalSheet ? planPrincipalSheet.properties.sheetId : 0;
+
+    // 4. Read current full Plan_Principal (Col A to BZ)
     const readRowsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Plan_Principal!A1:BZ`;
     const allRowsRes = await fetch(readRowsUrl, { headers: { Authorization: `Bearer ${token}` } });
     const allRowsData = await allRowsRes.json();
@@ -217,22 +225,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // Helper: Find first empty row in Plan_Principal (row 6 onwards)
-    const findFirstEmptyPlanPrincipalRowIndex = (rowsArray, excludeIndices = new Set()) => {
-      for (let i = 5; i < rowsArray.length; i++) {
-        if (excludeIndices.has(i)) continue;
-        const r = rowsArray[i];
-        if (!r || r.length === 0) return i;
-        const valB = String(r[1] || '').trim();
-        const valG = String(r[6] || '').trim();
-        const valH = String(r[7] || '').trim();
-        if (!valB && !valG && !valH) {
-          return i;
-        }
-      }
-      return Math.max(5, rowsArray.length);
-    };
-
     // Helper: Find existing planned schedule (has project in Col H / r[7]) for team and date
     const findExistingPlannedRowIndex = (rowsArray, targetEquipe, targetDataStr, targetChaveBk, excludeIndices = new Set()) => {
       for (let i = 5; i < rowsArray.length; i++) {
@@ -256,32 +248,11 @@ export default async function handler(req, res) {
       return -1;
     };
 
-    // Helper: Find empty template slot for team and date (where project in Col H / r[7] is empty)
-    const findTemplateSlotIndex = (rowsArray, targetEquipe, targetDataStr, excludeIndices = new Set()) => {
-      for (let i = 5; i < rowsArray.length; i++) {
-        if (excludeIndices.has(i)) continue;
-        const r = rowsArray[i];
-        if (!r || r.length === 0) continue;
-        const existProjeto = cleanCode(r[7]);
-        if (existProjeto) continue; // Must be empty of project
-
-        const existEquipe = String(r[6] || '').trim().toUpperCase();
-        const existDataStr = extractDate(r[1]);
-
-        if (targetEquipe && existEquipe === targetEquipe && targetDataStr && existDataStr === targetDataStr) {
-          return i;
-        }
-      }
-      return -1;
-    };
-
-    const rangesToClear = [];
-    const cellUpdates = [];
     const reprogUpdates = [];
-    const clearedIndices = new Set();
-    const usedTargetRows = new Set();
+    const rowIndicesToDelete = [];
+    const plannedOperations = [];
 
-    // 4. Process each new dataLine according to business rules
+    // 5. Categorize each dataLine according to business rules
     dataLines.forEach((line) => {
       const rowCells = line.split(';');
       const novaDataStr = extractDate(rowCells[1]);
@@ -290,18 +261,14 @@ export default async function handler(req, res) {
       const novaChaveBk = String(rowCells[62] || '').trim().replace(/^"|"$/g, '');
       const isLineReprog = reprogramar || String(rowCells[0] || '').toUpperCase().includes('REPROG') || String(rowCells[0] || '').toUpperCase() === 'TRUE';
 
-      // 4.1 Search for existing planned schedule for this team and date
-      const existingPlannedIdx = findExistingPlannedRowIndex(allRows, novaEquipe, novaDataStr, novaChaveBk, clearedIndices);
+      const existingPlannedIdx = findExistingPlannedRowIndex(allRows, novaEquipe, novaDataStr, novaChaveBk, new Set(rowIndicesToDelete));
       const hasExistingPlan = existingPlannedIdx !== -1;
       const existProjeto = hasExistingPlan ? cleanCode(allRows[existingPlannedIdx][7]) : '';
       const isSameObra = hasExistingPlan && (existProjeto === novoProjeto);
-      const existingPlannedRowNumber = existingPlannedIdx + 1; // 1-indexed for sheets
-
-      let targetRowNumber;
 
       if (isLineReprog) {
         // === CASO 1: BOTÃO REPROGRAMAR MARCADO ===
-        // 1.1 Se existir programação anterior, copia a linha original para a aba Reprogramadas com o motivo em AU (coluna 46)
+        // 1.1 Se existir programação anterior, copia a linha original para a aba Reprogramadas
         if (hasExistingPlan) {
           const oldRowData = allRows[existingPlannedIdx] || [];
           const copyRow = [...oldRowData];
@@ -323,82 +290,45 @@ export default async function handler(req, res) {
             }
           });
 
-          // 1.2 Deleta a linha da programação original de Plan_Principal
-          rangesToClear.push(`Plan_Principal!A${existingPlannedRowNumber}:BZ${existingPlannedRowNumber}`);
-          clearedIndices.add(existingPlannedIdx);
-          allRows[existingPlannedIdx] = [];
+          // 1.2 Marca a linha original para EXCLUSÃO FÍSICA de Plan_Principal
+          rowIndicesToDelete.push(existingPlannedIdx);
         }
 
-        // 1.3 Insere o novo planejamento na primeira linha em branco de Plan_Principal
-        let blankIdx = findFirstEmptyPlanPrincipalRowIndex(allRows, clearedIndices);
-        while (usedTargetRows.has(blankIdx + 1)) {
-          blankIdx++;
-        }
-        targetRowNumber = blankIdx + 1;
-        usedTargetRows.add(targetRowNumber);
-        clearedIndices.add(blankIdx);
-        while (allRows.length <= blankIdx) allRows.push([]);
-        allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+        // 1.3 Insere a nova programação na primeira linha em branco de Plan_Principal
+        plannedOperations.push({
+          type: 'APPEND',
+          rowCells
+        });
 
       } else {
         // === CASO 2: BOTÃO REPROGRAMAR NÃO MARCADO ===
         if (hasExistingPlan && isSameObra) {
           // 2.1 Mesma obra e mesma data -> Altera os dados e mantém na mesma linha existente
-          targetRowNumber = existingPlannedRowNumber;
-          usedTargetRows.add(targetRowNumber);
-          rangesToClear.push(`Plan_Principal!A${existingPlannedRowNumber}:BZ${existingPlannedRowNumber}`);
-          allRows[existingPlannedIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+          plannedOperations.push({
+            type: 'OVERWRITE_SAME_ROW',
+            originalRowIndex: existingPlannedIdx,
+            rowCells
+          });
         } else if (hasExistingPlan && !isSameObra) {
-          // 2.2 Outra obra no mesmo dia -> Deleta a linha anterior da Plan_Principal e lança na primeira em branco
-          rangesToClear.push(`Plan_Principal!A${existingPlannedRowNumber}:BZ${existingPlannedRowNumber}`);
-          clearedIndices.add(existingPlannedIdx);
-          allRows[existingPlannedIdx] = [];
-
-          let blankIdx = findFirstEmptyPlanPrincipalRowIndex(allRows, clearedIndices);
-          while (usedTargetRows.has(blankIdx + 1)) {
-            blankIdx++;
-          }
-          targetRowNumber = blankIdx + 1;
-          usedTargetRows.add(targetRowNumber);
-          clearedIndices.add(blankIdx);
-          while (allRows.length <= blankIdx) allRows.push([]);
-          allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+          // 2.2 Outra obra no mesmo dia -> EXCLUI a linha original da Plan_Principal e lança na primeira em branco
+          rowIndicesToDelete.push(existingPlannedIdx);
+          plannedOperations.push({
+            type: 'APPEND',
+            rowCells
+          });
         } else {
-          // 2.3 Planejamento NOVO (sem programação prévia para esta equipe/data)
-          // Se houver um slot de template pré-existente sem projeto para esta equipe/data, usa ele; senão usa a primeira linha em branco
-          const templateSlotIdx = findTemplateSlotIndex(allRows, novaEquipe, novaDataStr, clearedIndices);
-          if (templateSlotIdx !== -1 && !usedTargetRows.has(templateSlotIdx + 1)) {
-            targetRowNumber = templateSlotIdx + 1;
-            usedTargetRows.add(targetRowNumber);
-            clearedIndices.add(templateSlotIdx);
-            allRows[templateSlotIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
-          } else {
-            let blankIdx = findFirstEmptyPlanPrincipalRowIndex(allRows, clearedIndices);
-            while (usedTargetRows.has(blankIdx + 1)) {
-              blankIdx++;
-            }
-            targetRowNumber = blankIdx + 1;
-            usedTargetRows.add(targetRowNumber);
-            clearedIndices.add(blankIdx);
-            while (allRows.length <= blankIdx) allRows.push([]);
-            allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
-          }
-        }
-      }
-
-      // Adiciona células a serem gravadas na Plan_Principal
-      rowCells.slice(0, 78).forEach((val, cIdx) => {
-        const valStr = String(val ?? '').trim().replace(/^"|"$/g, '');
-        if (valStr) {
-          cellUpdates.push({
-            range: `Plan_Principal!${getColumnLetter(cIdx)}${targetRowNumber}`,
-            values: [[valStr]]
+          // 2.3 Planejamento NOVO -> lança na primeira linha em branco
+          plannedOperations.push({
+            type: 'NEW_OR_TEMPLATE',
+            novaEquipe,
+            novaDataStr,
+            rowCells
           });
         }
-      });
+      }
     });
 
-    // 5. Executa gravações em Reprogramadas (se houver)
+    // 6. Grava linhas copiadas na aba Reprogramadas (se houver)
     if (reprogUpdates.length > 0) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
         method: 'POST',
@@ -413,43 +343,132 @@ export default async function handler(req, res) {
       });
     }
 
-    // 6. Executa limpeza das linhas antigas/substituídas em Plan_Principal (se houver)
-    if (rangesToClear.length > 0) {
-      const uniqueRanges = Array.from(new Set(rangesToClear));
-      try {
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            ranges: uniqueRanges
-          })
-        });
+    // 7. EXCLUI FISICAMENTE as linhas originais da Plan_Principal via deleteDimension
+    if (rowIndicesToDelete.length > 0) {
+      // Ordena índices de forma DECRESCENTE para que a exclusão de um índice maior não altere os menores
+      const uniqueSortedIndices = Array.from(new Set(rowIndicesToDelete)).sort((a, b) => b - a);
+      const deleteRequests = uniqueSortedIndices.map(idx => ({
+        deleteDimension: {
+          range: {
+            sheetId: planPrincipalSheetId,
+            dimension: 'ROWS',
+            startIndex: idx,
+            endIndex: idx + 1
+          }
+        }
+      }));
 
-        // Garantia de limpeza completa: sobrescreve células com strings vazias
-        const clearUpdates = uniqueRanges.map(r => ({
-          range: r,
-          values: [new Array(78).fill('')]
-        }));
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            valueInputOption: 'USER_ENTERED',
-            data: clearUpdates
-          })
-        });
-      } catch (clearErr) {
-        console.error('Erro ao limpar ranges em Plan_Principal:', clearErr);
+      const deleteRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests: deleteRequests })
+      });
+      const deleteData = await deleteRes.json();
+      if (!deleteRes.ok) {
+        console.error('Aviso ao excluir linhas via deleteDimension:', deleteData);
       }
     }
 
-    // 7. Executa gravação das novas programações em Plan_Principal
+    // 8. Lê o estado atualizado de Plan_Principal após exclusões para posicionamento exato das novas linhas
+    const updatedRowsRes = await fetch(readRowsUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const updatedRowsData = await updatedRowsRes.json();
+    const currentRows = updatedRowsData.values || [];
+
+    // Helper: Find first empty row in updated Plan_Principal (row 6 onwards)
+    const findFirstEmptyInUpdated = (rowsArray, excludeIndices = new Set()) => {
+      for (let i = 5; i < rowsArray.length; i++) {
+        if (excludeIndices.has(i)) continue;
+        const r = rowsArray[i];
+        if (!r || r.length === 0) return i;
+        const valB = String(r[1] || '').trim();
+        const valG = String(r[6] || '').trim();
+        const valH = String(r[7] || '').trim();
+        if (!valB && !valG && !valH) {
+          return i;
+        }
+      }
+      return Math.max(5, rowsArray.length);
+    };
+
+    // Helper: Find template slot in updated Plan_Principal
+    const findTemplateSlotInUpdated = (rowsArray, targetEquipe, targetDataStr, excludeIndices = new Set()) => {
+      for (let i = 5; i < rowsArray.length; i++) {
+        if (excludeIndices.has(i)) continue;
+        const r = rowsArray[i];
+        if (!r || r.length === 0) continue;
+        const existProjeto = cleanCode(r[7]);
+        if (existProjeto) continue;
+
+        const existEquipe = String(r[6] || '').trim().toUpperCase();
+        const existDataStr = extractDate(r[1]);
+
+        if (targetEquipe && existEquipe === targetEquipe && targetDataStr && existDataStr === targetDataStr) {
+          return i;
+        }
+      }
+      return -1;
+    };
+
+    const cellUpdates = [];
+    const usedTargetIndices = new Set();
+
+    plannedOperations.forEach((op) => {
+      let targetRowIndex;
+
+      if (op.type === 'OVERWRITE_SAME_ROW') {
+        // Se houve exclusões anteriores a esta linha, a linha se deslocou para cima
+        let adjustedIdx = op.originalRowIndex;
+        if (rowIndicesToDelete.length > 0) {
+          const deletedBefore = rowIndicesToDelete.filter(dIdx => dIdx < op.originalRowIndex).length;
+          adjustedIdx = op.originalRowIndex - deletedBefore;
+        }
+        targetRowIndex = adjustedIdx;
+        usedTargetIndices.add(targetRowIndex);
+
+      } else if (op.type === 'NEW_OR_TEMPLATE') {
+        const slotIdx = findTemplateSlotInUpdated(currentRows, op.novaEquipe, op.novaDataStr, usedTargetIndices);
+        if (slotIdx !== -1) {
+          targetRowIndex = slotIdx;
+        } else {
+          let blankIdx = findFirstEmptyInUpdated(currentRows, usedTargetIndices);
+          while (usedTargetIndices.has(blankIdx)) {
+            blankIdx++;
+          }
+          targetRowIndex = blankIdx;
+        }
+        usedTargetIndices.add(targetRowIndex);
+        while (currentRows.length <= targetRowIndex) currentRows.push([]);
+        currentRows[targetRowIndex] = op.rowCells;
+
+      } else {
+        // APPEND
+        let blankIdx = findFirstEmptyInUpdated(currentRows, usedTargetIndices);
+        while (usedTargetIndices.has(blankIdx)) {
+          blankIdx++;
+        }
+        targetRowIndex = blankIdx;
+        usedTargetIndices.add(targetRowIndex);
+        while (currentRows.length <= targetRowIndex) currentRows.push([]);
+        currentRows[targetRowIndex] = op.rowCells;
+      }
+
+      const targetRowNumber = targetRowIndex + 1; // 1-indexed for Google Sheets
+
+      op.rowCells.slice(0, 78).forEach((val, cIdx) => {
+        const valStr = String(val ?? '').trim().replace(/^"|"$/g, '');
+        if (valStr) {
+          cellUpdates.push({
+            range: `Plan_Principal!${getColumnLetter(cIdx)}${targetRowNumber}`,
+            values: [[valStr]]
+          });
+        }
+      });
+    });
+
+    // 9. Grava as novas programações e atualizações na Plan_Principal
     if (cellUpdates.length > 0) {
       const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
         method: 'POST',
