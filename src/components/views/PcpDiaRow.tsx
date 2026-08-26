@@ -77,6 +77,71 @@ export function getSituacaoDia(pontosCount: number, tempoTotalHoras: number, pct
   return { forte: '#D9782E', texto: '#B4581A', fundo: '#FBEBDC', rotulo: 'Ociosa' };
 }
 
+export function getMetaColorScale(pct: number): { texto: string; fundo: string; borda: string } {
+  if (pct >= 130) {
+    // Acima de 130%: mantém no mesmo azul
+    return {
+      texto: '#1D58B5',
+      fundo: '#EBF2FC',
+      borda: '#A8C7FA',
+    };
+  }
+  if (pct >= 115) {
+    // Azul intermediário (115% a 129%)
+    return {
+      texto: '#0D7A94',
+      fundo: '#E3F5F8',
+      borda: '#9FE0EC',
+    };
+  }
+  if (pct >= 100) {
+    // Verde 100% Meta atingida (100% a 114%)
+    return {
+      texto: '#17794C',
+      fundo: '#E6F2EA',
+      borda: '#A0D4B2',
+    };
+  }
+  if (pct >= 85) {
+    // Verde claro (85% a 99%)
+    return {
+      texto: '#2D8A4E',
+      fundo: '#EDF7F0',
+      borda: '#BCE1CC',
+    };
+  }
+  if (pct >= 70) {
+    // Lima / Amarelo-esverdeado (70% a 84%)
+    return {
+      texto: '#628B2C',
+      fundo: '#F3F8EC',
+      borda: '#D0E4BE',
+    };
+  }
+  if (pct >= 50) {
+    // Amarelo / Dourado (50% a 69%)
+    return {
+      texto: '#A06A16',
+      fundo: '#FBF2DA',
+      borda: '#E8C9A0',
+    };
+  }
+  if (pct >= 30) {
+    // Laranja (30% a 49%)
+    return {
+      texto: '#B4581A',
+      fundo: '#FBEBDC',
+      borda: '#F5D3B3',
+    };
+  }
+  // Vermelho (0% a 29%)
+  return {
+    texto: '#B03028',
+    fundo: '#FDF2F0',
+    borda: '#F2C0B8',
+  };
+}
+
 function formatMinToHours(minutes: number): string {
   if (!minutes || minutes <= 0) return '00:00';
   const h = Math.floor(minutes / 60);
@@ -372,12 +437,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Planejado */}
-          <div className="w-[95px] font-mono text-right pr-2 font-semibold text-[#23211E] shrink-0 text-xs">
+          <div className="w-[95px] font-mono text-right pr-2 font-bold shrink-0 text-xs" style={{ color: getMetaColorScale(pctMeta).texto }}>
             R$ {valorPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
 
           {/* % Meta */}
-          <div className="w-[65px] font-mono font-bold text-right pr-2 shrink-0 text-xs" style={{ color: situacao.texto }}>
+          <div className="w-[65px] font-mono font-bold text-right pr-2 shrink-0 text-xs" style={{ color: getMetaColorScale(pctMeta).texto }}>
             {pctMeta}%
           </div>
 

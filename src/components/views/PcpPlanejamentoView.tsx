@@ -72,7 +72,7 @@ import { ptBR } from 'date-fns/locale';
 import { useAlojamentos } from '@/hooks/useAlojamentos';
 import { useVistoriaRisk } from '@/hooks/usePcpAiPlanner';
 import { toast } from 'sonner';
-import { PcpDiaRow } from './PcpDiaRow';
+import { PcpDiaRow, getMetaColorScale } from './PcpDiaRow';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
 function calcDistanceKM(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -1322,6 +1322,7 @@ export const PcpPlanejamentoView = () => {
 
   const metaTotalPeriodo = metaEquipeInput * Math.max(1, diasProgramados.length);
   const pctMetaTotal = metaTotalPeriodo > 0 ? Math.round((totalValorPeriodo / metaTotalPeriodo) * 100) : 0;
+  const metaColorPeriodo = getMetaColorScale(pctMetaTotal);
 
   // Filtros Existentes Modal
   const filteredExistingPlans = useMemo(() => {
@@ -1983,10 +1984,16 @@ export const PcpPlanejamentoView = () => {
                     <span className="text-xs font-mono font-bold text-[#23211E] bg-white px-2.5 py-1 rounded border border-[#DEDAD3] shadow-2xs">
                       {formatMinToHours(totalHorasPeriodoMin)}
                     </span>
-                    <span className="text-xs font-mono font-bold text-[#17794C] bg-[#E6F2EA] px-2.5 py-1 rounded border border-[#A0D4B2] shadow-2xs">
+                    <span
+                      className="text-xs font-mono font-bold px-2.5 py-1 rounded border shadow-2xs"
+                      style={{ color: metaColorPeriodo.texto, backgroundColor: metaColorPeriodo.fundo, borderColor: metaColorPeriodo.borda }}
+                    >
                       R$ {totalValorPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
-                    <span className="text-xs font-mono font-bold text-[#17794C] bg-[#E6F2EA] px-2.5 py-1 rounded border border-[#A0D4B2] shadow-2xs">
+                    <span
+                      className="text-xs font-mono font-bold px-2.5 py-1 rounded border shadow-2xs"
+                      style={{ color: metaColorPeriodo.texto, backgroundColor: metaColorPeriodo.fundo, borderColor: metaColorPeriodo.borda }}
+                    >
                       {pctMetaTotal}%
                     </span>
                   </div>
@@ -2169,10 +2176,10 @@ export const PcpPlanejamentoView = () => {
                         <div className="w-[65px] text-right pr-2 text-[#23211E]">
                           {formatMinToHours(totalHorasPeriodoMin)}
                         </div>
-                        <div className="w-[95px] text-right pr-2 text-[#17794C]">
+                        <div className="w-[95px] text-right pr-2 font-bold text-xs font-mono" style={{ color: metaColorPeriodo.texto }}>
                           R$ {totalValorPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
-                        <div className="w-[65px] text-right pr-2 text-[#17794C]">
+                        <div className="w-[65px] text-right pr-2 font-bold text-xs font-mono" style={{ color: metaColorPeriodo.texto }}>
                           {pctMetaTotal}%
                         </div>
                         <div className="w-[80px]" />
