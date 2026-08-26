@@ -1239,14 +1239,17 @@ export const usePcpPlanejamentoData = (
 
       return { csvFilename, totalRows: allNewRows.length };
     },
+    onMutate: () => {
+      toast.loading('Enviando programação para a Plan_Principal no Google Sheets...', { id: 'salvar-programacao' });
+    },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['pcp-planejamento-cache', selectedUnidadeId] });
       queryClient.invalidateQueries({ queryKey: ['planejamento-cache-raw'] });
-      toast.success(`Programação gravada com sucesso! CSV ${result.csvFilename} enviado ao Drive e processado na Plan_Principal!`);
+      toast.success(`Programação gravada com sucesso na Plan_Principal! (CSV ${result.csvFilename})`, { id: 'salvar-programacao' });
     },
     onError: (err: any) => {
       console.error('Erro ao salvar programação no PCP:', err);
-      toast.error('Erro ao salvar programação: ' + (err.message || err));
+      toast.error('Erro ao salvar programação: ' + (err.message || err), { id: 'salvar-programacao' });
     },
   });
 

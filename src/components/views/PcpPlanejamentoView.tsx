@@ -959,6 +959,7 @@ export const PcpPlanejamentoView = () => {
     }
 
     try {
+      toast.loading(`Enviando programação de ${diaTarget.dataStr} para a Plan_Principal...`, { id: 'salvar-programacao' });
       const formPayload: PcpProgramacaoForm = {
         unidadeId: selectedUnidadeId,
         dataProgramacao: diaTarget.dataCompleta,
@@ -976,9 +977,9 @@ export const PcpPlanejamentoView = () => {
       };
 
       await salvarProgramacao.mutateAsync([formPayload]);
-      toast.success(`Programação de ${diaTarget.dataStr} enviada com sucesso para a Plan_Principal!`);
+      toast.success(`Programação de ${diaTarget.dataStr} enviada com sucesso para a Plan_Principal!`, { id: 'salvar-programacao' });
     } catch (err: any) {
-      toast.error(`Erro ao enviar dia: ${err.message || 'Erro inesperado'}`);
+      toast.error(`Erro ao enviar dia: ${err.message || 'Erro inesperado'}`, { id: 'salvar-programacao' });
     }
   };
 
@@ -1001,6 +1002,7 @@ export const PcpPlanejamentoView = () => {
     }
 
     try {
+      toast.loading(`Enviando programação de todos os ${diasComAtividadesOuDesloc.length} dias para a Plan_Principal...`, { id: 'salvar-programacao' });
       const allForms: PcpProgramacaoForm[] = [];
       const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
 
@@ -1032,9 +1034,9 @@ export const PcpPlanejamentoView = () => {
       }
 
       await salvarProgramacao.mutateAsync(allForms);
-      toast.success(`Programação de todos os ${diasComAtividadesOuDesloc.length} dias enviada com sucesso para a Plan_Principal!`);
+      toast.success(`Programação de todos os ${diasComAtividadesOuDesloc.length} dias enviada com sucesso para a Plan_Principal!`, { id: 'salvar-programacao' });
     } catch (err: any) {
-      toast.error(`Erro ao enviar dias: ${err.message || 'Erro inesperado'}`);
+      toast.error(`Erro ao enviar dias: ${err.message || 'Erro inesperado'}`, { id: 'salvar-programacao' });
     }
   };
 
@@ -2135,6 +2137,7 @@ export const PcpPlanejamentoView = () => {
                             handleUpdateAtividade={handleUpdateAtividade}
                             handleRemoveAtividade={handleRemoveAtividade}
                             handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
+                            isSubmitting={salvarProgramacao.isPending}
                           />
                         );
                       })}
@@ -2267,6 +2270,7 @@ export const PcpPlanejamentoView = () => {
                                   handleUpdateAtividade={handleUpdateAtividade}
                                   handleRemoveAtividade={handleRemoveAtividade}
                                   handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
+                                  isSubmitting={salvarProgramacao.isPending}
                                 />
                               );
                             })}
@@ -2278,7 +2282,7 @@ export const PcpPlanejamentoView = () => {
                             >
                               <div className="w-[110px] text-[#23211E]">Total acumulado</div>
                               <div className="w-[210px] px-1 text-[#6B6660] text-[11px] font-sans font-medium">
-                                {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'} analisados
+                                {diasProgramados.length} {diasProgramados.length === 1 ? 'dia analisado' : 'dias analisados'}
                               </div>
                               <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoIdaMin, 0))}
@@ -2287,7 +2291,7 @@ export const PcpPlanejamentoView = () => {
                               <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(diasProgramados.reduce((acc, d, i) => acc + getDayDisplacement(d.id, i, diasProgramados.length).tempoVoltaMin, 0))}
                               </div>
-                              <div className="w-[110px] text-center shrink-0 flex items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
+                              <div className="w-[110px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
                                 {formatMinToHours(totalDeslocamentoPeriodoMin)}
                               </div>
                               <div className="w-[90px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
@@ -2363,10 +2367,10 @@ export const PcpPlanejamentoView = () => {
                             </div>
                           </div>
 
-                          {/* Linha inferior compacta: Alerta + Alojamentos lado a lado */}
-                          <div className="flex flex-col sm:flex-row items-stretch gap-2 pt-1 border-t border-[#E6E3DD]">
-                            {/* Alerta de Deslocamento */}
-                            <div className={`flex-1 p-2 rounded-lg border text-xs flex items-center gap-1.5 ${
+                          {/* Banner de Conformidade e Alojamentos */}
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#E6E3DD] flex-wrap">
+                            {/* Badge de Alerta ou Sucesso */}
+                            <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs border ${
                               isMediaDeslocamentoAlto
                                 ? 'bg-[#FDF2F0] border-[#F2C0B8] text-[#B03028]'
                                 : 'bg-[#E6F2EA] border-[#A0D4B2] text-[#17794C]'
@@ -2455,10 +2459,21 @@ export const PcpPlanejamentoView = () => {
 
                     <Button
                       size="sm"
+                      disabled={salvarProgramacao.isPending}
                       onClick={handleEnviarTodosOsDias}
-                      className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs"
+                      className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs transition-all disabled:opacity-70"
                     >
-                      <Send className="w-4 h-4" /> Enviar todos os dias ({diasProgramados.length})
+                      {salvarProgramacao.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Enviando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>Enviar todos os dias ({diasProgramados.length})</span>
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>

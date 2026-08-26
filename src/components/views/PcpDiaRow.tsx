@@ -5,6 +5,7 @@ import {
   Calendar as CalendarIcon,
   Trash2,
   Send,
+  Loader2,
   Plus,
   Wrench,
   PackageCheck,
@@ -145,6 +146,7 @@ interface PcpDiaRowProps {
   handleUpdateAtividade: (diaId: string, pontoLabelTarget: string, itemIdOrIndex: string | number, field: keyof PcpPontoItem, value: any) => void;
   handleRemoveAtividade: (diaId: string, pontoLabelTarget: string, itemIdOrIndex: string | number) => void;
   handleEnviarPlanPrincipalDia: (diaId: string) => void;
+  isSubmitting?: boolean;
 }
 
 export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
@@ -198,6 +200,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   handleUpdateAtividade,
   handleRemoveAtividade,
   handleEnviarPlanPrincipalDia,
+  isSubmitting = false,
 }) => {
   const [customPontoInput, setCustomPontoInput] = useState('');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -1284,10 +1287,21 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
 
             <Button
               size="sm"
+              disabled={isSubmitting}
               onClick={() => handleEnviarPlanPrincipalDia(dia.id)}
-              className="h-8 px-3.5 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-1.5 font-bold"
+              className="h-8 px-3.5 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-1.5 font-bold shadow-2xs transition-all disabled:opacity-70"
             >
-              <Send className="w-3.5 h-3.5" /> Enviar somente este dia
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Enviando...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Enviar somente este dia</span>
+                </>
+              )}
             </Button>
           </div>
         </div>
