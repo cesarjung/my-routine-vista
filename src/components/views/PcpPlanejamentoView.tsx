@@ -1963,55 +1963,63 @@ export const PcpPlanejamentoView = () => {
 
               {/* 3. Grade Principal de Programação */}
               <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-                {/* Linha Superior da Grade: Título e Alternador de Visões */}
-                <div className="p-3 border-b border-[#E6E3DD] flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-[#23211E]">
+                {/* Linha Superior da Grade: Título e Alternador de Visões (Fixo e sem wrap que esconda os botões) */}
+                <div className="p-3 border-b border-[#E6E3DD] flex items-center justify-between gap-3 bg-[#FAF8F5]">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="font-bold text-xs text-[#23211E] shrink-0">
                       Dias programados ({diasProgramados.length})
                     </span>
-                    {/* Legenda de cores */}
-                    <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#6B6660] ml-2">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#23211E]" /> Saída
+                    {/* Legenda de cores na visão jornada */}
+                    {viewMode === 'jornada' ? (
+                      <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#6B6660] ml-2">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#23211E]" /> Saída
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#E07A1F]" /> Ida
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#A39E96]" /> Segurança
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#C0392E]" /> Serviço
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#F5BE84]" /> Volta
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-[#A06A16] font-semibold bg-[#FBF2DA] px-2 py-0.5 rounded border border-[#E8C9A0] ml-2">
+                        Configuração de Alojamentos e Deslocamento
                       </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#E07A1F]" /> Ida
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#A39E96]" /> Segurança
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#C0392E]" /> Serviço
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#F5BE84]" /> Volta
-                      </span>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Segmented Controller: Jornada vs Alojamentos */}
-                  <div className="inline-flex rounded-lg border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold">
+                  {/* Alternador de Visões: Jornada vs Alojamentos */}
+                  <div className="inline-flex items-center rounded-lg border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold shrink-0 shadow-2xs">
                     <button
                       type="button"
                       onClick={() => setViewMode('jornada')}
-                      className={`px-3 py-1 rounded-md transition-all ${
+                      className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
                         viewMode === 'jornada'
-                          ? 'bg-white text-[#23211E] shadow-2xs'
-                          : 'text-[#6B6660] hover:text-[#23211E]'
+                          ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
+                          : 'text-[#6B6660] hover:text-[#23211E] hover:bg-white/50'
                       }`}
                     >
-                      Jornada
+                      <Clock className="w-3.5 h-3.5 text-[#E07A1F]" />
+                      <span>Jornada</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('alojamentos')}
-                      className={`px-3 py-1 rounded-md transition-all ${
+                      className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
                         viewMode === 'alojamentos'
-                          ? 'bg-white text-[#23211E] shadow-2xs'
-                          : 'text-[#6B6660] hover:text-[#23211E]'
+                          ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
+                          : 'text-[#6B6660] hover:text-[#23211E] hover:bg-white/50'
                       }`}
                     >
-                      Alojamentos
+                      <Building2 className="w-3.5 h-3.5 text-[#E07A1F]" />
+                      <span>Alojamentos</span>
                     </button>
                   </div>
                 </div>
@@ -2391,7 +2399,7 @@ export const PcpPlanejamentoView = () => {
                 {/* RODAPÉ DO CARD "DIAS PROGRAMADOS" */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 px-4 bg-[#FBFAF7] border-t border-[#E6E3DD]">
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {viewMode === 'jornada' && (
+                    {viewMode === 'jornada' ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -2399,6 +2407,15 @@ export const PcpPlanejamentoView = () => {
                         className="h-8 px-3 text-xs bg-white border-[#DEDAD3] text-[#23211E] font-semibold"
                       >
                         {expandedDayIds.length === diasProgramados.length ? 'Recolher todos' : 'Expandir todos'}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewMode('jornada')}
+                        className="h-8 px-3 text-xs bg-white border-[#E8C9A0] text-[#A06A16] hover:bg-[#FBF5EC] font-bold gap-1.5 shadow-2xs"
+                      >
+                        <Clock className="w-3.5 h-3.5 text-[#E07A1F]" /> Voltar para Jornada
                       </Button>
                     )}
 
@@ -2421,13 +2438,26 @@ export const PcpPlanejamentoView = () => {
                     </Button>
                   </div>
 
-                  <Button
-                    size="sm"
-                    onClick={handleEnviarTodosOsDias}
-                    className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs"
-                  >
-                    <Send className="w-4 h-4" /> Enviar todos os dias ({diasProgramados.length})
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    {viewMode === 'jornada' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewMode('alojamentos')}
+                        className="h-9 px-3.5 text-xs bg-white border-[#DEDAD3] text-[#5C574F] hover:text-[#23211E] font-semibold gap-1.5"
+                      >
+                        <Building2 className="w-3.5 h-3.5 text-[#E07A1F]" /> Ver Alojamentos
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      onClick={handleEnviarTodosOsDias}
+                      className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs"
+                    >
+                      <Send className="w-4 h-4" /> Enviar todos os dias ({diasProgramados.length})
+                    </Button>
+                  </div>
                 </div>
               </div>
             </>
