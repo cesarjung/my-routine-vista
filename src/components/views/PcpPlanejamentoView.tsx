@@ -254,6 +254,8 @@ export const PcpPlanejamentoView = () => {
   const [diasEtapasMap, setDiasEtapasMap] = useInMemorySessionState<Record<string, string[]>>('pcp_mem_etapas_map', {});
   const [diasFiltroLvMap, setDiasFiltroLvMap] = useInMemorySessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_mem_filtro_lv', {});
   const [diasExtrasList, setDiasExtrasList] = useInMemorySessionState<string[]>('pcp_mem_dias_extras', []);
+  const [diasPercentualCumprimentoMap, setDiasPercentualCumprimentoMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_perc_cump', {});
+  const [diasMotivoDescumprimentoMap, setDiasMotivoDescumprimentoMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_motivo_descump', {});
 
   // Modal Carregar Planejamento
   const [isCarregarPlanModalOpen, setIsCarregarPlanModalOpen] = useState(false);
@@ -886,6 +888,14 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
+  // Atualização de Motivo de Descumprimento (Coluna AU)
+  const handleUpdateDiaMotivoDescumprimento = (diaId: string, motivo: string) => {
+    setDiasMotivoDescumprimentoMap(prev => ({
+      ...prev,
+      [diaId]: motivo,
+    }));
+  };
+
   // Envio de Programação (usando salvarProgramacao.mutateAsync)
   const handleEnviarPlanPrincipalDia = async (diaId: string) => {
     if (!selectedObra) {
@@ -914,12 +924,13 @@ export const PcpPlanejamentoView = () => {
         dateObj: diaTarget.dateObj,
         supervisor,
         equipe: selectedEquipes[0] || 'EH156',
-        etapa: (diasEtapasMap[diaId] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
+        etapaGeral: (diasEtapasMap[diaId] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
         obra: selectedObra,
         pontos: allActivitiesDia,
         isPes: diasPesMap[diaId] || false,
         reprogramar: diasReprogramarMap[diaId] || false,
         motivoReprogramacao: diasMotivoReprogramarMap[diaId] || '',
+        motivoDescumprimento: diasMotivoDescumprimentoMap[diaId] || '',
         metaEquipeValor: metaEquipeInput,
       };
 
@@ -963,12 +974,13 @@ export const PcpPlanejamentoView = () => {
             dateObj: d.dateObj,
             supervisor,
             equipe: eq,
-            etapa: (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
+            etapaGeral: (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO',
             obra: selectedObra,
             pontos: allActs,
             isPes: diasPesMap[d.id] || false,
             reprogramar: diasReprogramarMap[d.id] || false,
             motivoReprogramacao: diasMotivoReprogramarMap[d.id] || '',
+            motivoDescumprimento: diasMotivoDescumprimentoMap[d.id] || '',
             metaEquipeValor: metaEquipeInput,
           });
         }
@@ -994,6 +1006,8 @@ export const PcpPlanejamentoView = () => {
     setDiasPesMap({});
     setDiasEtapasMap({});
     setDiasCustomAlojMap({});
+    setDiasMotivoDescumprimentoMap({});
+    setDiasPercentualCumprimentoMap({});
     toast.success('Planejamento e pontos em tela limpos com sucesso.');
   };
 
@@ -1071,6 +1085,8 @@ export const PcpPlanejamentoView = () => {
     // 3. Montar mapas limpos apenas com os dados dos planejamentos carregados
     const nextDiasPontosMap: Record<string, string[]> = {};
     const nextDiasPontosGroupedMap: Record<string, Record<string, PcpPontoItem[]>> = {};
+    const nextDiasPercentualCumprimentoMap: Record<string, string> = {};
+    const nextDiasMotivoDescumprimentoMap: Record<string, string> = {};
 
     plansToLoad.forEach(plan => {
       let dayId = '';
@@ -1081,6 +1097,15 @@ export const PcpPlanejamentoView = () => {
         const month = Number(match[2]);
         const year = Number(match[3]);
         dayId = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+
+      if (dayId) {
+        if (plan.percentualCumprimento) {
+          nextDiasPercentualCumprimentoMap[dayId] = plan.percentualCumprimento;
+        }
+        if (plan.motivoDescumprimento) {
+          nextDiasMotivoDescumprimentoMap[dayId] = plan.motivoDescumprimento;
+        }
       }
 
       // Reúne todos os pontos do plano (da Coluna I e do compilado da Coluna O)
@@ -1197,6 +1222,8 @@ export const PcpPlanejamentoView = () => {
 
     setDiasPontosMap(nextDiasPontosMap);
     setDiasPontosGroupedMap(nextDiasPontosGroupedMap);
+    setDiasPercentualCumprimentoMap(nextDiasPercentualCumprimentoMap);
+    setDiasMotivoDescumprimentoMap(nextDiasMotivoDescumprimentoMap);
     setIsCarregarPlanModalOpen(false);
     setSelectedExistingPlanKeys([]);
     toast.success(`${plansToLoad.length} ${plansToLoad.length === 1 ? 'planejamento carregado' : 'planejamentos carregados'} com sucesso.`);
@@ -1952,14 +1979,15 @@ export const PcpPlanejamentoView = () => {
                         style={{ borderLeft: '4px solid transparent' }}
                       >
                         <div className="w-[30px]" />
-                        <div className="w-[125px]">Dia</div>
-                        <div className="w-[85px]">Pontos</div>
-                        <div className="flex-1 min-w-[280px] px-3">Ocupação da jornada</div>
-                        <div className="w-[70px] text-right pr-2">Total</div>
-                        <div className="w-[110px] text-right pr-2">Planejado</div>
-                        <div className="w-[70px] text-right pr-2">% Meta</div>
-                        <div className="w-[90px] text-center">Situação</div>
-                        <div className="w-[100px] text-center">Marcações</div>
+                        <div className="w-[115px]">Dia</div>
+                        <div className="w-[80px]">Pontos</div>
+                        <div className="flex-1 min-w-[220px] px-2">Ocupação da jornada</div>
+                        <div className="w-[65px] text-right pr-2">Total</div>
+                        <div className="w-[95px] text-right pr-2">Planejado</div>
+                        <div className="w-[65px] text-right pr-2">% Meta</div>
+                        <div className="w-[80px] text-center">Situação</div>
+                        <div className="w-[85px] text-center">Cumprimento</div>
+                        <div className="w-[200px] text-left pl-2">Motivos Descumprimento</div>
                         <div className="w-[36px] shrink-0" />
                       </div>
 
@@ -1968,8 +1996,8 @@ export const PcpPlanejamentoView = () => {
                         className="flex items-center py-1.5 px-2 text-[10px] font-mono text-[#A39E96] bg-[#FBFAF7] border-b border-[#E6E3DD]"
                         style={{ borderLeft: '4px solid transparent' }}
                       >
-                        <div className="w-[240px] shrink-0" />
-                        <div className="flex-1 min-w-[280px] px-3 relative h-3.5">
+                        <div className="w-[225px] shrink-0" />
+                        <div className="flex-1 min-w-[220px] px-2 relative h-3.5">
                           <span className="absolute left-0 top-0">0h</span>
                           <span
                             className="absolute top-0 font-bold text-[#17794C]"
@@ -1985,7 +2013,7 @@ export const PcpPlanejamentoView = () => {
                           </span>
                           <span className="absolute right-0 top-0">13h</span>
                         </div>
-                        <div className="w-[476px] shrink-0" />
+                        <div className="w-[541px] shrink-0" />
                       </div>
 
                       {/* LINHAS DOS DIAS */}
@@ -2028,9 +2056,12 @@ export const PcpPlanejamentoView = () => {
                             destinoAloj={disp.destinoNome}
                             isTrocaAloj={disp.origemNome !== disp.destinoNome}
                             filteredServicosBase={servicosBase}
+                            percentualCumprimentoDia={diasPercentualCumprimentoMap[dia.id] || ''}
+                            motivoDescumprimentoDia={diasMotivoDescumprimentoMap[dia.id] || ''}
                             handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
                             handleUpdateDiaTempo={handleUpdateDiaTempo}
                             handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
+                            handleUpdateDiaMotivoDescumprimento={handleUpdateDiaMotivoDescumprimento}
                             handleUpdateDiaDate={handleUpdateDiaDate}
                             handleRemoveDia={handleRemoveDia}
                             handleToggleReprogramarDia={handleToggleReprogramarDia}
@@ -2056,24 +2087,25 @@ export const PcpPlanejamentoView = () => {
                         style={{ borderLeft: '4px solid transparent' }}
                       >
                         <div className="w-[30px]" />
-                        <div className="w-[125px] text-[#23211E]">Total do período</div>
-                        <div className="w-[85px] text-[#5C574F]">
+                        <div className="w-[115px] text-[#23211E]">Total do período</div>
+                        <div className="w-[80px] text-[#5C574F]">
                           {totalPontosPeriodo} {totalPontosPeriodo === 1 ? 'ponto' : 'pontos'}
                         </div>
-                        <div className="flex-1 min-w-[280px] px-3 text-[#6B6660] text-xs">
+                        <div className="flex-1 min-w-[220px] px-2 text-[#6B6660] text-xs">
                           {diasProgramados.length} {diasProgramados.length === 1 ? 'dia programado' : 'dias programados'}
                         </div>
-                        <div className="w-[70px] text-right pr-2 text-[#23211E]">
+                        <div className="w-[65px] text-right pr-2 text-[#23211E]">
                           {formatMinToHours(totalHorasPeriodoMin)}
                         </div>
-                        <div className="w-[110px] text-right pr-2 text-[#17794C]">
+                        <div className="w-[95px] text-right pr-2 text-[#17794C]">
                           R$ {totalValorPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
-                        <div className="w-[70px] text-right pr-2 text-[#17794C]">
+                        <div className="w-[65px] text-right pr-2 text-[#17794C]">
                           {pctMetaTotal}%
                         </div>
-                        <div className="w-[90px]" />
-                        <div className="w-[100px]" />
+                        <div className="w-[80px]" />
+                        <div className="w-[85px]" />
+                        <div className="w-[200px]" />
                         <div className="w-[36px] shrink-0" />
                       </div>
                     </div>
@@ -2156,9 +2188,12 @@ export const PcpPlanejamentoView = () => {
                                   destinoAloj={disp.destinoNome}
                                   isTrocaAloj={disp.origemNome !== disp.destinoNome}
                                   filteredServicosBase={servicosBase}
+                                  percentualCumprimentoDia={diasPercentualCumprimentoMap[dia.id] || ''}
+                                  motivoDescumprimentoDia={diasMotivoDescumprimentoMap[dia.id] || ''}
                                   handleUpdateDiaAlojamento={handleUpdateDiaAlojamento}
                                   handleUpdateDiaTempo={handleUpdateDiaTempo}
                                   handleUpdateDiaTempoComp={handleUpdateDiaTempoComp}
+                                  handleUpdateDiaMotivoDescumprimento={handleUpdateDiaMotivoDescumprimento}
                                   handleUpdateDiaDate={handleUpdateDiaDate}
                                   handleRemoveDia={handleRemoveDia}
                                   handleToggleReprogramarDia={handleToggleReprogramarDia}

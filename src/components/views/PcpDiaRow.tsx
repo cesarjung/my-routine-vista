@@ -114,10 +114,13 @@ interface PcpDiaRowProps {
   baseNome?: string;
   isTrocaAloj: boolean;
   filteredServicosBase: ServicoBase[];
+  percentualCumprimentoDia?: string;
+  motivoDescumprimentoDia?: string;
   // Handlers
   handleUpdateDiaAlojamento: (diaId: string, tipo: 'origem' | 'destino', alojNome: string) => void;
   handleUpdateDiaTempo: (diaId: string, tipo: 'ida' | 'volta', minutos: number) => void;
   handleUpdateDiaTempoComp: (diaId: string, field: 'saidaBase' | 'seguranca', minutos: number) => void;
+  handleUpdateDiaMotivoDescumprimento?: (diaId: string, motivo: string) => void;
   handleUpdateDiaDate: (diaId: string, newDate: Date) => void;
   handleRemoveDia: (diaId: string) => void;
   handleToggleReprogramarDia: (diaId: string) => void;
@@ -158,16 +161,19 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   tempoVoltaMin,
   distIdaKm,
   distVoltaKm,
-  baseNome,
   isIdaManual,
   isVoltaManual,
   origemAloj,
   destinoAloj,
+  baseNome,
   isTrocaAloj,
   filteredServicosBase,
+  percentualCumprimentoDia,
+  motivoDescumprimentoDia,
   handleUpdateDiaAlojamento,
   handleUpdateDiaTempo,
   handleUpdateDiaTempoComp,
+  handleUpdateDiaMotivoDescumprimento,
   handleUpdateDiaDate,
   handleRemoveDia,
   handleToggleReprogramarDia,
@@ -240,17 +246,17 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
 
           {/* Dia e data */}
-          <div className="w-[125px] font-semibold text-[#23211E] shrink-0">
+          <div className="w-[115px] font-semibold text-[#23211E] shrink-0 text-xs">
             <span className="capitalize">{dia.nomeDia.slice(0, 3)}</span>, {dia.dataStr}
           </div>
 
           {/* Pontos */}
-          <div className="w-[85px] font-mono text-xs text-[#5C574F] shrink-0">
+          <div className="w-[80px] font-mono text-xs text-[#5C574F] shrink-0">
             {pontosAtivos.length === 1 ? '1 ponto' : `${pontosAtivos.length} pontos`}
           </div>
 
           {/* Ocupação da Jornada (Barra de 0 a 13h) */}
-          <div className="flex-1 min-w-[280px] px-3">
+          <div className="flex-1 min-w-[220px] px-2">
             <div className="relative h-[18px] bg-[#F4F2EE] rounded-md overflow-hidden flex shadow-inner">
               {/* Janela Alvo de 8h a 10h */}
               <div
@@ -299,64 +305,81 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             </div>
 
             {/* Leituras auxiliares abaixo da barra */}
-            <div className="flex items-center gap-4 mt-1.5 text-xs font-mono">
-              <span className="flex items-center gap-1.5">
+            <div className="flex items-center gap-3 mt-1 text-[11px] font-mono">
+              <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#C0392E' }} />
-                <span className="text-[#6B6660]">serviço:</span>
+                <span className="text-[#6B6660]">serv:</span>
                 <strong style={{ color: isServicoBaixo ? '#B03028' : '#23211E' }}>
                   {formatMinToHours(tempoServicoMin)}
                 </strong>
-                <span className="text-[#A39E96]">mín 07:00</span>
               </span>
 
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#E07A1F' }} />
-                <span className="text-[#6B6660]">ida e volta:</span>
+                <span className="text-[#6B6660]">desloc:</span>
                 <strong style={{ color: isDeslocamentoAlto ? '#B03028' : '#23211E' }}>
                   {formatMinToHours(deslocamentoMin)}
                 </strong>
-                <span className="text-[#A39E96]">máx 02:00</span>
               </span>
             </div>
           </div>
 
           {/* Total de Horas */}
-          <div className="w-[70px] font-mono font-bold text-right pr-2 shrink-0 text-sm" style={{ color: situacao.texto }}>
+          <div className="w-[65px] font-mono font-bold text-right pr-2 shrink-0 text-xs" style={{ color: situacao.texto }}>
             {formatMinToHours(tempoTotalMin)}
           </div>
 
           {/* Planejado */}
-          <div className="w-[110px] font-mono text-right pr-2 font-semibold text-[#23211E] shrink-0 text-sm">
+          <div className="w-[95px] font-mono text-right pr-2 font-semibold text-[#23211E] shrink-0 text-xs">
             R$ {valorPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
 
           {/* % Meta */}
-          <div className="w-[70px] font-mono font-bold text-right pr-2 shrink-0 text-sm" style={{ color: situacao.texto }}>
+          <div className="w-[65px] font-mono font-bold text-right pr-2 shrink-0 text-xs" style={{ color: situacao.texto }}>
             {pctMeta}%
           </div>
 
           {/* Situação */}
-          <div className="w-[90px] text-center shrink-0">
+          <div className="w-[80px] text-center shrink-0">
             <span
-              className="inline-block px-2.5 py-1 rounded-md text-[11px] font-bold tracking-tight shadow-2xs"
+              className="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold tracking-tight shadow-2xs"
               style={{ backgroundColor: situacao.fundo, color: situacao.texto }}
             >
               {situacao.rotulo}
             </span>
           </div>
 
-          {/* Marcações (REPROG / PES) */}
-          <div className="w-[100px] flex items-center justify-center gap-1 shrink-0">
-            {isReprogramarDia && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]">
-                REPROG
+          {/* Cumprimento (% da Coluna AP) */}
+          <div className="w-[85px] shrink-0 text-center font-mono font-bold text-xs">
+            {percentualCumprimentoDia ? (
+              <span className="inline-block px-2 py-0.5 rounded-md bg-[#E6F2EA] text-[#17794C] border border-[#BCE1CC] text-[11px]">
+                {percentualCumprimentoDia}
               </span>
+            ) : (
+              <span className="text-[#A39E96] font-normal text-xs">-</span>
             )}
-            {isPesDia && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]">
-                PES
-              </span>
-            )}
+          </div>
+
+          {/* Motivos Descumprimento (Coluna AU) */}
+          <div className="w-[200px] shrink-0" onClick={e => e.stopPropagation()}>
+            <Select
+              value={motivoDescumprimentoDia || 'nenhum'}
+              onValueChange={val => handleUpdateDiaMotivoDescumprimento && handleUpdateDiaMotivoDescumprimento(dia.id, val === 'nenhum' ? '' : val)}
+            >
+              <SelectTrigger className="h-7 text-xs bg-white border-[#DEDAD3] text-[#23211E] truncate font-medium">
+                <SelectValue placeholder="Selecione motivo..." />
+              </SelectTrigger>
+              <SelectContent className="max-w-[340px]">
+                <SelectItem value="nenhum" className="text-xs text-[#A39E96]">
+                  Nenhum motivo
+                </SelectItem>
+                {MOTIVOS_REPROGRAMACAO_COL_AU.map(m => (
+                  <SelectItem key={m} value={m} className="text-xs">
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Botão de Excluir Dia */}

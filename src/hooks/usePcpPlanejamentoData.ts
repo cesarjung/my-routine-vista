@@ -46,16 +46,17 @@ export interface PcpPontoItem {
 
 export interface PcpProgramacaoForm {
   unidadeId: string;
-  dataProgramacao: string; // Ex: "16/08/2026"
+  dataProgramacao: string;
   dateObj?: Date;
-  supervisor: string;
   equipe: string;
-  etapa: string;
+  supervisor: string;
   obra: PcpObra;
+  etapaGeral: string;
   pontos: PcpPontoItem[];
-  isPes?: boolean;
+  isPes: boolean;
   reprogramar?: boolean;
   motivoReprogramacao?: string;
+  motivoDescumprimento?: string;
   tempoDeslocamentoMinutos?: number;
   tempoSaidaBaseMinutos?: number;
   tempoSegurancaMinutos?: number;
@@ -120,6 +121,8 @@ export interface ParsedPlanejamentoExistente {
   tempoSegurancaMin: number;
   metaEquipeValor: number;
   valorPlanejado: number;
+  percentualCumprimento?: string; // Coluna AP (Index 41)
+  motivoDescumprimento?: string;  // Coluna AU (Index 46)
   chaveBk: string;
 }
 
@@ -1141,6 +1144,12 @@ export const usePcpPlanejamentoData = (
     const pctMetaFormatted = `${pctMeta.toFixed(1)}%`;
     newRow[39] = pctMetaFormatted;                          // Col AN (39): Percentual Planejado da Meta
 
+    if (form.motivoDescumprimento) {
+      newRow[46] = form.motivoDescumprimento;               // Col AU (46): Motivo Descumprimento
+    } else if (form.motivoReprogramacao) {
+      newRow[46] = form.motivoReprogramacao;                // Col AU (46): Motivo Reprogramação
+    }
+
     newRow[56] = nomeUnidadePlanejadaUpper;                 // Col BE (56): Unidade Planejada
     
     const cleanDateNum = form.dataProgramacao.replace(/\//g, '');
@@ -1290,6 +1299,21 @@ export const usePcpPlanejamentoData = (
         const tempoSaidaBaseMin = parseTimeToMin(String(row[65] || ''));
         const tempoSegurancaMin = parseTimeToMin(String(row[66] || ''));
 
+        // Coluna AP (Index 41): Percentual de Cumprimento
+        const percCumprimentoRaw = String(row[41] || '').trim();
+        let percentualCumprimento = '';
+        if (percCumprimentoRaw) {
+          const num = parseFloat(percCumprimentoRaw.replace('%', '').replace(',', '.').trim());
+          if (!isNaN(num)) {
+            percentualCumprimento = num <= 1 && num > 0 ? `${(num * 100).toFixed(0)}%` : `${num.toFixed(0)}%`;
+          } else {
+            percentualCumprimento = percCumprimentoRaw;
+          }
+        }
+
+        // Coluna AU (Index 46): Motivo Descumprimento
+        const motivoDescumprimento = String(row[46] || '').trim();
+
         const parsedAtividades = parseCompiledAtividades(compiladoAtividades);
 
         // Se houver pontos no compilado que não constavam na Col I, inclui
@@ -1319,6 +1343,8 @@ export const usePcpPlanejamentoData = (
           tempoSegurancaMin,
           metaEquipeValor,
           valorPlanejado,
+          percentualCumprimento,
+          motivoDescumprimento,
           chaveBk,
         });
       });
