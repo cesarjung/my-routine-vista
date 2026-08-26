@@ -19,6 +19,14 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -195,11 +203,41 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isPontosPopoverOpen, setIsPontosPopoverOpen] = useState(false);
   const [pontoSearchTerm, setPontoSearchTerm] = useState('');
+  const [addAtividadeModalPonto, setAddAtividadeModalPonto] = useState<string | null>(null);
+  const [filtroBuscaAtividade, setFiltroBuscaAtividade] = useState('');
+  const [selectedServicosIndices, setSelectedServicosIndices] = useState<Record<number, boolean>>({});
 
   const filteredPontosDaObra = useMemo(() => {
     if (!pontoSearchTerm.trim()) return pontosDisponiveis;
     return pontosDisponiveis.filter(p => p.toLowerCase().includes(pontoSearchTerm.toLowerCase().trim()));
   }, [pontosDisponiveis, pontoSearchTerm]);
+
+  const servicosFiltrados = useMemo(() => {
+    if (!filteredServicosBase || filteredServicosBase.length === 0) return [];
+    if (!filtroBuscaAtividade.trim()) return filteredServicosBase;
+    const q = filtroBuscaAtividade.toUpperCase().trim();
+    return filteredServicosBase.filter(s =>
+      (s.servico || '').toUpperCase().includes(q) ||
+      (s.codigo || '').toUpperCase().includes(q)
+    );
+  }, [filteredServicosBase, filtroBuscaAtividade]);
+
+  const handleConfirmAddAtividades = () => {
+    if (!addAtividadeModalPonto) return;
+    const indices = Object.keys(selectedServicosIndices).filter(k => selectedServicosIndices[Number(k)]);
+    if (indices.length === 0) {
+      return;
+    }
+    indices.forEach(idxStr => {
+      const serv = servicosFiltrados[Number(idxStr)] || filteredServicosBase[Number(idxStr)];
+      if (serv) {
+        handleAddAtividadeNoPonto(dia.id, addAtividadeModalPonto, serv);
+      }
+    });
+    setAddAtividadeModalPonto(null);
+    setSelectedServicosIndices({});
+    setFiltroBuscaAtividade('');
+  };
 
   // Cálculos do Dia
   const pontosAtivos = pontosDoDia || [];
@@ -1031,8 +1069,12 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleAddAtividadeNoPonto(dia.id, pLabel)}
-                          className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1 font-semibold"
+                          onClick={() => {
+                            setAddAtividadeModalPonto(pLabel);
+                            setFiltroBuscaAtividade('');
+                            setSelectedServicosIndices({});
+                          }}
+                          className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#23211E] gap-1 font-semibold hover:bg-[#FBF5EC]"
                         >
                           <Plus className="w-3.5 h-3.5 text-[#E07A1F]" /> Adicionar atividade
                         </Button>
@@ -1056,7 +1098,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                               />
                             </th>
                             <th className="p-2.5">Atividade</th>
-                            <th className="w-[150px] p-2.5">Etapa</th>
+                            <th className="w-[170px] p-2.5">Etapa Materiais</th>
                             <th className="w-[75px] p-2.5 text-center">Previsto</th>
                             <th className="w-[105px] p-2.5 text-center">Programado</th>
                             <th className="w-[95px] p-2.5 text-center">Tempo</th>
@@ -1250,6 +1292,134 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           </div>
         </div>
       )}
+
+      {/* DIALOG: SELEÇÃO DE ATIVIDADES PARA O PONTO */}
+      <Dialog open={Boolean(addAtividadeModalPonto)} onOpenChange={open => !open && setAddAtividadeModalPonto(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-6 bg-white border border-[#E6E3DD] shadow-2xl z-[300]">
+          <DialogHeader className="pb-3 border-b border-[#E6E3DD]">
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-[#23211E]">
+              <PackageCheck className="w-5 h-5 text-[#E07A1F]" />
+              Adicionar Atividades no Ponto {addAtividadeModalPonto}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#6B6660]">
+              Selecione uma ou mais atividades da base oficial para adicionar à programação do dia {dia.dataStr}.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Campo de Busca */}
+          <div className="py-2 flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#A39E96]" />
+              <Input
+                placeholder="Buscar por descrição da atividade, código ou palavra-chave..."
+                value={filtroBuscaAtividade}
+                onChange={e => setFiltroBuscaAtividade(e.target.value)}
+                className="pl-9 text-xs h-9 bg-[#FBFAF7] border-[#DEDAD3]"
+                autoFocus
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const nextState: Record<number, boolean> = {};
+                servicosFiltrados.forEach((_, idx) => {
+                  nextState[idx] = true;
+                });
+                setSelectedServicosIndices(nextState);
+              }}
+              className="h-9 text-xs bg-white border-[#DEDAD3] text-[#23211E] font-semibold"
+            >
+              Marcar todos ({servicosFiltrados.length})
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedServicosIndices({})}
+              className="h-9 text-xs text-[#A39E96] hover:text-[#C0392E]"
+            >
+              Limpar
+            </Button>
+          </div>
+
+          {/* Lista com scroll e checkboxes */}
+          <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[420px] border border-[#E6E3DD] rounded-lg divide-y divide-[#E6E3DD] bg-[#FBFAF7]">
+            {servicosFiltrados.length === 0 ? (
+              <div className="p-8 text-center text-xs text-[#A39E96]">
+                Nenhuma atividade encontrada com o termo pesquisado.
+              </div>
+            ) : (
+              servicosFiltrados.map((serv, idx) => {
+                const isSelected = Boolean(selectedServicosIndices[idx]);
+                return (
+                  <label
+                    key={serv.codigo ? `${serv.codigo}-${idx}` : `${serv.servico}-${idx}`}
+                    className={`flex items-center justify-between p-3 cursor-pointer select-none transition-colors ${isSelected ? 'bg-[#FBF5EC]' : 'hover:bg-white'}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 pr-4">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setSelectedServicosIndices(prev => ({
+                            ...prev,
+                            [idx]: checked
+                          }));
+                        }}
+                        className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4 shrink-0"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold text-[#23211E] truncate">
+                          {serv.servico}
+                        </span>
+                        {serv.codigo && (
+                          <span className="font-mono text-[10.5px] text-[#A39E96]">
+                            Código: {serv.codigo}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs font-mono shrink-0">
+                      <span className="text-[#5C574F]">
+                        {serv.tempoMinutosPorUnidade || 15} min
+                      </span>
+                      <span className="font-bold text-[#17794C]">
+                        R$ {(serv.valorPorUnidade || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </label>
+                );
+              })
+            )}
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-[#E6E3DD] flex items-center justify-between">
+            <span className="text-xs font-mono text-[#5C574F]">
+              {Object.values(selectedServicosIndices).filter(Boolean).length} atividade(s) selecionada(s)
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAddAtividadeModalPonto(null)}
+                className="h-8 text-xs bg-white border-[#DEDAD3]"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirmAddAtividades}
+                disabled={Object.values(selectedServicosIndices).filter(Boolean).length === 0}
+                className="h-8 px-4 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 font-bold gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" /> Adicionar ao Ponto {addAtividadeModalPonto}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

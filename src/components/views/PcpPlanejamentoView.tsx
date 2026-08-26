@@ -749,21 +749,23 @@ export const PcpPlanejamentoView = () => {
   };
 
   // Handlers de Atividades
-  const handleAddAtividadeNoPonto = (diaId: string, pontoLabelTarget: string) => {
+  const handleAddAtividadeNoPonto = (diaId: string, pontoLabelTarget: string, customServico?: Partial<PcpPontoItem> | ServicoBase) => {
     const pUpper = (pontoLabelTarget || '').toUpperCase();
     const existing = getItemsDoPontoNoDia(diaId, pUpper);
     const existingServicos = new Set(existing.map(i => i.servico));
     const safeBase = Array.isArray(servicosBase) && servicosBase.length > 0 ? servicosBase : [];
     const fallback = safeBase.length > 0 ? safeBase[0] : { servico: 'INSTALAR ISOLADOR BASTAO/DISCO', tempoMinutosPorUnidade: 27, valorPorUnidade: 338.40 };
-    const nextAvailable = safeBase.find(s => s && s.servico && !existingServicos.has(s.servico)) || fallback;
+    const nextAvailable = customServico?.servico ? customServico : (safeBase.find(s => s && s.servico && !existingServicos.has(s.servico)) || fallback);
+
+    const etapaSugerida = (customServico as any)?.etapaPrevista || inferEtapaFromServico(nextAvailable.servico) || 'IMPLANTAÇÃO';
 
     const newActivity: PcpPontoItem = {
       id: `${diaId}-${pUpper}-manual-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       ponto: pUpper,
-      servico: nextAvailable.servico,
-      codigoMaterial: nextAvailable.codigo,
+      servico: nextAvailable.servico || 'ATIVIDADE',
+      codigoMaterial: nextAvailable.codigo || '',
       qtdOrcadaPonto: 1,
-      etapaPrevista: 'IMPLANTAÇÃO',
+      etapaPrevista: etapaSugerida,
       quantidade: 1,
       tempoEstimadoMinutos: nextAvailable.tempoMinutosPorUnidade || 60,
       valorEstimado: nextAvailable.valorPorUnidade || 100,
