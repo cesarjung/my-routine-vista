@@ -226,15 +226,24 @@ export function parseVistoriaData(
       ) {
         categoria = 'Segurança';
         icone = isCritico ? '🔴' : '⚡';
-      } else if (pUpper.includes('PODA') || pUpper.includes('VEGETAÇÃO') || pUpper.includes('ÁRVORE')) {
+      } else if (pUpper.includes('TRAFO') || pUpper.includes('TRANSFORMADOR') || pUpper.includes('DESLIGAMENTO') || pUpper.includes('REDE BT') || pUpper.includes('REDE MT') || pUpper.includes('CHAVE') || pUpper.includes('FUSIVEL') || pUpper.includes('GLV')) {
+        categoria = 'Rede Elétrica';
+        icone = '⚡';
+      } else if (pUpper.includes('SINALIZAÇÃO') || pUpper.includes('SINALIZACAO') || pUpper.includes('CONES') || pUpper.includes('TRANSITO') || pUpper.includes('TRÂNSITO')) {
+        categoria = 'Sinalização';
+        icone = '🚧';
+      } else if (pUpper.includes('PODA') || pUpper.includes('VEGETAÇÃO') || pUpper.includes('VEGETACAO') || pUpper.includes('ÁRVORE') || pUpper.includes('ARVORE')) {
         categoria = 'Podas';
         icone = '🌳';
-      } else if (pUpper.includes('ROCHA') || pUpper.includes('PEDRA') || pUpper.includes('RETROESCAVADEIRA') || pUpper.includes('AREIA') || pUpper.includes('ARENOSO') || pUpper.includes('ESCAVAÇÃO')) {
-        categoria = 'Solo/Equipamentos';
-        icone = '🚜';
-      } else if (pUpper.includes('ACESSO') || pUpper.includes('PONTE') || pUpper.includes('CERCA') || pUpper.includes('CANCELA') || pUpper.includes('CAMINHÃO') || pUpper.includes('CARRETA') || pUpper.includes('CHUVA') || pUpper.includes('ALAGAM')) {
+      } else if (pUpper.includes('ROCHA') || pUpper.includes('PEDRA') || pUpper.includes('RETROESCAVADEIRA') || pUpper.includes('AREIA') || pUpper.includes('ARENOSO') || pUpper.includes('ESCAVAÇÃO') || pUpper.includes('CANO') || pUpper.includes('ESGOTO') || pUpper.includes('TUBULAÇÃO')) {
+        categoria = 'Solo/Escavação';
+        icone = '⛏️';
+      } else if (pUpper.includes('ACESSO') || pUpper.includes('PONTE') || pUpper.includes('CERCA') || pUpper.includes('CANCELA') || pUpper.includes('CAMINHÃO') || pUpper.includes('CARRETA') || pUpper.includes('CHUVA') || pUpper.includes('ALAGAM') || pUpper.includes('RUA') || pUpper.includes('ESTRADA') || pUpper.includes('URBANO') || pUpper.includes('RURAL')) {
         categoria = 'Acesso';
         icone = '🛣️';
+      } else if (pUpper.includes('SEM IMPEDITIVO') || pUpper.includes('LIBERAD') || pUpper.includes('APTA')) {
+        categoria = 'Status';
+        icone = '✅';
       }
 
       pontosDetalhados.push({ categoria, icone, texto: part, isCritico });

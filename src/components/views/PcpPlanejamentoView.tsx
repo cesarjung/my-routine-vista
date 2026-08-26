@@ -1593,7 +1593,7 @@ export const PcpPlanejamentoView = () => {
               {/* Resumo da Análise de Risco da Vistoria */}
               <div className="pt-2.5 border-t border-[#E6E3DD] space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#5C574F] font-semibold">Vistoria</span>
+                  <span className="text-[#5C574F] font-bold text-xs">Vistoria</span>
                   <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold shadow-2xs ${
                     currentRisk?.classificacao === 'Vermelho'
                       ? 'bg-[#C0392E] text-white'
@@ -1607,20 +1607,29 @@ export const PcpPlanejamentoView = () => {
                 <div className="space-y-1.5">
                   {currentRisk?.pontosDetalhados && currentRisk.pontosDetalhados.length > 0 ? (
                     currentRisk.pontosDetalhados.map((pt, pIdx) => {
-                      const isVermelho = currentRisk.classificacao === 'Vermelho' || pt.isCritico;
+                      const isCritico = Boolean(pt.isCritico);
                       return (
                         <div
                           key={pIdx}
-                          className={`p-2 rounded-lg text-[11px] leading-snug break-words flex items-start gap-1.5 shadow-2xs transition-colors ${
-                            isVermelho
-                              ? 'bg-[#C0392E] text-white font-semibold'
-                              : currentRisk.classificacao === 'Laranja'
-                                ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0] font-medium'
-                                : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2] font-medium'
+                          className={`p-2 rounded-lg text-[11px] leading-snug break-words flex items-start gap-2 shadow-2xs transition-all ${
+                            isCritico
+                              ? 'bg-[#C0392E] text-white font-bold border border-[#A93226] ring-1 ring-[#C0392E]/40'
+                              : 'bg-white border border-[#E6E3DD] text-[#23211E]'
                           }`}
                         >
-                          <span className={`text-[10px] mt-0.5 shrink-0 ${isVermelho ? 'text-white' : 'text-[#E07A1F]'}`}>●</span>
-                          <span className="break-words whitespace-normal flex-1">{pt.texto}</span>
+                          <span className="text-xs shrink-0 mt-0.5">{pt.icone || (isCritico ? '🔴' : '📌')}</span>
+                          <div className="flex-1 min-w-0">
+                            {pt.categoria && (
+                              <span className={`mr-1 text-[10px] uppercase tracking-wider ${
+                                isCritico ? 'text-red-100 font-bold' : 'text-[#8A857D] font-semibold'
+                              }`}>
+                                [{pt.categoria}]
+                              </span>
+                            )}
+                            <span className={`break-words whitespace-normal ${isCritico ? 'text-white' : 'text-[#23211E]'}`}>
+                              {pt.texto}
+                            </span>
+                          </div>
                         </div>
                       );
                     })
