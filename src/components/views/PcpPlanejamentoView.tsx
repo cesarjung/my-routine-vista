@@ -1041,14 +1041,43 @@ export const PcpPlanejamentoView = () => {
     const distinctEquipes = Array.from(new Set(plansToLoad.map(p => p.equipe).filter(Boolean)));
     if (distinctEquipes.length > 0) setSelectedEquipes(distinctEquipes);
 
-    const nextDiasPontosMap = { ...diasPontosMap };
-    const nextDiasPontosGroupedMap = { ...diasPontosGroupedMap };
+    // 1. Extrair e ordenar todas as datas dos planejamentos selecionados
+    const dateMap = new Map<string, Date>(); // key: 'yyyy-MM-dd', value: Date
+    plansToLoad.forEach(plan => {
+      let d: Date | null = null;
+      const dStr = plan.dataCompleta || plan.dataStr;
+      if (dStr) {
+        const parts = dStr.split('/');
+        if (parts.length === 3) {
+          d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+        } else if (parts.length === 2) {
+          d = new Date(new Date().getFullYear(), Number(parts[1]) - 1, Number(parts[0]));
+        }
+      }
+      if (d && !isNaN(d.getTime())) {
+        dateMap.set(format(d, 'yyyy-MM-dd'), d);
+      }
+    });
+
+    const sortedDayKeys = Array.from(dateMap.keys()).sort();
+
+    // 2. Ajustar o período da tela EXATAMENTE para as datas dos planos carregados
+    if (sortedDayKeys.length > 0) {
+      setDataInicio(sortedDayKeys[0]);
+      setDataFim(sortedDayKeys[sortedDayKeys.length - 1]);
+      setDiasExtrasList([]);
+      setExpandedDayIds(sortedDayKeys);
+    }
+
+    // 3. Montar mapas limpos apenas com os dados dos planejamentos carregados
+    const nextDiasPontosMap: Record<string, string[]> = {};
+    const nextDiasPontosGroupedMap: Record<string, Record<string, PcpPontoItem[]>> = {};
 
     plansToLoad.forEach(plan => {
-      let matchedDia = diasProgramados.find(d => d.dataCompleta === plan.dataStr || plan.dataCompleta.includes(d.dataCompleta));
-      let dayId = matchedDia?.id;
-      if (!dayId && plan.dataStr) {
-        const parts = plan.dataStr.split('/');
+      let dayId = '';
+      const dStr = plan.dataCompleta || plan.dataStr;
+      if (dStr) {
+        const parts = dStr.split('/');
         if (parts.length === 3) {
           dayId = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
         }
