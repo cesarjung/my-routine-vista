@@ -1972,19 +1972,19 @@ export const PcpPlanejamentoView = () => {
                     {/* Legenda de cores */}
                     <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#6B6660] ml-2">
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-[#3B82F6]" /> Saída
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#23211E]" /> Saída
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-[#E07A1F]" /> Ida
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#E07A1F]" /> Ida
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-[#0D9488]" /> Segurança
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#A39E96]" /> Segurança
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-[#C0392E]" /> Serviço
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#C0392E]" /> Serviço
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-[#F59E0B]" /> Volta
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#F5BE84]" /> Volta
                       </span>
                     </div>
                   </div>
