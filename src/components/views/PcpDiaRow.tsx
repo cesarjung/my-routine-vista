@@ -763,71 +763,38 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             </div>
           </div>
 
-          {/* 3. Seleção de Pontos do Dia */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-[#5C574F]">Pontos do dia:</span>
-              {pontosAtivos.map(pLabel => (
-                <span
-                  key={pLabel}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-[#FBF5EC] text-[#23211E] border border-[#E8C9A0] shadow-2xs"
-                >
-                  {pLabel}
+          {/* 3. Seleção de Pontos do Dia (Chips Diretos e Visíveis) */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-[#E6E3DD]">
+            <div className="flex flex-wrap items-center gap-1.5 flex-1">
+              <span className="text-xs font-bold text-[#5C574F] mr-1">
+                Pontos da obra ({pontosDisponiveis.length}):
+              </span>
+
+              {/* Chips de todos os pontos disponíveis da obra */}
+              {pontosDisponiveis.map(pLabel => {
+                const isSelected = pontosAtivos.includes(pLabel);
+                return (
                   <button
+                    key={pLabel}
                     type="button"
                     onClick={() => handleTogglePontoNoDia(dia.id, pLabel)}
-                    className="text-[#A39E96] hover:text-[#C0392E] font-bold ml-1"
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono transition-all cursor-pointer shadow-2xs ${
+                      isSelected
+                        ? 'bg-[#E07A1F] text-white font-bold border border-[#C66512] ring-1 ring-[#E07A1F]/30'
+                        : 'bg-white text-[#5C574F] font-medium border border-[#DEDAD3] hover:border-[#E07A1F] hover:bg-[#FBF5EC] hover:text-[#23211E]'
+                    }`}
+                    title={isSelected ? `Clique para remover ${pLabel} deste dia` : `Clique para incluir ${pLabel} neste dia`}
                   >
-                    ×
+                    <span>{pLabel}</span>
+                    {isSelected && <Check className="w-3 h-3" />}
                   </button>
-                </span>
-              ))}
+                );
+              })}
 
-              {/* Seletor Dropdown de Pontos */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs bg-white border-[#DEDAD3]">
-                    <Plus className="w-3.5 h-3.5 mr-1 text-[#E07A1F]" /> Adicionar ponto
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-2.5 bg-white" align="start">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-[#E6E3DD] text-xs">
-                      <span className="font-bold text-[#23211E]">Pontos da obra</span>
-                      <div className="flex items-center gap-2 text-[#E07A1F] font-semibold">
-                        <button type="button" onClick={() => handleSelectAllPontosNoDia(dia.id)} className="hover:underline">
-                          Todos
-                        </button>
-                        <span>·</span>
-                        <button type="button" onClick={() => handleDeselectAllPontosNoDia(dia.id)} className="hover:underline">
-                          Nenhum
-                        </button>
-                      </div>
-                    </div>
-                    <div className="max-h-[240px] overflow-y-auto space-y-1">
-                      {pontosDisponiveis.map(p => {
-                        const isChecked = pontosAtivos.includes(p);
-                        return (
-                          <label key={p} className="flex items-center gap-2 p-1.5 rounded hover:bg-[#FBF5EC]/60 cursor-pointer text-xs font-mono">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleTogglePontoNoDia(dia.id, p)}
-                              className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4"
-                            />
-                            <span>{p}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {/* Ponto Customizado */}
-              <div className="inline-flex items-center gap-1 ml-1">
+              {/* Ponto Customizado Adicional */}
+              <div className="inline-flex items-center gap-1 ml-1.5">
                 <Input
-                  placeholder="Outro ponto..."
+                  placeholder="+ Outro ponto..."
                   value={customPontoInput}
                   onChange={e => setCustomPontoInput(e.target.value)}
                   onKeyDown={e => {
@@ -848,27 +815,28 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                     }}
                     className="h-7 px-2 text-xs bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 font-bold"
                   >
-                    + Add
+                    Add
                   </Button>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-medium">
+            {/* Ações Rápidas */}
+            <div className="flex items-center gap-2 text-xs text-[#E07A1F] font-semibold shrink-0">
               <button
                 type="button"
                 onClick={() => handleSelectAllPontosNoDia(dia.id)}
-                className="text-[#5C574F] hover:text-[#23211E] underline"
+                className="hover:underline text-[11px]"
               >
-                Restaurar todos
+                Marcar todos
               </button>
-              <span>·</span>
+              <span className="text-[#DEDAD3]">·</span>
               <button
                 type="button"
                 onClick={() => handleDeselectAllPontosNoDia(dia.id)}
-                className="text-[#A39E96] hover:text-[#C0392E] underline"
+                className="text-[#A39E96] hover:text-[#C0392E] hover:underline text-[11px]"
               >
-                Limpar
+                Limpar dia
               </button>
             </div>
           </div>
