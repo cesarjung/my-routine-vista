@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Search,
   Plus,
@@ -156,6 +157,8 @@ function formatMinToHours(minutes: number): string {
 }
 
 export const PcpPlanejamentoView = () => {
+  const queryClient = useQueryClient();
+
   // Limpeza de session storage legado ao inicializar
   useEffect(() => {
     try {
