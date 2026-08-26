@@ -193,8 +193,32 @@ export default async function handler(req, res) {
     const allRowsData = await allRowsRes.json();
     const allRows = allRowsData.values || [];
 
-    // Helper: find first empty row index (0-indexed in allRows, starting at row 6 / index 5)
-    const findFirstEmptyRowIndex = (rowsArray, excludeIndices = new Set()) => {
+    // Helper: Find next available row in Reprogramadas tab (row 6 onwards)
+    let nextReprogRowNumber = 6;
+    if (reprogramar) {
+      try {
+        const readReprogUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Reprogramadas!B1:B`;
+        const readReprogRes = await fetch(readReprogUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const readReprogData = await readReprogRes.json();
+        const reprogB = readReprogData.values || [];
+        let foundEmpty = false;
+        for (let i = 5; i < reprogB.length; i++) {
+          if (!reprogB[i] || !reprogB[i][0] || !String(reprogB[i][0]).trim()) {
+            nextReprogRowNumber = i + 1;
+            foundEmpty = true;
+            break;
+          }
+        }
+        if (!foundEmpty) {
+          nextReprogRowNumber = Math.max(6, reprogB.length + 1);
+        }
+      } catch (e) {
+        console.error('Erro ao ler aba Reprogramadas:', e);
+      }
+    }
+
+    // Helper: Find first empty row in Plan_Principal (row 6 onwards)
+    const findFirstEmptyPlanPrincipalRowIndex = (rowsArray, excludeIndices = new Set()) => {
       for (let i = 5; i < rowsArray.length; i++) {
         if (excludeIndices.has(i)) continue;
         const r = rowsArray[i];
@@ -209,30 +233,53 @@ export default async function handler(req, res) {
       return Math.max(5, rowsArray.length);
     };
 
+    // Helper: Find existing planned schedule (has project in Col H / r[7]) for team and date
+    const findExistingPlannedRowIndex = (rowsArray, targetEquipe, targetDataStr, targetChaveBk, excludeIndices = new Set()) => {
+      for (let i = 5; i < rowsArray.length; i++) {
+        if (excludeIndices.has(i)) continue;
+        const r = rowsArray[i];
+        if (!r || r.length === 0) continue;
+        const existProjeto = cleanCode(r[7]);
+        if (!existProjeto) continue; // Only rows that actually have an active project
+
+        const existChaveBk = String(r[62] || '').trim();
+        const existEquipe = String(r[6] || '').trim().toUpperCase();
+        const existDataStr = extractDate(r[1]);
+
+        if (
+          (targetChaveBk && existChaveBk && existChaveBk === targetChaveBk) ||
+          (targetEquipe && existEquipe === targetEquipe && targetDataStr && existDataStr === targetDataStr)
+        ) {
+          return i;
+        }
+      }
+      return -1;
+    };
+
+    // Helper: Find empty template slot for team and date (where project in Col H / r[7] is empty)
+    const findTemplateSlotIndex = (rowsArray, targetEquipe, targetDataStr, excludeIndices = new Set()) => {
+      for (let i = 5; i < rowsArray.length; i++) {
+        if (excludeIndices.has(i)) continue;
+        const r = rowsArray[i];
+        if (!r || r.length === 0) continue;
+        const existProjeto = cleanCode(r[7]);
+        if (existProjeto) continue; // Must be empty of project
+
+        const existEquipe = String(r[6] || '').trim().toUpperCase();
+        const existDataStr = extractDate(r[1]);
+
+        if (targetEquipe && existEquipe === targetEquipe && targetDataStr && existDataStr === targetDataStr) {
+          return i;
+        }
+      }
+      return -1;
+    };
+
     const rangesToClear = [];
     const cellUpdates = [];
     const reprogUpdates = [];
     const clearedIndices = new Set();
-
-    // If reprogramming, check Reprogramadas tab to find target starting row
-    let targetReprogRow = 6;
-    if (reprogramar) {
-      try {
-        const readReprogUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Reprogramadas!B1:B`;
-        const readReprogRes = await fetch(readReprogUrl, { headers: { Authorization: `Bearer ${token}` } });
-        const readReprogData = await readReprogRes.json();
-        const reprogB = readReprogData.values || [];
-        for (let i = 5; i < reprogB.length; i++) {
-          if (!reprogB[i] || !reprogB[i][0] || !reprogB[i][0].trim()) {
-            targetReprogRow = i + 1;
-            break;
-          }
-        }
-        if (targetReprogRow <= 5) targetReprogRow = Math.max(6, reprogB.length + 1);
-      } catch (e) {
-        console.error('Erro ao ler aba Reprogramadas:', e);
-      }
-    }
+    const usedTargetRows = new Set();
 
     // 4. Process each new dataLine according to business rules
     dataLines.forEach((line) => {
@@ -243,43 +290,28 @@ export default async function handler(req, res) {
       const novaChaveBk = String(rowCells[62] || '').trim().replace(/^"|"$/g, '');
       const isLineReprog = reprogramar || String(rowCells[0] || '').toUpperCase().includes('REPROG') || String(rowCells[0] || '').toUpperCase() === 'TRUE';
 
-      // Search for existing matching row in allRows (row 6 onwards)
-      let existingRowIdx = -1;
-      for (let i = 5; i < allRows.length; i++) {
-        if (clearedIndices.has(i)) continue;
-        const r = allRows[i] || [];
-        const existChaveBk = String(r[62] || '').trim();
-        const existEquipe = String(r[6] || '').trim().toUpperCase();
-        const existDataStr = extractDate(r[1]);
-
-        if (
-          (novaChaveBk && existChaveBk && existChaveBk === novaChaveBk) ||
-          (novaEquipe && existEquipe === novaEquipe && novaDataStr && existDataStr === novaDataStr)
-        ) {
-          existingRowIdx = i;
-          break;
-        }
-      }
-
-      const hasExistingRow = existingRowIdx !== -1;
-      const existProjeto = hasExistingRow ? cleanCode(allRows[existingRowIdx][7]) : '';
-      const isSameObra = hasExistingRow && (existProjeto === novoProjeto);
-      const existingRowNumber = existingRowIdx + 1; // 1-indexed for sheets
+      // 4.1 Search for existing planned schedule for this team and date
+      const existingPlannedIdx = findExistingPlannedRowIndex(allRows, novaEquipe, novaDataStr, novaChaveBk, clearedIndices);
+      const hasExistingPlan = existingPlannedIdx !== -1;
+      const existProjeto = hasExistingPlan ? cleanCode(allRows[existingPlannedIdx][7]) : '';
+      const isSameObra = hasExistingPlan && (existProjeto === novoProjeto);
+      const existingPlannedRowNumber = existingPlannedIdx + 1; // 1-indexed for sheets
 
       let targetRowNumber;
 
       if (isLineReprog) {
-        // === CASO 1: REPROGRAMAR MARCADO ===
-        // 1. Se existir programação anterior, copia para a aba Reprogramadas e apaga a original da Plan_Principal
-        if (hasExistingRow) {
-          const oldRowData = allRows[existingRowIdx] || [];
+        // === CASO 1: BOTÃO REPROGRAMAR MARCADO ===
+        // 1.1 Se existir programação anterior, copia a linha original para a aba Reprogramadas com o motivo em AU (coluna 46)
+        if (hasExistingPlan) {
+          const oldRowData = allRows[existingPlannedIdx] || [];
           const copyRow = [...oldRowData];
-          while (copyRow.length <= 46) copyRow.push('');
-          const motivoLinha = motivo || rowCells[46] || '';
+          while (copyRow.length <= 78) copyRow.push('');
+          copyRow[0] = 'REPROGRAMADA';
+          const motivoLinha = motivo || rowCells[46] || oldRowData[46] || '';
           if (motivoLinha) copyRow[46] = String(motivoLinha).trim();
 
-          const destReprogRow = targetReprogRow;
-          targetReprogRow++;
+          const destReprogRow = nextReprogRowNumber;
+          nextReprogRowNumber++;
 
           copyRow.forEach((val, cIdx) => {
             const valStr = String(val ?? '').trim();
@@ -291,36 +323,66 @@ export default async function handler(req, res) {
             }
           });
 
-          // Limpa a linha original em Plan_Principal
-          rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
-          clearedIndices.add(existingRowIdx);
-          allRows[existingRowIdx] = []; // marca como vazia em memória
+          // 1.2 Deleta a linha da programação original de Plan_Principal
+          rangesToClear.push(`Plan_Principal!A${existingPlannedRowNumber}:BZ${existingPlannedRowNumber}`);
+          clearedIndices.add(existingPlannedIdx);
+          allRows[existingPlannedIdx] = [];
         }
 
-        // 2. Lança a nova programação na primeira linha em branco de Plan_Principal (ao final das preenchidas)
-        const blankIdx = findFirstEmptyRowIndex(allRows, clearedIndices);
+        // 1.3 Insere o novo planejamento na primeira linha em branco de Plan_Principal
+        let blankIdx = findFirstEmptyPlanPrincipalRowIndex(allRows, clearedIndices);
+        while (usedTargetRows.has(blankIdx + 1)) {
+          blankIdx++;
+        }
         targetRowNumber = blankIdx + 1;
+        usedTargetRows.add(targetRowNumber);
+        clearedIndices.add(blankIdx);
         while (allRows.length <= blankIdx) allRows.push([]);
         allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
 
       } else {
-        // === CASO 2: REPROGRAMAR NÃO MARCADO (Alteração na própria programação) ===
-        if (hasExistingRow && isSameObra) {
-          // 2A: Mesma obra e mesma data -> sobrescreve e mantém na mesma linha
-          targetRowNumber = existingRowNumber;
-          rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
-          allRows[existingRowIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
-        } else {
-          // 2B: Obra diferente no mesmo dia -> apaga a linha anterior e lança na primeira em branco
-          if (hasExistingRow) {
-            rangesToClear.push(`Plan_Principal!A${existingRowNumber}:BZ${existingRowNumber}`);
-            clearedIndices.add(existingRowIdx);
-            allRows[existingRowIdx] = []; // marca como vazia em memória
+        // === CASO 2: BOTÃO REPROGRAMAR NÃO MARCADO ===
+        if (hasExistingPlan && isSameObra) {
+          // 2.1 Mesma obra e mesma data -> Altera os dados e mantém na mesma linha existente
+          targetRowNumber = existingPlannedRowNumber;
+          usedTargetRows.add(targetRowNumber);
+          rangesToClear.push(`Plan_Principal!A${existingPlannedRowNumber}:BZ${existingPlannedRowNumber}`);
+          allRows[existingPlannedIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+        } else if (hasExistingPlan && !isSameObra) {
+          // 2.2 Outra obra no mesmo dia -> Deleta a linha anterior da Plan_Principal e lança na primeira em branco
+          rangesToClear.push(`Plan_Principal!A${existingPlannedRowNumber}:BZ${existingPlannedRowNumber}`);
+          clearedIndices.add(existingPlannedIdx);
+          allRows[existingPlannedIdx] = [];
+
+          let blankIdx = findFirstEmptyPlanPrincipalRowIndex(allRows, clearedIndices);
+          while (usedTargetRows.has(blankIdx + 1)) {
+            blankIdx++;
           }
-          const blankIdx = findFirstEmptyRowIndex(allRows, clearedIndices);
           targetRowNumber = blankIdx + 1;
+          usedTargetRows.add(targetRowNumber);
+          clearedIndices.add(blankIdx);
           while (allRows.length <= blankIdx) allRows.push([]);
           allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+        } else {
+          // 2.3 Planejamento NOVO (sem programação prévia para esta equipe/data)
+          // Se houver um slot de template pré-existente sem projeto para esta equipe/data, usa ele; senão usa a primeira linha em branco
+          const templateSlotIdx = findTemplateSlotIndex(allRows, novaEquipe, novaDataStr, clearedIndices);
+          if (templateSlotIdx !== -1 && !usedTargetRows.has(templateSlotIdx + 1)) {
+            targetRowNumber = templateSlotIdx + 1;
+            usedTargetRows.add(targetRowNumber);
+            clearedIndices.add(templateSlotIdx);
+            allRows[templateSlotIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+          } else {
+            let blankIdx = findFirstEmptyPlanPrincipalRowIndex(allRows, clearedIndices);
+            while (usedTargetRows.has(blankIdx + 1)) {
+              blankIdx++;
+            }
+            targetRowNumber = blankIdx + 1;
+            usedTargetRows.add(targetRowNumber);
+            clearedIndices.add(blankIdx);
+            while (allRows.length <= blankIdx) allRows.push([]);
+            allRows[blankIdx] = rowCells.map(c => String(c ?? '').replace(/^"|"$/g, ''));
+          }
         }
       }
 
@@ -355,7 +417,7 @@ export default async function handler(req, res) {
     if (rangesToClear.length > 0) {
       const uniqueRanges = Array.from(new Set(rangesToClear));
       try {
-        const clearRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -365,24 +427,23 @@ export default async function handler(req, res) {
             ranges: uniqueRanges
           })
         });
-        if (!clearRes.ok) {
-          // Fallback: preenche com strings vazias para limpar os dados
-          const clearUpdates = uniqueRanges.map(r => ({
-            range: r,
-            values: [new Array(78).fill('')]
-          }));
-          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              valueInputOption: 'USER_ENTERED',
-              data: clearUpdates
-            })
-          });
-        }
+
+        // Garantia de limpeza completa: sobrescreve células com strings vazias
+        const clearUpdates = uniqueRanges.map(r => ({
+          range: r,
+          values: [new Array(78).fill('')]
+        }));
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            valueInputOption: 'USER_ENTERED',
+            data: clearUpdates
+          })
+        });
       } catch (clearErr) {
         console.error('Erro ao limpar ranges em Plan_Principal:', clearErr);
       }
