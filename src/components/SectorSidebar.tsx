@@ -794,6 +794,19 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         )}
         {hasAnyPcpAccess && (!collapsed ? isPcpExpanded : true) && (
           <div className="space-y-0.5 px-3">
+            {(hasPcpAccess('pcp_calendario') || hasPcpAccess('pcp_planejamento')) && (
+              <button
+                onClick={() => onNavigate({ type: 'pcp_calendario', section: 'planejamento' })}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                  context.type === 'pcp_calendario' ? 'bg-sidebar-accent text-sidebar-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                )}
+              >
+                <Calendar className="w-4 h-4 shrink-0 text-amber-500" />
+                {!collapsed && <span className="text-sm whitespace-nowrap">Calendário</span>}
+              </button>
+            )}
+
             {hasPcpAccess('pcp_planejamento') && (
               <button
                 onClick={() => onNavigate({ type: 'pcp_planejamento', section: 'planejamento' })}

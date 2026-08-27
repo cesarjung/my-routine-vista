@@ -33,6 +33,7 @@ export const ALMOXARIFADO_SECTIONS = [
 ];
 
 export const PCP_SECTIONS = [
+  { id: 'pcp_calendario', label: 'Calendário' },
   { id: 'pcp_planejamento', label: 'Planejamento' },
   { id: 'pcp_planej_auto', label: 'Planej. Automático' }
 ];
@@ -76,18 +77,19 @@ const ROLE_PRESETS: Record<string, { planejamento: string[]; almoxarifado: strin
       'planejamento_semanal'
     ],
     almoxarifado: ['planejamento_envios', 'planejamento_materiais'],
-    pcp: ['pcp_planejamento'],
+    pcp: ['pcp_calendario', 'pcp_planejamento'],
     configuracoes: ['config_integrations']
   },
   leitor: {
     planejamento: [
       'carteira_dashboard',
       'carteira',
+      'planejamento_semanal',
       'cumprimento_planejamento',
       'planejado_meta'
     ],
-    almoxarifado: [],
-    pcp: [],
+    almoxarifado: ['planejamento_envios', 'planejamento_materiais'],
+    pcp: ['pcp_calendario'],
     configuracoes: []
   }
 };

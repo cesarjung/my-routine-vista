@@ -110,6 +110,66 @@ const pcpSyncApiPlugin = (): Plugin => ({
         next();
       }
     });
+
+    server.middlewares.use("/api/enviar-planejamento-email", (req, res, next) => {
+      if (req.method === "POST") {
+        let body = "";
+        req.on("data", chunk => { body += chunk.toString(); });
+        req.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            const scratchDir = path.resolve(__dirname, "scratch");
+            if (!fs.existsSync(scratchDir)) {
+              fs.mkdirSync(scratchDir, { recursive: true });
+            }
+
+            const tempPayloadPath = path.join(scratchDir, `email_payload_${Date.now()}.json`);
+            fs.writeFileSync(tempPayloadPath, JSON.stringify(data, null, 2), "utf-8");
+
+            const pyScript = path.resolve(__dirname, "send_planejamento_email.py");
+            const cmd = `python "${pyScript}" "${tempPayloadPath}"`;
+
+            console.log(`[API PCP EMAIL] 📧 Disparando envio de e-mail via SMTP...`);
+            exec(cmd, { cwd: __dirname }, (error, stdout, stderr) => {
+              // Remove temp file after send
+              try { if (fs.existsSync(tempPayloadPath)) fs.unlinkSync(tempPayloadPath); } catch (e) {}
+
+              if (error) {
+                console.error(`[API PCP EMAIL ERRO] ${error.message}`);
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ success: false, error: error.message }));
+                return;
+              }
+
+              try {
+                const parsedResult = JSON.parse(stdout.trim());
+                if (!parsedResult.success) {
+                  res.statusCode = 400;
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify(parsedResult));
+                  return;
+                }
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify(parsedResult));
+              } catch (e) {
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ success: true, message: stdout.trim() }));
+              }
+            });
+          } catch (e: any) {
+            console.error(`[API PCP EMAIL EXCEPTION] ${e.message}`);
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ success: false, error: e.message }));
+          }
+        });
+      } else {
+        next();
+      }
+    });
   },
 });
 

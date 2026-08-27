@@ -31,7 +31,8 @@ import {
   MapPin,
   Clock,
   DollarSign,
-  Info
+  Info,
+  Mail
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -214,6 +215,12 @@ export const PcpPlanejamentoView = () => {
     return UNIDADES_DISPONIVEIS.find(u => u.id === selectedUnidadeId) || null;
   }, [selectedUnidadeId]);
 
+  // Modal de Envio de Planejamento Semanal
+  const [isEnvioModalOpen, setIsEnvioModalOpen] = useState(false);
+  const semanalData = usePlanejamentoSemanal({
+    unidadeId: selectedUnidadeId,
+  });
+
   const selectedObra = useMemo(() => {
     if (!selectedObraId || selectedObraId.trim() === '') return null;
     return obras.find(o => o.projeto === selectedObraId) || null;
@@ -267,6 +274,8 @@ export const PcpPlanejamentoView = () => {
   const [filterEquipeExistingPlan, setFilterEquipeExistingPlan] = useState<string>('TODAS');
   const [filterOnlyCurrentPeriod, setFilterOnlyCurrentPeriod] = useState<boolean>(false);
   const [filterOnlyCurrentObra, setFilterOnlyCurrentObra] = useState<boolean>(false);
+  const [filterDataInicioExistingPlan, setFilterDataInicioExistingPlan] = useState<string>('');
+  const [filterDataFimExistingPlan, setFilterDataFimExistingPlan] = useState<string>('');
   const [searchExistingPlan, setSearchExistingPlan] = useState<string>('');
 
   // Zoom
@@ -1334,6 +1343,15 @@ export const PcpPlanejamentoView = () => {
       if (filterOnlyCurrentObra && selectedObraId && p.projeto !== selectedObraId) {
         return false;
       }
+      if (filterDataInicioExistingPlan || filterDataFimExistingPlan) {
+        const dStr = p.dataCompleta || p.dataStr || '';
+        const match = dStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (match) {
+          const iso = `${match[3]}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
+          if (filterDataInicioExistingPlan && iso < filterDataInicioExistingPlan) return false;
+          if (filterDataFimExistingPlan && iso > filterDataFimExistingPlan) return false;
+        }
+      }
       if (searchExistingPlan.trim()) {
         const q = searchExistingPlan.toLowerCase();
         const matchesProj = (p.projeto || '').toLowerCase().includes(q);
@@ -1344,7 +1362,15 @@ export const PcpPlanejamentoView = () => {
       }
       return true;
     });
-  }, [planejamentosExistentesList, filterEquipeExistingPlan, filterOnlyCurrentObra, selectedObraId, searchExistingPlan]);
+  }, [
+    planejamentosExistentesList,
+    filterEquipeExistingPlan,
+    filterOnlyCurrentObra,
+    filterDataInicioExistingPlan,
+    filterDataFimExistingPlan,
+    selectedObraId,
+    searchExistingPlan,
+  ]);
 
   return (
     <div
@@ -1378,6 +1404,15 @@ export const PcpPlanejamentoView = () => {
 
           {/* Botões de Ação do Header */}
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEnvioModalOpen(true)}
+              className="h-[32px] px-3.5 text-xs font-semibold bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] hover:border-[#E8C9A0] shadow-2xs"
+            >
+              <Mail className="w-3.5 h-3.5 mr-1.5 text-[#E07A1F]" /> Envio Planejamento
+            </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -2515,7 +2550,7 @@ export const PcpPlanejamentoView = () => {
 
           {/* Filtros e Busca do Modal */}
           <div className="p-3 bg-[#F7F6F3] border-b border-[#E6E3DD] flex flex-wrap items-center gap-2 text-xs">
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-[180px]">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#A39E96]" />
               <input
                 placeholder="Buscar projeto, equipe, data..."
@@ -2525,8 +2560,38 @@ export const PcpPlanejamentoView = () => {
               />
             </div>
 
+            {/* Filtro de Período (De / Até) */}
+            <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded border border-[#DEDAD3]">
+              <span className="text-[10px] uppercase font-bold text-[#6B6660]">De:</span>
+              <input
+                type="date"
+                value={filterDataInicioExistingPlan}
+                onChange={e => setFilterDataInicioExistingPlan(e.target.value)}
+                className="h-6 px-1 text-xs rounded border border-[#DEDAD3] font-mono text-[#23211E]"
+              />
+              <span className="text-[10px] uppercase font-bold text-[#6B6660]">Até:</span>
+              <input
+                type="date"
+                value={filterDataFimExistingPlan}
+                onChange={e => setFilterDataFimExistingPlan(e.target.value)}
+                className="h-6 px-1 text-xs rounded border border-[#DEDAD3] font-mono text-[#23211E]"
+              />
+              {(filterDataInicioExistingPlan || filterDataFimExistingPlan) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterDataInicioExistingPlan('');
+                    setFilterDataFimExistingPlan('');
+                  }}
+                  className="text-[10px] font-bold text-[#E07A1F] hover:underline ml-1"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+
             <Select value={filterEquipeExistingPlan} onValueChange={setFilterEquipeExistingPlan}>
-              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3]">
+              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3] w-[140px]">
                 <SelectValue placeholder="Todas as equipes" />
               </SelectTrigger>
               <SelectContent>
@@ -2546,6 +2611,28 @@ export const PcpPlanejamentoView = () => {
               />
               <span>Somente obra atual</span>
             </label>
+
+            {/* Ações Rápidas de Seleção */}
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  const allKeys = filteredExistingPlans.map(p => `${p.chaveBk}-${p.rowIdx}`);
+                  setSelectedExistingPlanKeys(allKeys);
+                }}
+                className="text-[11px] font-bold text-[#E07A1F] hover:underline px-1.5 py-0.5 rounded hover:bg-[#FBF5EC]"
+              >
+                Selecionar todos ({filteredExistingPlans.length})
+              </button>
+              <span className="text-[#DEDAD3]">|</span>
+              <button
+                type="button"
+                onClick={() => setSelectedExistingPlanKeys([])}
+                className="text-[11px] font-medium text-[#6B6660] hover:underline px-1.5 py-0.5 rounded hover:bg-[#F2F0EC]"
+              >
+                Desmarcar
+              </button>
+            </div>
           </div>
 
           {/* Lista de Planejamentos */}

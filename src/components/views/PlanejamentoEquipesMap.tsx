@@ -42,17 +42,38 @@ const createTeamMarkerIcon = (color: string, number: number, equipe: string) => 
   });
 };
 
-interface PlanejamentoEquipesMapProps {
+export interface PlanejamentoEquipesMapProps {
   data: PlanejamentoEquipeRow[];
   dates: Date[];
+  className?: string;
+  height?: string | number;
+  title?: string;
+  onMapPositionChange?: (pos: { center: [number, number]; zoom: number }) => void;
 }
 
-const MapUpdater = () => {
+const MapUpdater = ({
+  points,
+  onMapPositionChange,
+}: {
+  points: [number, number][];
+  onMapPositionChange?: (pos: { center: [number, number]; zoom: number }) => void;
+}) => {
   const map = useMap();
   useEffect(() => {
-    // Invalida o tamanho algumas vezes na montagem para garantir que renderize quando entrar na tela
-    const timeout1 = setTimeout(() => map.invalidateSize(), 100);
-    const timeout2 = setTimeout(() => map.invalidateSize(), 1000);
+    // Invalida o tamanho e enquadra as coordenadas de todas as equipes visíveis com margem de segurança
+    const timeout1 = setTimeout(() => {
+      map.invalidateSize();
+      if (points.length > 0) {
+        const bounds = L.latLngBounds(points);
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [55, 55], maxZoom: 13 });
+        }
+      }
+    }, 150);
+
+    const timeout2 = setTimeout(() => {
+      map.invalidateSize();
+    }, 800);
     
     // Configura ResizeObserver para redimensionamentos contínuos (ex: Tela Cheia)
     const resizeObserver = new ResizeObserver(() => {
@@ -64,21 +85,49 @@ const MapUpdater = () => {
       resizeObserver.observe(container);
     }
 
+    const handleMove = () => {
+      if (onMapPositionChange) {
+        const c = map.getCenter();
+        onMapPositionChange({ center: [c.lat, c.lng], zoom: map.getZoom() });
+      }
+    };
+    map.on('moveend', handleMove);
+
     return () => {
       clearTimeout(timeout1);
       clearTimeout(timeout2);
+      map.off('moveend', handleMove);
       if (container) {
         resizeObserver.unobserve(container);
       }
       resizeObserver.disconnect();
     };
-  }, [map]);
+  }, [map, points, onMapPositionChange]);
   return null;
-}
+};
 
-export const PlanejamentoEquipesMap = ({ data, dates }: PlanejamentoEquipesMapProps) => {
+export const PlanejamentoEquipesMap = ({
+  data,
+  dates,
+  className,
+  height,
+  title = 'Mapa de Trajetos e Deslocamento das Equipes',
+  onMapPositionChange,
+}: PlanejamentoEquipesMapProps) => {
   const [activeTeams, setActiveTeams] = useState<Set<string>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Fecha o modo tela cheia ao pressionar a tecla ESC
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   // Automatically activate all teams when data changes
   useEffect(() => {
@@ -188,32 +237,50 @@ export const PlanejamentoEquipesMap = ({ data, dates }: PlanejamentoEquipesMapPr
     }
   };
 
+  const activePoints: [number, number][] = useMemo(() => {
+    const list: [number, number][] = [];
+    mapData.forEach(team => {
+      if (activeTeams.has(team.equipe)) {
+        team.points.forEach(p => list.push([p.lat, p.lng]));
+      }
+    });
+    return list;
+  }, [mapData, activeTeams]);
+
   const mapContent = (
     <>
       <div className="h-12 bg-secondary/95 backdrop-blur border-b border-border flex flex-col sticky top-0 z-20 flex-shrink-0">
-        <div className="h-5 flex items-center justify-between px-2 border-b border-border bg-muted/50">
+        <div className="h-6 flex items-center justify-between px-3 border-b border-border bg-muted/50">
           <div className="flex-1"></div>
-          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-            Mapa de Trajetos do Período
+          <div className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+            {title}
           </div>
-          <div className="flex-1 flex justify-end">
+          <div className="flex-1 flex justify-end items-center gap-2">
+            {isFullscreen && (
+              <span className="text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border">
+                ESC para sair
+              </span>
+            )}
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
+              className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
+              title={isFullscreen ? "Sair da Tela Cheia (ESC)" : "Tela Cheia"}
             >
-              {isFullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+              {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </Button>
           </div>
         </div>
         <div className="flex-1 flex items-center px-4 text-[10px] font-medium text-muted-foreground justify-between">
-          <span>Linhas retas indicam a ordem cronológica das obras da equipe.</span>
+          <span>Linhas retas indicam a ordem cronológica das obras da equipe no período.</span>
         </div>
       </div>
 
-      <div className={cn("flex-1 relative w-full", isFullscreen ? "h-full" : "min-h-[850px]")}>
+      <div
+        className={cn("flex-1 relative w-full", isFullscreen ? "h-full" : "min-h-[750px]")}
+        style={!isFullscreen && height ? { minHeight: typeof height === 'number' ? `${height}px` : height } : undefined}
+      >
         <div className="absolute inset-0">
           <MapContainer 
             center={center} 
@@ -223,7 +290,7 @@ export const PlanejamentoEquipesMap = ({ data, dates }: PlanejamentoEquipesMapPr
             markerZoomAnimation={false}
             style={{ height: '100%', width: '100%', zIndex: 1 }}
           >
-            <MapUpdater />
+            <MapUpdater points={activePoints} onMapPositionChange={onMapPositionChange} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -340,7 +407,7 @@ export const PlanejamentoEquipesMap = ({ data, dates }: PlanejamentoEquipesMapPr
   }
 
   return (
-    <div className="w-[1400px] h-full relative flex-shrink-0 border-l border-border bg-card flex flex-col">
+    <div className={cn("w-full h-full relative flex-shrink-0 bg-card flex flex-col", className)}>
       {mapContent}
     </div>
   );

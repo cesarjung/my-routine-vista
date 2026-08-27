@@ -14,7 +14,7 @@ import { useCanManageUsers, useIsAdmin } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
-import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key, Moon, Trash2 } from 'lucide-react';
+import { User, Building2, UserPlus, Shield, ShieldX, Pencil, Calendar, Lock, UserCircle, FolderKey, Key, Moon, Trash2, Mail } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { UnitsManagement } from '@/components/UnitsManagement';
 import { GoogleCalendarConnect } from '@/components/GoogleCalendarConnect';
@@ -22,6 +22,7 @@ import { SectorUsersManagement } from '@/components/SectorUsersManagement';
 import { AdminUsersManagement } from '@/components/AdminUsersManagement';
 import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
 import { UserPermissionsTab } from '@/components/UserPermissionsTab';
+import { PlanejamentoEmailSettings } from '@/components/settings/PlanejamentoEmailSettings';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -510,144 +511,179 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
     );
   }
 
-  // For regular users (not admin or gestor), show only their profile settings
+  // For regular users (not admin or gestor), show profile and planning email settings with tab navigation
   if (!canManageUsers) {
     const userUnit = units?.find(u => u.id === myProfile?.unit_id);
 
     return (
       <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Meu Perfil</h1>
-          <p className="text-muted-foreground">Visualize e atualize suas informações pessoais</p>
-        </div>
+        {!hideHeader && (
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
+            <p className="text-muted-foreground">Visualize e atualize suas informações pessoais e configurações de planejamento</p>
+          </div>
+        )}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Profile Info Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserCircle className="w-5 h-5" />
-                Informações Pessoais
-              </CardTitle>
-              <CardDescription>
-                Seus dados cadastrados no sistema
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="my-name">Nome Completo</Label>
-                <Input
-                  id="my-name"
-                  value={myName || myProfile?.full_name || ''}
-                  onChange={(e) => setMyName(e.target.value)}
-                  placeholder="Seu nome"
-                />
-              </div>
+        <Tabs defaultValue="profile" className="space-y-4">
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="profile" className="flex items-center gap-2">
+              <UserCircle className="w-4 h-4" />
+              Meu Perfil
+            </TabsTrigger>
+            <TabsTrigger value="planejamento_email" className="flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              Envio Planejamento
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="flex items-center gap-2">
+              <Moon className="w-4 h-4" />
+              Aparência
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Integrações
+            </TabsTrigger>
+          </TabsList>
 
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input
-                  value={myProfile?.email || user?.email || ''}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Para alterar o email, entre em contato com um administrador
-                </p>
-              </div>
+          <TabsContent value="profile">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Profile Info Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <UserCircle className="w-5 h-5" />
+                    Informações Pessoais
+                  </CardTitle>
+                  <CardDescription>
+                    Seus dados cadastrados no sistema
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="my-name">Nome Completo</Label>
+                    <Input
+                      id="my-name"
+                      value={myName || myProfile?.full_name || ''}
+                      onChange={(e) => setMyName(e.target.value)}
+                      placeholder="Seu nome"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Unidade</Label>
-                <Input
-                  value={userUnit ? `${userUnit.name} (${userUnit.code})` : 'Não atribuída'}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input
+                      value={myProfile?.email || user?.email || ''}
+                      disabled
+                      className="bg-muted"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Para alterar o email, entre em contato com um administrador
+                    </p>
+                  </div>
 
-              <Button
-                onClick={handleUpdateMyProfile}
-                disabled={isUpdatingProfile || !myName.trim()}
-              >
-                {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
-              </Button>
-            </CardContent>
-          </Card>
+                  <div className="space-y-2">
+                    <Label>Unidade</Label>
+                    <Input
+                      value={userUnit ? `${userUnit.name} (${userUnit.code})` : 'Não atribuída'}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
 
-          {/* Change Password Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="w-5 h-5" />
-                Alterar Senha
-              </CardTitle>
-              <CardDescription>
-                Atualize sua senha de acesso
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="new-password">Nova Senha</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                />
-              </div>
+                  <Button
+                    onClick={handleUpdateMyProfile}
+                    disabled={isUpdatingProfile || !myName.trim()}
+                  >
+                    {isUpdatingProfile ? 'Salvando...' : 'Salvar Alterações'}
+                  </Button>
+                </CardContent>
+              </Card>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirmar Nova Senha</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Digite a senha novamente"
-                />
-              </div>
+              {/* Change Password Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lock className="w-5 h-5" />
+                    Alterar Senha
+                  </CardTitle>
+                  <CardDescription>
+                    Atualize sua senha de acesso
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">Nova Senha</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                  </div>
 
-              <Button
-                onClick={handleChangePassword}
-                disabled={isChangingPassword || !newPassword || !confirmPassword}
-              >
-                {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
-              </Button>
-            </CardContent>
-          </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirmar Nova Senha</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Digite a senha novamente"
+                    />
+                  </div>
 
-          {/* Theme / Appearance Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Moon className="w-5 h-5" />
-                Aparência
-              </CardTitle>
-              <CardDescription>
-                Personalize o tema visual do sistema
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="theme-select-user">Tema da Interface</Label>
-                <Select value={theme} onValueChange={(v: "light" | "dark" | "system") => setTheme(v)}>
-                  <SelectTrigger id="theme-select-user">
-                    <SelectValue placeholder="Selecione um tema" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">Claro</SelectItem>
-                    <SelectItem value="dark">Escuro</SelectItem>
-                    <SelectItem value="system">Padrão do Sistema</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={isChangingPassword || !newPassword || !confirmPassword}
+                  >
+                    {isChangingPassword ? 'Alterando...' : 'Alterar Senha'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
-        {/* Google Calendar Integration */}
-        <GoogleCalendarConnect />
+          <TabsContent value="planejamento_email">
+            <PlanejamentoEmailSettings
+              isAdmin={false}
+              isGestor={false}
+              userUnitId={userUnit?.id || myProfile?.unit_id}
+            />
+          </TabsContent>
+
+          <TabsContent value="appearance">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Moon className="w-5 h-5" />
+                  Aparência
+                </CardTitle>
+                <CardDescription>
+                  Personalize o tema visual do sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="theme-select-user">Tema da Interface</Label>
+                  <Select value={theme} onValueChange={(v: "light" | "dark" | "system") => setTheme(v)}>
+                    <SelectTrigger id="theme-select-user">
+                      <SelectValue placeholder="Selecione um tema" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Claro</SelectItem>
+                      <SelectItem value="dark">Escuro</SelectItem>
+                      <SelectItem value="system">Padrão do Sistema</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="integrations">
+            <GoogleCalendarConnect />
+          </TabsContent>
+        </Tabs>
       </div>
     );
   }
@@ -678,6 +714,10 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
           <TabsTrigger value="units" className="flex items-center gap-2">
             <Building2 className="w-4 h-4" />
             Unidades
+          </TabsTrigger>
+          <TabsTrigger value="planejamento_email" className="flex items-center gap-2">
+            <Mail className="w-4 h-4" />
+            Envio Planejamento
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="sectors" className="flex items-center gap-2">
@@ -959,6 +999,14 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
             <UserPermissionsTab />
           </TabsContent>
         )}
+
+        <TabsContent value="planejamento_email">
+          <PlanejamentoEmailSettings
+            isAdmin={isAdmin}
+            isGestor={canManageUsers && !isAdmin}
+            userUnitId={myProfile?.unit_id}
+          />
+        </TabsContent>
 
         <TabsContent value="integrations">
           <div className="space-y-4">

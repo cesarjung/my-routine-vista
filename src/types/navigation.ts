@@ -16,6 +16,7 @@ export type NavigationContext =
   | { type: 'planejamento_semanal'; section: 'carteira' }
   | { type: 'planejamento_materiais'; section: 'carteira' }
   | { type: 'planejamento_envios'; section: 'carteira' }
+  | { type: 'pcp_calendario'; section: 'planejamento' }
   | { type: 'pcp_planejamento'; section: 'planejamento' }
   | { type: 'pcp_planejamento_auto'; section: 'planejamento' }
   | { type: 'lancamentos_servicos' };
@@ -75,6 +76,11 @@ export const VIEW_CONFIG = {
     id: 'planejamento_envios',
     label: 'Envios',
     icon: 'Truck'
+  },
+  pcp_calendario: {
+    id: 'pcp_calendario',
+    label: 'Calendário (PCP)',
+    icon: 'Calendar'
   },
   pcp_planejamento: {
     id: 'pcp_planejamento',

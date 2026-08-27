@@ -25,6 +25,7 @@ import { PlanejamentoMateriaisView } from '@/components/views/PlanejamentoMateri
 import { PlanejamentoEnviosView } from '@/components/views/PlanejamentoEnviosView';
 import { AlojamentosView } from '@/components/views/AlojamentosView';
 import { LancamentosServicosView } from '@/components/views/LancamentosServicosView';
+import { PcpCalendarioView } from '@/components/views/PcpCalendarioView';
 import { PcpPlanejamentoView } from '@/components/views/PcpPlanejamentoView';
 import { PcpPlanejAutoView } from '@/components/views/PcpPlanejAutoView';
 import { cn } from '@/lib/utils';
@@ -207,7 +208,7 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
     return null;
   };
 
-  const isPlanejamento = context.type === 'planejamento' || context.type === 'alojamentos' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal' || context.type === 'planejamento_materiais' || context.type === 'planejamento_envios' || context.type === 'pcp_planejamento' || context.type === 'pcp_planejamento_auto';
+  const isPlanejamento = context.type === 'planejamento' || context.type === 'alojamentos' || context.type === 'planejamento_equipes' || context.type === 'poste_turno' || context.type === 'deslocamento' || context.type === 'planejado_meta' || context.type === 'cumprimento_planejamento' || context.type === 'etapas' || context.type === 'planejamento_semanal' || context.type === 'planejamento_materiais' || context.type === 'planejamento_envios' || context.type === 'pcp_calendario' || context.type === 'pcp_planejamento' || context.type === 'pcp_planejamento_auto';
   const isGanttView = (context.type === 'planejamento' && context.section === 'carteira') || context.type === 'planejamento_equipes';
 
   // Sector specific view
@@ -310,13 +311,16 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
       <main className={cn("flex-1 flex flex-col", isGanttView ? "p-0 overflow-hidden" : "p-6 overflow-auto")}>
         <div className={cn("mx-auto flex flex-col w-full min-h-full", isPlanejamento ? "max-w-none" : "max-w-7xl")}>
           <ErrorBoundary>
+            <div className={cn("w-full h-full", context.type === 'pcp_calendario' ? "block" : "hidden")}>
+              {visitedViews.has('pcp_calendario') && <PcpCalendarioView />}
+            </div>
             <div className={cn("w-full h-full", context.type === 'pcp_planejamento' ? "block" : "hidden")}>
               {visitedViews.has('pcp_planejamento') && <PcpPlanejamentoView />}
             </div>
             <div className={cn("w-full h-full", context.type === 'pcp_planejamento_auto' ? "block" : "hidden")}>
               {visitedViews.has('pcp_planejamento_auto') && <PcpPlanejAutoView />}
             </div>
-            {context.type !== 'pcp_planejamento' && context.type !== 'pcp_planejamento_auto' && renderContent()}
+            {context.type !== 'pcp_calendario' && context.type !== 'pcp_planejamento' && context.type !== 'pcp_planejamento_auto' && renderContent()}
           </ErrorBoundary>
         </div>
       </main>

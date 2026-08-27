@@ -883,7 +883,7 @@ export const PlanejamentoEquipesGanttView = () => {
               </div>
             </div>
 
-            <PlanejamentoEquipesMap data={filteredData} dates={dates} />
+            <PlanejamentoEquipesMap data={filteredData} dates={dates} className="w-[1400px] border-l border-border" />
 
           </div>
         </div>

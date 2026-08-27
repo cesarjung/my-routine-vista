@@ -301,3 +301,96 @@
     }
   }
 }
+
+/* Regras Globais de Impressão e PDF (Formato Retrato / Portrait) */
+@media print {
+  @page {
+    size: portrait;
+    margin: 6mm 8mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Quando o modal de envio está aberto, oculta todo o #root em segundo plano */
+  body:has([role="dialog"]) #root {
+    display: none !important;
+  }
+
+  /* Ocultar elementos de navegação, sidebars, botões, modais fechados e menus */
+  nav,
+  aside,
+  .sidebar,
+  .app-sidebar,
+  header.print\:hidden,
+  aside.print\:hidden,
+  .print\:hidden,
+  button,
+  .no-print,
+  [data-state="open"][aria-hidden="true"],
+  [data-radix-portal] > div[data-state]:not([role="dialog"]) {
+    display: none !important;
+  }
+
+  /* Remove o posicionamento fixo do Dialog para fluir normalmente no PDF */
+  [role="dialog"] {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  [role="dialog"] > div {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  main {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Ajustes dos cartões para formato Retrato */
+  .grid-cols-1.md\:grid-cols-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  /* Evitar quebra no meio de blocos, tabelas e cabeçalhos */
+  .bg-white,
+  .rounded-xl,
+  tr,
+  table,
+  .custom-team-marker {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
