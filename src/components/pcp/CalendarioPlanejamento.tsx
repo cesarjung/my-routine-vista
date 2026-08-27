@@ -375,6 +375,53 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     if (onUpdateDestaquesIa) onUpdateDestaquesIa(next);
   };
 
+  const handleAddDestaque = () => {
+    const next = [...destaquesIa, { id: `d${Date.now()}`, titulo: '', texto: '', gravidade: 'bom' as const }];
+    setDestaquesIa(next);
+    if (onUpdateDestaquesIa) onUpdateDestaquesIa(next);
+  };
+
+  const handleRemoveDestaque = (idx: number) => {
+    const next = destaquesIa.filter((_, i) => i !== idx);
+    setDestaquesIa(next);
+    if (onUpdateDestaquesIa) onUpdateDestaquesIa(next);
+  };
+
+  const handleAddObservacao = () => {
+    const next = [...observacoes, ''];
+    setObservacoes(next);
+    if (onUpdateObservacoes) onUpdateObservacoes(next);
+    setTimeout(() => {
+      const inputs = document.querySelectorAll<HTMLInputElement>('.obs-topic-input');
+      if (inputs[inputs.length - 1]) inputs[inputs.length - 1].focus();
+    }, 50);
+  };
+
+  const handleRemoveObservacao = (idx: number) => {
+    const next = observacoes.filter((_, i) => i !== idx);
+    setObservacoes(next.length > 0 ? next : ['']);
+    if (onUpdateObservacoes) onUpdateObservacoes(next.length > 0 ? next : ['']);
+  };
+
+  /** Renderiza o resumo com valores numéricos em negrito e cores da escala */
+  const renderResumoHighlighted = (texto: string) => {
+    const parts = texto.split(/(R\$\s*[\d.,]+(?:\.[\d]+)?|[\d.,]+%|[\d]+h[\d]*m?|[\d.,]+h\s)/g);
+    return parts.map((part, i) => {
+      if (/^R\$/.test(part)) {
+        return <strong key={i} className="text-[#1D58B5]">{part}</strong>;
+      }
+      if (/%$/.test(part)) {
+        const val = parseFloat(part.replace(',', '.'));
+        const color = val >= 100 ? '#17794C' : val >= 70 ? '#C9A227' : '#C0392E';
+        return <strong key={i} style={{ color }}>{part}</strong>;
+      }
+      if (/\d+h/.test(part)) {
+        return <strong key={i} className="text-[#5C574F]">{part}</strong>;
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   // Equipes filtradas pelo escopo
   const equipesFiltradas = useMemo(() => {
     if (activeEscopo === 'com_programacao') {
@@ -412,6 +459,73 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       };
     });
   }, [diasDaSemana, equipes]);
+
+  // Resumo de Vistorias por Obra — agrupa obras de todas equipes
+  const obrasResumo = useMemo(() => {
+    const obrasMap = new Map<string, { obra: string; etapas: Set<string>; equipes: Set<string> }>();
+    equipesFiltradas.forEach(eq => {
+      if (!eq.dias) return;
+      Object.values(eq.dias).forEach((prog: any) => {
+        if (prog && prog.obra && !prog.isFolga && !prog.isFeriado) {
+          const key = prog.obra;
+          if (!obrasMap.has(key)) {
+            obrasMap.set(key, { obra: key, etapas: new Set(), equipes: new Set() });
+          }
+          const entry = obrasMap.get(key)!;
+          if (prog.etapa) entry.etapas.add(prog.etapa);
+          entry.equipes.add(eq.codigo);
+        }
+      });
+    });
+    return Array.from(obrasMap.values()).map(o => ({
+      obra: o.obra,
+      etapas: Array.from(o.etapas),
+      equipes: Array.from(o.equipes),
+    }));
+  }, [equipesFiltradas]);
+
+  const [vistoriaTopicos, setVistoriaTopicos] = useState<Record<string, string[]>>({});
+
+  // Inicializa tópicos de vistoria quando obras mudam
+  useEffect(() => {
+    setVistoriaTopicos(prev => {
+      const next = { ...prev };
+      obrasResumo.forEach(o => {
+        if (!next[o.obra]) {
+          next[o.obra] = [
+            `Etapas previstas: ${o.etapas.join(', ')}`,
+            `Equipes alocadas: ${o.equipes.join(', ')}`,
+          ];
+        }
+      });
+      return next;
+    });
+  }, [obrasResumo]);
+
+  const handleVistoriaTopicoChange = (obra: string, idx: number, text: string) => {
+    setVistoriaTopicos(prev => {
+      const next = { ...prev };
+      next[obra] = [...(next[obra] || [])];
+      next[obra][idx] = text;
+      return next;
+    });
+  };
+
+  const handleAddVistoriaTopico = (obra: string) => {
+    setVistoriaTopicos(prev => {
+      const next = { ...prev };
+      next[obra] = [...(next[obra] || []), ''];
+      return next;
+    });
+  };
+
+  const handleRemoveVistoriaTopico = (obra: string, idx: number) => {
+    setVistoriaTopicos(prev => {
+      const next = { ...prev };
+      next[obra] = (next[obra] || []).filter((_, i) => i !== idx);
+      return next;
+    });
+  };
 
   // Dados oficiais de mapa com coordenadas reais dos projetos (Idêntico à seção Equipes)
   const { data: equipesMapData } = usePlanejamentoEquipesData(unidadeId ? [unidadeId] : []);
@@ -566,12 +680,12 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             </Button>
           </div>
 
-          {/* Parágrafo de Resumo */}
+          {/* Parágrafo de Resumo com valores destacados */}
           <p className="text-xs text-[#3C3833] leading-relaxed">
-            {resumoIa}
+            {renderResumoHighlighted(resumoIa)}
           </p>
 
-          {/* 3 Destaques com trilho colorido por gravidade (Editáveis inline) */}
+          {/* Destaques com trilho colorido por gravidade (Editáveis inline + Adicionar/Remover) */}
           <div className="space-y-2 pt-1">
             {destaquesIa.map((d, idx) => {
               const corGravidade =
@@ -586,14 +700,22 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               return (
                 <div
                   key={d.id || idx}
-                  className="p-2.5 rounded-lg bg-[#FBFAF7] border border-[#E6E3DD] text-xs space-y-1"
+                  className="group p-2.5 rounded-lg bg-[#FBFAF7] border border-[#E6E3DD] text-xs space-y-1 relative"
                   style={{ borderLeft: `3.5px solid ${corGravidade}` }}
                 >
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDestaque(idx)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#A39E96] hover:text-[#C0392E] print:hidden"
+                    title="Remover destaque"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                   <input
                     type="text"
                     value={d.titulo}
                     onChange={e => handleDestaqueChange(idx, 'titulo', e.target.value)}
-                    className="w-full font-bold text-[#23211E] bg-transparent focus:outline-none focus:bg-white/80 rounded px-1"
+                    className="w-full font-bold text-[#23211E] bg-transparent focus:outline-none focus:bg-white/80 rounded px-1 pr-6"
                     placeholder="Título do destaque..."
                   />
                   <input
@@ -606,6 +728,15 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 </div>
               );
             })}
+
+            {/* Botão Adicionar Destaque */}
+            <button
+              type="button"
+              onClick={handleAddDestaque}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-[#E07A1F] hover:text-[#C0671A] transition-colors print:hidden px-1 py-1"
+            >
+              <Plus className="w-3.5 h-3.5" /> Adicionar consideração
+            </button>
           </div>
 
           <p className="text-[10.5px] text-[#A39E96] italic pt-1 print:hidden">
@@ -808,7 +939,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                 >
                                   {prog.pctMetaDia > 0 ? `${prog.pctMetaDia}%` : '-'}
                                 </span>
-                                <span className="px-1.5 py-0.2 rounded bg-[#EDF4E7] text-[#17794C] text-[9px] font-bold uppercase truncate max-w-[65px]" title={prog.municipio}>
+                <span className="px-1.5 py-0.2 rounded bg-[#F2F0EC] text-[#6B6660] text-[9px] font-bold uppercase truncate max-w-[65px]" title={prog.municipio}>
                                   {prog.municipio}
                                 </span>
                               </div>
@@ -917,6 +1048,73 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       )}
 
+      {/* 5.5 RESUMO DE VISTORIAS POR OBRA */}
+      {obrasResumo.length > 0 && (
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between border-b border-[#E6E3DD] pb-2.5">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-[#E07A1F]" />
+              <h3 className="text-sm font-bold text-[#23211E]">
+                Resumo de Vistorias por Obra ({obrasResumo.length})
+              </h3>
+            </div>
+            <span className="text-[11px] text-[#6B6660]">
+              Tópicos editáveis por obra/projeto
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {obrasResumo.map((obra) => {
+              const topicos = vistoriaTopicos[obra.obra] || [];
+              return (
+                <div key={obra.obra} className="p-3 rounded-lg border border-[#E6E3DD] bg-[#FBFAF7] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-xs text-[#23211E] block">{obra.obra}</span>
+                      <span className="text-[10px] text-[#6B6660]">
+                        {obra.equipes.join(', ')} · {obra.etapas.join(', ')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAddVistoriaTopico(obra.obra)}
+                      className="flex items-center gap-1 text-[10.5px] font-semibold text-[#E07A1F] hover:text-[#C0671A] transition-colors print:hidden"
+                    >
+                      <Plus className="w-3 h-3" /> Tópico
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    {topicos.map((topico, tIdx) => (
+                      <div key={tIdx} className="group flex items-start gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-[#A39E96] mt-2 shrink-0" />
+                        <input
+                          type="text"
+                          value={topico}
+                          onChange={e => handleVistoriaTopicoChange(obra.obra, tIdx, e.target.value)}
+                          placeholder="Tópico de vistoria..."
+                          className="flex-1 bg-transparent text-[11px] text-[#3C3833] focus:outline-none focus:bg-white/80 px-1 py-0.5 rounded border border-transparent focus:border-[#DEDAD3] transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVistoriaTopico(obra.obra, tIdx)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[#A39E96] hover:text-[#C0392E] mt-1 print:hidden"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {topicos.length === 0 && (
+                      <span className="text-[10.5px] text-[#A39E96] italic">Nenhum tópico. Clique + para adicionar.</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 5.6 ALOJAMENTOS */}
       {blocos.alojamentos && alojamentos.length > 0 && (
         <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs space-y-3">
@@ -924,35 +1122,24 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-[#E07A1F]" />
               <h3 className="text-sm font-bold text-[#23211E]">
-                Alojamentos e Bases das Equipes ({alojamentos.length} equipes)
+                Alojamentos e Bases ({alojamentos.length})
               </h3>
             </div>
-            <span className="text-[11px] text-[#6B6660]">
-              Consolidado de municípios e bases no período
-            </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border border-[#E6E3DD] rounded-lg overflow-hidden">
-              <thead className="bg-[#FAF8F5] text-[#6B6660] font-semibold border-b border-[#E6E3DD]">
-                <tr>
-                  <th className="p-2.5 pl-3 w-28">Equipe</th>
-                  <th className="p-2.5 w-40">Supervisor</th>
-                  <th className="p-2.5">Municípios de Atuação</th>
-                  <th className="p-2.5">Alojamento / Base Operacional</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F0EDE8]">
-                {alojamentos.map((aloj, idx) => (
-                  <tr key={idx} className="hover:bg-[#FAF8F5]/50 transition-colors">
-                    <td className="p-2.5 pl-3 font-bold font-mono text-[#23211E]">{aloj.equipe}</td>
-                    <td className="p-2.5 text-[#5C574F]">{aloj.supervisor || '-'}</td>
-                    <td className="p-2.5 font-medium text-[#23211E]">{aloj.municipio}</td>
-                    <td className="p-2.5 text-[#5C574F]">{aloj.alojamento}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {alojamentos.map((aloj, idx) => (
+              <div
+                key={idx}
+                className="p-2.5 rounded-lg border border-[#E6E3DD] bg-[#FBFAF7] flex flex-col gap-1"
+                style={{ borderLeft: `3px solid ${getCorEquipe(aloj.equipe)}` }}
+              >
+                <span className="font-bold font-mono text-xs text-[#23211E]">{aloj.equipe}</span>
+                <span className="text-[11px] text-[#5C574F]">
+                  {aloj.alojamento || <span className="text-[#A39E96] italic">Base Central</span>}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -967,14 +1154,23 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 Observações do Planejador
               </h3>
             </div>
-            <span className="text-[11px] text-[#A06A16] font-medium print:hidden">
-              Pressione Enter para novo tópico · Backspace para apagar
-            </span>
+            <div className="flex items-center gap-3 print:hidden">
+              <span className="text-[11px] text-[#A06A16] font-medium">
+                Enter = novo · Backspace = apagar
+              </span>
+              <button
+                type="button"
+                onClick={handleAddObservacao}
+                className="flex items-center gap-1 text-[11px] font-bold text-[#E07A1F] hover:text-[#C0671A] transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Adicionar
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
             {observacoes.map((obs, idx) => (
-              <div key={idx} className="flex items-start gap-2">
+              <div key={idx} className="group flex items-start gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#E07A1F] mt-2 shrink-0" />
                 <input
                   type="text"
@@ -984,6 +1180,14 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                   placeholder="Digite uma observação para a semana..."
                   className="obs-topic-input flex-1 bg-transparent text-xs text-[#23211E] font-medium focus:outline-none focus:bg-white/80 px-2 py-1 rounded border border-transparent focus:border-[#E8C9A0] transition-colors"
                 />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveObservacao(idx)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[#A39E96] hover:text-[#C0392E] mt-1 print:hidden"
+                  title="Remover observação"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>
