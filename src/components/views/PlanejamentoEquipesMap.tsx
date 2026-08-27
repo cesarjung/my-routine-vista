@@ -284,7 +284,7 @@ export const PlanejamentoEquipesMap = ({
         className={cn("flex-1 relative w-full", isFullscreen ? "h-full" : "min-h-[750px]")}
         style={!isFullscreen && height ? { minHeight: typeof height === 'number' ? `${height}px` : height } : undefined}
       >
-        <div className="absolute inset-0">
+        <div id="mapa-equipes-container" className="absolute inset-0">
           <MapContainer 
             center={center} 
             zoom={8} 

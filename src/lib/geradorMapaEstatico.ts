@@ -399,24 +399,41 @@ function resolvePoints(eq: EquipeMapaInfo): Array<{ lat: number; lng: number; nu
 }
 
 /**
- * Tenta capturar a instância viva do Leaflet na tela via html2canvas
+ * Captura o mapa Leaflet já renderizado na DOM exatamente como está na tela.
+ * Usa html2canvas no div #mapa-equipes-container que contém tiles, polylines e markers.
  */
 export async function capturarMapaLeafletDoDom(): Promise<string | null> {
   if (typeof document === 'undefined') return null;
-  const mapEl = document.querySelector<HTMLElement>('#mapa-equipes-container .leaflet-container') ||
-                document.querySelector<HTMLElement>('.leaflet-container');
-  if (!mapEl) return null;
+
+  // Busca o container do mapa que já está renderizado na tela
+  const mapEl = document.querySelector<HTMLElement>('#mapa-equipes-container');
+  if (!mapEl) {
+    console.warn('[gerarMapa] #mapa-equipes-container não encontrado no DOM');
+    return null;
+  }
+
   try {
     const { default: html2canvas } = await import('html2canvas');
-    const c = await html2canvas(mapEl, {
-      useCORS: true,
-      allowTaint: true,
+
+    const canvas = await html2canvas(mapEl, {
+      useCORS: true,         // tiles OSM têm Access-Control-Allow-Origin: *
+      allowTaint: false,
       logging: false,
       backgroundColor: '#f8f9fa',
-      scale: 1.5,
+      scale: 1.5,            // maior resolução para o e-mail
+      imageTimeout: 15000,   // 15s timeout para tiles remotos
+      onclone: (doc) => {
+        // Garante que o SVG das polylines tenha dimensões corretas no clone
+        const svgs = doc.querySelectorAll<SVGElement>('svg.leaflet-zoom-animated');
+        svgs.forEach(svg => {
+          svg.style.overflow = 'visible';
+        });
+      },
     });
-    return c.toDataURL('image/jpeg', 0.92);
-  } catch {
+
+    return canvas.toDataURL('image/jpeg', 0.92);
+  } catch (err) {
+    console.warn('[gerarMapa] html2canvas falhou:', err);
     return null;
   }
 }
