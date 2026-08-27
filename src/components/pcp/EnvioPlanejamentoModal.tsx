@@ -28,7 +28,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarioPlanejamento } from './CalendarioPlanejamento';
 import { buildPlanejamentoEmailPayload, generatePlanejamentoEmailHtml, EmailBlocosConfig, PlanejamentoEmailPayload } from '@/lib/planejamentoEmail';
-import { obterMapaBase64ParaEmail } from '@/lib/geradorMapaEstatico';
+import { gerarMapaLeafletRealAsync } from '@/lib/geradorMapaEstatico';
 import { EquipeSemanalItem, MetricasSemana } from '@/hooks/usePlanejamentoSemanal';
 import { usePlanejamentoEmailSettings } from '@/hooks/usePlanejamentoEmailSettings';
 import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
@@ -47,8 +47,6 @@ export interface EnvioPlanejamentoModalProps {
   ultimaAtualizacao?: string | null;
   /** Dados GPS reais das equipes, capturados do PlanejamentoEquipesMap ao vivo */
   mapDataGps?: ComputedMapData[];
-  /** Imagem do mapa pré-capturada via html2canvas quando os tiles carregaram */
-  mapCaptureBase64?: string;
 }
 
 export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
@@ -64,7 +62,6 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   alojamentos,
   ultimaAtualizacao,
   mapDataGps = [],
-  mapCaptureBase64 = '',
 }) => {
   // ════════════════════════════════════════════════════════════════
   // TODOS os hooks DEVEM ficar antes de qualquer return condicional
@@ -123,9 +120,6 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   const [mapPosition, setMapPosition] = useState<{ center: [number, number]; zoom: number }>({
     center: [-13.25501, -43.42314], zoom: 9,
   });
-
-  // Imagem do mapa: usa a pré-capturada pelo PcpCalendarioView (via onCaptureReady do mapa na tela)
-  const finalMapBase64 = mapCaptureBase64;
 
   // Early return APÓS todos os hooks
   if (!open) return null;
@@ -187,24 +181,23 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
 
       const labelPeriodo = `Semana de ${format(inicioSemana, 'dd/MM')} a ${format(fimSemana, 'dd/MM/yyyy')}`;
 
-      // Prioridade: imagem já capturada (html2canvas após tiles carregarem)
-      // Fallback 1: GPS real + gerador canvas
-      // Fallback 2: centróides de municípios
-      let mapaImagemBase64 = finalMapBase64;
-      if (!mapaImagemBase64) {
-        const equipesParaMapaEmail = mapDataGps.length > 0
-          ? mapDataGps.map(md => ({ codigo: md.equipe, cor: md.color, points: md.points }))
-          : equipes.filter(e => e.temProgramacao).map(eq => {
-              const munSet = new Set<string>();
-              if (eq.dias) {
-                Object.values(eq.dias).forEach((d: any) => {
-                  if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio);
-                });
+      // Gera imagem do mapa via canvas: usa GPS real (mapDataGps) se disponível,
+      // senão fallback para centróides de municípios.
+      const equipesParaMapaEmail = mapDataGps.length > 0
+        ? mapDataGps.map(md => ({ codigo: md.equipe, cor: md.color, points: md.points }))
+        : equipes.filter(e => e.temProgramacao).map(eq => {
+            const munSet = new Set<string>();
+            if (eq.dias) {
+              if (Array.isArray(eq.dias)) {
+                eq.dias.forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
+              } else {
+                Object.values(eq.dias).forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
               }
-              return { codigo: eq.codigo, municipios: Array.from(munSet) };
-            });
-        mapaImagemBase64 = await obterMapaBase64ParaEmail(equipesParaMapaEmail, unidadeNome || 'BOM JESUS DA LAPA');
-      }
+            }
+            return { codigo: eq.codigo, municipios: Array.from(munSet) };
+          });
+      // Chama o gerador canvas DIRETAMENTE (sem tentar html2canvas que nunca funciona com CORS)
+      const mapaImagemBase64 = await gerarMapaLeafletRealAsync(equipesParaMapaEmail, unidadeNome || 'BOM JESUS DA LAPA');
 
       const payload: PlanejamentoEmailPayload = {
         unidade: unidadeId,

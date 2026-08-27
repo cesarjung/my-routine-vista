@@ -50,8 +50,6 @@ export interface PlanejamentoEquipesMapProps {
   title?: string;
   onMapPositionChange?: (pos: { center: [number, number]; zoom: number }) => void;
   onMapDataReady?: (mapData: ComputedMapData[]) => void;
-  /** Callback chamado com o base64 do mapa capturado após os tiles carregarem */
-  onCaptureReady?: (base64: string) => void;
 }
 
 export interface ComputedMapData {
@@ -126,11 +124,9 @@ export function computeMapData(
 const MapUpdater = ({
   points,
   onMapPositionChange,
-  onCaptureReady,
 }: {
   points: [number, number][];
   onMapPositionChange?: (pos: { center: [number, number]; zoom: number }) => void;
-  onCaptureReady?: (base64: string) => void;
 }) => {
   const map = useMap();
   useEffect(() => {
@@ -147,37 +143,6 @@ const MapUpdater = ({
     const timeout2 = setTimeout(() => {
       map.invalidateSize();
     }, 800);
-
-    // Após 4s (tiles carregados), captura o mapa com html2canvas
-    let captureTimeout: ReturnType<typeof setTimeout>;
-    if (onCaptureReady) {
-      const doCapture = async () => {
-        const container = document.querySelector<HTMLElement>('#mapa-equipes-container');
-        if (!container) return;
-        try {
-          const { default: html2canvas } = await import('html2canvas');
-          const canvas = await html2canvas(container, {
-            useCORS: true,
-            allowTaint: false,
-            logging: false,
-            backgroundColor: '#f8f9fa',
-            scale: 1.5,
-            imageTimeout: 15000,
-          });
-          onCaptureReady(canvas.toDataURL('image/jpeg', 0.92));
-        } catch (err) {
-          console.warn('[MapUpdater] Captura html2canvas falhou:', err);
-        }
-      };
-      // Espera os tiles do Leaflet carregarem via evento tileload + timeout de segurança
-      const handleTileLoad = () => {
-        clearTimeout(captureTimeout);
-        captureTimeout = setTimeout(doCapture, 1500);
-      };
-      map.on('tileloadend', handleTileLoad);
-      // Fallback: captura após 5s mesmo sem evento
-      captureTimeout = setTimeout(doCapture, 5000);
-    }
     
     // Configura ResizeObserver para redimensionamentos contínuos (ex: Tela Cheia)
     const resizeObserver = new ResizeObserver(() => {
@@ -200,15 +165,13 @@ const MapUpdater = ({
     return () => {
       clearTimeout(timeout1);
       clearTimeout(timeout2);
-      clearTimeout(captureTimeout);
       map.off('moveend', handleMove);
-      map.off('tileloadend');
       if (container) {
         resizeObserver.unobserve(container);
       }
       resizeObserver.disconnect();
     };
-  }, [map, points, onMapPositionChange, onCaptureReady]);
+  }, [map, points, onMapPositionChange]);
   return null;
 };
 
@@ -220,7 +183,6 @@ export const PlanejamentoEquipesMap = ({
   title = 'Mapa de Trajetos e Deslocamento das Equipes',
   onMapPositionChange,
   onMapDataReady,
-  onCaptureReady,
 }: PlanejamentoEquipesMapProps) => {
   const [activeTeams, setActiveTeams] = useState<Set<string>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -330,7 +292,7 @@ export const PlanejamentoEquipesMap = ({
             markerZoomAnimation={false}
             style={{ height: '100%', width: '100%', zIndex: 1 }}
           >
-            <MapUpdater points={activePoints} onMapPositionChange={onMapPositionChange} onCaptureReady={onCaptureReady} />
+            <MapUpdater points={activePoints} onMapPositionChange={onMapPositionChange} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
