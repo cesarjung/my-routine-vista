@@ -6,8 +6,6 @@
  * com as rotas, marcadores de pílula das equipes e controles cartográficos.
  */
 
-import html2canvas from 'html2canvas';
-
 export interface EquipeMapaInfo {
   codigo: string;
   supervisor?: string;
@@ -53,62 +51,36 @@ const MUNICIPIOS_GEO: Record<string, { lat: number; lng: number }> = {
 };
 
 /**
- * Converte coordenadas Lat/Lng para coordenadas de Pixel no Canvas em uma dada projeção Web Mercator
+ * Converte coordenadas lat/lng para pixel no canvas usando projeção Web Mercator
  */
-function latLngToPoint(
-  lat: number,
-  lng: number,
-  centerLat: number,
-  centerLng: number,
+function latLngToPixel(
+  lat: number, lng: number,
+  centerLat: number, centerLng: number,
   zoom: number,
-  width: number,
-  height: number
+  canvasW: number, canvasH: number
 ): { x: number; y: number } {
-  const scale = 256 * Math.pow(2, zoom);
-  
-  const centerWorldX = ((centerLng + 180) / 360) * scale;
-  const centerLatRad = (centerLat * Math.PI) / 180;
-  const centerWorldY = ((1 - Math.log(Math.tan(centerLatRad) + 1 / Math.cos(centerLatRad)) / Math.PI) / 2) * scale;
+  const tileSize = 256;
+  const scale = tileSize * Math.pow(2, zoom);
 
-  const worldX = ((lng + 180) / 360) * scale;
-  const latRad = (lat * Math.PI) / 180;
-  const worldY = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * scale;
+  const worldX = (lng + 180) / 360 * scale;
+  const latRad = lat * Math.PI / 180;
+  const worldY = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * scale;
+
+  const cLng = centerLng;
+  const cLat = centerLat;
+  const cWorldX = (cLng + 180) / 360 * scale;
+  const cLatRad = cLat * Math.PI / 180;
+  const cWorldY = (1 - Math.log(Math.tan(cLatRad) + 1 / Math.cos(cLatRad)) / Math.PI) / 2 * scale;
 
   return {
-    x: width / 2 + (worldX - centerWorldX),
-    y: height / 2 + (worldY - centerWorldY),
+    x: canvasW / 2 + (worldX - cWorldX),
+    y: canvasH / 2 + (worldY - cWorldY),
   };
 }
 
 /**
- * Tenta capturar diretamente o container Leaflet renderizado no DOM
- */
-export async function capturarMapaLeafletDoDom(): Promise<string | null> {
-  if (typeof document === 'undefined') return null;
-
-  // Procura pelo container Leaflet na página
-  const mapEl = document.querySelector<HTMLElement>('#mapa-equipes-container .leaflet-container') ||
-                document.querySelector<HTMLElement>('.leaflet-container');
-
-  if (!mapEl) return null;
-
-  try {
-    const canvas = await html2canvas(mapEl, {
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
-      backgroundColor: '#f8f9fa',
-      scale: 1.5,
-    });
-    return canvas.toDataURL('image/jpeg', 0.90);
-  } catch (err) {
-    console.warn('Falha ao capturar Leaflet via html2canvas, usando compositor de tiles OSM:', err);
-    return null;
-  }
-}
-
-/**
- * Renderiza o mapa idêntico ao OpenStreetMap / Leaflet carregando os tiles reais via Canvas
+ * Renderiza o mapa idêntico ao Leaflet / OpenStreetMap com tiles reais
+ * Zoom FIXO em 9 (igual ao Leaflet com fitBounds da região operacional)
  */
 export async function gerarMapaLeafletRealAsync(
   equipes: EquipeMapaInfo[],
@@ -117,327 +89,333 @@ export async function gerarMapaLeafletRealAsync(
 ): Promise<string> {
   if (typeof document === 'undefined') return '';
 
-  const width = 1260;
-  const height = 720;
+  // Canvas grande para o e-mail – mesma proporção do Leaflet na tela
+  const CANVAS_W = 1440;
+  const CANVAS_H = 820;
+  const ZOOM = 9; // igual ao Leaflet fitBounds da região operacional
+  const TILE_SIZE = 256;
+
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return '';
 
-  // 1. Coleta todos os pontos das equipes
+  // 1. Coleta todos os pontos ativos das equipes
   const allCoords: Array<{ lat: number; lng: number }> = [];
-  
   equipes.forEach(eq => {
     if (eq.points && eq.points.length > 0) {
       eq.points.forEach(p => allCoords.push({ lat: p.lat, lng: p.lng }));
     } else {
-      const mList = eq.municipios && eq.municipios.length > 0 ? eq.municipios : (eq.municipio ? eq.municipio.split(',') : []);
+      const mList = eq.municipios?.length ? eq.municipios : (eq.municipio ? eq.municipio.split(',') : []);
       mList.forEach(m => {
-        const cleanM = m.toUpperCase().trim();
-        const geo = MUNICIPIOS_GEO[cleanM];
+        const geo = MUNICIPIOS_GEO[m.toUpperCase().trim()];
         if (geo) allCoords.push(geo);
       });
     }
   });
 
-  // Se não houver coordenadas, usa pontos padrão da região
-  if (allCoords.length === 0) {
-    allCoords.push({ lat: -13.2550, lng: -43.4231 }); // Bom Jesus da Lapa
-    allCoords.push({ lat: -12.4439, lng: -44.1017 }); // Brejolândia
-    allCoords.push({ lat: -14.1819, lng: -44.5333 }); // Cocos
+  // Centro ponderado entre todos os pontos (não o centróide do bounding box)
+  let centerLat: number;
+  let centerLng: number;
+  if (allCoords.length > 0) {
+    centerLat = allCoords.reduce((s, c) => s + c.lat, 0) / allCoords.length;
+    centerLng = allCoords.reduce((s, c) => s + c.lng, 0) / allCoords.length;
+  } else {
+    // Base operacional padrão: Bom Jesus da Lapa
+    centerLat = -13.2550;
+    centerLng = -43.8000; // ligeiramente a Oeste para centralar os municípios ativos no canvas
   }
 
-  // Calcula Bounding Box e Centro
-  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-  allCoords.forEach(c => {
-    if (c.lat < minLat) minLat = c.lat;
-    if (c.lat > maxLat) maxLat = c.lat;
-    if (c.lng < minLng) minLng = c.lng;
-    if (c.lng > maxLng) maxLng = c.lng;
-  });
+  // Ajuste fino: os municípios ficam a Oeste do Rio São Francisco (BomJesus)
+  // Centralizar o canvas um pouco mais para Oeste para replicar o fitBounds do Leaflet
+  centerLng = centerLng - 0.15;
 
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLng = (minLng + maxLng) / 2;
-
-  // Zoom ideal para focar na região operacional (zoom 9 para enquadramento perfeito)
-  const latDiff = Math.abs(maxLat - minLat);
-  const lngDiff = Math.abs(maxLng - minLng);
-  let zoom = 9;
-  if (latDiff > 2.6 || lngDiff > 2.8) zoom = 8;
-  if (latDiff < 0.8 && lngDiff < 0.8) zoom = 10;
-
-  // Fundo de placeholder do mapa (cor dos mapas OSM)
+  // 2. Fundo provisório
   ctx.fillStyle = '#E8ECE9';
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // Função para carregar tile com Promise
-  const loadTile = (x: number, y: number, z: number): Promise<{ img: HTMLImageElement; x: number; y: number } | null> => {
-    return new Promise(resolve => {
-      const subdomains = ['a', 'b', 'c'];
-      const s = subdomains[Math.abs(x + y) % subdomains.length];
+  // 3. Calcula range de tiles necessários para cobrir o canvas inteiro
+  const numTiles = Math.pow(2, ZOOM);
+  const scale = TILE_SIZE * numTiles;
+
+  const cWorldX = (centerLng + 180) / 360 * scale;
+  const cLatRad = centerLat * Math.PI / 180;
+  const cWorldY = (1 - Math.log(Math.tan(cLatRad) + 1 / Math.cos(cLatRad)) / Math.PI) / 2 * scale;
+
+  // tile X/Y do canto superior esquerdo do canvas
+  const topLeftWorldX = cWorldX - CANVAS_W / 2;
+  const topLeftWorldY = cWorldY - CANVAS_H / 2;
+
+  const tileX0 = Math.floor(topLeftWorldX / TILE_SIZE) - 1;
+  const tileY0 = Math.floor(topLeftWorldY / TILE_SIZE) - 1;
+
+  // tile X/Y do canto inferior direito
+  const botRightWorldX = cWorldX + CANVAS_W / 2;
+  const botRightWorldY = cWorldY + CANVAS_H / 2;
+  const tileX1 = Math.floor(botRightWorldX / TILE_SIZE) + 1;
+  const tileY1 = Math.floor(botRightWorldY / TILE_SIZE) + 1;
+
+  // Clamp dentro dos limites do mapa
+  const clampedX0 = Math.max(0, tileX0);
+  const clampedX1 = Math.min(numTiles - 1, tileX1);
+  const clampedY0 = Math.max(0, tileY0);
+  const clampedY1 = Math.min(numTiles - 1, tileY1);
+
+  // 4. Carrega os tiles em paralelo
+  const loadTile = (tx: number, ty: number): Promise<{ img: HTMLImageElement; tx: number; ty: number } | null> =>
+    new Promise(resolve => {
+      const sub = ['a', 'b', 'c'][(tx + ty) % 3];
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => resolve({ img, x, y });
+      img.onload = () => resolve({ img, tx, ty });
       img.onerror = () => resolve(null);
-      img.src = `https://${s}.tile.openstreetmap.org/${z}/${x}/${y}.png`;
-      setTimeout(() => resolve(null), 3000);
+      img.src = `https://${sub}.tile.openstreetmap.org/${ZOOM}/${tx}/${ty}.png`;
+      setTimeout(() => resolve(null), 4000);
     });
-  };
 
-  // Calcula tiles necessários para cobrir toda a viewport
   const tilePromises: Promise<any>[] = [];
-  const numTiles = Math.pow(2, zoom);
-  
-  const minTileX = Math.max(0, Math.floor(((centerLng + 180) / 360) * numTiles) - 4);
-  const maxTileX = Math.min(numTiles - 1, minTileX + 8);
-  
-  const centerLatRad = (centerLat * Math.PI) / 180;
-  const centerTileY = Math.floor(((1 - Math.log(Math.tan(centerLatRad) + 1 / Math.cos(centerLatRad)) / Math.PI) / 2) * numTiles);
-  const minTileY = Math.max(0, centerTileY - 3);
-  const maxTileY = Math.min(numTiles - 1, centerTileY + 4);
-
-  for (let tx = minTileX; tx <= maxTileX; tx++) {
-    for (let ty = minTileY; ty <= maxTileY; ty++) {
-      tilePromises.push(loadTile(tx, ty, zoom));
+  for (let tx = clampedX0; tx <= clampedX1; tx++) {
+    for (let ty = clampedY0; ty <= clampedY1; ty++) {
+      tilePromises.push(loadTile(tx, ty));
     }
   }
+  const tiles = await Promise.all(tilePromises);
 
-  const loadedTiles = await Promise.all(tilePromises);
-
-  // Desenha os tiles na posição correta
-  loadedTiles.forEach(tile => {
-    if (!tile) return;
-    const tileScale = 256 * Math.pow(2, zoom);
-    const tileWorldX = tile.x * 256;
-    const tileWorldY = tile.y * 256;
-
-    const centerWorldX = ((centerLng + 180) / 360) * tileScale;
-    const cLatRad = (centerLat * Math.PI) / 180;
-    const centerWorldY = ((1 - Math.log(Math.tan(cLatRad) + 1 / Math.cos(cLatRad)) / Math.PI) / 2) * tileScale;
-
-    const screenX = width / 2 + (tileWorldX - centerWorldX);
-    const screenY = height / 2 + (tileWorldY - centerWorldY);
-
-    ctx.drawImage(tile.img, screenX, screenY, 256, 256);
+  // 5. Desenha os tiles no canvas
+  tiles.forEach(t => {
+    if (!t) return;
+    const tileWorldX = t.tx * TILE_SIZE;
+    const tileWorldY = t.ty * TILE_SIZE;
+    const screenX = CANVAS_W / 2 + (tileWorldX - cWorldX);
+    const screenY = CANVAS_H / 2 + (tileWorldY - cWorldY);
+    ctx.drawImage(t.img, screenX, screenY, TILE_SIZE, TILE_SIZE);
   });
 
-  // 3. Desenha as Linhas de Rota Cronológicas das Equipes (Idêntico ao Polyline Leaflet)
+  // Função auxiliar para converter lat/lng em coordenada de pixel no canvas
+  const toScreen = (lat: number, lng: number) =>
+    latLngToPixel(lat, lng, centerLat, centerLng, ZOOM, CANVAS_W, CANVAS_H);
+
+  // 6. Polilinhas das equipes (tracejado idêntico ao Leaflet)
   equipes.forEach(eq => {
     const color = eq.cor || getTeamColor(eq.codigo);
-    const pointsList = eq.points && eq.points.length > 0
-      ? eq.points
-      : (eq.municipios || (eq.municipio ? eq.municipio.split(',') : [])).map((m, idx) => {
-          const geo = MUNICIPIOS_GEO[m.toUpperCase().trim()];
-          return geo ? { lat: geo.lat, lng: geo.lng, num: idx + 1 } : null;
-        }).filter(Boolean) as any[];
+    const pts = resolvePoints(eq);
+    if (pts.length < 2) return;
 
-    if (pointsList.length > 1) {
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3.5;
-      ctx.setLineDash([7, 7]);
-      ctx.beginPath();
-
-      pointsList.forEach((pt, idx) => {
-        const screenPt = latLngToPoint(pt.lat, pt.lng, centerLat, centerLng, zoom, width, height);
-        if (idx === 0) {
-          ctx.moveTo(screenPt.x, screenPt.y);
-        } else {
-          ctx.lineTo(screenPt.x, screenPt.y);
-        }
-      });
-
-      ctx.stroke();
-      ctx.restore();
-    }
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3.5;
+    ctx.setLineDash([8, 8]);
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const s = toScreen(p.lat, p.lng);
+      i === 0 ? ctx.moveTo(s.x, s.y) : ctx.lineTo(s.x, s.y);
+    });
+    ctx.stroke();
+    ctx.restore();
   });
 
-  // 4. Desenha os Marcadores de Pílula (Idêntico ao createTeamMarkerIcon do Leaflet)
+  // 7. Marcadores tipo pílula (idêntico ao Leaflet createTeamMarkerIcon)
+  const PILL_H = 26;
+  const FONT = 'bold 12px sans-serif';
+  ctx.font = FONT;
+
   equipes.forEach(eq => {
     const color = eq.cor || getTeamColor(eq.codigo);
-    const shortName = eq.codigo.split(' ')[0].substring(0, 6);
+    const short = eq.codigo.length > 7 ? eq.codigo.substring(0, 7) : eq.codigo;
+    const pts = resolvePoints(eq);
 
-    const pointsList = eq.points && eq.points.length > 0
-      ? eq.points
-      : (eq.municipios || (eq.municipio ? eq.municipio.split(',') : [])).map((m, idx) => {
-          const geo = MUNICIPIOS_GEO[m.toUpperCase().trim()];
-          return geo ? { lat: geo.lat, lng: geo.lng, num: idx + 1 } : null;
-        }).filter(Boolean) as any[];
+    pts.forEach(pt => {
+      const s = toScreen(pt.lat, pt.lng);
+      const label = `${short} | ${pt.num || 1}`;
+      ctx.font = FONT;
+      const tw = ctx.measureText(label).width;
+      const pw = tw + 18;
+      const px = s.x - pw / 2;
+      const py = s.y - PILL_H / 2;
 
-    pointsList.forEach(pt => {
-      const screenPt = latLngToPoint(pt.lat, pt.lng, centerLat, centerLng, zoom, width, height);
-      
-      const label = `${shortName} | ${pt.num || 1}`;
-      ctx.font = 'bold 11px sans-serif';
-      const textWidth = ctx.measureText(label).width;
-      const pillWidth = textWidth + 16;
-      const pillHeight = 24;
-      const pillX = screenPt.x - pillWidth / 2;
-      const pillY = screenPt.y - pillHeight / 2;
-
-      // Sombra Marcante
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-      ctx.shadowBlur = 5;
+      // Sombra
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 6;
       ctx.shadowOffsetY = 2;
 
-      // Pílula com cor da equipe
+      // Pílula
       ctx.fillStyle = color;
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 12);
+      ctx.roundRect(px, py, pw, PILL_H, 13);
       ctx.fill();
       ctx.stroke();
-
       ctx.shadowColor = 'transparent';
 
-      // Texto do Marcador
+      // Texto
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, screenPt.x, screenPt.y);
+      ctx.fillText(label, s.x, s.y);
     });
   });
 
-  // 5. Barra Superior (Estilo Header Leaflet do Calendário)
-  ctx.fillStyle = 'rgba(247, 246, 243, 0.95)';
+  // 8. Header do mapa (idêntico ao Leaflet)
+  const HDR_H = 26;
+  const SUB_H = 18;
+  ctx.fillStyle = 'rgba(247, 246, 243, 0.96)';
   ctx.strokeStyle = '#DEDAD3';
   ctx.lineWidth = 1;
-  ctx.fillRect(0, 0, width, 28);
-  ctx.strokeRect(0, 0, width, 28);
+  ctx.fillRect(0, 0, CANVAS_W, HDR_H);
+  ctx.strokeRect(0, 0, CANVAS_W, HDR_H);
 
   ctx.fillStyle = '#5C574F';
-  ctx.font = 'bold 10px sans-serif';
+  ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(title, width / 2, 14);
+  ctx.fillText(title, CANVAS_W / 2, HDR_H / 2);
 
-  // Sub-faixa explicativa
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-  ctx.fillRect(0, 28, width, 20);
-  ctx.strokeStyle = '#E6E3DD';
-  ctx.strokeRect(0, 28, width, 20);
-
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  ctx.fillRect(0, HDR_H, CANVAS_W, SUB_H);
+  ctx.strokeRect(0, HDR_H, CANVAS_W, SUB_H);
   ctx.fillStyle = '#6B6660';
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('Linhas retas indicam a ordem cronológica das obras da equipe no período.', 14, 38);
+  ctx.fillText('Linhas retas indicam a ordem cronológica das obras da equipe no período.', 12, HDR_H + SUB_H / 2);
 
-  // 6. Controles Leaflet de Zoom no Canto Superior Esquerdo
+  // 9. Controles de zoom (idêntico ao Leaflet)
+  const ZX = 14, ZY = HDR_H + SUB_H + 8;
   ctx.fillStyle = '#FFFFFF';
   ctx.strokeStyle = '#CCCCCC';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(14, 60, 26, 52, 4);
+  ctx.roundRect(ZX, ZY, 28, 56, 4);
   ctx.fill();
   ctx.stroke();
-
-  ctx.fillStyle = '#333333';
-  ctx.font = 'bold 16px monospace';
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 18px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('+', 27, 78);
-  ctx.fillText('−', 27, 102);
-
-  ctx.strokeStyle = '#E6E6E6';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('+', ZX + 14, ZY + 14);
+  ctx.fillText('−', ZX + 14, ZY + 42);
+  ctx.strokeStyle = '#DDD';
   ctx.beginPath();
-  ctx.moveTo(15, 86);
-  ctx.lineTo(39, 86);
+  ctx.moveTo(ZX + 1, ZY + 28);
+  ctx.lineTo(ZX + 27, ZY + 28);
   ctx.stroke();
 
-  // 7. Card Flutuante de Legenda das Equipes no Canto Superior Direito (Idêntico ao Leaflet)
-  const legendWidth = 140;
-  const legendHeight = Math.min(240, 30 + equipes.slice(0, 8).length * 20);
-  const legendX = width - legendWidth - 14;
-  const legendY = 60;
+  // 10. Legenda de equipes (canto superior direito – idêntico ao Leaflet)
+  const eqList = equipes.slice(0, 12);
+  const LEG_W = 150;
+  const LEG_H = 26 + eqList.length * 22;
+  const LEG_X = CANVAS_W - LEG_W - 12;
+  const LEG_Y = HDR_H + SUB_H + 8;
 
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-  ctx.shadowBlur = 6;
+  ctx.shadowColor = 'rgba(0,0,0,0.12)';
+  ctx.shadowBlur = 8;
   ctx.shadowOffsetY = 2;
-
   ctx.fillStyle = '#FFFFFF';
   ctx.strokeStyle = '#DEDAD3';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(legendX, legendY, legendWidth, legendHeight, 6);
+  ctx.roundRect(LEG_X, LEG_Y, LEG_W, LEG_H, 6);
   ctx.fill();
   ctx.stroke();
-
   ctx.shadowColor = 'transparent';
 
-  // Cabeçalho da Legenda
   ctx.fillStyle = '#23211E';
-  ctx.font = 'bold 10px sans-serif';
+  ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillText('Equipes no Mapa', legendX + 10, legendY + 8);
+  ctx.fillText('Equipes no Mapa', LEG_X + 10, LEG_Y + 7);
 
-  // Lista de Equipes na Legenda
-  equipes.slice(0, 8).forEach((eq, idx) => {
-    const itemY = legendY + 28 + (idx * 20);
-    const color = eq.cor || getTeamColor(eq.codigo);
-
-    // Ícone / Dot colorido
-    ctx.fillStyle = color;
+  eqList.forEach((eq, i) => {
+    const iy = LEG_Y + 26 + i * 22;
+    const c = eq.cor || getTeamColor(eq.codigo);
+    ctx.fillStyle = c;
     ctx.beginPath();
-    ctx.arc(legendX + 16, itemY + 5, 4, 0, Math.PI * 2);
+    ctx.arc(LEG_X + 16, iy + 8, 5, 0, Math.PI * 2);
     ctx.fill();
-
-    // Nome da Equipe
     ctx.fillStyle = '#5C574F';
     ctx.font = '10px monospace';
-    ctx.fillText(eq.codigo, legendX + 26, itemY);
+    ctx.textBaseline = 'top';
+    ctx.fillText(eq.codigo, LEG_X + 26, iy + 2);
   });
 
-  // 8. Atribuição Leaflet / OpenStreetMap no Canto Inferior Direito
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-  ctx.fillRect(width - 160, height - 16, 160, 16);
+  // 11. Atribuição OSM
+  ctx.fillStyle = 'rgba(255,255,255,0.82)';
+  ctx.fillRect(CANVAS_W - 165, CANVAS_H - 16, 165, 16);
   ctx.fillStyle = '#0078A8';
   ctx.font = '9px sans-serif';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'bottom';
-  ctx.fillText('Leaflet | © OpenStreetMap', width - 6, height - 3);
+  ctx.fillText('Leaflet | © OpenStreetMap', CANVAS_W - 5, CANVAS_H - 2);
 
+  return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+/** Resolve lista de pontos de uma equipe (pontos reais ou coordenadas de município) */
+function resolvePoints(eq: EquipeMapaInfo): Array<{ lat: number; lng: number; num: number }> {
+  if (eq.points && eq.points.length > 0) {
+    return eq.points as any[];
+  }
+  const mList = eq.municipios?.length ? eq.municipios : (eq.municipio ? eq.municipio.split(',') : []);
+  return mList
+    .map((m, idx) => {
+      const geo = MUNICIPIOS_GEO[m.toUpperCase().trim()];
+      return geo ? { lat: geo.lat, lng: geo.lng, num: idx + 1 } : null;
+    })
+    .filter(Boolean) as any[];
+}
+
+/**
+ * Tenta capturar a instância viva do Leaflet na tela via html2canvas
+ */
+export async function capturarMapaLeafletDoDom(): Promise<string | null> {
+  if (typeof document === 'undefined') return null;
+  const mapEl = document.querySelector<HTMLElement>('#mapa-equipes-container .leaflet-container') ||
+                document.querySelector<HTMLElement>('.leaflet-container');
+  if (!mapEl) return null;
   try {
-    return canvas.toDataURL('image/jpeg', 0.90);
-  } catch (e) {
-    console.error('Erro ao converter canvas do mapa para Base64:', e);
-    return '';
+    const { default: html2canvas } = await import('html2canvas');
+    const c = await html2canvas(mapEl, {
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#f8f9fa',
+      scale: 1.5,
+    });
+    return c.toDataURL('image/jpeg', 0.92);
+  } catch {
+    return null;
   }
 }
 
 /**
- * Função síncrona/assíncrona unificada para obter a imagem Base64 do Mapa Leaflet
+ * Função principal para obter a imagem Base64 do Mapa para o e-mail:
+ * 1. Tenta capturar a instância viva do Leaflet na tela
+ * 2. Fallback: renderiza composição OSM real
  */
 export async function obterMapaBase64ParaEmail(
   equipes: EquipeMapaInfo[],
   unidadeNome: string = 'BOM JESUS DA LAPA'
 ): Promise<string> {
-  // 1. Tenta capturar a instância viva do Leaflet na tela
   const domCapture = await capturarMapaLeafletDoDom();
   if (domCapture) return domCapture;
-
-  // 2. Se não conseguir do DOM, renderiza o compositor real OpenStreetMap
   return await gerarMapaLeafletRealAsync(equipes, unidadeNome);
 }
 
-// Fallback síncrono para compatibilidade
+// Fallback síncrono (mantido por compatibilidade – retorna canvas em branco)
 export function gerarMapaEstaticoBase64(
-  equipes: EquipeMapaInfo[],
-  unidadeNome: string = 'BOM JESUS DA LAPA',
-  periodoStr: string = ''
+  _equipes: EquipeMapaInfo[],
+  _unidadeNome: string = 'BOM JESUS DA LAPA',
+  _periodoStr: string = ''
 ): string {
-  // Se for chamado de forma síncrona, gera o canvas com tiles e marcadores idênticos ao Leaflet
   if (typeof document === 'undefined') return '';
-  const canvas = document.createElement('canvas');
-  canvas.width = 1100;
-  canvas.height = 560;
-  const ctx = canvas.getContext('2d');
+  const c = document.createElement('canvas');
+  c.width = 1440; c.height = 820;
+  const ctx = c.getContext('2d');
   if (!ctx) return '';
-
-  // Renderiza a base OpenStreetMap cartográfica
   ctx.fillStyle = '#E8ECE9';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  return canvas.toDataURL('image/jpeg', 0.85);
+  ctx.fillRect(0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.85);
 }
+
