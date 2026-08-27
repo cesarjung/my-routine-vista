@@ -32,8 +32,6 @@ import { obterMapaBase64ParaEmail } from '@/lib/geradorMapaEstatico';
 import { EquipeSemanalItem, MetricasSemana } from '@/hooks/usePlanejamentoSemanal';
 import { usePlanejamentoEmailSettings } from '@/hooks/usePlanejamentoEmailSettings';
 import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
-import { PlanejamentoEquipesMap } from '@/components/views/PlanejamentoEquipesMap';
-import { usePlanejamentoEquipesData } from '@/hooks/usePlanejamentoEquipesData';
 
 export interface EnvioPlanejamentoModalProps {
   open: boolean;
@@ -68,21 +66,15 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   mapDataGps = [],
   mapCaptureBase64 = '',
 }) => {
-  // ⚠️ TODOS os hooks devem ficar ANTES de qualquer return condicional (Rules of Hooks)
-  const { data: equipesMapData } = usePlanejamentoEquipesData(unidadeId ? [unidadeId] : []);
-  const [localCaptureBase64, setLocalCaptureBase64] = useState<string>('');
+  // ════════════════════════════════════════════════════════════════
+  // TODOS os hooks DEVEM ficar antes de qualquer return condicional
+  // ════════════════════════════════════════════════════════════════
   const { getUnidadeConfig, getUserSignature, smtpConfig } = usePlanejamentoEmailSettings();
   const [isSending, setIsSending] = useState(false);
 
-  const finalMapBase64 = localCaptureBase64 || mapCaptureBase64;
-
-  if (!open) return null;
-
   const formatSafeDate = (d: any, fmt: string) => {
     try {
-      if (d && !isNaN(new Date(d).getTime())) {
-        return format(new Date(d), fmt);
-      }
+      if (d && !isNaN(new Date(d).getTime())) return format(new Date(d), fmt);
     } catch (e) {}
     return '';
   };
@@ -94,7 +86,6 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
     return d1 && d2 ? `Programação Semanal PCP · ${unidadeNome} · ${d1} a ${d2}` : `Programação Semanal PCP · ${unidadeNome}`;
   });
 
-  // Destinatários (inicializados a partir das configurações da unidade)
   const initialConfig = getUnidadeConfig(unidadeId);
   const [destinatariosPara, setDestinatariosPara] = useState<string[]>(
     initialConfig.destinatariosPara?.length > 0
@@ -111,44 +102,33 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   const [isAddingPara, setIsAddingPara] = useState(false);
   const [isAddingCc, setIsAddingCc] = useState(false);
 
-  // Recarrega destinatários padrão se mudar de unidade
   useEffect(() => {
     if (unidadeId) {
       const uConfig = getUnidadeConfig(unidadeId);
-      if (uConfig.destinatariosPara?.length > 0) {
-        setDestinatariosPara(uConfig.destinatariosPara);
-      }
-      if (uConfig.destinatariosCc?.length > 0) {
-        setDestinatariosCc(uConfig.destinatariosCc);
-      }
+      if (uConfig.destinatariosPara?.length > 0) setDestinatariosPara(uConfig.destinatariosPara);
+      if (uConfig.destinatariosCc?.length > 0) setDestinatariosCc(uConfig.destinatariosCc);
     }
   }, [unidadeId, getUnidadeConfig]);
 
-  // Blocos do e-mail
   const [blocos, setBlocos] = useState<EmailBlocosConfig>({
-    resumo: true,
-    calendario: true,
-    disponiveis: true,
-    alojamentos: true,
-    observacoes: true,
-    mapa: true,
+    resumo: true, calendario: true, disponiveis: true, alojamentos: true, observacoes: true, mapa: true,
   });
-
-  // Configurações de Escopo e Densidade
   const [escopo, setEscopo] = useState<'todas' | 'com_programacao'>('todas');
   const [densidade, setDensidade] = useState<'detalhado' | 'compacto'>('detalhado');
-
-  // Observações e IA
   const [observacoes, setObservacoes] = useState<string[]>([
     'Prioridade para frentes de religamento e atendimento a manutenções emergenciais.',
     'Supervisão atenta à programação de deslocamentos que excedem 2h diárias.',
     'Alinhamento com o almoxarifado para entrega antecipada de cabos e estruturas.'
   ]);
-
   const [mapPosition, setMapPosition] = useState<{ center: [number, number]; zoom: number }>({
-    center: [-13.25501, -43.42314],
-    zoom: 9,
+    center: [-13.25501, -43.42314], zoom: 9,
   });
+
+  // Imagem do mapa: usa a pré-capturada pelo PcpCalendarioView (via onCaptureReady do mapa na tela)
+  const finalMapBase64 = mapCaptureBase64;
+
+  // Early return APÓS todos os hooks
+  if (!open) return null;
 
   const handleAddPara = () => {
     if (novoParaInput.trim() && novoParaInput.includes('@')) {
@@ -668,31 +648,5 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
         </div>
       </DialogContent>
     </Dialog>
-
-    {/* Mapa oculto fora do Dialog: renderiza os tiles + tracejados e captura via html2canvas */}
-    {open && equipesMapData && equipesMapData.length > 0 && !localCaptureBase64 && (
-      <div
-        style={{
-          position: 'fixed',
-          left: '-9999px',
-          top: 0,
-          width: '900px',
-          height: '500px',
-          zIndex: -1,
-          pointerEvents: 'none',
-          opacity: 0,
-        }}
-      >
-        <PlanejamentoEquipesMap
-          data={equipesMapData}
-          dates={diasDaSemana}
-          height={500}
-          onCaptureReady={(b64) => {
-            if (b64) setLocalCaptureBase64(b64);
-          }}
-        />
-      </div>
-    )}
-    </>
   );
 };
