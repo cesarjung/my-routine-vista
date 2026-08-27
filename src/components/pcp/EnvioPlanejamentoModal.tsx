@@ -327,7 +327,6 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   };
 
   return (
-    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[1420px] w-[95vw] h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 bg-[#F7F6F3] border border-[#E6E3DD] overflow-hidden z-[200] print:max-w-none print:w-full print:h-auto print:max-h-none print:border-0 print:shadow-none print:bg-white print:p-0 print:m-0 print:static print:overflow-visible">
         {/* Cabeçalho do Modal (Oculto no PDF / Impressão) */}
