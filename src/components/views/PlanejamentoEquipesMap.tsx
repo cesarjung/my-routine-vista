@@ -66,7 +66,7 @@ export function computeMapData(
   data: PlanejamentoEquipeRow[],
   dates: Date[]
 ): ComputedMapData[] {
-  if (dates.length === 0) return [];
+  if (!data?.length || !dates?.length) return [];
 
   const startD = startOfDay(dates[0]);
   const endD = startOfDay(dates[dates.length - 1]);
@@ -94,10 +94,11 @@ export function computeMapData(
       points.push({ lat: finalLat, lng: finalLng, num: seqNum++, municipio: group.municipio, count: group.count, date: group.date });
     };
 
-    row.atividadesDiarias.forEach(ativ => {
+    (row.atividadesDiarias || []).forEach(ativ => {
+      if (!ativ?.dataParsed || isNaN(ativ.dataParsed.getTime())) return;
       const ativDate = startOfDay(ativ.dataParsed);
       if (ativDate >= startD && ativDate <= endD) {
-        ativ.atividades.forEach(a => {
+        (ativ.atividades || []).forEach(a => {
           if (a.lat !== null && a.lng !== null && a.lat !== 0 && a.lng !== 0) {
             const muni = a.municipio || 'Local';
             const key = `${a.lat},${a.lng}`;
