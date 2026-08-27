@@ -32,6 +32,8 @@ import { obterMapaBase64ParaEmail } from '@/lib/geradorMapaEstatico';
 import { EquipeSemanalItem, MetricasSemana } from '@/hooks/usePlanejamentoSemanal';
 import { usePlanejamentoEmailSettings } from '@/hooks/usePlanejamentoEmailSettings';
 import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
+import { PlanejamentoEquipesMap } from '@/components/views/PlanejamentoEquipesMap';
+import { usePlanejamentoEquipesData } from '@/hooks/usePlanejamentoEquipesData';
 
 export interface EnvioPlanejamentoModalProps {
   open: boolean;
@@ -67,6 +69,13 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   mapCaptureBase64 = '',
 }) => {
   if (!open) return null;
+
+  // Dados GPS reais via hook (para o mapa oculto dentro do modal)
+  const { data: equipesMapData } = usePlanejamentoEquipesData(unidadeId ? [unidadeId] : []);
+
+  // Base64 capturado localmente no modal (prioridade sobre o passado pelo pai)
+  const [localCaptureBase64, setLocalCaptureBase64] = useState<string>('');
+  const finalMapBase64 = localCaptureBase64 || mapCaptureBase64;
 
   const { getUnidadeConfig, getUserSignature, smtpConfig } = usePlanejamentoEmailSettings();
   const [isSending, setIsSending] = useState(false);
@@ -203,7 +212,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
       // Prioridade: imagem já capturada (html2canvas após tiles carregarem)
       // Fallback 1: GPS real + gerador canvas
       // Fallback 2: centróides de municípios
-      let mapaImagemBase64 = mapCaptureBase64;
+      let mapaImagemBase64 = finalMapBase64;
       if (!mapaImagemBase64) {
         const equipesParaMapaEmail = mapDataGps.length > 0
           ? mapDataGps.map(md => ({ codigo: md.equipe, cor: md.color, points: md.points }))
@@ -660,5 +669,30 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Mapa oculto fora do Dialog: renderiza os tiles + tracejados e captura via html2canvas */}
+    {open && equipesMapData && equipesMapData.length > 0 && !localCaptureBase64 && (
+      <div
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: 0,
+          width: '900px',
+          height: '500px',
+          zIndex: -1,
+          pointerEvents: 'none',
+          opacity: 0,
+        }}
+      >
+        <PlanejamentoEquipesMap
+          data={equipesMapData}
+          dates={diasDaSemana}
+          height={500}
+          onCaptureReady={(b64) => {
+            if (b64) setLocalCaptureBase64(b64);
+          }}
+        />
+      </div>
+    )}
   );
 };
