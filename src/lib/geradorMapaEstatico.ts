@@ -92,7 +92,6 @@ export async function gerarMapaLeafletRealAsync(
   // Canvas grande para o e-mail – mesma proporção do Leaflet na tela
   const CANVAS_W = 1440;
   const CANVAS_H = 820;
-  const ZOOM = 9; // igual ao Leaflet fitBounds da região operacional
   const TILE_SIZE = 256;
 
   const canvas = document.createElement('canvas');
