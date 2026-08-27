@@ -28,7 +28,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarioPlanejamento } from './CalendarioPlanejamento';
 import { buildPlanejamentoEmailPayload, generatePlanejamentoEmailHtml, EmailBlocosConfig, PlanejamentoEmailPayload } from '@/lib/planejamentoEmail';
-import { gerarMapaEstaticoBase64 } from '@/lib/geradorMapaEstatico';
+import { obterMapaBase64ParaEmail } from '@/lib/geradorMapaEstatico';
 import { EquipeSemanalItem, MetricasSemana } from '@/hooks/usePlanejamentoSemanal';
 import { usePlanejamentoEmailSettings } from '@/hooks/usePlanejamentoEmailSettings';
 
@@ -192,10 +192,9 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
       });
 
       const labelPeriodo = `Semana de ${format(inicioSemana, 'dd/MM')} a ${format(fimSemana, 'dd/MM/yyyy')}`;
-      const mapaImagemBase64 = gerarMapaEstaticoBase64(
+      const mapaImagemBase64 = await obterMapaBase64ParaEmail(
         equipesParaMapa,
-        unidadeNome || 'BOM JESUS DA LAPA',
-        labelPeriodo
+        unidadeNome || 'BOM JESUS DA LAPA'
       );
 
       const payload: PlanejamentoEmailPayload = {
