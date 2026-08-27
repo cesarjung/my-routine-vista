@@ -55,7 +55,7 @@ export interface PlanejamentoEquipesMapProps {
 export interface ComputedMapData {
   equipe: string;
   color: string;
-  points: Array<{ lat: number; lng: number; num: number; municipio: string; count: number; date: Date }>;
+  points: Array<{ lat: number; lng: number; num: number; municipio: string; count: number; date: Date; projetos: string[] }>;
 }
 
 /**
@@ -91,7 +91,7 @@ export function computeMapData(
         finalLng += visits * 0.015;
       }
       visitedCoords.set(group.latLngKey, visits + 1);
-      points.push({ lat: finalLat, lng: finalLng, num: seqNum++, municipio: group.municipio, count: group.count, date: group.date });
+      points.push({ lat: finalLat, lng: finalLng, num: seqNum++, municipio: group.municipio, count: group.count, date: group.date, projetos: group.projetos });
     };
 
     (row.atividadesDiarias || []).forEach(ativ => {
