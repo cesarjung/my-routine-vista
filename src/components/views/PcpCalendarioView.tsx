@@ -27,6 +27,7 @@ import { usePlanejamentoSemanal } from '@/hooks/usePlanejamentoSemanal';
 import { CalendarioPlanejamento } from '@/components/pcp/CalendarioPlanejamento';
 import { EnvioPlanejamentoModal } from '@/components/pcp/EnvioPlanejamentoModal';
 import { EmailBlocosConfig } from '@/lib/planejamentoEmail';
+import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
 
 export const PcpCalendarioView: React.FC = () => {
   const [selectedUnidadeId, setSelectedUnidadeId] = useState<string>(
@@ -43,6 +44,8 @@ export const PcpCalendarioView: React.FC = () => {
 
   // Modal de Envio de Planejamento por E-mail
   const [isEnvioModalOpen, setIsEnvioModalOpen] = useState(false);
+  // Dados GPS reais das equipes para o mapa do e-mail (capturados via PlanejamentoEquipesMap)
+  const [mapDataGps, setMapDataGps] = useState<ComputedMapData[]>([]);
 
   const {
     inicioSemana,
@@ -324,6 +327,7 @@ export const PcpCalendarioView: React.FC = () => {
           densidade={densidade}
           setDensidade={setDensidade}
           blocos={blocos}
+          onMapDataReady={setMapDataGps}
         />
       </main>
 
@@ -340,6 +344,7 @@ export const PcpCalendarioView: React.FC = () => {
         metricas={metricas}
         alojamentos={alojamentos}
         ultimaAtualizacao={ultimaAtualizacao}
+        mapDataGps={mapDataGps}
       />
     </div>
   );

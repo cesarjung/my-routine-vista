@@ -49,7 +49,76 @@ export interface PlanejamentoEquipesMapProps {
   height?: string | number;
   title?: string;
   onMapPositionChange?: (pos: { center: [number, number]; zoom: number }) => void;
+  onMapDataReady?: (mapData: ComputedMapData[]) => void;
 }
+
+export interface ComputedMapData {
+  equipe: string;
+  color: string;
+  points: Array<{ lat: number; lng: number; num: number; municipio: string; count: number }>;
+}
+
+/**
+ * Computa o mapData (GPS sequenciado por equipe) a partir dos dados brutos.
+ * Exportado como função pura para reutilização no gerador de e-mail.
+ */
+export function computeMapData(
+  data: PlanejamentoEquipeRow[],
+  dates: Date[]
+): ComputedMapData[] {
+  if (dates.length === 0) return [];
+
+  const startD = startOfDay(dates[0]);
+  const endD = startOfDay(dates[dates.length - 1]);
+  const visitedCoords = new Map<string, number>();
+
+  return data.map(row => {
+    const color = getTeamColor(row.equipe);
+    const points: ComputedMapData['points'] = [];
+    let seqNum = 1;
+    let currentGroup: {
+      latLngKey: string; municipio: string; count: number;
+      lat: number; lng: number; date: Date; projetos: string[];
+    } | null = null;
+
+    const addGroupToPoints = (group: typeof currentGroup) => {
+      if (!group) return;
+      const visits = visitedCoords.get(group.latLngKey) || 0;
+      let finalLat = group.lat;
+      let finalLng = group.lng;
+      if (visits > 0) {
+        finalLat -= visits * 0.015;
+        finalLng += visits * 0.015;
+      }
+      visitedCoords.set(group.latLngKey, visits + 1);
+      points.push({ lat: finalLat, lng: finalLng, num: seqNum++, municipio: group.municipio, count: group.count });
+    };
+
+    row.atividadesDiarias.forEach(ativ => {
+      const ativDate = startOfDay(ativ.dataParsed);
+      if (ativDate >= startD && ativDate <= endD) {
+        ativ.atividades.forEach(a => {
+          if (a.lat !== null && a.lng !== null && a.lat !== 0 && a.lng !== 0) {
+            const muni = a.municipio || 'Local';
+            const key = `${a.lat},${a.lng}`;
+            if (!currentGroup) {
+              currentGroup = { latLngKey: key, municipio: muni, count: 1, lat: a.lat, lng: a.lng, date: ativDate, projetos: [a.projeto] };
+            } else if (currentGroup.latLngKey === key) {
+              currentGroup.count++;
+            } else {
+              addGroupToPoints(currentGroup);
+              currentGroup = { latLngKey: key, municipio: muni, count: 1, lat: a.lat, lng: a.lng, date: ativDate, projetos: [a.projeto] };
+            }
+          }
+        });
+      }
+    });
+    if (currentGroup) addGroupToPoints(currentGroup);
+
+    return { equipe: row.equipe, color, points };
+  }).filter(d => d.points.length > 0);
+}
+
 
 const MapUpdater = ({
   points,
@@ -113,6 +182,7 @@ export const PlanejamentoEquipesMap = ({
   height,
   title = 'Mapa de Trajetos e Deslocamento das Equipes',
   onMapPositionChange,
+  onMapDataReady,
 }: PlanejamentoEquipesMapProps) => {
   const [activeTeams, setActiveTeams] = useState<Set<string>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -135,82 +205,14 @@ export const PlanejamentoEquipesMap = ({
     setActiveTeams(teams);
   }, [data]);
 
-  const mapData = useMemo(() => {
-    if (dates.length === 0) return [];
-    
-    const startD = startOfDay(dates[0]);
-    const endD = startOfDay(dates[dates.length - 1]);
+  const mapData = useMemo(() => computeMapData(data, dates), [data, dates]);
 
-    const visitedCoords = new Map<string, number>();
-
-    return data.map(row => {
-      const color = getTeamColor(row.equipe);
-      const points: { lat: number, lng: number, date: Date, municipio: string, projetos: string[], count: number, num: number }[] = [];
-      let seqNum = 1;
-      let currentGroup: { latLngKey: string, municipio: string, count: number, lat: number, lng: number, date: Date, projetos: string[] } | null = null;
-
-      const addGroupToPoints = (group: any) => {
-        const baseKey = group.latLngKey;
-        const visits = visitedCoords.get(baseKey) || 0;
-        
-        let finalLat = group.lat;
-        let finalLng = group.lng;
-        
-        if (visits > 0) {
-          // Desloca levemente para baixo/direita para não sobrepor totalmente
-          // ~1.5km de diferença visual
-          finalLat -= visits * 0.015;
-          finalLng += visits * 0.015;
-        }
-        
-        visitedCoords.set(baseKey, visits + 1);
-        
-        points.push({
-          lat: finalLat,
-          lng: finalLng,
-          date: group.date,
-          municipio: group.municipio,
-          projetos: group.projetos,
-          count: group.count,
-          num: seqNum++
-        });
-      };
-
-      row.atividadesDiarias.forEach(ativ => {
-        const ativDate = startOfDay(ativ.dataParsed);
-        if (ativDate >= startD && ativDate <= endD) {
-          ativ.atividades.forEach(a => {
-            if (a.lat !== null && a.lng !== null && a.lat !== 0 && a.lng !== 0) {
-              const muni = a.municipio || "Local";
-              const key = `${a.lat},${a.lng}`;
-              
-              if (!currentGroup) {
-                currentGroup = { latLngKey: key, municipio: muni, count: 1, lat: a.lat, lng: a.lng, date: ativDate, projetos: [a.projeto] };
-              } else if (currentGroup.latLngKey === key) {
-                currentGroup.count++;
-                if (!currentGroup.projetos.includes(a.projeto)) currentGroup.projetos.push(a.projeto);
-              } else {
-                // Mudou de coordenada, salva o grupo anterior
-                addGroupToPoints(currentGroup);
-                currentGroup = { latLngKey: key, municipio: muni, count: 1, lat: a.lat, lng: a.lng, date: ativDate, projetos: [a.projeto] };
-              }
-            }
-          });
-        }
-      });
-      
-      // Salva o último grupo
-      if (currentGroup) {
-        addGroupToPoints(currentGroup);
-      }
-
-      return {
-        equipe: row.equipe,
-        color,
-        points
-      };
-    }).filter(d => d.points.length > 0);
-  }, [data, dates]);
+  // Notifica o pai com os dados GPS reais assim que disponíveis (para geração do mapa no e-mail)
+  useEffect(() => {
+    if (onMapDataReady && mapData.length > 0) {
+      onMapDataReady(mapData);
+    }
+  }, [mapData, onMapDataReady]);
 
   const center: [number, number] = useMemo(() => {
     if (mapData.length > 0 && mapData[0].points.length > 0) {

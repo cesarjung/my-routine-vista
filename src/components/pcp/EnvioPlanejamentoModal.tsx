@@ -31,6 +31,7 @@ import { buildPlanejamentoEmailPayload, generatePlanejamentoEmailHtml, EmailBloc
 import { obterMapaBase64ParaEmail } from '@/lib/geradorMapaEstatico';
 import { EquipeSemanalItem, MetricasSemana } from '@/hooks/usePlanejamentoSemanal';
 import { usePlanejamentoEmailSettings } from '@/hooks/usePlanejamentoEmailSettings';
+import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
 
 export interface EnvioPlanejamentoModalProps {
   open: boolean;
@@ -44,6 +45,8 @@ export interface EnvioPlanejamentoModalProps {
   metricas: MetricasSemana;
   alojamentos: Array<{ equipe: string; municipio: string; alojamento: string }>;
   ultimaAtualizacao?: string | null;
+  /** Dados GPS reais das equipes, capturados do PlanejamentoEquipesMap ao vivo */
+  mapDataGps?: ComputedMapData[];
 }
 
 export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
@@ -58,6 +61,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   metricas,
   alojamentos,
   ultimaAtualizacao,
+  mapDataGps = [],
 }) => {
   if (!open) return null;
 
@@ -192,8 +196,26 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
       });
 
       const labelPeriodo = `Semana de ${format(inicioSemana, 'dd/MM')} a ${format(fimSemana, 'dd/MM/yyyy')}`;
+
+      // Usa GPS real se disponível (capturado do Leaflet ao vivo), senão fallback para centróides
+      const equipesParaMapaEmail = mapDataGps.length > 0
+        ? mapDataGps.map(md => ({
+            codigo: md.equipe,
+            cor: md.color,
+            points: md.points,
+          }))
+        : equipes.filter(e => e.temProgramacao).map(eq => {
+            const munSet = new Set<string>();
+            if (eq.dias) {
+              Object.values(eq.dias).forEach((d: any) => {
+                if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio);
+              });
+            }
+            return { codigo: eq.codigo, municipios: Array.from(munSet) };
+          });
+
       const mapaImagemBase64 = await obterMapaBase64ParaEmail(
-        equipesParaMapa,
+        equipesParaMapaEmail,
         unidadeNome || 'BOM JESUS DA LAPA'
       );
 

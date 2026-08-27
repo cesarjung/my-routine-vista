@@ -120,25 +120,48 @@ export async function gerarMapaLeafletRealAsync(
   const operacionalCoords = allCoords.filter(c => c.lng < BASE_LNG - 0.1);
   const coordsParaCentro = operacionalCoords.length > 0 ? operacionalCoords : allCoords;
 
-  // Centro = centróide do bounding box dos pontos operacionais
-  let centerLat: number;
-  let centerLng: number;
+  // Bounding box real dos pontos
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
   if (coordsParaCentro.length > 0) {
-    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
     coordsParaCentro.forEach(c => {
       if (c.lat < minLat) minLat = c.lat;
       if (c.lat > maxLat) maxLat = c.lat;
       if (c.lng < minLng) minLng = c.lng;
       if (c.lng > maxLng) maxLng = c.lng;
     });
-    centerLat = (minLat + maxLat) / 2;
-    // Deslocar levemente para Leste para deixar Bom Jesus da Lapa visível no lado direito do mapa
-    // (replica o comportamento do Leaflet fitBounds com padding)
-    centerLng = (minLng + maxLng) / 2 + 0.45;
   } else {
-    // Sem nenhum ponto: centro padrão da região operacional
-    centerLat = -13.30;
-    centerLng = -44.05;
+    // Fallback: região operacional padrão
+    minLat = -14.5; maxLat = -12.0; minLng = -45.0; maxLng = -43.3;
+  }
+
+  // Centro = centróide do bounding box
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+
+  // Zoom idêntico ao Leaflet fitBounds com padding de ~55px (como no componente)
+  // Calcula o zoom máximo em que o bbox cabe no canvas com padding
+  const PADDING = 55;
+  const usableW = CANVAS_W - PADDING * 2;
+  const usableH = CANVAS_H - PADDING * 2;
+
+  function latLngToWorldXY(lat: number, lng: number, z: number) {
+    const n = Math.pow(2, z) * 256;
+    const x = (lng + 180) / 360 * n;
+    const latR = lat * Math.PI / 180;
+    const y = (1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n;
+    return { x, y };
+  }
+
+  let ZOOM = 9; // padrão
+  for (let z = 13; z >= 6; z--) {
+    const topLeft = latLngToWorldXY(maxLat, minLng, z);
+    const botRight = latLngToWorldXY(minLat, maxLng, z);
+    const bboxW = Math.abs(botRight.x - topLeft.x);
+    const bboxH = Math.abs(botRight.y - topLeft.y);
+    if (bboxW <= usableW && bboxH <= usableH) {
+      ZOOM = z;
+      break;
+    }
   }
 
   // 2. Fundo provisório
