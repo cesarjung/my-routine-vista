@@ -68,17 +68,15 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   mapDataGps = [],
   mapCaptureBase64 = '',
 }) => {
-  if (!open) return null;
-
-  // Dados GPS reais via hook (para o mapa oculto dentro do modal)
+  // ⚠️ TODOS os hooks devem ficar ANTES de qualquer return condicional (Rules of Hooks)
   const { data: equipesMapData } = usePlanejamentoEquipesData(unidadeId ? [unidadeId] : []);
-
-  // Base64 capturado localmente no modal (prioridade sobre o passado pelo pai)
   const [localCaptureBase64, setLocalCaptureBase64] = useState<string>('');
-  const finalMapBase64 = localCaptureBase64 || mapCaptureBase64;
-
   const { getUnidadeConfig, getUserSignature, smtpConfig } = usePlanejamentoEmailSettings();
   const [isSending, setIsSending] = useState(false);
+
+  const finalMapBase64 = localCaptureBase64 || mapCaptureBase64;
+
+  if (!open) return null;
 
   const formatSafeDate = (d: any, fmt: string) => {
     try {
