@@ -115,21 +115,31 @@ export async function gerarMapaLeafletRealAsync(
     }
   });
 
-  // Centro ponderado entre todos os pontos (não o centróide do bounding box)
+  // Filtra apenas coords de municípios operacionais (exclui a base Bom Jesus que puxa o centro p/ Leste)
+  const BASE_LNG = -43.4231;
+  const operacionalCoords = allCoords.filter(c => c.lng < BASE_LNG - 0.1);
+  const coordsParaCentro = operacionalCoords.length > 0 ? operacionalCoords : allCoords;
+
+  // Centro = centróide do bounding box dos pontos operacionais
   let centerLat: number;
   let centerLng: number;
-  if (allCoords.length > 0) {
-    centerLat = allCoords.reduce((s, c) => s + c.lat, 0) / allCoords.length;
-    centerLng = allCoords.reduce((s, c) => s + c.lng, 0) / allCoords.length;
+  if (coordsParaCentro.length > 0) {
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    coordsParaCentro.forEach(c => {
+      if (c.lat < minLat) minLat = c.lat;
+      if (c.lat > maxLat) maxLat = c.lat;
+      if (c.lng < minLng) minLng = c.lng;
+      if (c.lng > maxLng) maxLng = c.lng;
+    });
+    centerLat = (minLat + maxLat) / 2;
+    // Deslocar levemente para Leste para deixar Bom Jesus da Lapa visível no lado direito do mapa
+    // (replica o comportamento do Leaflet fitBounds com padding)
+    centerLng = (minLng + maxLng) / 2 + 0.45;
   } else {
-    // Base operacional padrão: Bom Jesus da Lapa
-    centerLat = -13.2550;
-    centerLng = -43.8000; // ligeiramente a Oeste para centralar os municípios ativos no canvas
+    // Sem nenhum ponto: centro padrão da região operacional
+    centerLat = -13.30;
+    centerLng = -44.05;
   }
-
-  // Ajuste fino: os municípios ficam a Oeste do Rio São Francisco (BomJesus)
-  // Centralizar o canvas um pouco mais para Oeste para replicar o fitBounds do Leaflet
-  centerLng = centerLng - 0.15;
 
   // 2. Fundo provisório
   ctx.fillStyle = '#E8ECE9';
