@@ -117,8 +117,8 @@ export async function gerarMapaLeafletRealAsync(
 ): Promise<string> {
   if (typeof document === 'undefined') return '';
 
-  const width = 1100;
-  const height = 560;
+  const width = 1260;
+  const height = 720;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -141,11 +141,11 @@ export async function gerarMapaLeafletRealAsync(
     }
   });
 
-  // Se não houver coordenadas, usa centro de Bom Jesus da Lapa
+  // Se não houver coordenadas, usa pontos padrão da região
   if (allCoords.length === 0) {
-    allCoords.push({ lat: -13.2550, lng: -43.4231 });
-    allCoords.push({ lat: -12.4439, lng: -44.1017 });
-    allCoords.push({ lat: -14.1819, lng: -44.5333 });
+    allCoords.push({ lat: -13.2550, lng: -43.4231 }); // Bom Jesus da Lapa
+    allCoords.push({ lat: -12.4439, lng: -44.1017 }); // Brejolândia
+    allCoords.push({ lat: -14.1819, lng: -44.5333 }); // Cocos
   }
 
   // Calcula Bounding Box e Centro
@@ -160,17 +160,12 @@ export async function gerarMapaLeafletRealAsync(
   const centerLat = (minLat + maxLat) / 2;
   const centerLng = (minLng + maxLng) / 2;
 
-  // Zoom ideal para enquadrar a região (~8 ou 9)
+  // Zoom ideal para focar na região operacional (zoom 9 para enquadramento perfeito)
   const latDiff = Math.abs(maxLat - minLat);
   const lngDiff = Math.abs(maxLng - minLng);
-  let zoom = 8;
-  if (latDiff < 1.0 && lngDiff < 1.0) zoom = 9;
-  if (latDiff > 2.5 || lngDiff > 3.0) zoom = 7;
-
-  // 2. Carrega e Desenha os Tiles Reais do OpenStreetMap
-  const scale = Math.pow(2, zoom);
-  const startTileX = Math.floor(((centerLng - (width / (256 * Math.pow(2, zoom))) * 180 + 180) / 360) * scale) - 1;
-  const endTileX = Math.floor(((centerLng + (width / (256 * Math.pow(2, zoom))) * 180 + 180) / 360) * scale) + 1;
+  let zoom = 9;
+  if (latDiff > 2.6 || lngDiff > 2.8) zoom = 8;
+  if (latDiff < 0.8 && lngDiff < 0.8) zoom = 10;
 
   // Fundo de placeholder do mapa (cor dos mapas OSM)
   ctx.fillStyle = '#E8ECE9';
@@ -186,22 +181,21 @@ export async function gerarMapaLeafletRealAsync(
       img.onload = () => resolve({ img, x, y });
       img.onerror = () => resolve(null);
       img.src = `https://${s}.tile.openstreetmap.org/${z}/${x}/${y}.png`;
-      // Timeout de segurança
       setTimeout(() => resolve(null), 3000);
     });
   };
 
-  // Calcula tiles necessários para cobrir a viewport
+  // Calcula tiles necessários para cobrir toda a viewport
   const tilePromises: Promise<any>[] = [];
   const numTiles = Math.pow(2, zoom);
   
-  const minTileX = Math.max(0, Math.floor(((centerLng + 180) / 360) * numTiles) - 3);
-  const maxTileX = Math.min(numTiles - 1, minTileX + 6);
+  const minTileX = Math.max(0, Math.floor(((centerLng + 180) / 360) * numTiles) - 4);
+  const maxTileX = Math.min(numTiles - 1, minTileX + 8);
   
   const centerLatRad = (centerLat * Math.PI) / 180;
   const centerTileY = Math.floor(((1 - Math.log(Math.tan(centerLatRad) + 1 / Math.cos(centerLatRad)) / Math.PI) / 2) * numTiles);
-  const minTileY = Math.max(0, centerTileY - 2);
-  const maxTileY = Math.min(numTiles - 1, centerTileY + 3);
+  const minTileY = Math.max(0, centerTileY - 3);
+  const maxTileY = Math.min(numTiles - 1, centerTileY + 4);
 
   for (let tx = minTileX; tx <= maxTileX; tx++) {
     for (let ty = minTileY; ty <= maxTileY; ty++) {
@@ -241,8 +235,8 @@ export async function gerarMapaLeafletRealAsync(
     if (pointsList.length > 1) {
       ctx.save();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.setLineDash([6, 6]);
+      ctx.lineWidth = 3.5;
+      ctx.setLineDash([7, 7]);
       ctx.beginPath();
 
       pointsList.forEach((pt, idx) => {
@@ -260,7 +254,6 @@ export async function gerarMapaLeafletRealAsync(
   });
 
   // 4. Desenha os Marcadores de Pílula (Idêntico ao createTeamMarkerIcon do Leaflet)
-  // html: `<div style="background-color: ${color}; padding: 2px 6px; border-radius: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; color: white; font-size: 10px; font-weight: bold;">${shortName} | ${number}</div>`
   equipes.forEach(eq => {
     const color = eq.cor || getTeamColor(eq.codigo);
     const shortName = eq.codigo.split(' ')[0].substring(0, 6);
@@ -276,16 +269,16 @@ export async function gerarMapaLeafletRealAsync(
       const screenPt = latLngToPoint(pt.lat, pt.lng, centerLat, centerLng, zoom, width, height);
       
       const label = `${shortName} | ${pt.num || 1}`;
-      ctx.font = 'bold 10px sans-serif';
+      ctx.font = 'bold 11px sans-serif';
       const textWidth = ctx.measureText(label).width;
-      const pillWidth = textWidth + 14;
-      const pillHeight = 22;
+      const pillWidth = textWidth + 16;
+      const pillHeight = 24;
       const pillX = screenPt.x - pillWidth / 2;
       const pillY = screenPt.y - pillHeight / 2;
 
-      // Sombra
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-      ctx.shadowBlur = 4;
+      // Sombra Marcante
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 5;
       ctx.shadowOffsetY = 2;
 
       // Pílula com cor da equipe
@@ -293,7 +286,7 @@ export async function gerarMapaLeafletRealAsync(
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 11);
+      ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 12);
       ctx.fill();
       ctx.stroke();
 

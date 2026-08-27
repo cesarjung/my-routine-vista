@@ -149,11 +149,11 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${payload.assunto}</title>
   <style>
-    body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; background-color: #F7F6F3; color: #23211E; margin: 0; padding: 20px 10px; }
-    .email-container { max-width: 1100px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E6E3DD; overflow: hidden; }
-    .header-box { padding: 20px 24px; border-bottom: 2px solid #E07A1F; background: linear-gradient(180deg, #FFFFFF 0%, #FAF8F5 100%); }
-    .kpi-table { width: 100%; border-collapse: separate; border-spacing: 12px; }
-    .kpi-card { background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 14px 16px; }
+    body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; background-color: #F7F6F3; color: #23211E; margin: 0; padding: 10px 4px; }
+    .email-container { width: 100%; max-width: 1380px; margin: 0 auto; background-color: #FFFFFF; border-radius: 10px; border: 1px solid #E6E3DD; overflow: hidden; }
+    .header-box { padding: 16px 18px; border-bottom: 2px solid #E07A1F; background: linear-gradient(180deg, #FFFFFF 0%, #FAF8F5 100%); }
+    .kpi-table { width: 100%; border-collapse: separate; border-spacing: 10px; }
+    .kpi-card { background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 8px; padding: 12px 14px; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
     .data-table th { background-color: #F2F0EC; color: #5C574F; font-size: 10px; text-transform: uppercase; font-weight: bold; padding: 8px 6px; border-bottom: 1px solid #E6E3DD; }
     .data-table td { padding: 8px 6px; border-bottom: 1px solid #E6E3DD; vertical-align: top; }
@@ -166,26 +166,26 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
       <table style="width: 100%;">
         <tr>
           <td>
-            <span style="font-size: 10.5px; font-weight: bold; color: #E07A1F; text-transform: uppercase; letter-spacing: 0.1em; display: block;">
+            <span style="font-size: 10px; font-weight: bold; color: #E07A1F; text-transform: uppercase; letter-spacing: 0.1em; display: block;">
               SIRTEC PCP · PROGRAMAÇÃO OPERACIONAL
             </span>
-            <h1 style="margin: 4px 0 0 0; font-size: 20px; font-weight: bold; color: #23211E;">
+            <h1 style="margin: 3px 0 0 0; font-size: 19px; font-weight: bold; color: #23211E;">
               ${unidadeNome}
             </h1>
-            <p style="margin: 3px 0 0 0; font-size: 11.5px; color: #6B6660;">
+            <p style="margin: 2px 0 0 0; font-size: 11px; color: #6B6660;">
               Programação da Semana · ${semana.label || `${semana.inicio} a ${semana.fim}`}
             </p>
           </td>
           <td style="text-align: right;">
-            <span style="font-size: 10.5px; color: #A39E96; display: block;">GERADO EM</span>
-            <strong style="font-size: 12px; color: #23211E;">${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong>
+            <span style="font-size: 10px; color: #A39E96; display: block;">GERADO EM</span>
+            <strong style="font-size: 11.5px; color: #23211E;">${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong>
           </td>
         </tr>
       </table>
     </div>
 
     <!-- CARDS DE INDICADORES (KPIS) -->
-    <div style="padding: 16px 20px;">
+    <div style="padding: 12px 14px;">
       <table class="kpi-table">
         <tr>
           <td class="kpi-card" style="width: 33.3%;">
@@ -256,7 +256,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
     ${blocos.resumo ? `
     <!-- RESUMO EXECUTIVO DO PERÍODO -->
-    <div style="padding: 0 20px 20px 20px;">
+    <div style="padding: 0 14px 16px 14px;">
       <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
         <strong style="font-size: 12.5px; color: #23211E; display: block; margin-bottom: 8px;">
           ✦ Síntese Operacional da Programação
@@ -283,7 +283,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     ` : ''}
 
     <!-- RESUMO DAS EQUIPES -->
-    <div style="padding: 0 20px 20px 20px;">
+    <div style="padding: 0 14px 16px 14px;">
       <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <div>
@@ -355,7 +355,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
     ${blocos.calendario ? `
     <!-- GRADE DA PROGRAMAÇÃO SEMANAL -->
-    <div style="padding: 0 20px 20px 20px;">
+    <div style="padding: 0 14px 16px 14px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <h3 style="font-size: 13px; font-weight: bold; color: #23211E; margin: 0;">
           Grade de Programação por Equipe (${equipes.length} equipes)
@@ -509,7 +509,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
     ${blocos.alojamentos && alojamentos && alojamentos.length > 0 ? `
     <!-- ALOJAMENTOS E BASES -->
-    <div style="padding: 0 20px 20px 20px;">
+    <div style="padding: 0 14px 16px 14px;">
       <h3 style="font-size: 13px; font-weight: bold; color: #23211E; margin: 0 0 10px 0;">
         Alojamentos e Bases das Equipes
       </h3>
@@ -536,7 +536,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
     ${blocos.observacoes && observacoes && observacoes.length > 0 ? `
     <!-- OBSERVAÇÕES DO PLANEJADOR -->
-    <div style="padding: 0 20px 20px 20px;">
+    <div style="padding: 0 14px 16px 14px;">
       <div style="background-color: #FBF5EC; border: 1px solid #E8C9A0; border-radius: 8px; padding: 14px 16px;">
         <strong style="font-size: 12px; color: #23211E; display: block; margin-bottom: 8px;">
           Observações e Recomendações do Planejador
@@ -573,7 +573,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
       return `
     <!-- MAPA E DESLOCAMENTOS OPERACIONAIS (NO FINAL DO RELATÓRIO) -->
-    <div style="padding: 0 20px 20px 20px;">
+    <div style="padding: 0 14px 16px 14px;">
       <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <div>
