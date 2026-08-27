@@ -47,6 +47,8 @@ export interface EnvioPlanejamentoModalProps {
   ultimaAtualizacao?: string | null;
   /** Dados GPS reais das equipes, capturados do PlanejamentoEquipesMap ao vivo */
   mapDataGps?: ComputedMapData[];
+  /** Imagem do mapa pré-capturada via html2canvas quando os tiles carregaram */
+  mapCaptureBase64?: string;
 }
 
 export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
@@ -62,6 +64,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   alojamentos,
   ultimaAtualizacao,
   mapDataGps = [],
+  mapCaptureBase64 = '',
 }) => {
   if (!open) return null;
 
@@ -197,27 +200,24 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
 
       const labelPeriodo = `Semana de ${format(inicioSemana, 'dd/MM')} a ${format(fimSemana, 'dd/MM/yyyy')}`;
 
-      // Usa GPS real se disponível (capturado do Leaflet ao vivo), senão fallback para centróides
-      const equipesParaMapaEmail = mapDataGps.length > 0
-        ? mapDataGps.map(md => ({
-            codigo: md.equipe,
-            cor: md.color,
-            points: md.points,
-          }))
-        : equipes.filter(e => e.temProgramacao).map(eq => {
-            const munSet = new Set<string>();
-            if (eq.dias) {
-              Object.values(eq.dias).forEach((d: any) => {
-                if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio);
-              });
-            }
-            return { codigo: eq.codigo, municipios: Array.from(munSet) };
-          });
-
-      const mapaImagemBase64 = await obterMapaBase64ParaEmail(
-        equipesParaMapaEmail,
-        unidadeNome || 'BOM JESUS DA LAPA'
-      );
+      // Prioridade: imagem já capturada (html2canvas após tiles carregarem)
+      // Fallback 1: GPS real + gerador canvas
+      // Fallback 2: centróides de municípios
+      let mapaImagemBase64 = mapCaptureBase64;
+      if (!mapaImagemBase64) {
+        const equipesParaMapaEmail = mapDataGps.length > 0
+          ? mapDataGps.map(md => ({ codigo: md.equipe, cor: md.color, points: md.points }))
+          : equipes.filter(e => e.temProgramacao).map(eq => {
+              const munSet = new Set<string>();
+              if (eq.dias) {
+                Object.values(eq.dias).forEach((d: any) => {
+                  if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio);
+                });
+              }
+              return { codigo: eq.codigo, municipios: Array.from(munSet) };
+            });
+        mapaImagemBase64 = await obterMapaBase64ParaEmail(equipesParaMapaEmail, unidadeNome || 'BOM JESUS DA LAPA');
+      }
 
       const payload: PlanejamentoEmailPayload = {
         unidade: unidadeId,

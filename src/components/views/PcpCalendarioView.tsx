@@ -46,6 +46,8 @@ export const PcpCalendarioView: React.FC = () => {
   const [isEnvioModalOpen, setIsEnvioModalOpen] = useState(false);
   // Dados GPS reais das equipes para o mapa do e-mail (capturados via PlanejamentoEquipesMap)
   const [mapDataGps, setMapDataGps] = useState<ComputedMapData[]>([]);
+  // Imagem do mapa pré-capturada via html2canvas quando os tiles carregam
+  const [mapCaptureBase64, setMapCaptureBase64] = useState<string>('');
 
   const {
     inicioSemana,
@@ -328,6 +330,7 @@ export const PcpCalendarioView: React.FC = () => {
           setDensidade={setDensidade}
           blocos={blocos}
           onMapDataReady={setMapDataGps}
+          onCaptureReady={setMapCaptureBase64}
         />
       </main>
 
@@ -345,6 +348,7 @@ export const PcpCalendarioView: React.FC = () => {
         alojamentos={alojamentos}
         ultimaAtualizacao={ultimaAtualizacao}
         mapDataGps={mapDataGps}
+        mapCaptureBase64={mapCaptureBase64}
       />
     </div>
   );

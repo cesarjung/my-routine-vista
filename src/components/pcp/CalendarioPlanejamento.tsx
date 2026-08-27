@@ -213,6 +213,7 @@ export interface CalendarioPlanejamentoProps {
   onUpdateResumoIaTexto?: (txt: string) => void;
   onMapPositionChange?: (center: [number, number], zoom: number) => void;
   onMapDataReady?: (mapData: import('@/components/views/PlanejamentoEquipesMap').ComputedMapData[]) => void;
+  onCaptureReady?: (base64: string) => void;
 }
 
 export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
@@ -260,6 +261,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   onUpdateResumoIaTexto,
   onMapPositionChange,
   onMapDataReady,
+  onCaptureReady,
 }) => {
   // Estado local de escopo e densidade se não vier controlado externamente
   const [localEscopo, setLocalEscopo] = useState<'todas' | 'com_programacao'>(escopo);
@@ -1001,6 +1003,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             title="Mapa de Trajetos e Deslocamento das Equipes"
             onMapPositionChange={onMapPositionChange}
             onMapDataReady={onMapDataReady}
+            onCaptureReady={onCaptureReady}
           />
         </div>
       )}
