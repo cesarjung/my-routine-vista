@@ -1025,11 +1025,18 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             </span>
           </div>
 
-          <div className="lg:columns-2 gap-3 space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: 'min-content' }}>
             {obrasResumo.map((obra) => {
               const risk = vistoriasMap?.[obra.obra];
+              const isVermelho = risk?.classificacao === 'Vermelho';
+              const isSemVistoria = !risk;
+              const cardBorderClass = isVermelho
+                ? 'border-2 border-[#C0392E]'
+                : isSemVistoria
+                  ? 'border-2 border-[#E8C9A0]'
+                  : 'border border-[#E6E3DD]';
               return (
-                <div key={obra.obra} className="p-3 rounded-lg border border-[#E6E3DD] bg-[#FBFAF7] space-y-2 break-inside-avoid">
+                <div key={obra.obra} className={`p-3 rounded-lg bg-[#FBFAF7] space-y-2 ${cardBorderClass}`}>
                   {/* Header: obra + badge de risco */}
                   <div className="flex items-center justify-between">
                     <div className="min-w-0">
@@ -1039,9 +1046,9 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                       </span>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ml-2 ${
-                      risk?.classificacao === 'Vermelho'
-                        ? 'bg-[#C0392E] text-white'
-                        : risk?.classificacao === 'Laranja'
+                      isVermelho
+                        ? 'bg-[#C0392E] text-white border border-[#A93226]'
+                        : isSemVistoria || risk?.classificacao === 'Laranja'
                           ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
                           : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
                     }`}>

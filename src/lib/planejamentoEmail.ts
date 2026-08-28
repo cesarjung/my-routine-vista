@@ -527,51 +527,81 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
         });
       });
       const obrasArr = Array.from(obrasMap.values());
-      const hasVistorias = obrasArr.length > 0 && Object.keys(vistorias).length > 0;
+      if (obrasArr.length === 0) return '';
 
-      if (!hasVistorias) return '';
+      // Helper: gera HTML de um card de obra
+      function renderObraCard(o: { obra: string; equipes: Set<string>; etapas: Set<string> }) {
+        const risk = vistorias[o.obra];
+        const isVermelho = risk?.classificacao === 'Vermelho';
+        const isSemVistoria = !risk;
+        const isLaranja = risk?.classificacao === 'Laranja' || isSemVistoria;
+
+        // Badge
+        let badgeBg = '#E6F2EA'; let badgeColor = '#17794C'; let badgeBorder = '1px solid #A0D4B2';
+        let label = risk ? 'Risco ' + risk.classificacao : 'Sem vistoria';
+        if (isVermelho) { badgeBg = '#C0392E'; badgeColor = '#FFFFFF'; badgeBorder = '1px solid #A93226'; }
+        else if (isSemVistoria) { badgeBg = '#FBF2DA'; badgeColor = '#A06A16'; badgeBorder = '1px solid #E8C9A0'; }
+        else if (risk?.classificacao === 'Laranja') { badgeBg = '#FBF2DA'; badgeColor = '#A06A16'; badgeBorder = '1px solid #E8C9A0'; }
+
+        // Card border
+        let cardBorder = '1px solid #E6E3DD';
+        if (isVermelho) cardBorder = '2px solid #C0392E';
+        else if (isSemVistoria) cardBorder = '2px solid #E8C9A0';
+
+        // Pontos detalhados
+        const pontosHtml = risk?.pontosDetalhados && risk.pontosDetalhados.length > 0
+          ? risk.pontosDetalhados.map(pt => {
+              const isCrit = Boolean(pt.isCritico);
+              return '<div style="padding: 4px 8px; margin-bottom: 3px; border-radius: 4px; font-size: 10.5px; line-height: 1.4; '
+                + (isCrit ? 'background-color: #C0392E; color: #FFFFFF; font-weight: bold; border: 1px solid #A93226;' : 'background-color: #FFFFFF; border: 1px solid #E6E3DD; color: #23211E;')
+                + '">' + (pt.icone || (isCrit ? '🔴' : '📌')) + ' '
+                + (pt.categoria ? '<span style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; '
+                  + (isCrit ? 'color: #FFD4D0; font-weight: bold;' : 'color: #8A857D; font-weight: 600;')
+                  + '">[' + pt.categoria + ']</span> ' : '')
+                + pt.texto + '</div>';
+            }).join('')
+          : '<div style="font-size: 10.5px; color: #A39E96; font-style: italic;">' + (risk ? 'Nenhum impeditivo crítico registrado.' : 'Vistoria não realizada para esta obra.') + '</div>';
+
+        return '<div style="background-color: #FBFAF7; border: ' + cardBorder + '; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;">'
+          + '<table style="width: 100%; border-collapse: collapse;"><tr>'
+          + '<td style="vertical-align: top;"><strong style="font-size: 11.5px; color: #23211E;">' + o.obra + '</strong>'
+          + '<br><span style="font-size: 10px; color: #6B6660;">' + Array.from(o.equipes).join(', ') + ' · ' + Array.from(o.etapas).join(', ') + '</span></td>'
+          + '<td style="text-align: right; vertical-align: top; white-space: nowrap; padding-left: 8px;">'
+          + '<span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ' + badgeBg + '; color: ' + badgeColor + '; border: ' + badgeBorder + ';">' + label + '</span>'
+          + '</td></tr></table>'
+          + '<div style="margin-top: 6px;">' + pontosHtml + '</div>'
+          + '</div>';
+      }
+
+      // Split obras em 2 colunas (alternando: 0→left, 1→right, 2→left...)
+      const col1: typeof obrasArr = [];
+      const col2: typeof obrasArr = [];
+      obrasArr.forEach((o, i) => { (i % 2 === 0 ? col1 : col2).push(o); });
 
       return `
     <!-- ANÁLISE DE VISTORIA POR OBRA -->
     <div style="padding: 0 14px 16px 14px;">
       <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
-        <strong style="font-size: 13px; color: #23211E; display: block; margin-bottom: 10px;">
-          👁️ Análise de Vistoria por Obra (${obrasArr.length})
-        </strong>
-        <span style="font-size: 11px; color: #6B6660; display: block; margin-bottom: 12px;">Dados da vistoria analisados por IA</span>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+          <tr>
+            <td style="vertical-align: middle;">
+              <strong style="font-size: 13px; color: #23211E;">👁️ Análise de Vistoria por Obra (${obrasArr.length})</strong>
+            </td>
+            <td style="text-align: right; vertical-align: middle;">
+              <span style="font-size: 11px; color: #6B6660;">Dados da vistoria analisados por IA</span>
+            </td>
+          </tr>
+        </table>
 
         <table style="width: 100%; border-collapse: collapse;">
-          <tbody>
-            ${obrasArr.map(o => {
-              const risk = vistorias[o.obra];
-              const badgeBg = risk?.classificacao === 'Vermelho' ? '#C0392E' : risk?.classificacao === 'Laranja' ? '#FBF2DA' : '#E6F2EA';
-              const badgeColor = risk?.classificacao === 'Vermelho' ? '#FFFFFF' : risk?.classificacao === 'Laranja' ? '#A06A16' : '#17794C';
-              const badgeBorder = risk?.classificacao === 'Laranja' ? '1px solid #E8C9A0' : risk?.classificacao === 'Vermelho' ? 'none' : '1px solid #A0D4B2';
-              const label = risk ? 'Risco ' + risk.classificacao : 'Sem vistoria';
-
-              const pontosHtml = risk?.pontosDetalhados && risk.pontosDetalhados.length > 0
-                ? risk.pontosDetalhados.map(pt => {
-                    const isCrit = Boolean(pt.isCritico);
-                    return '<div style="padding: 4px 8px; margin-bottom: 3px; border-radius: 4px; font-size: 10.5px; line-height: 1.4; '
-                      + (isCrit ? 'background-color: #C0392E; color: #FFFFFF; font-weight: bold; border: 1px solid #A93226;' : 'background-color: #FFFFFF; border: 1px solid #E6E3DD; color: #23211E;')
-                      + '">' + (pt.icone || (isCrit ? '🔴' : '📌')) + ' '
-                      + (pt.categoria ? '<span style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; '
-                        + (isCrit ? 'color: #FFD4D0; font-weight: bold;' : 'color: #8A857D; font-weight: 600;')
-                        + '">[' + pt.categoria + ']</span> ' : '')
-                      + pt.texto + '</div>';
-                  }).join('')
-                : '<div style="font-size: 10.5px; color: #A39E96; font-style: italic;">' + (risk ? 'Nenhum impeditivo crítico registrado.' : 'Vistoria não realizada.') + '</div>';
-
-              return '<tr><td style="padding: 8px; vertical-align: top; border-bottom: 1px solid #F0EDE8;">'
-                + '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">'
-                + '<div><strong style="font-size: 11.5px; color: #23211E;">' + o.obra + '</strong>'
-                + '<br><span style="font-size: 10px; color: #6B6660;">' + Array.from(o.equipes).join(', ') + ' · ' + Array.from(o.etapas).join(', ') + '</span></div>'
-                + '<span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ' + badgeBg + '; color: ' + badgeColor + '; border: ' + badgeBorder + '; white-space: nowrap; margin-left: 8px;">' + label + '</span>'
-                + '</div>'
-                + pontosHtml
-                + '</td></tr>';
-            }).join('')}
-          </tbody>
+          <tr>
+            <td style="width: 50%; vertical-align: top; padding-right: 6px;">
+              ${col1.map(o => renderObraCard(o)).join('')}
+            </td>
+            <td style="width: 50%; vertical-align: top; padding-left: 6px;">
+              ${col2.map(o => renderObraCard(o)).join('')}
+            </td>
+          </tr>
         </table>
       </div>
     </div>
