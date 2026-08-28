@@ -364,6 +364,22 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       : buildDefaultDestaquesIa()
   );
 
+  // Recalcula resumo e destaques quando as métricas carregam (evita zeros)
+  const prevPlanejadoRef = React.useRef(metricas.totalPlanejado);
+  React.useEffect(() => {
+    // Só atualiza se os valores eram zero e agora carregaram
+    if (prevPlanejadoRef.current === 0 && metricas.totalPlanejado > 0) {
+      if (!initialResumoIaTexto) {
+        const novoResumo = buildDefaultResumoIa();
+        setResumoIa(novoResumo);
+      }
+      if (!initialDestaquesIa || initialDestaquesIa.length === 0) {
+        setDestaquesIa(buildDefaultDestaquesIa() as any);
+      }
+    }
+    prevPlanejadoRef.current = metricas.totalPlanejado;
+  }, [metricas.totalPlanejado, metricas.aderenciaPeriodo]);
+
   // Recalcula resumo IA quando as métricas mudam
   const handleRegerarIa = () => {
     const novoResumo = buildDefaultResumoIa();
@@ -539,12 +555,23 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               <span className="text-[11px] font-bold text-[#6B6660]">
                 Planejado x meta do período
               </span>
-              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#EDF4E7] text-[#17794C] border border-[#CCE3B8]" title="Aderência calculada sobre as equipes com programação">
+              <span
+                className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border"
+                style={{
+                  backgroundColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).fundo,
+                  color: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto,
+                  borderColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto + '40',
+                }}
+                title="Aderência calculada sobre as equipes com programação"
+              >
                 Prog: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
               </span>
             </div>
             <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold text-[#23211E]">
+              <span
+                className="text-2xl font-mono font-bold"
+                style={{ color: getCorPctPlanejado(metricas.aderenciaPeriodo).texto }}
+              >
                 {metricas.aderenciaPeriodo}%
               </span>
               <span className="text-xs text-[#6B6660] font-mono">aderência global ({metricas.totalEquipesGeral || equipes.length} eqs)</span>
