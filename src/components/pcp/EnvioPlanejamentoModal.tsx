@@ -124,7 +124,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   }, [unidadeId, getUnidadeConfig]);
 
   const [blocos, setBlocos] = useState<EmailBlocosConfig>({
-    resumo: true, calendario: true, disponiveis: true, alojamentos: true, observacoes: true, mapa: true,
+    resumo: true, calendario: true, vistorias: true, disponiveis: true, alojamentos: true, observacoes: true, mapa: true,
   });
   const [escopo, setEscopo] = useState<'todas' | 'com_programacao'>('todas');
   const [densidade, setDensidade] = useState<'detalhado' | 'compacto'>('detalhado');
@@ -544,6 +544,14 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
                     <Switch
                       checked={blocos.calendario}
                       onCheckedChange={v => setBlocos(p => ({ ...p, calendario: v }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#23211E]">Análise de vistorias</span>
+                    <Switch
+                      checked={blocos.vistorias !== false}
+                      onCheckedChange={v => setBlocos(p => ({ ...p, vistorias: v }))}
                     />
                   </div>
 

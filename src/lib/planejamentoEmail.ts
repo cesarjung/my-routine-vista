@@ -37,6 +37,7 @@ export interface EmailDestinatarios {
 export interface EmailBlocosConfig {
   resumo: boolean;
   calendario: boolean;
+  vistorias?: boolean;
   disponiveis?: boolean;
   alojamentos: boolean;
   observacoes: boolean;
@@ -512,6 +513,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
     ${(() => {
       // ANÁLISE DE VISTORIA POR OBRA
+      if (blocos.vistorias === false) return '';
       const obrasMap = new Map<string, { obra: string; equipes: Set<string>; etapas: Set<string> }>();
       equipes.forEach(eq => {
         const diasObj = Array.isArray(eq.dias) ? eq.dias : (eq.dias ? Object.values(eq.dias) : []);

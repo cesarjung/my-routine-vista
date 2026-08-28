@@ -1025,11 +1025,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="lg:columns-2 gap-3 space-y-3">
             {obrasResumo.map((obra) => {
               const risk = vistoriasMap?.[obra.obra];
               return (
-                <div key={obra.obra} className="p-3 rounded-lg border border-[#E6E3DD] bg-[#FBFAF7] space-y-2">
+                <div key={obra.obra} className="p-3 rounded-lg border border-[#E6E3DD] bg-[#FBFAF7] space-y-2 break-inside-avoid">
                   {/* Header: obra + badge de risco */}
                   <div className="flex items-center justify-between">
                     <div className="min-w-0">
