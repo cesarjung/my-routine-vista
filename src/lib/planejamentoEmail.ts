@@ -534,19 +534,19 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
         const risk = vistorias[o.obra];
         const isVermelho = risk?.classificacao === 'Vermelho';
         const isSemVistoria = !risk;
-        const isLaranja = risk?.classificacao === 'Laranja' || isSemVistoria;
 
         // Badge
         let badgeBg = '#E6F2EA'; let badgeColor = '#17794C'; let badgeBorder = '1px solid #A0D4B2';
         let label = risk ? 'Risco ' + risk.classificacao : 'Sem vistoria';
         if (isVermelho) { badgeBg = '#C0392E'; badgeColor = '#FFFFFF'; badgeBorder = '1px solid #A93226'; }
-        else if (isSemVistoria) { badgeBg = '#FBF2DA'; badgeColor = '#A06A16'; badgeBorder = '1px solid #E8C9A0'; }
+        else if (isSemVistoria) { badgeBg = '#3C3833'; badgeColor = '#FFFFFF'; badgeBorder = 'none'; }
         else if (risk?.classificacao === 'Laranja') { badgeBg = '#FBF2DA'; badgeColor = '#A06A16'; badgeBorder = '1px solid #E8C9A0'; }
 
         // Card border
         let cardBorder = '1px solid #E6E3DD';
         if (isVermelho) cardBorder = '2px solid #C0392E';
-        else if (isSemVistoria) cardBorder = '2px solid #E8C9A0';
+        else if (isSemVistoria) cardBorder = '2px solid #3C3833';
+        else if (risk?.classificacao === 'Laranja') cardBorder = '2px solid #E8C9A0';
 
         // Pontos detalhados
         const pontosHtml = risk?.pontosDetalhados && risk.pontosDetalhados.length > 0
@@ -572,6 +572,16 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
           + '<div style="margin-top: 6px;">' + pontosHtml + '</div>'
           + '</div>';
       }
+
+      // Ordenar: Vermelho > Laranja > Verde > Sem vistoria
+      const riskOrder = (o: typeof obrasArr[0]) => {
+        const r = vistorias[o.obra];
+        if (!r) return 4;
+        if (r.classificacao === 'Vermelho') return 1;
+        if (r.classificacao === 'Laranja') return 2;
+        return 3;
+      };
+      obrasArr.sort((a, b) => riskOrder(a) - riskOrder(b));
 
       // Split obras em 2 colunas (alternando: 0→left, 1→right, 2→left...)
       const col1: typeof obrasArr = [];

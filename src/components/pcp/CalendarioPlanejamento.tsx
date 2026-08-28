@@ -200,6 +200,7 @@ export interface CalendarioPlanejamentoProps {
   blocos?: {
     resumo: boolean;
     calendario: boolean;
+    vistorias?: boolean;
     disponiveis: boolean;
     alojamentos: boolean;
     observacoes: boolean;
@@ -253,6 +254,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     observacoes: true,
     mapa: true,
   },
+  onUpdateBloco,
   observacoes: initialObservacoes,
   onUpdateObservacoes,
   destaquesIa: initialDestaquesIa,
@@ -269,6 +271,9 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   const activeDensidade = setDensidade ? densidade : localDensidade;
   const handleSetEscopo = setEscopo || setLocalEscopo;
   const handleSetDensidade = setDensidade || setLocalDensidade;
+
+  // Force re-render counter (para edições in-place de vistorias)
+  const [, setForceRender] = useState(0);
 
   // Estado das observações do planejador (editáveis inline)
   const [observacoes, setObservacoes] = useState<string[]>(
@@ -1011,7 +1016,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       )}
 
       {/* 5.5 ANÁLISE DE VISTORIA POR OBRA */}
-      {obrasResumo.length > 0 && (
+      {blocos.vistorias !== false && obrasResumo.length > 0 && (
         <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3">
           <div className="flex items-center justify-between border-b border-[#E6E3DD] pb-2.5">
             <div className="flex items-center gap-2">
@@ -1026,75 +1031,121 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
           </div>
 
           <div style={{ columnCount: 2, columnGap: '12px' }}>
-            {obrasResumo.map((obra) => {
-              const risk = vistoriasMap?.[obra.obra];
-              const isVermelho = risk?.classificacao === 'Vermelho';
-              const isSemVistoria = !risk;
-              const cardBorderClass = isVermelho
-                ? 'border-2 border-[#C0392E]'
-                : isSemVistoria
-                  ? 'border-2 border-[#E8C9A0]'
-                  : 'border border-[#E6E3DD]';
-              return (
-                <div key={obra.obra} className={`p-3 rounded-lg bg-[#FBFAF7] space-y-2 mb-3 ${cardBorderClass}`} style={{ breakInside: 'avoid', WebkitColumnBreakInside: 'avoid' }}>
-                  {/* Header: obra + badge de risco */}
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <span className="font-bold text-xs text-[#23211E] block truncate" title={obra.obra}>{obra.obra}</span>
-                      <span className="text-[10px] text-[#6B6660]">
-                        {obra.equipes.join(', ')} · {obra.etapas.join(', ')}
+            {(() => {
+              // Ordenar: Vermelho > Laranja > Verde > Sem vistoria
+              const riskOrder = (obra: typeof obrasResumo[0]) => {
+                const r = vistoriasMap?.[obra.obra];
+                if (!r) return 4; // Sem vistoria - último
+                if (r.classificacao === 'Vermelho') return 1;
+                if (r.classificacao === 'Laranja') return 2;
+                return 3; // Verde
+              };
+              const sorted = [...obrasResumo].sort((a, b) => riskOrder(a) - riskOrder(b));
+
+              return sorted.map((obra) => {
+                const risk = vistoriasMap?.[obra.obra];
+                const isVermelho = risk?.classificacao === 'Vermelho';
+                const isSemVistoria = !risk;
+                const cardBorderClass = isVermelho
+                  ? 'border-2 border-[#C0392E]'
+                  : isSemVistoria
+                    ? 'border-2 border-[#3C3833]'
+                    : risk?.classificacao === 'Laranja'
+                      ? 'border-2 border-[#E8C9A0]'
+                      : 'border border-[#E6E3DD]';
+                return (
+                  <div key={obra.obra} className={`p-3 rounded-lg bg-[#FBFAF7] space-y-2 mb-3 ${cardBorderClass}`} style={{ breakInside: 'avoid', WebkitColumnBreakInside: 'avoid' as any }}>
+                    {/* Header: obra + badge de risco */}
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <span className="font-bold text-xs text-[#23211E] block truncate" title={obra.obra}>{obra.obra}</span>
+                        <span className="text-[10px] text-[#6B6660]">
+                          {obra.equipes.join(', ')} · {obra.etapas.join(', ')}
+                        </span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ml-2 ${
+                        isVermelho
+                          ? 'bg-[#C0392E] text-white border border-[#A93226]'
+                          : isSemVistoria
+                            ? 'bg-[#3C3833] text-white'
+                            : risk?.classificacao === 'Laranja'
+                              ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
+                              : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
+                      }`}>
+                        {risk ? `Risco ${risk.classificacao}` : 'Sem vistoria'}
                       </span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ml-2 ${
-                      isVermelho
-                        ? 'bg-[#C0392E] text-white border border-[#A93226]'
-                        : isSemVistoria || risk?.classificacao === 'Laranja'
-                          ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
-                          : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
-                    }`}>
-                      {risk ? `Risco ${risk.classificacao}` : 'Sem vistoria'}
-                    </span>
-                  </div>
 
-                  {/* Pontos detalhados da vistoria (idêntico ao PcpPlanejamentoView) */}
-                  <div className="space-y-1">
-                    {risk?.pontosDetalhados && risk.pontosDetalhados.length > 0 ? (
-                      risk.pontosDetalhados.map((pt, pIdx) => {
-                        const isCritico = Boolean(pt.isCritico);
-                        return (
-                          <div
-                            key={pIdx}
-                            className={`p-1.5 rounded-lg text-[10.5px] leading-snug break-words flex items-start gap-1.5 ${
-                              isCritico
-                                ? 'bg-[#C0392E] text-white font-bold border border-[#A93226]'
-                                : 'bg-white border border-[#E6E3DD] text-[#23211E]'
-                            }`}
-                          >
-                            <span className="text-[10px] shrink-0 mt-0.5">{pt.icone || (isCritico ? '🔴' : '📌')}</span>
-                            <div className="flex-1 min-w-0">
-                              {pt.categoria && (
-                                <span className={`mr-1 text-[9px] uppercase tracking-wider ${
-                                  isCritico ? 'text-red-100 font-bold' : 'text-[#8A857D] font-semibold'
-                                }`}>
-                                  [{pt.categoria}]
+                    {/* Pontos detalhados da vistoria - editáveis */}
+                    <div className="space-y-1">
+                      {risk?.pontosDetalhados && risk.pontosDetalhados.length > 0 ? (
+                        risk.pontosDetalhados.map((pt, pIdx) => {
+                          const isCritico = Boolean(pt.isCritico);
+                          return (
+                            <div
+                              key={pIdx}
+                              className={`group p-1.5 rounded-lg text-[10.5px] leading-snug break-words flex items-start gap-1.5 ${
+                                isCritico
+                                  ? 'bg-[#C0392E] text-white font-bold border border-[#A93226]'
+                                  : 'bg-white border border-[#E6E3DD] text-[#23211E]'
+                              }`}
+                            >
+                              <span className="text-[10px] shrink-0 mt-0.5">{pt.icone || (isCritico ? '🔴' : '📌')}</span>
+                              <div className="flex-1 min-w-0">
+                                {pt.categoria && (
+                                  <span className={`mr-1 text-[9px] uppercase tracking-wider ${
+                                    isCritico ? 'text-red-100 font-bold' : 'text-[#8A857D] font-semibold'
+                                  }`}>
+                                    [{pt.categoria}]
+                                  </span>
+                                )}
+                                <span className={`break-words whitespace-normal ${isCritico ? 'text-white' : 'text-[#23211E]'}`}>
+                                  {pt.texto}
                                 </span>
-                              )}
-                              <span className={`break-words whitespace-normal ${isCritico ? 'text-white' : 'text-[#23211E]'}`}>
-                                {pt.texto}
-                              </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // Remove este ponto da vistoria (local)
+                                  if (risk?.pontosDetalhados) {
+                                    risk.pontosDetalhados.splice(pIdx, 1);
+                                    // Force re-render via state update
+                                    setForceRender(v => v + 1);
+                                  }
+                                }}
+                                className={`opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 print:hidden ${
+                                  isCritico ? 'text-red-200 hover:text-white' : 'text-[#A39E96] hover:text-[#C0392E]'
+                                }`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-[10.5px] text-[#A39E96] italic">
-                        {risk ? 'Nenhum impeditivo crítico registrado.' : 'Vistoria não realizada para esta obra.'}
-                      </div>
-                    )}
+                          );
+                        })
+                      ) : (
+                        <div className="text-[10.5px] text-[#A39E96] italic">
+                          {risk ? 'Nenhum impeditivo crítico registrado.' : 'Vistoria não realizada para esta obra.'}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Botão + para adicionar tópico */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!risk) return;
+                        if (!risk.pontosDetalhados) risk.pontosDetalhados = [];
+                        risk.pontosDetalhados.push({ categoria: '', icone: '📌', texto: 'Novo tópico...', isCritico: false });
+                        setForceRender(v => v + 1);
+                      }}
+                      className="flex items-center gap-1 text-[10.5px] font-semibold text-[#E07A1F] hover:text-[#C0671A] transition-colors print:hidden"
+                    >
+                      <Plus className="w-3 h-3" /> Tópico
+                    </button>
                   </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
         </div>
       )}

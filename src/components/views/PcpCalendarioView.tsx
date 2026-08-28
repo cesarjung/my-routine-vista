@@ -75,6 +75,7 @@ export const PcpCalendarioView: React.FC = () => {
   const [blocos, setBlocos] = useState<EmailBlocosConfig>({
     resumo: true,
     calendario: true,
+    vistorias: true,
     disponiveis: true,
     alojamentos: true,
     observacoes: true,
@@ -276,6 +277,15 @@ export const PcpCalendarioView: React.FC = () => {
                 className="scale-75"
               />
               <span>Grade</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <Switch
+                checked={blocos.vistorias !== false}
+                onCheckedChange={v => setBlocos(p => ({ ...p, vistorias: v }))}
+                className="scale-75"
+              />
+              <span>Vistorias</span>
             </label>
 
             <label className="flex items-center gap-1.5 cursor-pointer">
