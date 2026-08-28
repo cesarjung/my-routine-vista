@@ -1025,7 +1025,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: 'min-content' }}>
+          <div style={{ columnCount: 2, columnGap: '12px' }}>
             {obrasResumo.map((obra) => {
               const risk = vistoriasMap?.[obra.obra];
               const isVermelho = risk?.classificacao === 'Vermelho';
@@ -1036,7 +1036,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                   ? 'border-2 border-[#E8C9A0]'
                   : 'border border-[#E6E3DD]';
               return (
-                <div key={obra.obra} className={`p-3 rounded-lg bg-[#FBFAF7] space-y-2 ${cardBorderClass}`}>
+                <div key={obra.obra} className={`p-3 rounded-lg bg-[#FBFAF7] space-y-2 mb-3 ${cardBorderClass}`} style={{ breakInside: 'avoid', WebkitColumnBreakInside: 'avoid' }}>
                   {/* Header: obra + badge de risco */}
                   <div className="flex items-center justify-between">
                     <div className="min-w-0">
