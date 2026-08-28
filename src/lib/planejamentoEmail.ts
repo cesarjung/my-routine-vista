@@ -127,6 +127,30 @@ export function buildPlanejamentoEmailPayload(params: Omit<PlanejamentoEmailPayl
 }
 
 /**
+ * Destaca valores monetários (R$), percentuais (%) e tempos (h/m) no texto da Síntese
+ * com cores: R$ em azul bold, % em escala verde-amarelo-vermelho, tempo em cinza bold
+ */
+function highlightResumoValues(texto: string): string {
+  return texto.replace(
+    /(R\$\s*[\d.,]+(?:\.[\d]+)?)|([\d.,]+%)|([\d]+h[\d]*m?|[\d.,]+h\s)/g,
+    (match, money, pct, time) => {
+      if (money) {
+        return `<strong style="color: #1D58B5;">${match}</strong>`;
+      }
+      if (pct) {
+        const val = parseFloat(pct.replace(',', '.'));
+        const color = val >= 100 ? '#17794C' : val >= 70 ? '#C9A227' : '#C0392E';
+        return `<strong style="color: ${color};">${match}</strong>`;
+      }
+      if (time) {
+        return `<strong style="color: #5C574F;">${match}</strong>`;
+      }
+      return match;
+    }
+  );
+}
+
+/**
  * Gera o template HTML corporativo com distribuição ampla (1100px) para envio por e-mail
  */
 export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload): string {
@@ -266,7 +290,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
           ✦ Síntese Operacional da Programação
         </strong>
         <p style="font-size: 12px; line-height: 1.5; color: #3C3833; margin: 0 0 12px 0;">
-          ${resumoExecutivo?.texto || `A programação da semana prevê um volume planejado de R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com ${metricas.aderencia}% de aderência geral.`}
+          ${highlightResumoValues(resumoExecutivo?.texto || `A programação da semana prevê um volume planejado de R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com ${metricas.aderencia}% de aderência geral.`)}
         </p>
 
         ${resumoExecutivo?.destaques && resumoExecutivo.destaques.length > 0 ? `
