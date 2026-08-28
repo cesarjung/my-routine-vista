@@ -513,6 +513,21 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   // Dados oficiais de mapa com coordenadas reais dos projetos (Idêntico à seção Equipes)
   const { data: equipesMapData } = usePlanejamentoEquipesData(unidadeId ? [unidadeId] : []);
 
+  // Agrupa as equipes por supervisor para a nova tabela resumo
+  const equipesAgrupadasPorSupervisor = useMemo(() => {
+    const map = new Map<string, typeof equipes>();
+    equipesFiltradas.forEach(eq => {
+      const sup = eq.supervisor || 'Sem Supervisor';
+      if (!map.has(sup)) map.set(sup, []);
+      map.get(sup)!.push(eq);
+    });
+    return Array.from(map.entries()).sort((a, b) => {
+      if (a[0] === 'Sem Supervisor') return 1;
+      if (b[0] === 'Sem Supervisor') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [equipesFiltradas]);
+
   return (
     <div className="w-full bg-[#F7F6F3] text-[#23211E] font-sans antialiased space-y-4">
       {/* 5.1 CABEÇALHO */}
@@ -546,196 +561,112 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       </div>
 
-      {/* 5.2 TRÊS CARDS DE KPIS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-        {/* Card 1: Planejado x Meta */}
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
+      {/* 5.2 RESUMO OPERACIONAL DAS EQUIPES */}
+      <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E6E3DD] pb-3">
           <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-[#6B6660]">
-                Planejado x meta do período
-              </span>
-              <span
-                className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border"
-                style={{
-                  backgroundColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).fundo,
-                  color: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto,
-                  borderColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto + '40',
-                }}
-                title="Aderência calculada sobre as equipes com programação"
-              >
-                Prog: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2 mt-1.5">
-              <span
-                className="text-2xl font-mono font-bold"
-                style={{ color: getCorPctPlanejado(metricas.aderenciaPeriodo).texto }}
-              >
-                {metricas.aderenciaPeriodo}%
-              </span>
-              <span className="text-xs text-[#6B6660] font-mono">aderência global ({metricas.totalEquipesGeral || equipes.length} eqs)</span>
-            </div>
-            <p className="text-[11.5px] text-[#6B6660] mt-1 font-mono">
-              R$ {metricas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ {metricas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
-            {metricas.totalEquipesProgramadas > 0 && metricas.totalEquipesProgramadas < (metricas.totalEquipesGeral || equipes.length) && (
-              <p className="text-[10.5px] text-[#8C877D] mt-0.5 font-mono">
-                Meta {metricas.totalEquipesProgramadas} eqs prog.: R$ {metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
-              {metricas.equipesAcimaMeta} {metricas.equipesAcimaMeta === 1 ? 'equipe' : 'equipes'} ≥100%
+            <h3 className="text-sm font-bold text-[#23211E] flex items-center gap-1.5">
+              👥 Resumo Operacional das Equipes ({equipesFiltradas.length} equipes)
+            </h3>
+            <span className="text-[11px] text-[#6B6660] block mt-0.5">
+              {equipesFiltradas.filter(e => e.temProgramacao).length} equipes programadas · {equipesFiltradas.filter(e => !e.temProgramacao).length} equipes sem programação no período
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
-              {metricas.equipesAbaixoMeta} abaixo
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[11px] font-bold text-[#17794C] bg-[#E6F2EA] px-2 py-0.5 rounded border border-[#A0D4B2]">
+              Aderência Programadas: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
             </span>
           </div>
         </div>
 
-        {/* Card 2: Jornada Média */}
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
-          <div>
-            <span className="text-[11px] font-bold text-[#6B6660] block">
-              Jornada média das equipes
-            </span>
-            <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold text-[#23211E]">
-                {formatMinToHours(metricas.jornadaMediaMin)}
-              </span>
-              <span className="text-xs text-[#6B6660]">por turno</span>
-            </div>
-            <p className="text-[11.5px] text-[#6B6660] mt-1">
-              Média ponderada por turno programado
-            </p>
-          </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-[#E6E3DD] bg-[#FAF8F5]">
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] w-[140px]">Equipe</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right">Planejado</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right">Meta Semanal</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[90px]">% Meta</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[120px]">Média Deslocamento</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[160px]">Status Deslocamento</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[130px]">Status Produção</th>
+              </tr>
+            </thead>
+            <tbody>
+              {equipesAgrupadasPorSupervisor.map(([supervisor, groupEquipes]) => {
+                return (
+                  <React.Fragment key={supervisor}>
+                    {/* Header do Supervisor */}
+                    <tr className="border-b border-[#E6E3DD] bg-[#F7F6F3]">
+                      <td colSpan={7} className="p-2 px-3 font-bold text-[#5C574F] text-[11px]">
+                        👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})
+                      </td>
+                    </tr>
+                    {groupEquipes.map(eq => {
+                      const pctMeta = Math.round(eq.pctMeta || 0);
+                      const totalPlan = eq.totalPlanejado ?? eq.planejadoTotal ?? 0;
+                      const metaSemanal = eq.metaSemanal || 0;
+                      const temProg = eq.temProgramacao;
+                      const mediaDesloc = Number(eq.mediaDeslocamentoH || 0);
 
-          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBF2DA] text-[#A06A16] font-semibold border border-[#E8C9A0]">
-              {metricas.turnosAbaixo8} &lt; 08:00
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#F9E4E1] text-[#B03028] font-semibold border border-[#F2C0B8]">
-              {metricas.turnosAcima10} &gt; 10:00
-            </span>
-          </div>
-        </div>
+                      // Status Produção badges
+                      const corBadge = !temProg ? 'text-[#6B6660] bg-[#F0EDE8]' : pctMeta >= 100 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : pctMeta >= 70 ? 'text-[#A06A16] bg-[#FBF2DA] border border-[#E8C9A0]' : 'text-[#C0392E] bg-[#F9E4E1] border border-[#F2C0B8]';
+                      const statusTexto = !temProg ? 'Sem Progr.' : pctMeta >= 100 ? 'Meta Atingida' : pctMeta >= 70 ? 'Atenção' : 'Abaixo Meta';
 
-        {/* Card 3: Deslocamento Médio */}
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
-          <div>
-            <span className="text-[11px] font-bold text-[#6B6660] block">
-              Deslocamento médio na semana
-            </span>
-            <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold text-[#23211E]">
-                {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
-              </span>
-              <span className="text-xs text-[#6B6660]">por turno</span>
-            </div>
-            <p className="text-[11.5px] text-[#6B6660] mt-1">
-              Média acumulada de ida e volta por turno
-            </p>
-          </div>
+                      // Status Deslocamento badges
+                      const corDesloc = !temProg ? 'text-[#6B6660] bg-[#F0EDE8]' : mediaDesloc <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
+                      const textoDesloc = !temProg ? '-' : mediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
 
-          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
-              {metricas.turnosDentroMetaDesloc} na meta
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
-              {metricas.turnosAcima2h} &gt; 2,0h
-            </span>
-          </div>
+                      return (
+                        <tr key={eq.codigo} className="border-b border-[#E6E3DD] hover:bg-[#FBFAF7]/50 transition-colors">
+                          <td className="p-2.5 font-bold text-[#23211E] pl-6">{eq.codigo}</td>
+                          <td className="p-2.5 text-right font-bold text-[#23211E]">
+                            R$ {totalPlan.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </td>
+                          <td className="p-2.5 text-right text-[#6B6660]">
+                            R$ {metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </td>
+                          <td className="p-2.5 text-center font-bold" style={{ color: temProg ? getCorPctPlanejado(pctMeta).texto : '#A39E96' }}>
+                            {temProg ? `${pctMeta}%` : '-'}
+                          </td>
+                          <td className="p-2.5 text-center font-bold text-[#23211E]">
+                            {temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
+                          </td>
+                          <td className="p-2.5 text-center">
+                            {temProg ? (
+                              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corDesloc}`}>
+                                {textoDesloc}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadge}`}>
+                              {statusTexto}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* 5.3 RESUMO EXECUTIVO DO PERÍODO */}
-      {blocos.resumo && (
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between border-b border-[#E6E3DD] pb-2.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E07A1F]/10 text-[#E07A1F] text-xs font-bold border border-[#E07A1F]/20">
-                <Sparkles className="w-3.5 h-3.5" /> Síntese Operacional
-              </span>
-              <h3 className="text-sm font-bold text-[#23211E]">
-                Resumo Executivo do Período
-              </h3>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRegerarIa}
-              className="h-7 px-2.5 text-xs font-semibold bg-white border-[#DEDAD3] text-[#5C574F] hover:text-[#23211E] gap-1 print:hidden"
-            >
-              <RefreshCw className="w-3 h-3" /> Atualizar síntese
-            </Button>
-          </div>
-
-          {/* Parágrafo de Resumo com valores destacados */}
-          <p className="text-xs text-[#3C3833] leading-relaxed">
-            {renderResumoHighlighted(resumoIa)}
-          </p>
-
-          {/* Destaques com trilho colorido por gravidade (Editáveis inline + Adicionar/Remover) */}
-          <div className="space-y-2 pt-1">
-            {destaquesIa.map((d, idx) => {
-              const corGravidade =
-                d.gravidade === 'critico'
-                  ? '#C0392E'
-                  : d.gravidade === 'atencao'
-                    ? '#C9A227'
-                    : d.gravidade === 'otimo'
-                      ? '#17794C'
-                      : '#4E9E63';
-
-              return (
-                <div
-                  key={d.id || idx}
-                  className="group p-2.5 rounded-lg bg-[#FBFAF7] border border-[#E6E3DD] text-xs space-y-1 relative"
-                  style={{ borderLeft: `3.5px solid ${corGravidade}` }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveDestaque(idx)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#A39E96] hover:text-[#C0392E] print:hidden"
-                    title="Remover destaque"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                  <input
-                    type="text"
-                    value={d.titulo}
-                    onChange={e => handleDestaqueChange(idx, 'titulo', e.target.value)}
-                    className="w-full font-bold text-[#23211E] bg-transparent focus:outline-none focus:bg-white/80 rounded px-1 pr-6"
-                    placeholder="Título do destaque..."
-                  />
-                  <input
-                    type="text"
-                    value={d.texto}
-                    onChange={e => handleDestaqueChange(idx, 'texto', e.target.value)}
-                    className="w-full text-[#5C574F] bg-transparent focus:outline-none focus:bg-white/80 rounded px-1 text-[11.5px]"
-                    placeholder="Descrição do destaque..."
-                  />
-                </div>
-              );
-            })}
-
-            {/* Botão Adicionar Destaque */}
-            <button
-              type="button"
-              onClick={handleAddDestaque}
-              className="flex items-center gap-1.5 text-[11px] font-semibold text-[#E07A1F] hover:text-[#C0671A] transition-colors print:hidden px-1 py-1"
-            >
-              <Plus className="w-3.5 h-3.5" /> Adicionar consideração
-            </button>
-          </div>
-
-          <p className="text-[10.5px] text-[#A39E96] italic pt-1 print:hidden">
-            Texto gerado a partir dos dados do planejamento. Revise antes de enviar.
-          </p>
+      {/* 5.3 MAPA DE DESLOCAMENTOS DAS EQUIPES (IDÊNTICO À SEÇÃO EQUIPES) */}
+      {blocos.mapa && (
+        <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
+          <PlanejamentoEquipesMap
+            data={equipesMapData || []}
+            dates={diasDaSemana}
+            height={760}
+            className="w-full min-h-[760px] rounded-none border-0"
+            title="Mapa de Trajetos e Deslocamento das Equipes"
+            onMapPositionChange={onMapPositionChange}
+            onMapDataReady={onMapDataReady}
+          />
         </div>
       )}
 
@@ -1256,18 +1187,196 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       )}
 
-      {/* 5.8 MAPA DE DESLOCAMENTOS DAS EQUIPES (IDÊNTICO À SEÇÃO EQUIPES) */}
-      {blocos.mapa && (
-        <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-          <PlanejamentoEquipesMap
-            data={equipesMapData || []}
-            dates={diasDaSemana}
-            height={760}
-            className="w-full min-h-[760px] rounded-none border-0"
-            title="Mapa de Trajetos e Deslocamento das Equipes"
-            onMapPositionChange={onMapPositionChange}
-            onMapDataReady={onMapDataReady}
-          />
+      {/* 5.8 TRÊS CARDS DE KPIS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-4 border-t border-[#E6E3DD]">
+        {/* Card 1: Planejado x Meta */}
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-[#6B6660]">
+                Planejado x meta do período
+              </span>
+              <span
+                className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border"
+                style={{
+                  backgroundColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).fundo,
+                  color: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto,
+                  borderColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto + '40',
+                }}
+                title="Aderência calculada sobre as equipes com programação"
+              >
+                Prog: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span
+                className="text-2xl font-mono font-bold"
+                style={{ color: getCorPctPlanejado(metricas.aderenciaPeriodo).texto }}
+              >
+                {metricas.aderenciaPeriodo}%
+              </span>
+              <span className="text-xs text-[#6B6660] font-mono">aderência global ({metricas.totalEquipesGeral || equipes.length} eqs)</span>
+            </div>
+            <p className="text-[11.5px] text-[#6B6660] mt-1 font-mono">
+              R$ {metricas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ {metricas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            {metricas.totalEquipesProgramadas > 0 && metricas.totalEquipesProgramadas < (metricas.totalEquipesGeral || equipes.length) && (
+              <p className="text-[10.5px] text-[#8C877D] mt-0.5 font-mono">
+                Meta {metricas.totalEquipesProgramadas} eqs prog.: R$ {metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
+              {metricas.equipesAcimaMeta} {metricas.equipesAcimaMeta === 1 ? 'equipe' : 'equipes'} ≥100%
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
+              {metricas.equipesAbaixoMeta} abaixo
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Jornada Média */}
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-[#6B6660] block">
+              Jornada média das equipes
+            </span>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span className="text-2xl font-mono font-bold text-[#23211E]">
+                {formatMinToHours(metricas.jornadaMediaMin)}
+              </span>
+              <span className="text-xs text-[#6B6660]">por turno</span>
+            </div>
+            <p className="text-[11.5px] text-[#6B6660] mt-1">
+              Média ponderada por turno programado
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBF2DA] text-[#A06A16] font-semibold border border-[#E8C9A0]">
+              {metricas.turnosAbaixo8} &lt; 08:00
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#F9E4E1] text-[#B03028] font-semibold border border-[#F2C0B8]">
+              {metricas.turnosAcima10} &gt; 10:00
+            </span>
+          </div>
+        </div>
+
+        {/* Card 3: Deslocamento Médio */}
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-[#6B6660] block">
+              Deslocamento médio na semana
+            </span>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span className="text-2xl font-mono font-bold text-[#23211E]">
+                {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
+              </span>
+              <span className="text-xs text-[#6B6660]">por turno</span>
+            </div>
+            <p className="text-[11.5px] text-[#6B6660] mt-1">
+              Média acumulada de ida e volta por turno
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
+              {metricas.turnosDentroMetaDesloc} na meta
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
+              {metricas.turnosAcima2h} &gt; 2,0h
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 5.9 RESUMO EXECUTIVO DO PERÍODO */}
+      {blocos.resumo && (
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between border-b border-[#E6E3DD] pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E07A1F]/10 text-[#E07A1F] text-xs font-bold border border-[#E07A1F]/20">
+                <Sparkles className="w-3.5 h-3.5" /> Síntese Operacional
+              </span>
+              <h3 className="text-sm font-bold text-[#23211E]">
+                Resumo Executivo do Período
+              </h3>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRegerarIa}
+              className="h-7 px-2.5 text-xs font-semibold bg-white border-[#DEDAD3] text-[#5C574F] hover:text-[#23211E] gap-1 print:hidden"
+            >
+              <RefreshCw className="w-3 h-3" /> Atualizar síntese
+            </Button>
+          </div>
+
+          {/* Parágrafo de Resumo com valores destacados */}
+          <p className="text-xs text-[#3C3833] leading-relaxed">
+            {renderResumoHighlighted(resumoIa)}
+          </p>
+
+          {/* Destaques com trilho colorido por gravidade (Editáveis inline + Adicionar/Remover) */}
+          <div className="space-y-2 pt-1">
+            {destaquesIa.map((d, idx) => {
+              const corGravidade =
+                d.gravidade === 'critico'
+                  ? '#C0392E'
+                  : d.gravidade === 'atencao'
+                    ? '#C9A227'
+                    : d.gravidade === 'otimo'
+                      ? '#17794C'
+                      : '#4E9E63';
+
+              return (
+                <div
+                  key={d.id || idx}
+                  className="group p-2.5 rounded-lg bg-[#FBFAF7] border border-[#E6E3DD] text-xs space-y-1 relative"
+                  style={{ borderLeft: `3.5px solid ${corGravidade}` }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDestaque(idx)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#A39E96] hover:text-[#C0392E] print:hidden"
+                    title="Remover destaque"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <input
+                    type="text"
+                    value={d.titulo}
+                    onChange={e => handleDestaqueChange(idx, 'titulo', e.target.value)}
+                    className="w-full font-bold text-[#23211E] bg-transparent focus:outline-none focus:bg-white/80 rounded px-1 pr-6"
+                    placeholder="Título do destaque..."
+                  />
+                  <input
+                    type="text"
+                    value={d.texto}
+                    onChange={e => handleDestaqueChange(idx, 'texto', e.target.value)}
+                    className="w-full text-[#5C574F] bg-transparent focus:outline-none focus:bg-white/80 rounded px-1 text-[11.5px]"
+                    placeholder="Descrição do destaque..."
+                  />
+                </div>
+              );
+            })}
+
+            {/* Botão Adicionar Destaque */}
+            <button
+              type="button"
+              onClick={handleAddDestaque}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-[#E07A1F] hover:text-[#C0671A] transition-colors print:hidden px-1 py-1"
+            >
+              <Plus className="w-3.5 h-3.5" /> Adicionar consideração
+            </button>
+          </div>
+
+          <p className="text-[10.5px] text-[#A39E96] italic pt-1 print:hidden">
+            Texto gerado a partir dos dados do planejamento. Revise antes de enviar.
+          </p>
         </div>
       )}
     </div>

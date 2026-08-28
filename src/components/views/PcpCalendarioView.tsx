@@ -263,11 +263,11 @@ export const PcpCalendarioView: React.FC = () => {
 
             <label className="flex items-center gap-1.5 cursor-pointer">
               <Switch
-                checked={blocos.resumo}
-                onCheckedChange={v => setBlocos(p => ({ ...p, resumo: v }))}
+                checked={blocos.mapa}
+                onCheckedChange={v => setBlocos(p => ({ ...p, mapa: v }))}
                 className="scale-75"
               />
-              <span>Resumo Executivo</span>
+              <span>Mapa</span>
             </label>
 
             <label className="flex items-center gap-1.5 cursor-pointer">
@@ -308,11 +308,11 @@ export const PcpCalendarioView: React.FC = () => {
 
             <label className="flex items-center gap-1.5 cursor-pointer">
               <Switch
-                checked={blocos.mapa}
-                onCheckedChange={v => setBlocos(p => ({ ...p, mapa: v }))}
+                checked={blocos.resumo}
+                onCheckedChange={v => setBlocos(p => ({ ...p, resumo: v }))}
                 className="scale-75"
               />
-              <span>Mapa</span>
+              <span>Resumo Executivo</span>
             </label>
           </div>
         </div>

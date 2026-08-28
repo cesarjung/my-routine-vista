@@ -532,10 +532,10 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
 
                 <div className="space-y-2 bg-white p-3 rounded-lg border border-[#DEDAD3]">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-[#23211E]">Resumo executivo</span>
+                    <span className="text-xs font-medium text-[#23211E]">Mapa de deslocamentos</span>
                     <Switch
-                      checked={blocos.resumo}
-                      onCheckedChange={v => setBlocos(p => ({ ...p, resumo: v }))}
+                      checked={blocos.mapa}
+                      onCheckedChange={v => setBlocos(p => ({ ...p, mapa: v }))}
                     />
                   </div>
 
@@ -572,10 +572,10 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-[#23211E]">Mapa de deslocamentos</span>
+                    <span className="text-xs font-medium text-[#23211E]">Resumo executivo</span>
                     <Switch
-                      checked={blocos.mapa}
-                      onCheckedChange={v => setBlocos(p => ({ ...p, mapa: v }))}
+                      checked={blocos.resumo}
+                      onCheckedChange={v => setBlocos(p => ({ ...p, resumo: v }))}
                     />
                   </div>
                 </div>

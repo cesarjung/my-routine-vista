@@ -212,177 +212,163 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
       </table>
     </div>
 
-    <!-- CARDS DE INDICADORES (KPIS) -->
-    <div style="padding: 12px 14px;">
-      <table class="kpi-table">
-        <tr>
-          <td class="kpi-card" style="width: 33.3%;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 11px; font-weight: bold; color: #6B6660;">Planejado x Meta</span>
-              <span style="font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background-color: #EDF4E7; color: #17794C; border: 1px solid #CCE3B8;">
-                Prog: ${metricas.aderenciaEquipesProgramadas || metricas.aderencia}%
-              </span>
-            </div>
-            <div style="font-size: 24px; font-weight: bold; color: ${corAderencia}; margin: 4px 0;">
-              ${metricas.aderencia}%
-              <span style="font-size: 11px; font-weight: normal; color: #6B6660;">(global)</span>
-            </div>
-            <span style="font-size: 11px; color: #5C574F; display: block;">
-              R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ ${metricas.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </span>
-            ${metricas.metaEquipesProgramadas && metricas.metaEquipesProgramadas < metricas.meta ? `
-              <span style="font-size: 10px; color: #8C877D; display: block; margin-top: 2px;">
-                Meta das programadas: R$ ${metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-            ` : ''}
-            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
-              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
-                ${metricas.equipesAcimaMeta} equipes ≥100%
-              </span>
-              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                ${metricas.equipesAbaixoMeta} abaixo
-              </span>
-            </div>
-          </td>
-          <td class="kpi-card" style="width: 33.3%;">
-            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Jornada Média das Equipes</span>
-            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
-              ${Math.floor(metricas.jornadaMediaMin / 60).toString().padStart(2, '0')}:${Math.round(metricas.jornadaMediaMin % 60).toString().padStart(2, '0')}
-            </div>
-            <span style="font-size: 11px; color: #5C574F; display: block;">
-              Média por turno programado
-            </span>
-            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
-              <span style="display: inline-block; background-color: #FBF2DA; color: #A06A16; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
-                ${metricas.turnosAbaixo8} &lt; 08:00
-              </span>
-              <span style="display: inline-block; background-color: #F9E4E1; color: #B03028; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                ${metricas.turnosAcima10} &gt; 10:00
-              </span>
-            </div>
-          </td>
-          <td class="kpi-card" style="width: 33.3%;">
-            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Deslocamento Médio</span>
-            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
-              ${metricas.deslocamentoMedioH.toFixed(1)}h
-            </div>
-            <span style="font-size: 11px; color: #5C574F; display: block;">
-              Média acumulada de ida e volta
-            </span>
-            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
-              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
-                ${metricas.turnosDentroMetaDesloc} na meta
-              </span>
-              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                ${metricas.turnosAcima2h} &gt; 2,0h
-              </span>
-            </div>
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    ${blocos.resumo ? `
-    <!-- RESUMO EXECUTIVO DO PERÍODO -->
-    <div style="padding: 0 14px 16px 14px;">
-      <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
-        <strong style="font-size: 12.5px; color: #23211E; display: block; margin-bottom: 8px;">
-          ✦ Síntese Operacional da Programação
-        </strong>
-        <p style="font-size: 12px; line-height: 1.5; color: #3C3833; margin: 0 0 12px 0;">
-          ${highlightResumoValues(resumoExecutivo?.texto || `A programação da semana prevê um volume planejado de R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com ${metricas.aderencia}% de aderência geral.`)}
-        </p>
-
-        ${resumoExecutivo?.destaques && resumoExecutivo.destaques.length > 0 ? `
-          <div style="margin-top: 10px;">
-            ${resumoExecutivo.destaques.map(d => {
-              const cor = d.gravidade === 'critico' ? '#C0392E' : d.gravidade === 'atencao' ? '#C9A227' : '#17794C';
-              return `
-                <div style="background-color: #FBFAF7; border: 1px solid #E6E3DD; border-left: 3px solid ${cor}; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px;">
-                  <strong style="font-size: 11.5px; color: #23211E; display: block;">${d.titulo}</strong>
-                  <span style="font-size: 11px; color: #5C574F;">${d.texto}</span>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        ` : ''}
-      </div>
-    </div>
-    ` : ''}
-
-    <!-- RESUMO DAS EQUIPES -->
-    <div style="padding: 0 14px 16px 14px;">
+    <!-- 1. RESUMO OPERACIONAL DAS EQUIPES (agrupado por Supervisor) -->
+    <div style="padding: 12px 14px 16px 14px;">
       <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <div>
             <strong style="font-size: 13px; color: #23211E; display: block;">
               👥 Resumo Operacional das Equipes (${equipes.length} equipes)
             </strong>
-            <span style="font-size: 11px; color: #6B6660;">
-              ${equipes.filter(e => e.temProgramacao).length} equipes programadas · ${equipes.filter(e => !e.temProgramacao).length} equipes sem programação no período
-            </span>
-          </div>
-          <div style="text-align: right;">
-            <span style="font-size: 11px; font-weight: bold; color: #17794C; background-color: #E6F2EA; padding: 3px 8px; border-radius: 4px;">
-              Aderência Programadas: ${metricas.aderenciaEquipesProgramadas || metricas.aderencia}%
-            </span>
           </div>
         </div>
 
         <table class="data-table">
           <thead>
             <tr>
-              <th style="text-align: left; width: 90px;">Equipe</th>
-              <th style="text-align: left; width: 140px;">Supervisor</th>
-              <th style="text-align: right; width: 110px;">Planejado</th>
-              <th style="text-align: right; width: 110px;">Meta Semanal</th>
-              <th style="text-align: center; width: 70px;">% Meta</th>
-              <th style="text-align: center; width: 90px;">Deslocamento</th>
-              <th style="text-align: center; width: 120px;">Status</th>
+              <th style="text-align: left; width: 90px; padding: 8px 6px;">Equipe</th>
+              <th style="text-align: right; width: 110px; padding: 8px 6px;">Planejado</th>
+              <th style="text-align: right; width: 110px; padding: 8px 6px;">Meta Semanal</th>
+              <th style="text-align: center; width: 70px; padding: 8px 6px;">% Meta</th>
+              <th style="text-align: center; width: 100px; padding: 8px 6px;">Média Deslocamento</th>
+              <th style="text-align: center; width: 140px; padding: 8px 6px;">Status Deslocamento</th>
+              <th style="text-align: center; width: 110px; padding: 8px 6px;">Status Produção</th>
             </tr>
           </thead>
           <tbody>
-            ${equipes.map(eq => {
-              const pctMeta = Math.round(eq.pctMeta || 0);
-              const totalPlan = eq.totalPlanejado ?? eq.planejadoTotal ?? 0;
-              const metaSemanal = eq.metaSemanal || 0;
-              const temProg = eq.temProgramacao;
-              const mediaDesloc = Number(eq.mediaDeslocamentoH || 0);
-              const corBadge = !temProg ? '#BFB9B0' : pctMeta >= 100 ? '#17794C' : pctMeta >= 70 ? '#C9A227' : '#C0392E';
-              const fundoBadge = !temProg ? '#F0EDE8' : pctMeta >= 100 ? '#E6F2EA' : pctMeta >= 70 ? '#FBF2DA' : '#F9E4E1';
-              const statusTexto = !temProg ? 'Sem Progr.' : pctMeta >= 100 ? 'Meta Atingida' : pctMeta >= 70 ? 'Atenção' : 'Abaixo Meta';
+            ${(() => {
+              // Group by supervisor
+              const supervisorGroups = new Map<string, typeof equipes>();
+              equipes.forEach(eq => {
+                const supName = eq.supervisor || 'Sem Supervisor';
+                if (!supervisorGroups.has(supName)) {
+                  supervisorGroups.set(supName, []);
+                }
+                supervisorGroups.get(supName)!.push(eq);
+              });
 
-              return `
-              <tr>
-                <td style="font-weight: bold; color: #23211E;">${eq.codigo}</td>
-                <td style="color: #5C574F;">${eq.supervisor || '-'}</td>
-                <td style="text-align: right; font-weight: bold; color: ${temProg ? '#23211E' : '#A39E96'};">
-                  R$ ${totalPlan.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </td>
-                <td style="text-align: right; color: #6B6660;">
-                  R$ ${metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </td>
-                <td style="text-align: center; font-weight: bold; color: ${corBadge};">
-                  ${temProg ? `${pctMeta}%` : '-'}
-                </td>
-                <td style="text-align: center; color: #5C574F;">
-                  ${temProg ? `${mediaDesloc.toFixed(1)}h` : '-'}
-                </td>
-                <td style="text-align: center;">
-                  <span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ${fundoBadge}; color: ${corBadge};">
-                    ${statusTexto}
-                  </span>
-                </td>
-              </tr>
-              `;
-            }).join('')}
+              // Convert map to sorted array of groups
+              const sortedGroups = Array.from(supervisorGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+              return sortedGroups.map(([supervisor, groupEquipes]) => {
+                // Header for the supervisor group
+                const groupHeaderHtml = `
+                  <tr>
+                    <td colspan="7" style="background-color: #FAF8F5; font-weight: bold; color: #5C574F; padding: 6px 8px; border-bottom: 1px solid #E6E3DD; font-size: 11px;">
+                      👤 Supervisor: ${supervisor} (${groupEquipes.length} ${groupEquipes.length === 1 ? 'equipe' : 'equipes'})
+                    </td>
+                  </tr>
+                `;
+
+                const rowsHtml = groupEquipes.map(eq => {
+                  const pctMeta = Math.round(eq.pctMeta || 0);
+                  const totalPlan = eq.totalPlanejado ?? eq.planejadoTotal ?? 0;
+                  const metaSemanal = eq.metaSemanal || 0;
+                  const temProg = eq.temProgramacao;
+                  const mediaDesloc = Number(eq.mediaDeslocamentoH || 0);
+                  
+                  // Status Produção badge
+                  const corBadge = !temProg ? '#BFB9B0' : pctMeta >= 100 ? '#17794C' : pctMeta >= 70 ? '#C9A227' : '#C0392E';
+                  const fundoBadge = !temProg ? '#F0EDE8' : pctMeta >= 100 ? '#E6F2EA' : pctMeta >= 70 ? '#FBF2DA' : '#F9E4E1';
+                  const statusTexto = !temProg ? 'Sem Progr.' : pctMeta >= 100 ? 'Meta Atingida' : pctMeta >= 70 ? 'Atenção' : 'Abaixo Meta';
+
+                  // Status Deslocamento badge
+                  const fundoDesloc = !temProg ? '#F0EDE8' : mediaDesloc <= 2.0 ? '#E6F2EA' : '#FBEBDC';
+                  const corDesloc = !temProg ? '#6B6660' : mediaDesloc <= 2.0 ? '#17794C' : '#B4581A';
+                  const textoDesloc = !temProg ? '-' : mediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
+
+                  return `
+                    <tr>
+                      <td style="font-weight: bold; color: #23211E; padding-left: 14px;">${eq.codigo}</td>
+                      <td style="text-align: right; font-weight: bold; color: ${temProg ? '#23211E' : '#A39E96'};">
+                        R$ ${totalPlan.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </td>
+                      <td style="text-align: right; color: #6B6660;">
+                        R$ ${metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </td>
+                      <td style="text-align: center; font-weight: bold; color: ${corBadge};">
+                        ${temProg ? `${pctMeta}%` : '-'}
+                      </td>
+                      <td style="text-align: center; font-weight: bold; color: #23211E;">
+                        ${temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
+                      </td>
+                      <td style="text-align: center;">
+                        ${temProg ? `
+                          <span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ${fundoDesloc}; color: ${corDesloc};">
+                            ${textoDesloc}
+                          </span>
+                        ` : '-'}
+                      </td>
+                      <td style="text-align: center;">
+                        <span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ${fundoBadge}; color: ${corBadge};">
+                          ${statusTexto}
+                        </span>
+                      </td>
+                    </tr>
+                  `;
+                }).join('');
+
+                return groupHeaderHtml + rowsHtml;
+              }).join('');
+            })()}
           </tbody>
         </table>
       </div>
     </div>
 
+    <!-- 2. MAPA DE DESLOCAMENTOS -->
+    ${blocos.mapa ? (() => {
+      const mapaImg = payload.mapa?.imagemBase64 || (typeof document !== 'undefined' ? gerarMapaEstaticoBase64(
+        equipes.filter(e => e.temProgramacao).map(eq => {
+          const munSet = new Set<string>();
+          if (eq.dias) {
+            if (Array.isArray(eq.dias)) {
+              eq.dias.forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
+            } else {
+              Object.values(eq.dias).forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
+            }
+          }
+          return {
+            codigo: eq.codigo,
+            supervisor: eq.supervisor,
+            municipios: Array.from(munSet),
+            deslocamentoH: eq.mediaDeslocamentoH,
+            pctMeta: eq.pctMeta,
+          };
+        }),
+        unidadeNome || 'BOM JESUS DA LAPA',
+        semana.label || ''
+      ) : '');
+
+      return `
+      <div style="padding: 0 14px 16px 14px;">
+        <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div>
+              <strong style="font-size: 13px; color: #23211E; display: block;">
+                📍 Mapa de Deslocamentos das Equipes
+              </strong>
+              <span style="font-size: 11px; color: #6B6660;">
+                Raios de atendimento e frentes de trabalho no período
+              </span>
+            </div>
+            <span style="font-size: 11px; font-weight: bold; color: #17794C; background-color: #E6F2EA; padding: 3px 8px; border-radius: 4px;">
+              Média Geral: ${metricas.deslocamentoMedioH.toFixed(1).replace('.', ',')}h / turno
+            </span>
+          </div>
+
+          ${mapaImg ? `
+            <div style="text-align: center; margin: 12px 0;">
+              <img src="${mapaImg}" alt="Mapa de Deslocamentos das Equipes" style="display: block; width: 100%; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #E6E3DD;" />
+            </div>
+          ` : ''}
+        </div>
+      </div>
+      `;
+    })() : ''}
+
+    <!-- 3. GRADE DA PROGRAMAÇÃO SEMANAL -->
     ${blocos.calendario ? `
-    <!-- GRADE DA PROGRAMAÇÃO SEMANAL -->
     <div style="padding: 0 14px 16px 14px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <h3 style="font-size: 13px; font-weight: bold; color: #23211E; margin: 0;">
@@ -535,6 +521,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
     ` : ''}
 
+    <!-- 4. ANÁLISE DE VISTORIA POR OBRA -->
     ${(() => {
       // ANÁLISE DE VISTORIA POR OBRA
       if (blocos.vistorias === false) return '';
@@ -607,43 +594,42 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
       };
       obrasArr.sort((a, b) => riskOrder(a) - riskOrder(b));
 
-      // Split obras em 2 colunas (alternando: 0→left, 1→right, 2→left...)
+      // Split obras em 2 colunas
       const col1: typeof obrasArr = [];
       const col2: typeof obrasArr = [];
       obrasArr.forEach((o, i) => { (i % 2 === 0 ? col1 : col2).push(o); });
 
       return `
-    <!-- ANÁLISE DE VISTORIA POR OBRA -->
-    <div style="padding: 0 14px 16px 14px;">
-      <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
-          <tr>
-            <td style="vertical-align: middle;">
-              <strong style="font-size: 13px; color: #23211E;">👁️ Análise de Vistoria por Obra (${obrasArr.length})</strong>
-            </td>
-            <td style="text-align: right; vertical-align: middle;">
-              <span style="font-size: 11px; color: #6B6660;">Dados da vistoria analisados por IA</span>
-            </td>
-          </tr>
-        </table>
+      <div style="padding: 0 14px 16px 14px;">
+        <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+            <tr>
+              <td style="vertical-align: middle;">
+                <strong style="font-size: 13px; color: #23211E;">👁️ Análise de Vistoria por Obra (${obrasArr.length})</strong>
+              </td>
+              <td style="text-align: right; vertical-align: middle;">
+                <span style="font-size: 11px; color: #6B6660;">Dados da vistoria analisados por IA</span>
+              </td>
+            </tr>
+          </table>
 
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr>
-            <td style="width: 50%; vertical-align: top; padding-right: 6px;">
-              ${col1.map(o => renderObraCard(o)).join('')}
-            </td>
-            <td style="width: 50%; vertical-align: top; padding-left: 6px;">
-              ${col2.map(o => renderObraCard(o)).join('')}
-            </td>
-          </tr>
-        </table>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 50%; vertical-align: top; padding-right: 6px;">
+                ${col1.map(o => renderObraCard(o)).join('')}
+              </td>
+              <td style="width: 50%; vertical-align: top; padding-left: 6px;">
+                ${col2.map(o => renderObraCard(o)).join('')}
+              </td>
+            </tr>
+          </table>
+        </div>
       </div>
-    </div>
       `;
     })()}
 
+    <!-- 5. ALOJAMENTOS -->
     ${blocos.alojamentos && alojamentos && alojamentos.length > 0 ? `
-    <!-- ALOJAMENTOS E BASES (CARDS) -->
     <div style="padding: 0 14px 16px 14px;">
       <h3 style="font-size: 13px; font-weight: bold; color: #23211E; margin: 0 0 10px 0;">
         🏢 Alojamentos e Bases (${alojamentos.length})
@@ -662,8 +648,8 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
     ` : ''}
 
+    <!-- 6. OBSERVAÇÕES DO PLANEJADOR -->
     ${blocos.observacoes && observacoes && observacoes.length > 0 ? `
-    <!-- OBSERVAÇÕES DO PLANEJADOR -->
     <div style="padding: 0 14px 16px 14px;">
       <div style="background-color: #FBF5EC; border: 1px solid #E8C9A0; border-radius: 8px; padding: 14px 16px;">
         <strong style="font-size: 12px; color: #23211E; display: block; margin-bottom: 8px;">
@@ -676,96 +662,104 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
     ` : ''}
 
-    ${blocos.mapa ? (() => {
-      const mapaImg = payload.mapa?.imagemBase64 || (typeof document !== 'undefined' ? gerarMapaEstaticoBase64(
-        equipes.filter(e => e.temProgramacao).map(eq => {
-          const munSet = new Set<string>();
-          if (eq.dias) {
-            if (Array.isArray(eq.dias)) {
-              eq.dias.forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
-            } else {
-              Object.values(eq.dias).forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
-            }
-          }
-          return {
-            codigo: eq.codigo,
-            supervisor: eq.supervisor,
-            municipios: Array.from(munSet),
-            deslocamentoH: eq.mediaDeslocamentoH,
-            pctMeta: eq.pctMeta,
-          };
-        }),
-        unidadeNome || 'BOM JESUS DA LAPA',
-        semana.label || ''
-      ) : '');
+    <!-- 7. RESUMO OPERACIONAL DA PROGRAMAÇÃO (INDICADORES + SÍNTESE) -->
+    <!-- CARDS DE INDICADORES (KPIS) -->
+    <div style="padding: 12px 14px;">
+      <table class="kpi-table">
+        <tr>
+          <td class="kpi-card" style="width: 33.3%;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; font-weight: bold; color: #6B6660;">Planejado x Meta</span>
+              <span style="font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background-color: #EDF4E7; color: #17794C; border: 1px solid #CCE3B8;">
+                Prog: ${metricas.aderenciaEquipesProgramadas || metricas.aderencia}%
+              </span>
+            </div>
+            <div style="font-size: 24px; font-weight: bold; color: ${corAderencia}; margin: 4px 0;">
+              ${metricas.aderencia}%
+              <span style="font-size: 11px; font-weight: normal; color: #6B6660;">(global)</span>
+            </div>
+            <span style="font-size: 11px; color: #5C574F; display: block;">
+              R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ ${metricas.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+            ${metricas.metaEquipesProgramadas && metricas.metaEquipesProgramadas < metricas.meta ? `
+              <span style="font-size: 10px; color: #8C877D; display: block; margin-top: 2px;">
+                Meta das programadas: R$ ${metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            ` : ''}
+            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
+              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
+                ${metricas.equipesAcimaMeta} equipes ≥100%
+              </span>
+              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                ${metricas.equipesAbaixoMeta} abaixo
+              </span>
+            </div>
+          </td>
+          <td class="kpi-card" style="width: 33.3%;">
+            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Jornada Média das Equipes</span>
+            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
+              ${Math.floor(metricas.jornadaMediaMin / 60).toString().padStart(2, '0')}:${Math.round(metricas.jornadaMediaMin % 60).toString().padStart(2, '0')}
+            </div>
+            <span style="font-size: 11px; color: #5C574F; display: block;">
+              Média por turno programado
+            </span>
+            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
+              <span style="display: inline-block; background-color: #FBF2DA; color: #A06A16; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
+                ${metricas.turnosAbaixo8} &lt; 08:00
+              </span>
+              <span style="display: inline-block; background-color: #F9E4E1; color: #B03028; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                ${metricas.turnosAcima10} &gt; 10:00
+              </span>
+            </div>
+          </td>
+          <td class="kpi-card" style="width: 33.3%;">
+            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Deslocamento Médio</span>
+            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
+              ${metricas.deslocamentoMedioH.toFixed(1)}h
+            </div>
+            <span style="font-size: 11px; color: #5C574F; display: block;">
+              Média acumulada de ida e volta
+            </span>
+            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
+              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
+                ${metricas.turnosDentroMetaDesloc} na meta
+              </span>
+              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                ${metricas.turnosAcima2h} &gt; 2,0h
+              </span>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
 
-      return `
-    <!-- MAPA E DESLOCAMENTOS OPERACIONAIS (NO FINAL DO RELATÓRIO) -->
+    ${blocos.resumo ? `
+    <!-- RESUMO EXECUTIVO DO PERÍODO -->
     <div style="padding: 0 14px 16px 14px;">
       <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div>
-            <strong style="font-size: 13px; color: #23211E; display: block;">
-              📍 Mapa e Deslocamentos Operacionais das Equipes
-            </strong>
-            <span style="font-size: 11px; color: #6B6660;">
-              Raios de atendimento, frentes de trabalho e tempos médios em trânsito
-            </span>
-          </div>
-          <span style="font-size: 11px; font-weight: bold; color: #17794C; background-color: #E6F2EA; padding: 3px 8px; border-radius: 4px;">
-            Média Geral: ${metricas.deslocamentoMedioH.toFixed(1).replace('.', ',')}h / turno
-          </span>
-        </div>
+        <strong style="font-size: 12.5px; color: #23211E; display: block; margin-bottom: 8px;">
+          ✦ Síntese Operacional da Programação
+        </strong>
+        <p style="font-size: 12px; line-height: 1.5; color: #3C3833; margin: 0 0 12px 0;">
+          ${highlightResumoValues(resumoExecutivo?.texto || `A programação da semana prevê um volume planejado de R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com ${metricas.aderencia}% de aderência geral.`)}
+        </p>
 
-        ${mapaImg ? `
-          <div style="text-align: center; margin: 12px 0;">
-            <img src="${mapaImg}" alt="Mapa de Deslocamentos das Equipes" style="display: block; width: 100%; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #E6E3DD;" />
-          </div>
-        ` : ''}
-
-        <table class="data-table" style="margin-top: 10px;">
-          <thead>
-            <tr>
-              <th style="text-align: left; width: 80px;">Equipe</th>
-              <th style="text-align: left; width: 140px;">Supervisor</th>
-              <th style="text-align: left;">Municípios de Atuação</th>
-              <th style="text-align: center; width: 120px;">Média Deslocamento</th>
-              <th style="text-align: center; width: 130px;">Status Deslocamento</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${equipes.filter(e => e.temProgramacao).map(e => {
-              const munSet = new Set<string>();
-              if (e.dias) {
-                if (Array.isArray(e.dias)) {
-                  e.dias.forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
-                } else {
-                  Object.values(e.dias).forEach((d: any) => { if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') munSet.add(d.municipio); });
-                }
-              }
-              const munStr = Array.from(munSet).join(', ') || 'BOM JESUS DA LAPA';
-              const mediaDesloc = Number(e.mediaDeslocamentoH || 0);
-
+        ${resumoExecutivo?.destaques && resumoExecutivo.destaques.length > 0 ? `
+          <div style="margin-top: 10px;">
+            ${resumoExecutivo.destaques.map(d => {
+              const cor = d.gravidade === 'critico' ? '#C0392E' : d.gravidade === 'atencao' ? '#C9A227' : '#17794C';
               return `
-              <tr>
-                <td style="font-weight: bold; color: #23211E;">${e.codigo}</td>
-                <td style="color: #5C574F;">${e.supervisor || '-'}</td>
-                <td style="color: #23211E; font-weight: 500;">${munStr}</td>
-                <td style="text-align: center; font-weight: bold; color: #23211E;">${mediaDesloc.toFixed(1).replace('.', ',')}h</td>
-                <td style="text-align: center;">
-                  <span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ${mediaDesloc <= 2.0 ? '#E6F2EA' : '#FBEBDC'}; color: ${mediaDesloc <= 2.0 ? '#17794C' : '#B4581A'};">
-                    ${mediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h'}
-                  </span>
-                </td>
-              </tr>
+                <div style="background-color: #FBFAF7; border: 1px solid #E6E3DD; border-left: 3px solid ${cor}; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px;">
+                  <strong style="font-size: 11.5px; color: #23211E; display: block;">${d.titulo}</strong>
+                  <span style="font-size: 11px; color: #5C574F;">${d.texto}</span>
+                </div>
               `;
             }).join('')}
-          </tbody>
-        </table>
+          </div>
+        ` : ''}
       </div>
     </div>
-      `;
-    })() : ''}
+    ` : ''}
 
     ${payload.assinatura && payload.assinatura.conteudo ? `
     <!-- ASSINATURA DO USUÁRIO -->
