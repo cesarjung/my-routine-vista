@@ -561,6 +561,111 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       </div>
 
+      {/* 5.2 TRÊS CARDS DE KPIS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        {/* Card 1: Planejado x Meta */}
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-[#6B6660]">
+                Planejado x meta do período
+              </span>
+              <span
+                className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border"
+                style={{
+                  backgroundColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).fundo,
+                  color: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto,
+                  borderColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto + '40',
+                }}
+                title="Aderência calculada sobre as equipes com programação"
+              >
+                Prog: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span
+                className="text-2xl font-mono font-bold"
+                style={{ color: getCorPctPlanejado(metricas.aderenciaPeriodo).texto }}
+              >
+                {metricas.aderenciaPeriodo}%
+              </span>
+              <span className="text-xs text-[#6B6660] font-mono">aderência global ({metricas.totalEquipesGeral || equipes.length} eqs)</span>
+            </div>
+            <p className="text-[11.5px] text-[#6B6660] mt-1 font-mono">
+              R$ {metricas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ {metricas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            {metricas.totalEquipesProgramadas > 0 && metricas.totalEquipesProgramadas < (metricas.totalEquipesGeral || equipes.length) && (
+              <p className="text-[10.5px] text-[#8C877D] mt-0.5 font-mono">
+                Meta {metricas.totalEquipesProgramadas} eqs prog.: R$ {metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
+              {metricas.equipesAcimaMeta} {metricas.equipesAcimaMeta === 1 ? 'equipe' : 'equipes'} ≥100%
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
+              {metricas.equipesAbaixoMeta} abaixo
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Jornada Média */}
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-[#6B6660] block">
+              Jornada média das equipes
+            </span>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span className="text-2xl font-mono font-bold text-[#23211E]">
+                {formatMinToHours(metricas.jornadaMediaMin)}
+              </span>
+              <span className="text-xs text-[#6B6660]">por turno</span>
+            </div>
+            <p className="text-[11.5px] text-[#6B6660] mt-1">
+              Média ponderada por turno programado
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBF2DA] text-[#A06A16] font-semibold border border-[#E8C9A0]">
+              {metricas.turnosAbaixo8} &lt; 08:00
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#F9E4E1] text-[#B03028] font-semibold border border-[#F2C0B8]">
+              {metricas.turnosAcima10} &gt; 10:00
+            </span>
+          </div>
+        </div>
+
+        {/* Card 3: Deslocamento Médio */}
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-[#6B6660] block">
+              Deslocamento médio na semana
+            </span>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span className="text-2xl font-mono font-bold text-[#23211E]">
+                {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
+              </span>
+              <span className="text-xs text-[#6B6660]">por turno</span>
+            </div>
+            <p className="text-[11.5px] text-[#6B6660] mt-1">
+              Média acumulada de ida e volta por turno
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
+              {metricas.turnosDentroMetaDesloc} na meta
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
+              {metricas.turnosAcima2h} &gt; 2,0h
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* 5.2 RESUMO OPERACIONAL DAS EQUIPES */}
       <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E6E3DD] pb-3">
@@ -1186,111 +1291,6 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
           </div>
         </div>
       )}
-
-      {/* 5.8 TRÊS CARDS DE KPIS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-4 border-t border-[#E6E3DD]">
-        {/* Card 1: Planejado x Meta */}
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-[#6B6660]">
-                Planejado x meta do período
-              </span>
-              <span
-                className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border"
-                style={{
-                  backgroundColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).fundo,
-                  color: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto,
-                  borderColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto + '40',
-                }}
-                title="Aderência calculada sobre as equipes com programação"
-              >
-                Prog: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2 mt-1.5">
-              <span
-                className="text-2xl font-mono font-bold"
-                style={{ color: getCorPctPlanejado(metricas.aderenciaPeriodo).texto }}
-              >
-                {metricas.aderenciaPeriodo}%
-              </span>
-              <span className="text-xs text-[#6B6660] font-mono">aderência global ({metricas.totalEquipesGeral || equipes.length} eqs)</span>
-            </div>
-            <p className="text-[11.5px] text-[#6B6660] mt-1 font-mono">
-              R$ {metricas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ {metricas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
-            {metricas.totalEquipesProgramadas > 0 && metricas.totalEquipesProgramadas < (metricas.totalEquipesGeral || equipes.length) && (
-              <p className="text-[10.5px] text-[#8C877D] mt-0.5 font-mono">
-                Meta {metricas.totalEquipesProgramadas} eqs prog.: R$ {metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
-              {metricas.equipesAcimaMeta} {metricas.equipesAcimaMeta === 1 ? 'equipe' : 'equipes'} ≥100%
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
-              {metricas.equipesAbaixoMeta} abaixo
-            </span>
-          </div>
-        </div>
-
-        {/* Card 2: Jornada Média */}
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
-          <div>
-            <span className="text-[11px] font-bold text-[#6B6660] block">
-              Jornada média das equipes
-            </span>
-            <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold text-[#23211E]">
-                {formatMinToHours(metricas.jornadaMediaMin)}
-              </span>
-              <span className="text-xs text-[#6B6660]">por turno</span>
-            </div>
-            <p className="text-[11.5px] text-[#6B6660] mt-1">
-              Média ponderada por turno programado
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBF2DA] text-[#A06A16] font-semibold border border-[#E8C9A0]">
-              {metricas.turnosAbaixo8} &lt; 08:00
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#F9E4E1] text-[#B03028] font-semibold border border-[#F2C0B8]">
-              {metricas.turnosAcima10} &gt; 10:00
-            </span>
-          </div>
-        </div>
-
-        {/* Card 3: Deslocamento Médio */}
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs flex flex-col justify-between">
-          <div>
-            <span className="text-[11px] font-bold text-[#6B6660] block">
-              Deslocamento médio na semana
-            </span>
-            <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold text-[#23211E]">
-                {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
-              </span>
-              <span className="text-xs text-[#6B6660]">por turno</span>
-            </div>
-            <p className="text-[11.5px] text-[#6B6660] mt-1">
-              Média acumulada de ida e volta por turno
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
-              {metricas.turnosDentroMetaDesloc} na meta
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
-              {metricas.turnosAcima2h} &gt; 2,0h
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* 5.9 RESUMO EXECUTIVO DO PERÍODO */}
       {blocos.resumo && (

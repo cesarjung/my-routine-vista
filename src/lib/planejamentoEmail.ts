@@ -212,6 +212,76 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
       </table>
     </div>
 
+    <!-- CARDS DE INDICADORES (KPIS) -->
+    <div style="padding: 12px 14px;">
+      <table class="kpi-table">
+        <tr>
+          <td class="kpi-card" style="width: 33.3%;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; font-weight: bold; color: #6B6660;">Planejado x Meta</span>
+              <span style="font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background-color: #EDF4E7; color: #17794C; border: 1px solid #CCE3B8;">
+                Prog: ${metricas.aderenciaEquipesProgramadas || metricas.aderencia}%
+              </span>
+            </div>
+            <div style="font-size: 24px; font-weight: bold; color: ${corAderencia}; margin: 4px 0;">
+              ${metricas.aderencia}%
+              <span style="font-size: 11px; font-weight: normal; color: #6B6660;">(global)</span>
+            </div>
+            <span style="font-size: 11px; color: #5C574F; display: block;">
+              R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ ${metricas.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+            ${metricas.metaEquipesProgramadas && metricas.metaEquipesProgramadas < metricas.meta ? `
+              <span style="font-size: 10px; color: #8C877D; display: block; margin-top: 2px;">
+                Meta das programadas: R$ ${metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            ` : ''}
+            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
+              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
+                ${metricas.equipesAcimaMeta} equipes ≥100%
+              </span>
+              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                ${metricas.equipesAbaixoMeta} abaixo
+              </span>
+            </div>
+          </td>
+          <td class="kpi-card" style="width: 33.3%;">
+            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Jornada Média das Equipes</span>
+            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
+              ${Math.floor(metricas.jornadaMediaMin / 60).toString().padStart(2, '0')}:${Math.round(metricas.jornadaMediaMin % 60).toString().padStart(2, '0')}
+            </div>
+            <span style="font-size: 11px; color: #5C574F; display: block;">
+              Média por turno programado
+            </span>
+            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
+              <span style="display: inline-block; background-color: #FBF2DA; color: #A06A16; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
+                ${metricas.turnosAbaixo8} &lt; 08:00
+              </span>
+              <span style="display: inline-block; background-color: #F9E4E1; color: #B03028; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                ${metricas.turnosAcima10} &gt; 10:00
+              </span>
+            </div>
+          </td>
+          <td class="kpi-card" style="width: 33.3%;">
+            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Deslocamento Médio</span>
+            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
+              ${metricas.deslocamentoMedioH.toFixed(1)}h
+            </div>
+            <span style="font-size: 11px; color: #5C574F; display: block;">
+              Média acumulada de ida e volta
+            </span>
+            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
+              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
+                ${metricas.turnosDentroMetaDesloc} na meta
+              </span>
+              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                ${metricas.turnosAcima2h} &gt; 2,0h
+              </span>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
     <!-- 1. RESUMO OPERACIONAL DAS EQUIPES (agrupado por Supervisor) -->
     <div style="padding: 12px 14px 16px 14px;">
       <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
@@ -662,76 +732,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
     ` : ''}
 
-    <!-- 7. RESUMO OPERACIONAL DA PROGRAMAÇÃO (INDICADORES + SÍNTESE) -->
-    <!-- CARDS DE INDICADORES (KPIS) -->
-    <div style="padding: 12px 14px;">
-      <table class="kpi-table">
-        <tr>
-          <td class="kpi-card" style="width: 33.3%;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 11px; font-weight: bold; color: #6B6660;">Planejado x Meta</span>
-              <span style="font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background-color: #EDF4E7; color: #17794C; border: 1px solid #CCE3B8;">
-                Prog: ${metricas.aderenciaEquipesProgramadas || metricas.aderencia}%
-              </span>
-            </div>
-            <div style="font-size: 24px; font-weight: bold; color: ${corAderencia}; margin: 4px 0;">
-              ${metricas.aderencia}%
-              <span style="font-size: 11px; font-weight: normal; color: #6B6660;">(global)</span>
-            </div>
-            <span style="font-size: 11px; color: #5C574F; display: block;">
-              R$ ${metricas.planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ ${metricas.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </span>
-            ${metricas.metaEquipesProgramadas && metricas.metaEquipesProgramadas < metricas.meta ? `
-              <span style="font-size: 10px; color: #8C877D; display: block; margin-top: 2px;">
-                Meta das programadas: R$ ${metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-            ` : ''}
-            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
-              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
-                ${metricas.equipesAcimaMeta} equipes ≥100%
-              </span>
-              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                ${metricas.equipesAbaixoMeta} abaixo
-              </span>
-            </div>
-          </td>
-          <td class="kpi-card" style="width: 33.3%;">
-            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Jornada Média das Equipes</span>
-            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
-              ${Math.floor(metricas.jornadaMediaMin / 60).toString().padStart(2, '0')}:${Math.round(metricas.jornadaMediaMin % 60).toString().padStart(2, '0')}
-            </div>
-            <span style="font-size: 11px; color: #5C574F; display: block;">
-              Média por turno programado
-            </span>
-            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
-              <span style="display: inline-block; background-color: #FBF2DA; color: #A06A16; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
-                ${metricas.turnosAbaixo8} &lt; 08:00
-              </span>
-              <span style="display: inline-block; background-color: #F9E4E1; color: #B03028; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                ${metricas.turnosAcima10} &gt; 10:00
-              </span>
-            </div>
-          </td>
-          <td class="kpi-card" style="width: 33.3%;">
-            <span style="font-size: 11px; font-weight: bold; color: #6B6660; display: block;">Deslocamento Médio</span>
-            <div style="font-size: 24px; font-weight: bold; color: #23211E; margin: 4px 0;">
-              ${metricas.deslocamentoMedioH.toFixed(1)}h
-            </div>
-            <span style="font-size: 11px; color: #5C574F; display: block;">
-              Média acumulada de ida e volta
-            </span>
-            <div style="margin-top: 8px; font-size: 10.5px; color: #6B6660;">
-              <span style="display: inline-block; background-color: #E6F2EA; color: #17794C; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 4px;">
-                ${metricas.turnosDentroMetaDesloc} na meta
-              </span>
-              <span style="display: inline-block; background-color: #FBEBDC; color: #B4581A; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                ${metricas.turnosAcima2h} &gt; 2,0h
-              </span>
-            </div>
-          </td>
-        </tr>
-      </table>
-    </div>
+    <!-- 7. RESUMO OPERACIONAL DA PROGRAMAÇÃO (SÍNTESE) -->
 
     ${blocos.resumo ? `
     <!-- RESUMO EXECUTIVO DO PERÍODO -->
