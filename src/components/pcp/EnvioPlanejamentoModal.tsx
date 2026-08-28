@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,8 @@ import { gerarMapaLeafletRealAsync } from '@/lib/geradorMapaEstatico';
 import { EquipeSemanalItem, MetricasSemana } from '@/hooks/usePlanejamentoSemanal';
 import { usePlanejamentoEmailSettings } from '@/hooks/usePlanejamentoEmailSettings';
 import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
+import { useVistoriasBatch } from '@/hooks/useVistoriasBatch';
+import type { RiskResult } from '@/hooks/usePcpAiPlanner';
 
 export interface EnvioPlanejamentoModalProps {
   open: boolean;
@@ -68,6 +70,20 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   // ════════════════════════════════════════════════════════════════
   const { getUnidadeConfig, getUserSignature, smtpConfig } = usePlanejamentoEmailSettings();
   const [isSending, setIsSending] = useState(false);
+
+  // Extrair obras únicas de todas as equipes para buscar vistorias
+  const obraIds = useMemo(() => {
+    const set = new Set<string>();
+    equipes.forEach(eq => {
+      if (!eq.dias) return;
+      const diasObj = Array.isArray(eq.dias) ? eq.dias : Object.values(eq.dias);
+      diasObj.forEach((d: any) => {
+        if (d && d.obra && !d.isFolga && !d.isFeriado) set.add(d.obra);
+      });
+    });
+    return Array.from(set);
+  }, [equipes]);
+  const { data: vistoriasMap } = useVistoriasBatch(obraIds);
 
   const formatSafeDate = (d: any, fmt: string) => {
     try {
@@ -280,6 +296,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
           tipo: userSig.tipo,
           conteudo: userSig.tipo === 'html' ? userSig.html : userSig.texto,
         },
+        vistorias: vistoriasMap || {},
       };
 
       const htmlContent = generatePlanejamentoEmailHtml(payload);

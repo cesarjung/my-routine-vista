@@ -6,6 +6,7 @@
  */
 
 import { gerarMapaEstaticoBase64 } from './geradorMapaEstatico';
+import type { RiskResult } from '@/hooks/usePcpAiPlanner';
 
 export function cleanPontosList(pontos: string[]): string[] {
   if (!pontos || !Array.isArray(pontos)) return [];
@@ -110,6 +111,7 @@ export interface PlanejamentoEmailPayload {
     tipo: 'html' | 'texto';
     conteudo: string;
   };
+  vistorias?: Record<string, RiskResult>;
   criadoEm?: string;
 }
 
@@ -137,6 +139,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     dias = [],
     alojamentos = [],
     observacoes = [],
+    vistorias = {},
   } = payload;
 
   const corAderencia = metricas.aderencia >= 100 ? '#17794C' : metricas.aderencia >= 80 ? '#D9782E' : '#C0392E';
@@ -454,7 +457,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                           </span>
                         </td>
                         <td style="text-align: right; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55px;">
-                          <span style="background-color: #EDF4E7; color: #17794C; font-weight: bold; font-size: 8px; padding: 1px 3px; border-radius: 2px; text-transform: uppercase;" title="${municipio}">
+                          <span style="background-color: #F2F0EC; color: #6B6660; font-weight: bold; font-size: 8px; padding: 1px 3px; border-radius: 2px; text-transform: uppercase;" title="${municipio}">
                             ${municipio}
                           </span>
                         </td>
@@ -507,29 +510,88 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
     ` : ''}
 
+    ${(() => {
+      // ANÁLISE DE VISTORIA POR OBRA
+      const obrasMap = new Map<string, { obra: string; equipes: Set<string>; etapas: Set<string> }>();
+      equipes.forEach(eq => {
+        const diasObj = Array.isArray(eq.dias) ? eq.dias : (eq.dias ? Object.values(eq.dias) : []);
+        diasObj.forEach((d: any) => {
+          if (d && d.obra && !d.isFolga && !d.isFeriado) {
+            if (!obrasMap.has(d.obra)) obrasMap.set(d.obra, { obra: d.obra, equipes: new Set(), etapas: new Set() });
+            const e = obrasMap.get(d.obra)!;
+            e.equipes.add(eq.codigo);
+            if (d.etapa) e.etapas.add(d.etapa);
+          }
+        });
+      });
+      const obrasArr = Array.from(obrasMap.values());
+      const hasVistorias = obrasArr.length > 0 && Object.keys(vistorias).length > 0;
+
+      if (!hasVistorias) return '';
+
+      return `
+    <!-- ANÁLISE DE VISTORIA POR OBRA -->
+    <div style="padding: 0 14px 16px 14px;">
+      <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 10px; padding: 16px;">
+        <strong style="font-size: 13px; color: #23211E; display: block; margin-bottom: 10px;">
+          👁️ Análise de Vistoria por Obra (${obrasArr.length})
+        </strong>
+        <span style="font-size: 11px; color: #6B6660; display: block; margin-bottom: 12px;">Dados da vistoria analisados por IA</span>
+
+        <table style="width: 100%; border-collapse: collapse;">
+          <tbody>
+            ${obrasArr.map(o => {
+              const risk = vistorias[o.obra];
+              const badgeBg = risk?.classificacao === 'Vermelho' ? '#C0392E' : risk?.classificacao === 'Laranja' ? '#FBF2DA' : '#E6F2EA';
+              const badgeColor = risk?.classificacao === 'Vermelho' ? '#FFFFFF' : risk?.classificacao === 'Laranja' ? '#A06A16' : '#17794C';
+              const badgeBorder = risk?.classificacao === 'Laranja' ? '1px solid #E8C9A0' : risk?.classificacao === 'Vermelho' ? 'none' : '1px solid #A0D4B2';
+              const label = risk ? 'Risco ' + risk.classificacao : 'Sem vistoria';
+
+              const pontosHtml = risk?.pontosDetalhados && risk.pontosDetalhados.length > 0
+                ? risk.pontosDetalhados.map(pt => {
+                    const isCrit = Boolean(pt.isCritico);
+                    return '<div style="padding: 4px 8px; margin-bottom: 3px; border-radius: 4px; font-size: 10.5px; line-height: 1.4; '
+                      + (isCrit ? 'background-color: #C0392E; color: #FFFFFF; font-weight: bold; border: 1px solid #A93226;' : 'background-color: #FFFFFF; border: 1px solid #E6E3DD; color: #23211E;')
+                      + '">' + (pt.icone || (isCrit ? '🔴' : '📌')) + ' '
+                      + (pt.categoria ? '<span style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; '
+                        + (isCrit ? 'color: #FFD4D0; font-weight: bold;' : 'color: #8A857D; font-weight: 600;')
+                        + '">[' + pt.categoria + ']</span> ' : '')
+                      + pt.texto + '</div>';
+                  }).join('')
+                : '<div style="font-size: 10.5px; color: #A39E96; font-style: italic;">' + (risk ? 'Nenhum impeditivo crítico registrado.' : 'Vistoria não realizada.') + '</div>';
+
+              return '<tr><td style="padding: 8px; vertical-align: top; border-bottom: 1px solid #F0EDE8;">'
+                + '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">'
+                + '<div><strong style="font-size: 11.5px; color: #23211E;">' + o.obra + '</strong>'
+                + '<br><span style="font-size: 10px; color: #6B6660;">' + Array.from(o.equipes).join(', ') + ' · ' + Array.from(o.etapas).join(', ') + '</span></div>'
+                + '<span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ' + badgeBg + '; color: ' + badgeColor + '; border: ' + badgeBorder + '; white-space: nowrap; margin-left: 8px;">' + label + '</span>'
+                + '</div>'
+                + pontosHtml
+                + '</td></tr>';
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+      `;
+    })()}
+
     ${blocos.alojamentos && alojamentos && alojamentos.length > 0 ? `
-    <!-- ALOJAMENTOS E BASES -->
+    <!-- ALOJAMENTOS E BASES (CARDS) -->
     <div style="padding: 0 14px 16px 14px;">
       <h3 style="font-size: 13px; font-weight: bold; color: #23211E; margin: 0 0 10px 0;">
-        Alojamentos e Bases das Equipes
+        🏢 Alojamentos e Bases (${alojamentos.length})
       </h3>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th style="text-align: left; width: 140px;">Equipe</th>
-            <th style="text-align: left;">Município de Atuação</th>
-            <th style="text-align: left;">Alojamento / Base Operacional</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${alojamentos.map(a => `
-            <tr>
-              <td style="font-weight: bold; color: #23211E;">${a.equipe}</td>
-              <td style="color: #5C574F;">${a.municipio}</td>
-              <td style="color: #23211E; font-weight: 500;">${a.alojamento}</td>
-            </tr>
+      <table style="width: 100%; border-collapse: separate; border-spacing: 6px;">
+        <tr>
+          ${alojamentos.map((a, i) => `
+            ${i > 0 && i % 4 === 0 ? '</tr><tr>' : ''}
+            <td style="width: 25%; vertical-align: top; background-color: #FBFAF7; border: 1px solid #E6E3DD; border-radius: 6px; padding: 8px 10px;">
+              <strong style="font-size: 11px; color: #23211E; font-family: monospace; display: block;">${a.equipe}</strong>
+              <span style="font-size: 10.5px; color: #5C574F;">${a.alojamento || '<em style="color: #A39E96;">Base Central</em>'}</span>
+            </td>
           `).join('')}
-        </tbody>
+        </tr>
       </table>
     </div>
     ` : ''}
