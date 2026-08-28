@@ -226,13 +226,13 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
         <table class="data-table">
           <thead>
             <tr>
-              <th style="text-align: left; width: 90px; padding: 8px 6px;">Equipe</th>
-              <th style="text-align: right; width: 110px; padding: 8px 6px;">Planejado</th>
-              <th style="text-align: right; width: 110px; padding: 8px 6px;">Meta Semanal</th>
-              <th style="text-align: center; width: 70px; padding: 8px 6px;">% Meta</th>
-              <th style="text-align: center; width: 100px; padding: 8px 6px;">Média Deslocamento</th>
-              <th style="text-align: center; width: 140px; padding: 8px 6px;">Status Deslocamento</th>
-              <th style="text-align: center; width: 110px; padding: 8px 6px;">Status Produção</th>
+              <th style="text-align: left; width: 12%; padding: 8px 6px;">Equipe</th>
+              <th style="text-align: right; width: 14%; padding: 8px 6px;">Planejado</th>
+              <th style="text-align: right; width: 14%; padding: 8px 6px;">Meta Semanal</th>
+              <th style="text-align: center; width: 10%; padding: 8px 6px;">% Meta</th>
+              <th style="text-align: center; width: 15%; padding: 8px 6px;">Status Produção</th>
+              <th style="text-align: center; width: 15%; padding: 8px 6px;">Média Deslocamento</th>
+              <th style="text-align: center; width: 20%; padding: 8px 6px;">Status Deslocamento</th>
             </tr>
           </thead>
           <tbody>
@@ -289,6 +289,11 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                       <td style="text-align: center; font-weight: bold; color: ${corBadge};">
                         ${temProg ? `${pctMeta}%` : '-'}
                       </td>
+                      <td style="text-align: center;">
+                        <span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ${fundoBadge}; color: ${corBadge};">
+                          ${statusTexto}
+                        </span>
+                      </td>
                       <td style="text-align: center; font-weight: bold; color: #23211E;">
                         ${temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
                       </td>
@@ -298,11 +303,6 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                             ${textoDesloc}
                           </span>
                         ` : '-'}
-                      </td>
-                      <td style="text-align: center;">
-                        <span style="padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; background-color: ${fundoBadge}; color: ${corBadge};">
-                          ${statusTexto}
-                        </span>
                       </td>
                     </tr>
                   `;

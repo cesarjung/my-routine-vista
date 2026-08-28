@@ -580,16 +580,16 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left border-collapse text-xs table-fixed">
             <thead>
               <tr className="border-b border-[#E6E3DD] bg-[#FAF8F5]">
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] w-[140px]">Equipe</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right">Planejado</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right">Meta Semanal</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[90px]">% Meta</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[120px]">Média Deslocamento</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[160px]">Status Deslocamento</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[130px]">Status Produção</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] w-[12%]">Equipe</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right w-[14%]">Planejado</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right w-[14%]">Meta Semanal</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[10%]">% Meta</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[15%]">Status Produção</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[15%]">Média Deslocamento</th>
+                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[20%]">Status Deslocamento</th>
               </tr>
             </thead>
             <tbody>
@@ -629,6 +629,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                           <td className="p-2.5 text-center font-bold" style={{ color: temProg ? getCorPctPlanejado(pctMeta).texto : '#A39E96' }}>
                             {temProg ? `${pctMeta}%` : '-'}
                           </td>
+                          <td className="p-2.5 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadge}`}>
+                              {statusTexto}
+                            </span>
+                          </td>
                           <td className="p-2.5 text-center font-bold text-[#23211E]">
                             {temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
                           </td>
@@ -638,11 +643,6 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                 {textoDesloc}
                               </span>
                             ) : '-'}
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadge}`}>
-                              {statusTexto}
-                            </span>
                           </td>
                         </tr>
                       );
