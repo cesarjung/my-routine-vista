@@ -72,6 +72,7 @@ import { format, addDays, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAlojamentos } from '@/hooks/useAlojamentos';
 import { useVistoriaRisk } from '@/hooks/usePcpAiPlanner';
+import { usePlanejamentoSemanal } from '@/hooks/usePlanejamentoSemanal';
 import { toast } from 'sonner';
 import { PcpDiaRow, getMetaColorScale } from './PcpDiaRow';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
