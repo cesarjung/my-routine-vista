@@ -666,99 +666,6 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       </div>
 
-      {/* 5.2 RESUMO OPERACIONAL DAS EQUIPES */}
-      <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E6E3DD] pb-3">
-          <div>
-            <h3 className="text-sm font-bold text-[#23211E] flex items-center gap-1.5">
-              👥 Resumo Operacional das Equipes ({equipesFiltradas.length} equipes)
-            </h3>
-            <span className="text-[11px] text-[#6B6660] block mt-0.5">
-              {equipesFiltradas.filter(e => e.temProgramacao).length} equipes programadas · {equipesFiltradas.filter(e => !e.temProgramacao).length} equipes sem programação no período
-            </span>
-          </div>
-          <div className="text-right shrink-0">
-            <span className="text-[11px] font-bold text-[#17794C] bg-[#E6F2EA] px-2 py-0.5 rounded border border-[#A0D4B2]">
-              Aderência Programadas: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
-            </span>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs table-fixed">
-            <thead>
-              <tr className="border-b border-[#E6E3DD] bg-[#FAF8F5]">
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] w-[12%]">Equipe</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right w-[14%]">Planejado</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-right w-[14%]">Meta Semanal</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[10%]">% Meta</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[15%]">Status Produção</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[15%]">Média Deslocamento</th>
-                <th className="p-2.5 font-bold text-[#5C574F] uppercase tracking-wider text-[10px] text-center w-[20%]">Status Deslocamento</th>
-              </tr>
-            </thead>
-            <tbody>
-              {equipesAgrupadasPorSupervisor.map(([supervisor, groupEquipes]) => {
-                return (
-                  <React.Fragment key={supervisor}>
-                    {/* Header do Supervisor */}
-                    <tr className="border-b border-[#E6E3DD] bg-[#F7F6F3]">
-                      <td colSpan={7} className="p-2 px-3 font-bold text-[#5C574F] text-[11px]">
-                        👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})
-                      </td>
-                    </tr>
-                    {groupEquipes.map(eq => {
-                      const pctMeta = Math.round(eq.pctMeta || 0);
-                      const totalPlan = eq.totalPlanejado ?? eq.planejadoTotal ?? 0;
-                      const metaSemanal = eq.metaSemanal || 0;
-                      const temProg = eq.temProgramacao;
-                      const mediaDesloc = Number(eq.mediaDeslocamentoH || 0);
-
-                      // Status Produção badges
-                      const corBadge = !temProg ? 'text-[#6B6660] bg-[#F0EDE8]' : pctMeta >= 100 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : pctMeta >= 70 ? 'text-[#A06A16] bg-[#FBF2DA] border border-[#E8C9A0]' : 'text-[#C0392E] bg-[#F9E4E1] border border-[#F2C0B8]';
-                      const statusTexto = !temProg ? 'Sem Progr.' : pctMeta >= 100 ? 'Meta Atingida' : pctMeta >= 70 ? 'Atenção' : 'Abaixo Meta';
-
-                      // Status Deslocamento badges
-                      const corDesloc = !temProg ? 'text-[#6B6660] bg-[#F0EDE8]' : mediaDesloc <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
-                      const textoDesloc = !temProg ? '-' : mediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
-
-                      return (
-                        <tr key={eq.codigo} className="border-b border-[#E6E3DD] hover:bg-[#FBFAF7]/50 transition-colors">
-                          <td className="p-2.5 font-bold text-[#23211E] pl-6">{eq.codigo}</td>
-                          <td className="p-2.5 text-right font-bold text-[#23211E]">
-                            R$ {totalPlan.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                          </td>
-                          <td className="p-2.5 text-right text-[#6B6660]">
-                            R$ {metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                          </td>
-                          <td className="p-2.5 text-center font-bold" style={{ color: temProg ? getCorPctPlanejado(pctMeta).texto : '#A39E96' }}>
-                            {temProg ? `${pctMeta}%` : '-'}
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadge}`}>
-                              {statusTexto}
-                            </span>
-                          </td>
-                          <td className="p-2.5 text-center font-bold text-[#23211E]">
-                            {temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
-                          </td>
-                          <td className="p-2.5 text-center">
-                            {temProg ? (
-                              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corDesloc}`}>
-                                {textoDesloc}
-                              </span>
-                            ) : '-'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       {/* 5.3 MAPA DE DESLOCAMENTOS DAS EQUIPES (IDÊNTICO À SEÇÃO EQUIPES) */}
       {blocos.mapa && (
@@ -860,11 +767,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
           {/* Grade do Calendário */}
           <div className="overflow-x-auto">
-            <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 115 + 178)}px` }}>
+            <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 115 + 468)}px` }}>
               {/* Cabeçalho da Grade */}
               <div
                 className="bg-[#F2F0EC] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider py-2 px-3 items-center grid"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px` }}
+                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px 100px 70px 120px` }}
               >
                 <div>Equipe</div>
                 {diasDaSemana.map((diaData, idx) => {
@@ -883,6 +790,9 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 <div className="text-right pr-2">Planejado</div>
                 <div className="text-right pr-2">Meta</div>
                 <div className="text-center">%</div>
+                <div className="text-center">Status Prod.</div>
+                <div className="text-center">Desloc.</div>
+                <div className="text-center">Status Desloc.</div>
               </div>
 
               {/* Linhas das Equipes */}
@@ -892,142 +802,184 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                     Nenhuma equipe encontrada para o filtro selecionado.
                   </div>
                 ) : (
-                  equipesFiltradas.map(eq => {
-                    const corFaixa = getCorPctPlanejado(eq.pctMeta).texto;
-
+                  equipesAgrupadasPorSupervisor.map(([supervisor, groupEquipes]) => {
                     return (
-                      <div
-                        key={eq.codigo}
-                        className="px-3 py-2.5 items-center hover:bg-[#FAF8F5] transition-colors text-xs grid"
-                        style={{
-                          gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px`,
-                          borderLeft: `3px solid ${eq.temProgramacao ? corFaixa : '#BFB9B0'}`
-                        }}
-                      >
-                        {/* Coluna Equipe */}
-                        <div className="flex flex-col justify-center pl-1 leading-tight">
-                          <span className="font-bold text-xs text-[#23211E]">{eq.codigo}</span>
-                          <span className="text-[10px] text-[#6B6660] truncate" title={eq.supervisor}>
-                            {eq.supervisor}
-                          </span>
-                          {eq.temProgramacao && (
-                            <span className="text-[9px] font-mono text-[#8C877D] mt-0.5">
-                              {formatMinToHours(eq.mediaJornadaMin)} · {eq.mediaDeslocamentoH.toFixed(1).replace('.', ',')}h
-                            </span>
-                          )}
+                      <React.Fragment key={supervisor}>
+                        {/* Header do Supervisor na Grade */}
+                        <div className="bg-[#FAF8F5] border-y border-[#E6E3DD] text-[10.5px] font-bold text-[#5C574F] py-2 px-3 flex items-center gap-1 select-none">
+                          <span>👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})</span>
                         </div>
+                        {groupEquipes.map(eq => {
+                          const corFaixa = getCorPctPlanejado(eq.pctMeta).texto;
+                          const pctMeta = Math.round(eq.pctMeta || 0);
+                          const temProg = eq.temProgramacao;
+                          const mediaDesloc = Number(eq.mediaDeslocamentoH || 0);
 
-                        {/* Células de Dias */}
-                        {diasDaSemana.map((diaData) => {
-                          const diaIso = format(diaData, 'yyyy-MM-dd');
-                          const prog = eq.dias?.[diaIso];
+                          // Status Produção badges
+                          const corBadge = !temProg ? 'text-[#6B6660] bg-[#F0EDE8]' : pctMeta >= 100 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : pctMeta >= 70 ? 'text-[#A06A16] bg-[#FBF2DA] border border-[#E8C9A0]' : 'text-[#C0392E] bg-[#F9E4E1] border border-[#F2C0B8]';
+                          const statusTexto = !temProg ? 'Sem Progr.' : pctMeta >= 100 ? 'Meta Atingida' : pctMeta >= 70 ? 'Atenção' : 'Abaixo Meta';
 
-                          if (!prog || prog.isFolga) {
-                            return (
-                              <div
-                                key={diaIso}
-                                className="mx-1 h-20 rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
-                              >
-                                <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
-                                  {diaData.getDay() === 0 ? 'Domingo' : 'Folga'}
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          if (prog.isFeriado) {
-                            return (
-                              <div
-                                key={diaIso}
-                                className="mx-1 h-20 rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
-                              >
-                                <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
-                                  Feriado
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          const corPct = getCorPctPlanejado(prog.pctMetaDia);
-                          const corDotJornada =
-                            prog.tempoTotalMin > 600
-                              ? '#C0392E'
-                              : prog.tempoTotalMin >= 450
-                                ? '#17794C'
-                                : '#C9A227';
+                          // Status Deslocamento badges
+                          const corDesloc = !temProg ? 'text-[#6B6660] bg-[#F0EDE8]' : mediaDesloc <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
+                          const textoDesloc = !temProg ? '-' : mediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
 
                           return (
                             <div
-                              key={diaIso}
-                              className="mx-1 h-20 rounded-md border border-[#E6E3DD] bg-white p-1.5 flex flex-col justify-between shadow-2xs hover:border-[#DEDAD3] transition-colors"
+                              key={eq.codigo}
+                              className="px-3 py-2.5 items-center hover:bg-[#FAF8F5] transition-colors text-xs grid"
+                              style={{
+                                gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px 100px 70px 120px`,
+                                borderLeft: `3px solid ${temProg ? corFaixa : '#BFB9B0'}`
+                              }}
                             >
-                              {/* Faixa Superior: % Meta Diária e Município */}
-                              <div className="flex items-center justify-between gap-1">
+                              {/* Coluna Equipe */}
+                              <div className="flex flex-col justify-center pl-1 leading-tight">
+                                <span className="font-bold text-xs text-[#23211E]">{eq.codigo}</span>
+                                <span className="text-[10px] text-[#6B6660] truncate" title={eq.supervisor}>
+                                  {eq.supervisor}
+                                </span>
+                                {temProg && (
+                                  <span className="text-[9px] font-mono text-[#8C877D] mt-0.5">
+                                    {formatMinToHours(eq.mediaJornadaMin)} · {mediaDesloc.toFixed(1).replace('.', ',')}h
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Células de Dias */}
+                              {diasDaSemana.map((diaData) => {
+                                const diaIso = format(diaData, 'yyyy-MM-dd');
+                                const prog = eq.dias?.[diaIso];
+
+                                if (!prog || prog.isFolga) {
+                                  return (
+                                    <div
+                                      key={diaIso}
+                                      className="mx-1 h-20 rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
+                                    >
+                                      <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
+                                        {diaData.getDay() === 0 ? 'Domingo' : 'Folga'}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+
+                                if (prog.isFeriado) {
+                                  return (
+                                    <div
+                                      key={diaIso}
+                                      className="mx-1 h-20 rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
+                                    >
+                                      <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
+                                        Feriado
+                                      </span>
+                                    </div>
+                                  );
+                                }
+
+                                const corPct = getCorPctPlanejado(prog.pctMetaDia);
+                                const corDotJornada =
+                                  prog.tempoTotalMin > 600
+                                    ? '#C0392E'
+                                    : prog.tempoTotalMin >= 450
+                                      ? '#17794C'
+                                      : '#C9A227';
+
+                                return (
+                                  <div
+                                    key={diaIso}
+                                    className="mx-1 h-20 rounded-md border border-[#E6E3DD] bg-white p-1.5 flex flex-col justify-between shadow-2xs hover:border-[#DEDAD3] transition-colors"
+                                  >
+                                    {/* Faixa Superior: % Meta Diária e Município */}
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span
+                                        className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold"
+                                        style={{ backgroundColor: corPct.fundo, color: corPct.texto }}
+                                      >
+                                        {prog.pctMetaDia > 0 ? `${prog.pctMetaDia}%` : '-'}
+                                      </span>
+                                      <span className="px-1.5 py-0.2 rounded bg-[#F2F0EC] text-[#6B6660] text-[9px] font-bold uppercase truncate max-w-[65px]" title={prog.municipio}>
+                                        {prog.municipio}
+                                      </span>
+                                    </div>
+
+                                    {/* Etapa e Obra */}
+                                    <div className="leading-tight my-0.5">
+                                      <span className="font-bold text-[10px] text-[#23211E] uppercase line-clamp-1 block" title={prog.etapa}>
+                                        {prog.etapa}
+                                      </span>
+                                      <span className="font-mono text-[9px] text-[#6B6660] truncate block" title={prog.obra}>
+                                        {prog.obra}
+                                      </span>
+                                    </div>
+
+                                    {/* Saturação (Jornada) e Deslocamento */}
+                                    <div className="flex items-center justify-between font-mono text-[9.5px] text-[#5C574F] pt-0.5 border-t border-[#F2F0EC]">
+                                      <div className="flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: corDotJornada }} />
+                                        <span className="font-bold text-[#23211E]">{formatMinToHours(prog.tempoTotalMin)}</span>
+                                      </div>
+                                      <span className="text-[9px] text-[#6B6660]">
+                                        desl {(prog.tempoDeslocamentoMin / 60).toFixed(1).replace('.', ',')}h
+                                      </span>
+                                    </div>
+
+                                    {/* Pontos / Vãos (se houver e couber) */}
+                                    {activeDensidade === 'detalhado' && prog.pontos && prog.pontos.length > 0 && (
+                                      <div className="text-[8.5px] font-mono text-[#8C877D] truncate pt-0.5" title={prog.pontos.join(', ')}>
+                                        {prog.pontos.slice(0, 2).join(', ')}{prog.pontos.length > 2 ? ` +${prog.pontos.length - 2}` : ''}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+
+                              {/* Coluna Planejado */}
+                              <div className="text-right pr-2 font-mono font-bold text-xs text-[#17794C]">
+                                R$ {eq.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </div>
+
+                              {/* Coluna Meta */}
+                              <div className="text-right pr-2 font-mono text-[10px] text-[#6B6660]">
+                                R$ {eq.metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </div>
+
+                              {/* Coluna % Meta */}
+                              <div className="text-center">
                                 <span
-                                  className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold"
-                                  style={{ backgroundColor: corPct.fundo, color: corPct.texto }}
+                                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold font-mono"
+                                  style={{
+                                    backgroundColor: getCorPctPlanejado(eq.pctMeta).fundo,
+                                    color: getCorPctPlanejado(eq.pctMeta).texto,
+                                  }}
                                 >
-                                  {prog.pctMetaDia > 0 ? `${prog.pctMetaDia}%` : '-'}
-                                </span>
-                <span className="px-1.5 py-0.2 rounded bg-[#F2F0EC] text-[#6B6660] text-[9px] font-bold uppercase truncate max-w-[65px]" title={prog.municipio}>
-                                  {prog.municipio}
+                                  {eq.pctMeta}%
                                 </span>
                               </div>
 
-                              {/* Etapa e Obra */}
-                              <div className="leading-tight my-0.5">
-                                <span className="font-bold text-[10px] text-[#23211E] uppercase line-clamp-1 block" title={prog.etapa}>
-                                  {prog.etapa}
-                                </span>
-                                <span className="font-mono text-[9px] text-[#6B6660] truncate block" title={prog.obra}>
-                                  {prog.obra}
+                              {/* Coluna Status Produção */}
+                              <div className="text-center">
+                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadge}`}>
+                                  {statusTexto}
                                 </span>
                               </div>
 
-                              {/* Saturação (Jornada) e Deslocamento */}
-                              <div className="flex items-center justify-between font-mono text-[9.5px] text-[#5C574F] pt-0.5 border-t border-[#F2F0EC]">
-                                <div className="flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: corDotJornada }} />
-                                  <span className="font-bold text-[#23211E]">{formatMinToHours(prog.tempoTotalMin)}</span>
-                                </div>
-                                <span className="text-[9px] text-[#6B6660]">
-                                  desl {(prog.tempoDeslocamentoMin / 60).toFixed(1).replace('.', ',')}h
-                                </span>
+                              {/* Coluna Média Deslocamento */}
+                              <div className="text-center font-bold text-[#23211E] font-mono">
+                                {temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
                               </div>
 
-                              {/* Pontos / Vãos (se houver e couber) */}
-                              {activeDensidade === 'detalhado' && prog.pontos && prog.pontos.length > 0 && (
-                                <div className="text-[8.5px] font-mono text-[#8C877D] truncate pt-0.5" title={prog.pontos.join(', ')}>
-                                  {prog.pontos.slice(0, 2).join(', ')}{prog.pontos.length > 2 ? ` +${prog.pontos.length - 2}` : ''}
-                                </div>
-                              )}
+                              {/* Coluna Status Deslocamento */}
+                              <div className="text-center">
+                                {temProg ? (
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corDesloc}`}>
+                                    {textoDesloc}
+                                  </span>
+                                ) : '-'}
+                              </div>
                             </div>
                           );
                         })}
-
-                        {/* Coluna Planejado */}
-                        <div className="text-right pr-2 font-mono font-bold text-xs text-[#17794C]">
-                          R$ {eq.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                        </div>
-
-                        {/* Coluna Meta */}
-                        <div className="text-right pr-2 font-mono text-[10px] text-[#6B6660]">
-                          R$ {eq.metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                        </div>
-
-                        {/* Coluna % Meta */}
-                        <div className="text-center">
-                          <span
-                            className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold font-mono"
-                            style={{
-                              backgroundColor: getCorPctPlanejado(eq.pctMeta).fundo,
-                              color: getCorPctPlanejado(eq.pctMeta).texto,
-                            }}
-                          >
-                            {eq.pctMeta}%
-                          </span>
-                        </div>
-                      </div>
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -1036,7 +988,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               {/* Linha de Totais do Período */}
               <div
                 className="bg-[#FAF8F5] border-t-2 border-[#DEDAD3] text-xs font-bold py-2.5 px-3 items-center grid text-[#23211E]"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px` }}
+                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px 100px 70px 120px` }}
               >
                 <div className="pl-1 uppercase tracking-wider text-[11px] text-[#5C574F]">
                   Total Geral
@@ -1072,6 +1024,17 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                     {metricas.aderenciaPeriodo}%
                   </span>
                 </div>
+
+                {/* Status Produção */}
+                <div />
+
+                {/* Média Deslocamento */}
+                <div className="text-center font-bold text-[#23211E] font-mono">
+                  {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
+                </div>
+
+                {/* Status Deslocamento */}
+                <div />
               </div>
             </div>
           </div>
