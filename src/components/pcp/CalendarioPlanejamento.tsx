@@ -767,11 +767,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
           {/* Grade do Calendário */}
           <div className="overflow-x-auto">
-            <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 115 + 468)}px` }}>
+            <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 115 + 475)}px` }}>
               {/* Cabeçalho da Grade */}
               <div
                 className="bg-[#F2F0EC] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider py-2 px-3 items-center grid"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px 100px 70px 120px` }}
+                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px` }}
               >
                 <div>Equipe</div>
                 {diasDaSemana.map((diaData, idx) => {
@@ -828,7 +828,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                               key={eq.codigo}
                               className="px-3 py-2.5 items-center hover:bg-[#FAF8F5] transition-colors text-xs grid"
                               style={{
-                                gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px 100px 70px 120px`,
+                                gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px`,
                                 borderLeft: `3px solid ${temProg ? corFaixa : '#BFB9B0'}`
                               }}
                             >
@@ -854,7 +854,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                   return (
                                     <div
                                       key={diaIso}
-                                      className="mx-1 h-20 rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
+                                      className="mx-1 h-[96px] rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
                                     >
                                       <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
                                         {diaData.getDay() === 0 ? 'Domingo' : 'Folga'}
@@ -867,7 +867,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                   return (
                                     <div
                                       key={diaIso}
-                                      className="mx-1 h-20 rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
+                                      className="mx-1 h-[96px] rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
                                     >
                                       <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
                                         Feriado
@@ -887,7 +887,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                 return (
                                   <div
                                     key={diaIso}
-                                    className="mx-1 h-20 rounded-md border border-[#E6E3DD] bg-white p-1.5 flex flex-col justify-between shadow-2xs hover:border-[#DEDAD3] transition-colors"
+                                    className="mx-1 h-[96px] rounded-md border border-[#E6E3DD] bg-white p-1.5 flex flex-col justify-between shadow-2xs hover:border-[#DEDAD3] transition-colors"
                                   >
                                     {/* Faixa Superior: % Meta Diária e Município */}
                                     <div className="flex items-center justify-between gap-1">
@@ -988,7 +988,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               {/* Linha de Totais do Período */}
               <div
                 className="bg-[#FAF8F5] border-t-2 border-[#DEDAD3] text-xs font-bold py-2.5 px-3 items-center grid text-[#23211E]"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 68px 62px 48px 100px 70px 120px` }}
+                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px` }}
               >
                 <div className="pl-1 uppercase tracking-wider text-[11px] text-[#5C574F]">
                   Total Geral
