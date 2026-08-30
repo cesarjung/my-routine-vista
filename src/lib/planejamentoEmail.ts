@@ -283,6 +283,21 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
 
 
+
+    <!-- 6. OBSERVAÇÕES DO PLANEJADOR -->
+    ${blocos.observacoes && observacoes && observacoes.length > 0 ? `
+    <div style="padding: 0 14px 16px 14px;">
+      <div style="background-color: #FBF5EC; border: 1px solid #E8C9A0; border-radius: 8px; padding: 14px 16px;">
+        <strong style="font-size: 12px; color: #23211E; display: block; margin-bottom: 8px;">
+          Observações e Recomendações do Planejador
+        </strong>
+        <ul style="margin: 0; padding-left: 18px; font-size: 11.5px; color: #23211E; line-height: 1.6;">
+          ${observacoes.map(obs => `<li>${obs}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+    ` : ''}
+
     <!-- 2. MAPA DE DESLOCAMENTOS -->
     ${blocos.mapa ? (() => {
       const mapaImg = payload.mapa?.imagemBase64 || (typeof document !== 'undefined' ? gerarMapaEstaticoBase64(
@@ -346,17 +361,17 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
         </span>
       </div>
       <div style="overflow-x: auto;">
-        <table class="data-table" style="table-layout: fixed; width: 1040px; border-collapse: collapse;">
+        <table class="data-table" style="table-layout: fixed; width: 1320px; border-collapse: collapse;">
           <thead>
             <tr>
-              <th style="text-align: left; width: 85px; padding: 6px 4px;">Equipe</th>
-              ${dias.map(d => `<th style="text-align: center; width: 70px; padding: 6px 2px;">${d.diaSemana}<br><span style="font-weight: normal; font-size: 8px;">${d.label || d.data}</span></th>`).join('')}
+              <th style="text-align: left; width: 90px; padding: 6px 4px;">Equipe</th>
+              ${dias.map(d => `<th style="text-align: center; width: 105px; padding: 6px 2px;">${d.diaSemana}<br><span style="font-weight: normal; font-size: 8px;">${d.label || d.data}</span></th>`).join('')}
               <th style="text-align: right; width: 75px; padding: 6px 4px;">Planejado</th>
-              <th style="text-align: right; width: 70px; padding: 6px 4px;">Meta</th>
-              <th style="text-align: center; width: 50px; padding: 6px 4px;">% Meta</th>
-              <th style="text-align: center; width: 95px; padding: 6px 4px;">Status Prod.</th>
-              <th style="text-align: center; width: 65px; padding: 6px 4px;">Desloc.</th>
-              <th style="text-align: center; width: 110px; padding: 6px 4px;">Status Desloc.</th>
+              <th style="text-align: right; width: 65px; padding: 6px 4px;">Meta</th>
+              <th style="text-align: center; width: 42px; padding: 6px 2px;">%</th>
+              <th style="text-align: center; width: 90px; padding: 6px 2px;">Status Prod.</th>
+              <th style="text-align: center; width: 50px; padding: 6px 2px;">Desloc.</th>
+              <th style="text-align: center; width: 100px; padding: 6px 2px;">Status Desloc.</th>
             </tr>
           </thead>
           <tbody>
@@ -375,11 +390,54 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
               const sortedGroups = Array.from(supervisorGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
               return sortedGroups.map(([supervisor, groupEquipes]) => {
-                // Header for the supervisor group spanning all columns
+                // Calcular totais do supervisor
+                const supTotalPlan = groupEquipes.reduce((s, e) => s + (e.totalPlanejado ?? e.planejadoTotal ?? 0), 0);
+                const supTotalMeta = groupEquipes.reduce((s, e) => s + (e.metaSemanal || 0), 0);
+                const supPctMeta = supTotalMeta > 0 ? Math.round((supTotalPlan / supTotalMeta) * 100) : 0;
+                const supEquipesComProg = groupEquipes.filter(e => e.temProgramacao);
+                const supMediaDesloc = supEquipesComProg.length > 0
+                  ? Math.round(supEquipesComProg.reduce((s, e) => s + Number(e.mediaDeslocamentoH || 0), 0) / supEquipesComProg.length * 10) / 10
+                  : 0;
+
+                // Status badges do supervisor
+                const supFundoBadge = supPctMeta >= 100 ? '#E6F2EA' : supPctMeta >= 70 ? '#FBF2DA' : '#F9E4E1';
+                const supCorBadge = supPctMeta >= 100 ? '#17794C' : supPctMeta >= 70 ? '#A06A16' : '#C0392E';
+                const supStatusTexto = supPctMeta >= 100 ? 'Meta Atingida' : supPctMeta >= 70 ? 'Atenção' : 'Abaixo Meta';
+                const supFundoDesloc = supMediaDesloc <= 2.0 ? '#E6F2EA' : '#FBEBDC';
+                const supCorDesloc = supMediaDesloc <= 2.0 ? '#17794C' : '#B4581A';
+                const supTextoDesloc = supMediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
+
+                // Header for the supervisor group with totals
                 const groupHeaderHtml = `
                   <tr>
-                    <td colspan="${dias.length + 7}" style="background-color: #FAF8F5; font-weight: bold; color: #5C574F; padding: 6px 8px; border-bottom: 1px solid #E6E3DD; font-size: 11px; text-align: left;">
+                    <td colspan="${dias.length + 1}" style="background-color: #FAF8F5; font-weight: bold; color: #5C574F; padding: 6px 8px; border-bottom: 1px solid #E6E3DD; font-size: 11px; text-align: left;">
                       👤 Supervisor: ${supervisor} (${groupEquipes.length} ${groupEquipes.length === 1 ? 'equipe' : 'equipes'})
+                    </td>
+                    <td style="background-color: #FAF8F5; text-align: right; font-family: monospace; font-size: 10px; color: #17794C; font-weight: bold; padding: 6px 4px; border-bottom: 1px solid #E6E3DD; white-space: nowrap;">
+                      R$ ${supTotalPlan.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </td>
+                    <td style="background-color: #FAF8F5; text-align: right; font-family: monospace; font-size: 10px; color: #6B6660; font-weight: bold; padding: 6px 4px; border-bottom: 1px solid #E6E3DD; white-space: nowrap;">
+                      R$ ${supTotalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </td>
+                    <td style="background-color: #FAF8F5; text-align: center; vertical-align: middle; padding: 4px 2px; border-bottom: 1px solid #E6E3DD;">
+                      <span style="background-color: ${supFundoBadge}; color: ${supCorBadge}; font-weight: bold; font-family: monospace; font-size: 9px; padding: 2px 4px; border-radius: 3px; display: inline-block;">
+                        ${supPctMeta}%
+                      </span>
+                    </td>
+                    <td style="background-color: #FAF8F5; text-align: center; vertical-align: middle; padding: 4px 2px; border-bottom: 1px solid #E6E3DD;">
+                      <span style="background-color: ${supFundoBadge}; color: ${supCorBadge}; font-weight: bold; font-family: monospace; font-size: 9px; padding: 2px 4px; border-radius: 3px; display: inline-block;">
+                        ${supStatusTexto}
+                      </span>
+                    </td>
+                    <td style="background-color: #FAF8F5; text-align: center; vertical-align: middle; font-weight: bold; color: #23211E; font-family: monospace; font-size: 10px; border-bottom: 1px solid #E6E3DD;">
+                      ${supEquipesComProg.length > 0 ? `${supMediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
+                    </td>
+                    <td style="background-color: #FAF8F5; text-align: center; vertical-align: middle; padding: 4px 2px; border-bottom: 1px solid #E6E3DD;">
+                      ${supEquipesComProg.length > 0 ? `
+                        <span style="background-color: ${supFundoDesloc}; color: ${supCorDesloc}; font-weight: bold; font-family: monospace; font-size: 9px; padding: 2px 4px; border-radius: 3px; display: inline-block;">
+                          ${supTextoDesloc}
+                        </span>
+                      ` : '-'}
                     </td>
                   </tr>
                 `;
@@ -471,7 +529,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                                   ${pctDia > 0 ? `${pctDia}%` : '-'}
                                 </span>
                               </td>
-                              <td style="text-align: right; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55px;">
+                              <td style="text-align: right; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px;">
                                 <span style="background-color: #F2F0EC; color: #6B6660; font-weight: bold; font-size: 8px; padding: 1px 3px; border-radius: 2px; text-transform: uppercase;" title="${municipio}">
                                   ${municipio}
                                 </span>
@@ -540,6 +598,54 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
               }).join('');
             })()}
           </tbody>
+          <tfoot>
+            ${(() => {
+              const totalPlanejadoGeral = metricas.planejado || 0;
+              const totalMetaGeral = metricas.meta || 0;
+              const pctGeral = metricas.aderencia || 0;
+              const deslocGeral = metricas.deslocamentoMedioH || 0;
+              
+              // Status Produção Geral
+              const fundoBadgeGeral = pctGeral >= 100 ? '#E6F2EA' : pctGeral >= 70 ? '#FBF2DA' : '#F9E4E1';
+              const corBadgeGeral = pctGeral >= 100 ? '#17794C' : pctGeral >= 70 ? '#A06A16' : '#C0392E';
+              const statusTextoGeral = pctGeral >= 100 ? 'Meta Atingida' : pctGeral >= 70 ? 'Atenção' : 'Abaixo Meta';
+
+              // Status Deslocamento Geral
+              const fundoDeslocGeral = deslocGeral <= 2.0 ? '#E6F2EA' : '#FBEBDC';
+              const corDeslocGeral = deslocGeral <= 2.0 ? '#17794C' : '#B4581A';
+              const textoDeslocGeral = deslocGeral <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
+
+              return `
+              <tr style="background-color: #FAF8F5; border-top: 2px solid #DEDAD3; font-weight: bold;">
+                <td style="padding: 6px 4px; text-transform: uppercase; font-size: 9px; color: #5C574F; letter-spacing: 0.5px;">Total Geral</td>
+                ${dias.map(() => '<td></td>').join('')}
+                <td style="text-align: right; font-family: monospace; font-size: 10.5px; color: #17794C; padding: 6px 4px; white-space: nowrap;">
+                  R$ ${totalPlanejadoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </td>
+                <td style="text-align: right; font-family: monospace; font-size: 10px; color: #6B6660; padding: 6px 4px; white-space: nowrap;">
+                  R$ ${totalMetaGeral.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </td>
+                <td style="text-align: center; vertical-align: middle; padding: 4px 2px;">
+                  <span style="background-color: ${fundoBadgeGeral}; color: ${corBadgeGeral}; font-weight: bold; font-family: monospace; font-size: 9.5px; padding: 2px 4px; border-radius: 3px; display: inline-block;">
+                    ${pctGeral}%
+                  </span>
+                </td>
+                <td style="text-align: center; vertical-align: middle; padding: 4px 2px;">
+                  <span style="background-color: ${fundoBadgeGeral}; color: ${corBadgeGeral}; font-weight: bold; font-family: monospace; font-size: 9.5px; padding: 2px 4px; border-radius: 3px; display: inline-block;">
+                    ${statusTextoGeral}
+                  </span>
+                </td>
+                <td style="text-align: center; vertical-align: middle; font-weight: bold; color: #23211E; font-family: monospace; font-size: 10.5px;">
+                  ${deslocGeral.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
+                </td>
+                <td style="text-align: center; vertical-align: middle; padding: 4px 2px;">
+                  <span style="background-color: ${fundoDeslocGeral}; color: ${corDeslocGeral}; font-weight: bold; font-family: monospace; font-size: 9.5px; padding: 2px 4px; border-radius: 3px; display: inline-block;">
+                    ${textoDeslocGeral}
+                  </span>
+                </td>
+              </tr>`;
+            })()}
+          </tfoot>
         </table>
       </div>
     </div>
@@ -672,19 +778,6 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
     ` : ''}
 
-    <!-- 6. OBSERVAÇÕES DO PLANEJADOR -->
-    ${blocos.observacoes && observacoes && observacoes.length > 0 ? `
-    <div style="padding: 0 14px 16px 14px;">
-      <div style="background-color: #FBF5EC; border: 1px solid #E8C9A0; border-radius: 8px; padding: 14px 16px;">
-        <strong style="font-size: 12px; color: #23211E; display: block; margin-bottom: 8px;">
-          Observações e Recomendações do Planejador
-        </strong>
-        <ul style="margin: 0; padding-left: 18px; font-size: 11.5px; color: #23211E; line-height: 1.6;">
-          ${observacoes.map(obs => `<li>${obs}</li>`).join('')}
-        </ul>
-      </div>
-    </div>
-    ` : ''}
 
     <!-- 7. RESUMO OPERACIONAL DA PROGRAMAÇÃO (SÍNTESE) -->
 

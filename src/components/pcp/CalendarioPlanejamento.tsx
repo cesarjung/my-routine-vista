@@ -667,6 +667,56 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       </div>
 
 
+      {/* 5.7 OBSERVAÇÕES DO PLANEJADOR (Editáveis inline) */}
+      {blocos.observacoes && (
+        <div className="bg-[#FBF5EC] rounded-xl border border-[#E8C9A0] p-4 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between border-b border-[#E8C9A0]/60 pb-2">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-[#E07A1F]" />
+              <h3 className="text-sm font-bold text-[#23211E]">
+                Observações do Planejador
+              </h3>
+            </div>
+            <div className="flex items-center gap-3 print:hidden">
+              <span className="text-[11px] text-[#A06A16] font-medium">
+                Enter = novo · Backspace = apagar
+              </span>
+              <button
+                type="button"
+                onClick={handleAddObservacao}
+                className="flex items-center gap-1 text-[11px] font-bold text-[#E07A1F] hover:text-[#C0671A] transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Adicionar
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {observacoes.map((obs, idx) => (
+              <div key={idx} className="group flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#E07A1F] mt-2 shrink-0" />
+                <input
+                  type="text"
+                  value={obs}
+                  onChange={e => handleObservacaoChange(idx, e.target.value)}
+                  onKeyDown={e => handleObservacaoKeyDown(idx, e)}
+                  placeholder="Digite uma observação para a semana..."
+                  className="obs-topic-input flex-1 bg-transparent text-xs text-[#23211E] font-medium focus:outline-none focus:bg-white/80 px-2 py-1 rounded border border-transparent focus:border-[#E8C9A0] transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveObservacao(idx)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[#A39E96] hover:text-[#C0392E] mt-1 print:hidden"
+                  title="Remover observação"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 5.3 MAPA DE DESLOCAMENTOS DAS EQUIPES (IDÊNTICO À SEÇÃO EQUIPES) */}
       {blocos.mapa && (
         <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
@@ -803,11 +853,63 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                   </div>
                 ) : (
                   equipesAgrupadasPorSupervisor.map(([supervisor, groupEquipes]) => {
+                    // Calcular totais do supervisor
+                    const supTotalPlanejado = groupEquipes.reduce((s, e) => s + e.totalPlanejado, 0);
+                    const supTotalMeta = groupEquipes.reduce((s, e) => s + e.metaSemanal, 0);
+                    const supPctMeta = supTotalMeta > 0 ? Math.round((supTotalPlanejado / supTotalMeta) * 100) : 0;
+                    const equipesComProg = groupEquipes.filter(e => e.temProgramacao);
+                    const supMediaDesloc = equipesComProg.length > 0
+                      ? Math.round(equipesComProg.reduce((s, e) => s + e.mediaDeslocamentoH, 0) / equipesComProg.length * 10) / 10
+                      : 0;
+
+                    // Status badges do supervisor
+                    const supCorBadge = supPctMeta >= 100 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : supPctMeta >= 70 ? 'text-[#A06A16] bg-[#FBF2DA] border border-[#E8C9A0]' : 'text-[#C0392E] bg-[#F9E4E1] border border-[#F2C0B8]';
+                    const supStatusTexto = supPctMeta >= 100 ? 'Meta Atingida' : supPctMeta >= 70 ? 'Atenção' : 'Abaixo Meta';
+                    const supCorDesloc = supMediaDesloc <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
+                    const supTextoDesloc = supMediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
+
                     return (
                       <React.Fragment key={supervisor}>
-                        {/* Header do Supervisor na Grade */}
-                        <div className="bg-[#FAF8F5] border-y border-[#E6E3DD] text-[10.5px] font-bold text-[#5C574F] py-2 px-3 flex items-center gap-1 select-none">
-                          <span>👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})</span>
+                        {/* Header do Supervisor na Grade com Totais */}
+                        <div
+                          className="bg-[#FAF8F5] border-y border-[#E6E3DD] text-xs font-bold text-[#5C574F] py-2 px-3 items-center grid"
+                          style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px` }}
+                        >
+                          <div className="col-span-1 flex items-center gap-1 text-[10.5px] select-none" style={{ gridColumn: `1 / span ${1 + diasDaSemana.length}` }}>
+                            <span>👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})</span>
+                          </div>
+                          <div className="text-right pr-2 font-mono text-[10px] text-[#17794C]">
+                            R$ {supTotalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <div className="text-right pr-2 font-mono text-[10px] text-[#6B6660]">
+                            R$ {supTotalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <div className="text-center">
+                            <span
+                              className="inline-block px-1 py-0.5 rounded text-[9px] font-bold font-mono"
+                              style={{
+                                backgroundColor: getCorPctPlanejado(supPctMeta).fundo,
+                                color: getCorPctPlanejado(supPctMeta).texto,
+                              }}
+                            >
+                              {supPctMeta}%
+                            </span>
+                          </div>
+                          <div className="text-center">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${supCorBadge}`}>
+                              {supStatusTexto}
+                            </span>
+                          </div>
+                          <div className="text-center font-bold text-[#23211E] font-mono text-[10px]">
+                            {equipesComProg.length > 0 ? `${supMediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
+                          </div>
+                          <div className="text-center">
+                            {equipesComProg.length > 0 ? (
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${supCorDesloc}`}>
+                                {supTextoDesloc}
+                              </span>
+                            ) : '-'}
+                          </div>
                         </div>
                         {groupEquipes.map(eq => {
                           const corFaixa = getCorPctPlanejado(eq.pctMeta).texto;
@@ -1026,7 +1128,18 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 </div>
 
                 {/* Status Produção */}
-                <div />
+                <div className="text-center">
+                  {(() => {
+                    const pctGeral = metricas.aderenciaPeriodo;
+                    const corBadgeGeral = pctGeral >= 100 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : pctGeral >= 70 ? 'text-[#A06A16] bg-[#FBF2DA] border border-[#E8C9A0]' : 'text-[#C0392E] bg-[#F9E4E1] border border-[#F2C0B8]';
+                    const statusTextoGeral = pctGeral >= 100 ? 'Meta Atingida' : pctGeral >= 70 ? 'Atenção' : 'Abaixo Meta';
+                    return (
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadgeGeral}`}>
+                        {statusTextoGeral}
+                      </span>
+                    );
+                  })()}
+                </div>
 
                 {/* Média Deslocamento */}
                 <div className="text-center font-bold text-[#23211E] font-mono">
@@ -1034,7 +1147,18 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 </div>
 
                 {/* Status Deslocamento */}
-                <div />
+                <div className="text-center">
+                  {(() => {
+                    const deslocGeral = metricas.deslocamentoMedioH;
+                    const corDeslocGeral = deslocGeral <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
+                    const textoDeslocGeral = deslocGeral <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
+                    return (
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corDeslocGeral}`}>
+                        {textoDeslocGeral}
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
           </div>
@@ -1199,56 +1323,6 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 <span className="text-[11px] text-[#5C574F]">
                   {aloj.alojamento || <span className="text-[#A39E96] italic">Base Central</span>}
                 </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 5.7 OBSERVAÇÕES DO PLANEJADOR (Editáveis inline) */}
-      {blocos.observacoes && (
-        <div className="bg-[#FBF5EC] rounded-xl border border-[#E8C9A0] p-4 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between border-b border-[#E8C9A0]/60 pb-2">
-            <div className="flex items-center gap-2">
-              <Info className="w-4 h-4 text-[#E07A1F]" />
-              <h3 className="text-sm font-bold text-[#23211E]">
-                Observações do Planejador
-              </h3>
-            </div>
-            <div className="flex items-center gap-3 print:hidden">
-              <span className="text-[11px] text-[#A06A16] font-medium">
-                Enter = novo · Backspace = apagar
-              </span>
-              <button
-                type="button"
-                onClick={handleAddObservacao}
-                className="flex items-center gap-1 text-[11px] font-bold text-[#E07A1F] hover:text-[#C0671A] transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" /> Adicionar
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {observacoes.map((obs, idx) => (
-              <div key={idx} className="group flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#E07A1F] mt-2 shrink-0" />
-                <input
-                  type="text"
-                  value={obs}
-                  onChange={e => handleObservacaoChange(idx, e.target.value)}
-                  onKeyDown={e => handleObservacaoKeyDown(idx, e)}
-                  placeholder="Digite uma observação para a semana..."
-                  className="obs-topic-input flex-1 bg-transparent text-xs text-[#23211E] font-medium focus:outline-none focus:bg-white/80 px-2 py-1 rounded border border-transparent focus:border-[#E8C9A0] transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleRemoveObservacao(idx)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[#A39E96] hover:text-[#C0392E] mt-1 print:hidden"
-                  title="Remover observação"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
               </div>
             ))}
           </div>

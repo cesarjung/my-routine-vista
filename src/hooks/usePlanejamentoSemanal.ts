@@ -279,7 +279,7 @@ export function usePlanejamentoSemanal({
         const row = bdConfigRows[i];
         if (!row || !Array.isArray(row)) continue;
         const eq = String(row[3] || '').trim().toUpperCase(); // Coluna D
-        const sup = String(row[2] || row[4] || '').trim(); // Coluna C ou E
+        const sup = String(row[4] || row[2] || '').trim(); // Coluna E (Supervisor), fallback Coluna C (Encarregado)
         if (eq && eq !== 'EQUIPE' && eq.length >= 2) {
           equipesConfigMap.set(eq, sup || 'SUPERVISOR');
         }
@@ -332,21 +332,33 @@ export function usePlanejamentoSemanal({
       console.error('Erro ao ler carteira no semanal:', e);
     }
 
-    // Se BD_Config!D estiver vazia, fallback para as equipes encontradas na Plan_Principal
+    // SEMPRE extrair Supervisores da Plan_Principal (Coluna E=Supervisor, Coluna G=Equipe)
+    // pois a BD_Config não possui coluna confiável de Supervisor (Coluna C contém Encarregado).
+    // Se BD_Config!D estiver vazia, também extrai códigos de equipes daqui.
     if (equipesConfigMap.size === 0) {
       avisoBdConfig = true;
-      for (let i = 5; i < principalRows.length; i++) {
-        const row = principalRows[i];
-        if (!row) continue;
-        const eq = String(row[6] || '').trim().toUpperCase();
-        const sup = String(row[4] || '').trim();
-        if (eq && eq.length >= 2) {
-          if (!equipesConfigMap.has(eq)) {
-            equipesConfigMap.set(eq, sup || 'SUPERVISOR');
-          }
-        }
+    }
+    // Mapa Equipe→Supervisor da Plan_Principal (fonte confiável)
+    const supervisorPrincipalMap = new Map<string, string>();
+    for (let i = 5; i < principalRows.length; i++) {
+      const row = principalRows[i];
+      if (!row) continue;
+      const eq = String(row[6] || '').trim().toUpperCase(); // Coluna G = Equipe
+      const sup = String(row[4] || '').trim();               // Coluna E = Supervisor
+      if (eq && eq.length >= 2 && sup) {
+        supervisorPrincipalMap.set(eq, sup);
+      }
+      // Se BD_Config não tinha equipes, registra aqui
+      if (avisoBdConfig && eq && eq.length >= 2 && !equipesConfigMap.has(eq)) {
+        equipesConfigMap.set(eq, sup || 'SUPERVISOR');
       }
     }
+    // Sobrescreve supervisor no equipesConfigMap com o valor correto da Plan_Principal
+    supervisorPrincipalMap.forEach((sup, eq) => {
+      if (equipesConfigMap.has(eq)) {
+        equipesConfigMap.set(eq, sup);
+      }
+    });
 
     // Fallback padrão se nada for encontrado
     if (equipesConfigMap.size === 0) {
