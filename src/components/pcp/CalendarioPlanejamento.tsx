@@ -1461,54 +1461,65 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       )}
 
-      {/* 5.4.5 QUADRO DE CONCLUSÕES DE OBRAS (PADRÃO EXATO SOLICITADO) */}
+      {/* 5.4.5 QUADRO DE CONCLUSÕES DE OBRAS */}
       {blocos.conclusoes !== false && conclusoesFiltradas.length > 0 && (
-        <div className="rounded-lg border border-[#CBD5E1] shadow-2xs overflow-hidden bg-white mb-6">
-          {/* Header Superior Azul Escuro */}
-          <div className="bg-[#1A3B66] text-white py-2 px-4 text-center">
-            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider font-sans">
-              PLANEJADO CONCLUSÃO DE OBRAS - SEMANA DE {format(inicioSemana, 'dd/MM')} ATÉ {format(fimSemana, 'dd/MM')}
-            </h3>
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3.5 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E6E3DD] pb-2.5">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#E07A1F]" />
+              <h3 className="text-sm font-bold text-[#23211E]">
+                Planejado Conclusão de Obras ({conclusoesFiltradas.length})
+              </h3>
+            </div>
+            <span className="text-[11px] text-[#6B6660]">
+              Semana de {format(inicioSemana, 'dd/MM')} até {format(fimSemana, 'dd/MM')} · Obras com etapa Conclusão ou Desligamento/Conclusão
+            </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse font-sans">
+          <div className="overflow-x-auto rounded-lg border border-[#E6E3DD]">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-[#7A899B] text-white font-bold text-[11px] border-b border-[#CBD5E1]">
-                  <th className="py-2 px-3 text-center border-r border-[#CBD5E1]/40 w-[14%]">Data</th>
-                  <th className="py-2 px-3 text-left border-r border-[#CBD5E1]/40 w-[24%]">Supervisor Equipe</th>
-                  <th className="py-2 px-3 text-left border-r border-[#CBD5E1]/40 w-[18%]">Projeto</th>
-                  <th className="py-2 px-3 text-center border-r border-[#CBD5E1]/40 w-[24%]">Tipo</th>
-                  <th className="py-2 px-3 text-right w-[20%]">Valor Obra</th>
+                <tr className="bg-[#FAF8F5] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider">
+                  <th className="py-2.5 px-3 text-center w-[14%]">Data</th>
+                  <th className="py-2.5 px-3 text-left w-[24%]">Supervisor Equipe</th>
+                  <th className="py-2.5 px-3 text-left w-[18%]">Projeto</th>
+                  <th className="py-2.5 px-3 text-center w-[24%]">Tipo</th>
+                  <th className="py-2.5 px-3 text-right w-[20%]">Valor Obra</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E2E8F0] text-[#1E293B]">
+              <tbody className="divide-y divide-[#F0EDE8]">
                 {conclusoesFiltradas.map((c, idx) => (
-                  <tr key={`${c.data}_${c.equipe}_${c.projeto}_${idx}`} className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="py-2 px-3 text-center border-r border-[#E2E8F0] text-xs">
+                  <tr key={`${c.data}_${c.equipe}_${c.projeto}_${idx}`} className="hover:bg-[#FAF8F5] transition-colors">
+                    <td className="py-2.5 px-3 text-center text-xs font-medium text-[#23211E]">
                       {c.data}
                     </td>
-                    <td className="py-2 px-3 text-left font-semibold border-r border-[#E2E8F0] text-xs uppercase">
+                    <td className="py-2.5 px-3 text-left font-semibold text-xs text-[#23211E] uppercase">
                       {c.supervisorEquipe}
                     </td>
-                    <td className="py-2 px-3 text-left font-mono font-bold border-r border-[#E2E8F0] text-xs">
+                    <td className="py-2.5 px-3 text-left font-mono font-bold text-xs text-[#E07A1F]">
                       {c.projeto}
                     </td>
-                    <td className="py-2 px-3 text-center font-semibold border-r border-[#E2E8F0] text-xs uppercase">
-                      {c.tipo}
+                    <td className="py-2.5 px-3 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        c.tipo.includes('DESLIG')
+                          ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
+                          : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
+                      }`}>
+                        {c.tipo}
+                      </span>
                     </td>
-                    <td className="py-2 px-3 text-right font-mono font-bold text-xs whitespace-nowrap">
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-xs text-[#23211E] whitespace-nowrap">
                       {c.valorObra > 0 ? `R$ ${c.valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-[#F8FAFC] border-t-2 border-[#64748B] font-bold text-xs text-[#1E293B]">
-                  <td colSpan={4} className="py-2.5 px-3 text-right uppercase tracking-wider text-[11px] border-r border-[#CBD5E1]">
-                    Total Geral:
+                <tr className="bg-[#FAF8F5] border-t-2 border-[#DEDAD3] font-bold text-xs text-[#23211E]">
+                  <td colSpan={4} className="py-2.5 px-3 text-right uppercase text-[10px] text-[#5C574F] tracking-wider">
+                    Total ({conclusoesFiltradas.length} {conclusoesFiltradas.length === 1 ? 'obra' : 'obras'}):
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-xs text-[#1A3B66] whitespace-nowrap">
+                  <td className="py-2.5 px-3 text-right font-mono font-bold text-xs text-[#17794C] whitespace-nowrap">
                     R$ {conclusoesFiltradas.reduce((acc, c) => acc + (c.valorObra || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                 </tr>

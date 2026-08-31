@@ -678,7 +678,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     </div>
     ` : ''}
 
-    <!-- 3.5 QUADRO DE CONCLUSÕES DE OBRAS (PADRÃO EXATO SOLICITADO) -->
+    <!-- 3.5 QUADRO DE CONCLUSÕES DE OBRAS -->
     ${(() => {
       if (blocos.conclusoes === false) return '';
       const conclusoesList = data.obrasConclusoes || [];
@@ -690,46 +690,68 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
         : 'SEMANA';
 
       return `
-      <div style="margin-bottom: 24px; border: 1px solid #CBD5E1; border-radius: 6px; overflow: hidden; background-color: #FFFFFF;">
-        <table style="width: 100%; border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11px;">
-          <thead>
-            <tr>
-              <th colspan="5" style="background-color: #1A3B66; color: #FFFFFF; font-size: 13px; font-weight: bold; text-align: center; padding: 9px 8px; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #1A3B66;">
-                PLANEJADO CONCLUSÃO DE OBRAS - SEMANA DE ${semanaLabel}
-              </th>
-            </tr>
-            <tr style="background-color: #7A899B; color: #FFFFFF; font-weight: bold;">
-              <th style="padding: 7px 8px; border: 1px solid #CBD5E1; width: 14%; text-align: center;">Data</th>
-              <th style="padding: 7px 8px; border: 1px solid #CBD5E1; width: 24%; text-align: left;">Supervisor Equipe</th>
-              <th style="padding: 7px 8px; border: 1px solid #CBD5E1; width: 18%; text-align: left;">Projeto</th>
-              <th style="padding: 7px 8px; border: 1px solid #CBD5E1; width: 24%; text-align: center;">Tipo</th>
-              <th style="padding: 7px 8px; border: 1px solid #CBD5E1; width: 20%; text-align: right;">Valor Obra</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${conclusoesList.map((c, idx) => `
-              <tr style="background-color: ${idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'};">
-                <td style="padding: 6px 8px; border: 1px solid #E2E8F0; text-align: center; color: #1E293B;">${c.data}</td>
-                <td style="padding: 6px 8px; border: 1px solid #E2E8F0; text-align: left; font-weight: 600; color: #1E293B; text-transform: uppercase;">${c.supervisorEquipe}</td>
-                <td style="padding: 6px 8px; border: 1px solid #E2E8F0; text-align: left; font-family: monospace; font-weight: bold; color: #1E293B;">${c.projeto}</td>
-                <td style="padding: 6px 8px; border: 1px solid #E2E8F0; text-align: center; font-weight: 600; color: #1E293B; text-transform: uppercase;">${c.tipo}</td>
-                <td style="padding: 6px 8px; border: 1px solid #E2E8F0; text-align: right; font-family: monospace; font-weight: bold; color: #1E293B; white-space: nowrap;">
-                  ${c.valorObra > 0 ? `R$ ${c.valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+      <div style="margin-bottom: 24px;">
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
+          <tr>
+            <td style="vertical-align: middle;">
+              <h3 style="margin: 0; font-size: 13px; font-weight: bold; color: #23211E; text-transform: uppercase; letter-spacing: 0.5px;">
+                Planejado Conclusão de Obras (${conclusoesList.length})
+              </h3>
+            </td>
+            <td style="text-align: right; vertical-align: middle;">
+              <span style="font-size: 10.5px; color: #6B6660;">
+                Semana de ${semanaLabel} · Obras com etapa Conclusão ou Desligamento/Conclusão
+              </span>
+            </td>
+          </tr>
+        </table>
+
+        <div style="background-color: #FFFFFF; border: 1px solid #E6E3DD; border-radius: 8px; overflow: hidden;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 10.5px; text-align: left;">
+            <thead>
+              <tr style="background-color: #FAF8F5; border-bottom: 1px solid #E6E3DD; color: #5C574F; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;">
+                <th style="padding: 7px 8px; font-weight: bold; text-align: center; width: 14%;">Data</th>
+                <th style="padding: 7px 8px; font-weight: bold; text-align: left; width: 24%;">Supervisor Equipe</th>
+                <th style="padding: 7px 8px; font-weight: bold; text-align: left; width: 18%;">Projeto</th>
+                <th style="padding: 7px 8px; font-weight: bold; text-align: center; width: 24%;">Tipo</th>
+                <th style="padding: 7px 8px; font-weight: bold; text-align: right; width: 20%;">Valor Obra</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${conclusoesList.map((c, idx) => {
+                const bgRow = idx % 2 === 0 ? '#FFFFFF' : '#FBFAF7';
+                const badgeBg = c.tipo.includes('DESLIG') ? '#FBF2DA' : '#E6F2EA';
+                const badgeColor = c.tipo.includes('DESLIG') ? '#A06A16' : '#17794C';
+
+                return `
+                <tr style="background-color: ${bgRow}; border-bottom: 1px solid #F0EDE8;">
+                  <td style="padding: 6px 8px; text-align: center; color: #23211E;">${c.data}</td>
+                  <td style="padding: 6px 8px; text-align: left; font-weight: bold; color: #23211E; text-transform: uppercase;">${c.supervisorEquipe}</td>
+                  <td style="padding: 6px 8px; text-align: left; font-family: monospace; font-weight: bold; color: #E07A1F;">${c.projeto}</td>
+                  <td style="padding: 6px 8px; text-align: center;">
+                    <span style="background-color: ${badgeBg}; color: ${badgeColor}; font-weight: bold; font-size: 8.5px; padding: 2px 6px; border-radius: 3px; text-transform: uppercase;">
+                      ${c.tipo}
+                    </span>
+                  </td>
+                  <td style="padding: 6px 8px; text-align: right; font-family: monospace; font-weight: bold; color: #23211E; white-space: nowrap;">
+                    ${c.valorObra > 0 ? `R$ ${c.valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                  </td>
+                </tr>
+                `;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background-color: #FAF8F5; border-top: 2px solid #DEDAD3; font-weight: bold; font-size: 10.5px;">
+                <td colspan="4" style="padding: 6px 8px; text-align: right; text-transform: uppercase; font-size: 9px; color: #5C574F;">
+                  Total (${conclusoesList.length} ${conclusoesList.length === 1 ? 'obra' : 'obras'}):
+                </td>
+                <td style="padding: 6px 8px; text-align: right; font-family: monospace; color: #17794C; white-space: nowrap;">
+                  R$ ${totalValConsiderado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
-            `).join('')}
-          </tbody>
-          <tfoot>
-            <tr style="background-color: #F8FAFC; border-top: 2px solid #64748B; font-weight: bold;">
-              <td colspan="4" style="padding: 7px 8px; text-align: right; font-size: 11px; text-transform: uppercase; color: #1E293B; border: 1px solid #CBD5E1;">
-                Total Geral:
-              </td>
-              <td style="padding: 7px 8px; text-align: right; font-family: monospace; font-size: 11.5px; font-weight: bold; color: #1A3B66; border: 1px solid #CBD5E1; white-space: nowrap;">
-                R$ ${totalValConsiderado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            </tfoot>
+          </table>
+        </div>
       </div>
       `;
     })()}
