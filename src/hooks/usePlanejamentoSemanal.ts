@@ -7,18 +7,13 @@ import { toast } from 'sonner';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
 export interface ObraConclusaoItem {
-  obra: string;
-  titulo: string;
-  municipio: string;
-  dono: string;
-  supervisores: string[];
-  equipes: string[];
-  etapas: string[];
-  pontos: string[];
-  qtdPontos: number;
-  valorConsiderado: number;
-  valorPlanejadoSemana: number;
-  statusExecucao: string;
+  data: string;             // "22/07/2026"
+  dataObj: Date;
+  supervisorEquipe: string; // "ALEX XAVIER"
+  equipe: string;           // "EH156"
+  projeto: string;          // "B-1213860"
+  tipo: string;             // "DESLIGAMENTO/CONCLUSÃO" | "CONCLUSÃO"
+  valorObra: number;        // 47724.20
 }
 
 export interface EquipeSemanalItem {
@@ -721,67 +716,73 @@ export function usePlanejamentoSemanal({
       }
     });
 
-    // 6. Agrupamento de Conclusões de Obras
-    const conclusoesMap = new Map<string, {
-      obra: string;
-      titulo: string;
-      municipio: string;
-      dono: string;
-      supervisores: Set<string>;
-      equipes: Set<string>;
-      etapas: Set<string>;
-      pontos: Set<string>;
-      valorConsiderado: number;
-      valorPlanejadoSemana: number;
-      statusExecucao: string;
-    }>();
+    // 6. Quadro de Planejado Conclusão de Obras (Padrão exato da tabela)
+    const obrasConclusoes: ObraConclusaoItem[] = [];
+    const seenKeys = new Set<string>();
 
     equipesResultado.forEach(eq => {
-      Object.values(eq.dias).forEach(dia => {
+      Object.entries(eq.dias).forEach(([dataKey, dia]) => {
         if (dia && dia.obra && !dia.isFolga && !dia.isFeriado) {
-          const key = dia.obra.trim().toUpperCase();
-          if (!conclusoesMap.has(key)) {
-            const pInfo = projetoInfoMap.get(key);
-            conclusoesMap.set(key, {
-              obra: dia.obra.trim(),
-              titulo: pInfo?.titulo || dia.obra,
-              municipio: pInfo?.municipio || dia.municipio || 'BASE',
-              dono: pInfo?.dono || 'COELBA',
-              supervisores: new Set(),
-              equipes: new Set(),
-              etapas: new Set(),
-              pontos: new Set(),
-              valorConsiderado: pInfo?.valorConsiderado || 0,
-              valorPlanejadoSemana: 0,
-              statusExecucao: pInfo?.statusExecucao || 'EM ANDAMENTO',
+          const keyUpper = dia.obra.trim().toUpperCase();
+          const pInfo = projetoInfoMap.get(keyUpper);
+
+          let cleanProj = dia.obra.trim().toUpperCase();
+          if (!cleanProj.startsWith('B-') && !cleanProj.startsWith('P-')) {
+            if (cleanProj.startsWith('B') && cleanProj.length > 3) {
+              cleanProj = `B-${cleanProj.slice(1)}`;
+            } else {
+              cleanProj = `B-${cleanProj}`;
+            }
+          }
+
+          let tipoEtapa = 'CONCLUSÃO';
+          const etUpper = (dia.etapa || '').toUpperCase();
+          if (etUpper.includes('DESLIG') && etUpper.includes('CONCLU')) {
+            tipoEtapa = 'DESLIGAMENTO/CONCLUSÃO';
+          } else if (etUpper.includes('DESLIG')) {
+            tipoEtapa = 'DESLIGAMENTO/CONCLUSÃO';
+          } else if (etUpper.includes('CONCLU')) {
+            tipoEtapa = 'CONCLUSÃO';
+          } else if (dia.etapa) {
+            tipoEtapa = dia.etapa.replace(/^\d+\s*-\s*/, '').trim().toUpperCase();
+          }
+
+          // Formatar data
+          let dataFormatada = dataKey;
+          let dateObj = new Date();
+          try {
+            const parts = dataKey.split('-');
+            if (parts.length === 3) {
+              dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+              dataFormatada = format(dateObj, 'dd/MM/yyyy');
+            }
+          } catch {}
+
+          const uniqueKey = `${dataFormatada}_${eq.supervisor}_${cleanProj}_${tipoEtapa}`;
+          if (!seenKeys.has(uniqueKey)) {
+            seenKeys.add(uniqueKey);
+            obrasConclusoes.push({
+              data: dataFormatada,
+              dataObj: dateObj,
+              supervisorEquipe: eq.supervisor || 'SUPERVISOR',
+              equipe: eq.codigo,
+              projeto: cleanProj,
+              tipo: tipoEtapa,
+              valorObra: pInfo?.valorConsiderado || 0,
             });
           }
-          const c = conclusoesMap.get(key)!;
-          if (eq.supervisor) c.supervisores.add(eq.supervisor);
-          c.equipes.add(eq.codigo);
-          if (dia.etapa) c.etapas.add(dia.etapa);
-          if (Array.isArray(dia.pontos)) {
-            cleanPontosList(dia.pontos).forEach(pt => c.pontos.add(pt));
-          }
-          c.valorPlanejadoSemana += dia.valorPlanejado || 0;
         }
       });
     });
 
-    const obrasConclusoes: ObraConclusaoItem[] = Array.from(conclusoesMap.values()).map(c => ({
-      obra: c.obra,
-      titulo: c.titulo,
-      municipio: c.municipio,
-      dono: c.dono,
-      supervisores: Array.from(c.supervisores),
-      equipes: Array.from(c.equipes),
-      etapas: Array.from(c.etapas),
-      pontos: Array.from(c.pontos),
-      qtdPontos: c.pontos.size,
-      valorConsiderado: c.valorConsiderado,
-      valorPlanejadoSemana: c.valorPlanejadoSemana,
-      statusExecucao: c.statusExecucao,
-    })).sort((a, b) => b.valorPlanejadoSemana - a.valorPlanejadoSemana);
+    // Ordenar por data crescente, depois supervisor, depois projeto
+    obrasConclusoes.sort((a, b) => {
+      const timeDiff = a.dataObj.getTime() - b.dataObj.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      const supDiff = a.supervisorEquipe.localeCompare(b.supervisorEquipe);
+      if (supDiff !== 0) return supDiff;
+      return a.projeto.localeCompare(b.projeto);
+    });
 
     return {
       equipes: equipesResultado,

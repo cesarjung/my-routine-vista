@@ -582,7 +582,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   const conclusoesFiltradas = useMemo(() => {
     if (obrasConclusoes && obrasConclusoes.length > 0) {
       const equipesPermitidas = new Set(equipesFiltradas.map(e => e.codigo.toUpperCase()));
-      return obrasConclusoes.filter(c => c.equipes.some(eq => equipesPermitidas.has(eq.toUpperCase())));
+      return obrasConclusoes.filter(c => equipesPermitidas.has(c.equipe.toUpperCase()));
     }
     return [];
   }, [obrasConclusoes, equipesFiltradas]);
@@ -1071,8 +1071,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 180 + 340)}px`, transform: `scale(${zoomGrade / 100})`, transformOrigin: 'top left', width: `${10000 / zoomGrade}%` }}>
               {/* Cabeçalho da Grade */}
               <div
-                className="bg-[#F2F0EC] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider py-2 px-3 items-center grid"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px` }}
+                className="bg-[#F2F0EC] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider py-2 px-3 items-center grid calendario-grid-row"
+                style={{
+                  gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px`,
+                  ['--dias-count' as any]: diasDaSemana.length,
+                }}
               >
                 <div>Equipe</div>
                 {diasDaSemana.map((diaData, idx) => {
@@ -1123,8 +1126,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                       <React.Fragment key={supervisor}>
                         {/* Header do Supervisor na Grade com Totais */}
                         <div
-                          className="bg-[#FAF8F5] border-y border-[#E6E3DD] text-xs font-bold text-[#5C574F] py-2 px-3 items-center grid"
-                          style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px` }}
+                          className="bg-[#FAF8F5] border-y border-[#E6E3DD] text-xs font-bold text-[#5C574F] py-2 px-3 items-center grid calendario-grid-row"
+                          style={{
+                            gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px`,
+                            ['--dias-count' as any]: diasDaSemana.length,
+                          }}
                         >
                           <div className="col-span-1 flex items-center gap-1 text-[10.5px] select-none" style={{ gridColumn: `1 / span ${1 + diasDaSemana.length}` }}>
                             <span>👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})</span>
@@ -1179,10 +1185,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                           return (
                             <div
                               key={eq.codigo}
-                              className="px-3 py-2.5 items-center hover:bg-[#FAF8F5] transition-colors text-xs grid"
+                              className="px-3 py-2.5 items-center hover:bg-[#FAF8F5] transition-colors text-xs grid calendario-grid-row"
                               style={{
                                 gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px`,
-                                borderLeft: `3px solid ${temProg ? corFaixa : '#BFB9B0'}`
+                                borderLeft: `3px solid ${temProg ? corFaixa : '#BFB9B0'}`,
+                                ['--dias-count' as any]: diasDaSemana.length,
                               }}
                             >
                               {/* Coluna Equipe */}
@@ -1454,107 +1461,56 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       )}
 
-      {/* 5.4.5 QUADRO DE CONCLUSÕES DE OBRAS */}
+      {/* 5.4.5 QUADRO DE CONCLUSÕES DE OBRAS (PADRÃO EXATO SOLICITADO) */}
       {blocos.conclusoes !== false && conclusoesFiltradas.length > 0 && (
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E6E3DD] pb-2.5">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[#E07A1F]" />
-              <h3 className="text-sm font-bold text-[#23211E]">
-                Quadro de Conclusões de Obras ({conclusoesFiltradas.length})
-              </h3>
-            </div>
-            <span className="text-[11px] text-[#6B6660]">
-              Valor Considerado da Carteira vs Planejado na Semana
-            </span>
+        <div className="rounded-lg border border-[#CBD5E1] shadow-2xs overflow-hidden bg-white mb-6">
+          {/* Header Superior Azul Escuro */}
+          <div className="bg-[#1A3B66] text-white py-2 px-4 text-center">
+            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider font-sans">
+              PLANEJADO CONCLUSÃO DE OBRAS - SEMANA DE {format(inicioSemana, 'dd/MM')} ATÉ {format(fimSemana, 'dd/MM')}
+            </h3>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-[#E6E3DD]">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse font-sans">
               <thead>
-                <tr className="bg-[#FAF8F5] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider">
-                  <th className="py-2.5 px-3">Obra / Dono</th>
-                  <th className="py-2.5 px-3">Título & Município</th>
-                  <th className="py-2.5 px-3">Supervisão / Equipes</th>
-                  <th className="py-2.5 px-3">Etapas</th>
-                  <th className="py-2.5 px-3 text-center">Pontos</th>
-                  <th className="py-2.5 px-3 text-right">Valor Considerado</th>
-                  <th className="py-2.5 px-3 text-right">Planejado Semana</th>
-                  <th className="py-2.5 px-3 text-center">Status</th>
+                <tr className="bg-[#7A899B] text-white font-bold text-[11px] border-b border-[#CBD5E1]">
+                  <th className="py-2 px-3 text-center border-r border-[#CBD5E1]/40 w-[14%]">Data</th>
+                  <th className="py-2 px-3 text-left border-r border-[#CBD5E1]/40 w-[24%]">Supervisor Equipe</th>
+                  <th className="py-2 px-3 text-left border-r border-[#CBD5E1]/40 w-[18%]">Projeto</th>
+                  <th className="py-2 px-3 text-center border-r border-[#CBD5E1]/40 w-[24%]">Tipo</th>
+                  <th className="py-2 px-3 text-right w-[20%]">Valor Obra</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F0EDE8]">
-                {conclusoesFiltradas.map((c, idx) => {
-                  const pctCob = c.valorConsiderado > 0 ? Math.round((c.valorPlanejadoSemana / c.valorConsiderado) * 100) : 0;
-                  const isConcluida = (c.statusExecucao || '').toUpperCase().includes('CONCLU');
-
-                  return (
-                    <tr key={c.obra + idx} className="hover:bg-[#FAF8F5] transition-colors">
-                      <td className="py-2.5 px-3 align-top whitespace-nowrap">
-                        <span className="font-mono font-bold text-xs text-[#E07A1F] block">{c.obra}</span>
-                        <span className="text-[10px] text-[#8C877D] uppercase font-semibold">{c.dono || 'COELBA'}</span>
-                      </td>
-                      <td className="py-2.5 px-3 align-top max-w-[240px]">
-                        <span className="font-bold text-[#23211E] text-xs block leading-snug">{c.titulo}</span>
-                        <span className="text-[10px] text-[#6B6660] uppercase font-medium">{c.municipio}</span>
-                      </td>
-                      <td className="py-2.5 px-3 align-top text-xs text-[#5C574F]">
-                        <span className="font-semibold text-[#23211E] block">{c.supervisores.join(', ') || 'SUPERVISÃO'}</span>
-                        <span className="font-mono text-[#E07A1F] font-bold text-[11px]">{c.equipes.join(', ')}</span>
-                      </td>
-                      <td className="py-2.5 px-3 align-top">
-                        <div className="flex flex-wrap gap-1">
-                          {c.etapas.map(et => (
-                            <span key={et} className="px-1.5 py-0.5 rounded bg-[#F2F0EC] text-[#5C574F] text-[9.5px] font-bold uppercase tracking-wider">
-                              {et}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 align-top text-center font-mono">
-                        <span className="font-bold text-xs text-[#23211E] block">{c.qtdPontos}</span>
-                        {c.pontos && c.pontos.length > 0 && (
-                          <span className="text-[9.5px] text-[#8C877D] block truncate max-w-[120px]" title={c.pontos.join(', ')}>
-                            {c.pontos.join(', ')}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 align-top text-right font-mono font-bold text-xs text-[#23211E] whitespace-nowrap">
-                        {c.valorConsiderado > 0 ? `R$ ${c.valorConsiderado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                      </td>
-                      <td className="py-2.5 px-3 align-top text-right font-mono font-bold text-xs text-[#17794C] whitespace-nowrap">
-                        R$ ${c.valorPlanejadoSemana.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2.5 px-3 align-top text-center whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          isConcluida
-                            ? 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
-                            : 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
-                        }`}>
-                          {c.statusExecucao || (pctCob >= 100 ? 'CONCLUÍDA' : 'EM ANDAMENTO')}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+              <tbody className="divide-y divide-[#E2E8F0] text-[#1E293B]">
+                {conclusoesFiltradas.map((c, idx) => (
+                  <tr key={`${c.data}_${c.equipe}_${c.projeto}_${idx}`} className="hover:bg-[#F8FAFC] transition-colors">
+                    <td className="py-2 px-3 text-center border-r border-[#E2E8F0] text-xs">
+                      {c.data}
+                    </td>
+                    <td className="py-2 px-3 text-left font-semibold border-r border-[#E2E8F0] text-xs uppercase">
+                      {c.supervisorEquipe}
+                    </td>
+                    <td className="py-2 px-3 text-left font-mono font-bold border-r border-[#E2E8F0] text-xs">
+                      {c.projeto}
+                    </td>
+                    <td className="py-2 px-3 text-center font-semibold border-r border-[#E2E8F0] text-xs uppercase">
+                      {c.tipo}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-bold text-xs whitespace-nowrap">
+                      {c.valorObra > 0 ? `R$ ${c.valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
-                <tr className="bg-[#FAF8F5] border-t-2 border-[#DEDAD3] font-bold text-xs text-[#23211E]">
-                  <td colSpan={4} className="py-2.5 px-3 uppercase text-[10px] text-[#5C574F] tracking-wider">
-                    Total ({conclusoesFiltradas.length} obras)
+                <tr className="bg-[#F8FAFC] border-t-2 border-[#64748B] font-bold text-xs text-[#1E293B]">
+                  <td colSpan={4} className="py-2.5 px-3 text-right uppercase tracking-wider text-[11px] border-r border-[#CBD5E1]">
+                    Total Geral:
                   </td>
-                  <td className="py-2.5 px-3 text-center font-mono">
-                    {conclusoesFiltradas.reduce((acc, c) => acc + (c.qtdPontos || 0), 0)} pts
+                  <td className="py-2.5 px-3 text-right font-mono text-xs text-[#1A3B66] whitespace-nowrap">
+                    R$ {conclusoesFiltradas.reduce((acc, c) => acc + (c.valorObra || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">
-                    {conclusoesFiltradas.reduce((acc, c) => acc + (c.valorConsiderado || 0), 0) > 0
-                      ? `R$ ${conclusoesFiltradas.reduce((acc, c) => acc + (c.valorConsiderado || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-[#17794C] whitespace-nowrap">
-                    R$ ${conclusoesFiltradas.reduce((acc, c) => acc + (c.valorPlanejadoSemana || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td></td>
                 </tr>
               </tfoot>
             </table>

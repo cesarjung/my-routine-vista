@@ -305,8 +305,8 @@
 /* Regras Globais de Impressão e PDF (Formato Paisagem / Landscape) */
 @media print {
   @page {
-    size: landscape;
-    margin: 6mm 8mm;
+    size: landscape !important;
+    margin: 5mm 6mm !important;
   }
 
   html,
@@ -314,6 +314,8 @@
     background: #ffffff !important;
     color: #000000 !important;
     width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
     overflow: visible !important;
     margin: 0 !important;
@@ -348,6 +350,7 @@
     inset: auto !important;
     transform: none !important;
     width: 100% !important;
+    min-width: 0 !important;
     max-width: 100% !important;
     height: auto !important;
     max-height: none !important;
@@ -359,17 +362,11 @@
     background: transparent !important;
   }
 
-  [role="dialog"] > div {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-
+  [role="dialog"] > div,
   main {
     display: block !important;
     width: 100% !important;
+    min-width: 0 !important;
     max-width: 100% !important;
     height: auto !important;
     overflow: visible !important;
@@ -377,7 +374,29 @@
     margin: 0 !important;
   }
 
-  /* Ajustes dos cartões para formato Retrato */
+  /* Forçar tabela da grade a caber 100% na largura da página Paisagem sem corte */
+  .overflow-x-auto {
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .overflow-x-auto > div {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: none !important;
+  }
+
+  /* Ajustar grid do calendário para caber perfeitamente no PDF Paisagem */
+  .calendario-grid-row {
+    grid-template-columns: 85px repeat(var(--dias-count, 6), minmax(0, 1fr)) 55px 50px 32px 65px 35px 55px !important;
+    gap: 2px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+
+  /* Ajustes dos cartões para formato Paisagem */
   .grid-cols-1.md\:grid-cols-3 {
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
@@ -387,10 +406,12 @@
   /* Evitar quebra no meio de blocos, tabelas e cabeçalhos */
   .bg-white,
   .rounded-xl,
+  .rounded-lg,
   tr,
   table,
-  .custom-team-marker {
-    break-inside: avoid;
-    page-break-inside: avoid;
+  .custom-team-marker,
+  .calendario-grid-row {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
