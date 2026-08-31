@@ -373,39 +373,259 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     }
   };
 
+  // 1. Equipes filtradas pelo escopo + filtros avançados
+  const equipesFiltradas = useMemo(() => {
+    let filtered = [...equipes];
+
+    // Escopo
+    if (activeEscopo === 'com_programacao') {
+      filtered = filtered.filter(e => e.temProgramacao);
+    }
+
+    // Filtro Supervisor (case-insensitive & trimmed)
+    if (filtroSupervisor) {
+      const supTarget = filtroSupervisor.trim().toUpperCase();
+      filtered = filtered.filter(e => (e.supervisor || 'Sem Supervisor').trim().toUpperCase() === supTarget);
+    }
+
+    // Filtro Equipe (busca textual)
+    if (filtroEquipe.trim()) {
+      const search = filtroEquipe.trim().toUpperCase();
+      filtered = filtered.filter(e => e.codigo.toUpperCase().includes(search));
+    }
+
+    // Filtro Tipo (multi-select)
+    if (tiposSelecionados.size < tiposUnicos.length) {
+      filtered = filtered.filter(e => tiposSelecionados.has(e.tipoEquipe || 'CONSTRUÇÃO'));
+    }
+
+    // Filtro Disponibilidade
+    if (filtroDisponibilidade === 'disponiveis') {
+      filtered = filtered.filter(e => e.temProgramacao && !Object.values(e.dias || {}).every((d: any) => !d || d.isFolga || d.isFeriado || d.isIndisponivel || d?.etapa?.toUpperCase().includes('EQUIPE PARADA')));
+    } else if (filtroDisponibilidade === 'paradas') {
+      // Equipes que tem EQUIPE PARADA em algum dia
+      filtered = filtered.filter(e => {
+        if (!e.dias) return false;
+        return Object.values(e.dias).some((d: any) => d?.etapa?.toUpperCase().includes('EQUIPE PARADA'));
+      });
+    } else if (filtroDisponibilidade === 'sem_programacao') {
+      filtered = filtered.filter(e => !e.temProgramacao);
+    }
+
+    // Filtro Meta
+    if (filtroMeta === 'na_meta') {
+      filtered = filtered.filter(e => e.pctMeta >= 100);
+    } else if (filtroMeta === 'abaixo') {
+      filtered = filtered.filter(e => e.pctMeta < 100);
+    }
+
+    // Filtro Jornada
+    if (filtroJornada === 'abaixo_8') {
+      filtered = filtered.filter(e => e.temProgramacao && e.mediaJornadaMin < 480);
+    } else if (filtroJornada === 'acima_10') {
+      filtered = filtered.filter(e => e.temProgramacao && e.mediaJornadaMin > 600);
+    } else if (filtroJornada === 'na_meta') {
+      filtered = filtered.filter(e => e.temProgramacao && e.mediaJornadaMin >= 480 && e.mediaJornadaMin <= 600);
+    }
+
+    // Filtro Deslocamento
+    if (filtroDeslocamento === 'na_meta') {
+      filtered = filtered.filter(e => e.temProgramacao && e.mediaDeslocamentoH <= 2.0);
+    } else if (filtroDeslocamento === 'acima') {
+      filtered = filtered.filter(e => e.temProgramacao && e.mediaDeslocamentoH > 2.0);
+    }
+
+    return filtered;
+  }, [equipes, activeEscopo, filtroSupervisor, filtroEquipe, tiposSelecionados, tiposUnicos, filtroDisponibilidade, filtroMeta, filtroJornada, filtroDeslocamento]);
+
+  // 2. Métricas calculadas dinamicamente com base nas equipes filtradas
+  const metricasFiltradas = useMemo(() => {
+    let totalPlanejado = 0;
+    let totalMeta = 0;
+    let totalTurnos = 0;
+    let totalJornadaMinutos = 0;
+    let totalDeslocamentoMinutos = 0;
+    let turnosAbaixo8 = 0;
+    let turnosAcima10 = 0;
+    let turnosAcima2h = 0;
+    let turnosDentroMetaDesloc = 0;
+    let equipesAcimaMeta = 0;
+    let equipesAbaixoMeta = 0;
+
+    equipesFiltradas.forEach(eq => {
+      totalPlanejado += eq.totalPlanejado;
+      totalMeta += eq.metaSemanal;
+
+      if (eq.pctMeta >= 100) {
+        equipesAcimaMeta += 1;
+      } else {
+        equipesAbaixoMeta += 1;
+      }
+
+      if (eq.dias) {
+        Object.values(eq.dias).forEach(prog => {
+          if (prog && !prog.isIndisponivel) {
+            totalTurnos += 1;
+            totalJornadaMinutos += prog.tempoTotalMin;
+            totalDeslocamentoMinutos += prog.tempoDeslocamentoMin;
+
+            if (prog.tempoTotalMin < 480) turnosAbaixo8 += 1;
+            if (prog.tempoTotalMin > 600) turnosAcima10 += 1;
+            if (prog.tempoDeslocamentoMin > 120) turnosAcima2h += 1;
+            if (prog.tempoDeslocamentoMin <= 120) turnosDentroMetaDesloc += 1;
+          }
+        });
+      }
+    });
+
+    const equipesProgramadas = equipesFiltradas.filter(e => e.temProgramacao);
+    const metaEquipesProgramadas = equipesProgramadas.reduce((acc, eq) => acc + eq.metaSemanal, 0);
+    const aderenciaPeriodo = totalMeta > 0 ? Math.round((totalPlanejado / totalMeta) * 100) : 0;
+    const aderenciaEquipesProgramadas = metaEquipesProgramadas > 0 ? Math.round((totalPlanejado / metaEquipesProgramadas) * 100) : 0;
+    const jornadaMediaMin = totalTurnos > 0 ? Math.round(totalJornadaMinutos / totalTurnos) : 0;
+    const deslocamentoMedioH = totalTurnos > 0 ? Math.round((totalDeslocamentoMinutos / totalTurnos / 60) * 10) / 10 : 0;
+
+    return {
+      totalPlanejado,
+      totalMeta,
+      aderenciaPeriodo,
+      metaEquipesProgramadas,
+      aderenciaEquipesProgramadas,
+      totalEquipesGeral: equipesFiltradas.length,
+      totalEquipesProgramadas: equipesProgramadas.length,
+      totalEquipesSemProgramacao: equipesFiltradas.length - equipesProgramadas.length,
+      equipesAcimaMeta,
+      equipesAbaixoMeta,
+      totalTurnos,
+      jornadaMediaMin,
+      turnosAbaixo8,
+      turnosAcima10,
+      deslocamentoMedioH,
+      turnosAcima2h,
+      turnosDentroMetaDesloc,
+    };
+  }, [equipesFiltradas]);
+
+  // 3. Dados de mapa oficiais filtrados pelas equipes visíveis
+  const { data: equipesMapData } = usePlanejamentoEquipesData(unidadeId ? [unidadeId] : []);
+  const filteredMapData = useMemo(() => {
+    if (!equipesMapData || !Array.isArray(equipesMapData)) return [];
+    const equipesPermitidas = new Set(equipesFiltradas.map(e => e.codigo.toUpperCase()));
+    return equipesMapData.filter(row => equipesPermitidas.has(row.equipe.toUpperCase()));
+  }, [equipesMapData, equipesFiltradas]);
+
+  // 4. Alojamentos filtrados pelas equipes visíveis
+  const alojamentosFiltrados = useMemo(() => {
+    const codigosVisiveis = new Set(equipesFiltradas.map(e => e.codigo.toUpperCase()));
+    return alojamentos.filter(a => codigosVisiveis.has(a.equipe.toUpperCase()));
+  }, [alojamentos, equipesFiltradas]);
+
+  // 5. Totalizadores diários para a grade (baseado em equipesFiltradas)
+  const totalizadoresDiarios = useMemo(() => {
+    return diasDaSemana.map(diaData => {
+      const dataIso = format(diaData, 'yyyy-MM-dd');
+      const diaIso = dataIso;
+      let valorDia = 0;
+      let equipesCount = 0;
+      let totalJornadaMin = 0;
+      let totalDeslocMin = 0;
+
+      equipesFiltradas.forEach(eq => {
+        const prog = eq.dias?.[diaIso];
+        if (prog && !prog.isIndisponivel) {
+          valorDia += prog.valorPlanejado;
+          equipesCount += 1;
+          totalJornadaMin += prog.tempoTotalMin;
+          totalDeslocMin += prog.tempoDeslocamentoMin;
+        }
+      });
+
+      return {
+        dataIso,
+        valorDia,
+        equipesCount,
+        mediaJornadaMin: equipesCount > 0 ? Math.round(totalJornadaMin / equipesCount) : 0,
+        mediaDeslocH: equipesCount > 0 ? Math.round((totalDeslocMin / equipesCount / 60) * 10) / 10 : 0,
+      };
+    });
+  }, [diasDaSemana, equipesFiltradas]);
+
+  // 6. Resumo de Vistorias por Obra — agrupa obras das equipes filtradas
+  const obrasResumo = useMemo(() => {
+    const obrasMap = new Map<string, { obra: string; etapas: Set<string>; equipes: Set<string> }>();
+    equipesFiltradas.forEach(eq => {
+      if (!eq.dias) return;
+      Object.values(eq.dias).forEach((prog: any) => {
+        if (prog && prog.obra && !prog.isFolga && !prog.isFeriado) {
+          const key = prog.obra;
+          if (!obrasMap.has(key)) {
+            obrasMap.set(key, { obra: key, etapas: new Set(), equipes: new Set() });
+          }
+          const entry = obrasMap.get(key)!;
+          if (prog.etapa) entry.etapas.add(prog.etapa);
+          entry.equipes.add(eq.codigo);
+        }
+      });
+    });
+    return Array.from(obrasMap.values()).map(o => ({
+      obra: o.obra,
+      etapas: Array.from(o.etapas),
+      equipes: Array.from(o.equipes),
+    }));
+  }, [equipesFiltradas]);
+
+  // Busca vistoria real via Supabase para cada obra do período
+  const obraIds = useMemo(() => obrasResumo.map(o => o.obra), [obrasResumo]);
+  const { data: vistoriasMap } = useVistoriasBatch(obraIds);
+
+  // 7. Agrupa as equipes por supervisor para a grade
+  const equipesAgrupadasPorSupervisor = useMemo(() => {
+    const map = new Map<string, typeof equipes>();
+    equipesFiltradas.forEach(eq => {
+      const sup = eq.supervisor || 'Sem Supervisor';
+      if (!map.has(sup)) map.set(sup, []);
+      map.get(sup)!.push(eq);
+    });
+    return Array.from(map.entries()).sort((a, b) => {
+      if (a[0] === 'Sem Supervisor') return 1;
+      if (b[0] === 'Sem Supervisor') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [equipesFiltradas]);
+
   // Estado da Leitura da Semana com IA
   const buildDefaultResumoIa = () => {
-    const totalEqGeral = metricas.totalEquipesGeral || equipes.length;
-    const totalEqProg = metricas.totalEquipesProgramadas || equipes.filter(e => e.temProgramacao).length;
-    const metaProg = metricas.metaEquipesProgramadas || metricas.totalMeta;
-    const aderProg = metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo;
+    const totalEqGeral = metricasFiltradas.totalEquipesGeral;
+    const totalEqProg = metricasFiltradas.totalEquipesProgramadas;
+    const metaProg = metricasFiltradas.metaEquipesProgramadas || metricasFiltradas.totalMeta;
+    const aderProg = metricasFiltradas.aderenciaEquipesProgramadas || metricasFiltradas.aderenciaPeriodo;
 
-    return `A programação da semana prevê um volume planejado de R$ ${metricas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} frente à meta global de R$ ${metricas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${metricas.aderenciaPeriodo}% de aderência geral com ${totalEqGeral} equipes). Considerando apenas as ${totalEqProg} equipes com programação ativa (meta de R$ ${metaProg.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}), a aderência da produção atinge ${aderProg}%. A jornada média estimada por turno é de ${formatMinToHours(metricas.jornadaMediaMin)} e o deslocamento médio semanal é de ${metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h por turno.`;
+    return `A programação da semana prevê um volume planejado de R$ ${metricasFiltradas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} frente à meta global de R$ ${metricasFiltradas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${metricasFiltradas.aderenciaPeriodo}% de aderência geral com ${totalEqGeral} equipes). Considerando apenas as ${totalEqProg} equipes com programação ativa (meta de R$ ${metaProg.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}), a aderência da produção atinge ${aderProg}%. A jornada média estimada por turno é de ${formatMinToHours(metricasFiltradas.jornadaMediaMin)} e o deslocamento médio semanal é de ${metricasFiltradas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h por turno.`;
   };
 
   const buildDefaultDestaquesIa = () => {
-    const totalEqGeral = metricas.totalEquipesGeral || equipes.length;
-    const totalEqProg = metricas.totalEquipesProgramadas || equipes.filter(e => e.temProgramacao).length;
-    const aderProg = metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo;
+    const totalEqGeral = metricasFiltradas.totalEquipesGeral;
+    const totalEqProg = metricasFiltradas.totalEquipesProgramadas;
+    const aderProg = metricasFiltradas.aderenciaEquipesProgramadas || metricasFiltradas.aderenciaPeriodo;
 
     return [
       {
         id: 'd1',
         titulo: 'Aderência Financeira e Metas',
-        texto: `Aderência Global: ${metricas.aderenciaPeriodo}% (${totalEqGeral} equipes). Aderência das Equipes Programadas: ${aderProg}% (${totalEqProg} equipes). ${metricas.equipesAcimaMeta} equipes alcançam ≥100% da meta semanal e ${metricas.equipesAbaixoMeta} equipes permanecem com saldo abaixo.`,
-        gravidade: metricas.aderenciaPeriodo >= 100 ? 'otimo' : metricas.aderenciaPeriodo >= 70 ? 'atencao' : 'critico',
+        texto: `Aderência Global: ${metricasFiltradas.aderenciaPeriodo}% (${totalEqGeral} equipes). Aderência das Equipes Programadas: ${aderProg}% (${totalEqProg} equipes). ${metricasFiltradas.equipesAcimaMeta} equipes alcançam ≥100% da meta semanal e ${metricasFiltradas.equipesAbaixoMeta} equipes permanecem com saldo abaixo.`,
+        gravidade: metricasFiltradas.aderenciaPeriodo >= 100 ? 'otimo' : metricasFiltradas.aderenciaPeriodo >= 70 ? 'atencao' : 'critico',
       },
       {
         id: 'd2',
         titulo: 'Conformidade da Jornada de Trabalho',
-        texto: `${metricas.turnosAbaixo8} turnos apresentam previsão inferior a 08:00 e ${metricas.turnosAcima10} turnos ultrapassam o limite de 10:00.`,
-        gravidade: metricas.turnosAcima10 > 0 ? 'critico' : metricas.turnosAbaixo8 > 2 ? 'atencao' : 'bom',
+        texto: `${metricasFiltradas.turnosAbaixo8} turnos apresentam previsão inferior a 08:00 e ${metricasFiltradas.turnosAcima10} turnos ultrapassam o limite de 10:00.`,
+        gravidade: metricasFiltradas.turnosAcima10 > 0 ? 'critico' : metricasFiltradas.turnosAbaixo8 > 2 ? 'atencao' : 'bom',
       },
       {
         id: 'd3',
         titulo: 'Tempo de Deslocamento em Trânsito',
-        texto: `${metricas.turnosDentroMetaDesloc} turnos operam dentro da meta de deslocamento e ${metricas.turnosAcima2h} turnos demandam mais de 2,0h de trajeto.`,
-        gravidade: metricas.turnosAcima2h > 0 ? 'atencao' : 'otimo',
+        texto: `${metricasFiltradas.turnosDentroMetaDesloc} turnos operam dentro da meta de deslocamento e ${metricasFiltradas.turnosAcima2h} turnos demandam mais de 2,0h de trajeto.`,
+        gravidade: metricasFiltradas.turnosAcima2h > 0 ? 'atencao' : 'otimo',
       },
     ];
   };
@@ -421,10 +641,9 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   );
 
   // Recalcula resumo e destaques quando as métricas carregam (evita zeros)
-  const prevPlanejadoRef = React.useRef(metricas.totalPlanejado);
+  const prevPlanejadoRef = React.useRef(metricasFiltradas.totalPlanejado);
   React.useEffect(() => {
-    // Só atualiza se os valores eram zero e agora carregaram
-    if (prevPlanejadoRef.current === 0 && metricas.totalPlanejado > 0) {
+    if (prevPlanejadoRef.current === 0 && metricasFiltradas.totalPlanejado > 0) {
       if (!initialResumoIaTexto) {
         const novoResumo = buildDefaultResumoIa();
         setResumoIa(novoResumo);
@@ -433,8 +652,8 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         setDestaquesIa(buildDefaultDestaquesIa() as any);
       }
     }
-    prevPlanejadoRef.current = metricas.totalPlanejado;
-  }, [metricas.totalPlanejado, metricas.aderenciaPeriodo]);
+    prevPlanejadoRef.current = metricasFiltradas.totalPlanejado;
+  }, [metricasFiltradas.totalPlanejado, metricasFiltradas.aderenciaPeriodo]);
 
   // Recalcula resumo IA quando as métricas mudam
   const handleRegerarIa = () => {
@@ -500,146 +719,6 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     });
   };
 
-  // Equipes filtradas pelo escopo + filtros avançados
-  const equipesFiltradas = useMemo(() => {
-    let filtered = [...equipes];
-
-    // Escopo
-    if (activeEscopo === 'com_programacao') {
-      filtered = filtered.filter(e => e.temProgramacao);
-    }
-
-    // Filtro Supervisor
-    if (filtroSupervisor) {
-      filtered = filtered.filter(e => (e.supervisor || 'Sem Supervisor') === filtroSupervisor);
-    }
-
-    // Filtro Equipe (busca textual)
-    if (filtroEquipe) {
-      const search = filtroEquipe.toUpperCase();
-      filtered = filtered.filter(e => e.codigo.toUpperCase().includes(search));
-    }
-
-    // Filtro Tipo (multi-select)
-    if (tiposSelecionados.size > 0 && tiposSelecionados.size < tiposUnicos.length) {
-      filtered = filtered.filter(e => tiposSelecionados.has(e.tipoEquipe || 'CONSTRUÇÃO'));
-    }
-
-    // Filtro Disponibilidade
-    if (filtroDisponibilidade === 'disponiveis') {
-      filtered = filtered.filter(e => e.temProgramacao);
-    } else if (filtroDisponibilidade === 'paradas') {
-      // Equipes que tem EQUIPE PARADA em algum dia
-      filtered = filtered.filter(e => {
-        if (!e.dias) return false;
-        return Object.values(e.dias).some((d: any) => d?.etapa?.toUpperCase().includes('EQUIPE PARADA'));
-      });
-    } else if (filtroDisponibilidade === 'sem_programacao') {
-      filtered = filtered.filter(e => !e.temProgramacao);
-    }
-
-    // Filtro Meta
-    if (filtroMeta === 'na_meta') {
-      filtered = filtered.filter(e => e.pctMeta >= 100);
-    } else if (filtroMeta === 'abaixo') {
-      filtered = filtered.filter(e => e.pctMeta < 100 && e.metaSemanal > 0);
-    }
-
-    // Filtro Jornada
-    if (filtroJornada === 'abaixo_8') {
-      filtered = filtered.filter(e => e.mediaJornadaMin > 0 && e.mediaJornadaMin < 480);
-    } else if (filtroJornada === 'acima_10') {
-      filtered = filtered.filter(e => e.mediaJornadaMin > 600);
-    } else if (filtroJornada === 'na_meta') {
-      filtered = filtered.filter(e => e.mediaJornadaMin >= 480 && e.mediaJornadaMin <= 600);
-    }
-
-    // Filtro Deslocamento
-    if (filtroDeslocamento === 'na_meta') {
-      filtered = filtered.filter(e => e.mediaDeslocamentoH > 0 && e.mediaDeslocamentoH <= 2.0);
-    } else if (filtroDeslocamento === 'acima') {
-      filtered = filtered.filter(e => e.mediaDeslocamentoH > 2.0);
-    }
-
-    return filtered;
-  }, [equipes, activeEscopo, filtroSupervisor, filtroEquipe, tiposSelecionados, tiposUnicos, filtroDisponibilidade, filtroMeta, filtroJornada, filtroDeslocamento]);
-
-  // Totalizadores diários para a grade
-  const totalizadoresDiarios = useMemo(() => {
-    return diasDaSemana.map(diaData => {
-      const dataIso = format(diaData, 'yyyy-MM-dd');
-      const diaIso = dataIso;
-      let valorDia = 0;
-      let equipesCount = 0;
-      let totalJornadaMin = 0;
-      let totalDeslocMin = 0;
-
-      equipes.forEach(eq => {
-        const prog = eq.dias?.[diaIso];
-        if (prog) {
-          valorDia += prog.valorPlanejado;
-          equipesCount += 1;
-          totalJornadaMin += prog.tempoTotalMin;
-          totalDeslocMin += prog.tempoDeslocamentoMin;
-        }
-      });
-
-      return {
-        dataIso,
-        valorDia,
-        equipesCount,
-        mediaJornadaMin: equipesCount > 0 ? Math.round(totalJornadaMin / equipesCount) : 0,
-        mediaDeslocH: equipesCount > 0 ? Math.round((totalDeslocMin / equipesCount / 60) * 10) / 10 : 0,
-      };
-    });
-  }, [diasDaSemana, equipes]);
-
-  // Resumo de Vistorias por Obra — agrupa obras de todas equipes
-  const obrasResumo = useMemo(() => {
-    const obrasMap = new Map<string, { obra: string; etapas: Set<string>; equipes: Set<string> }>();
-    equipesFiltradas.forEach(eq => {
-      if (!eq.dias) return;
-      Object.values(eq.dias).forEach((prog: any) => {
-        if (prog && prog.obra && !prog.isFolga && !prog.isFeriado) {
-          const key = prog.obra;
-          if (!obrasMap.has(key)) {
-            obrasMap.set(key, { obra: key, etapas: new Set(), equipes: new Set() });
-          }
-          const entry = obrasMap.get(key)!;
-          if (prog.etapa) entry.etapas.add(prog.etapa);
-          entry.equipes.add(eq.codigo);
-        }
-      });
-    });
-    return Array.from(obrasMap.values()).map(o => ({
-      obra: o.obra,
-      etapas: Array.from(o.etapas),
-      equipes: Array.from(o.equipes),
-    }));
-  }, [equipesFiltradas]);
-
-  // Busca vistoria real via Supabase para cada obra do período
-  const obraIds = useMemo(() => obrasResumo.map(o => o.obra), [obrasResumo]);
-  const { data: vistoriasMap } = useVistoriasBatch(obraIds);
-
-  // Dados oficiais de mapa com coordenadas reais dos projetos (Idêntico à seção Equipes)
-  const { data: equipesMapData } = usePlanejamentoEquipesData(unidadeId ? [unidadeId] : []);
-
-  // Agrupa as equipes por supervisor para a nova tabela resumo
-  const equipesAgrupadasPorSupervisor = useMemo(() => {
-    const map = new Map<string, typeof equipes>();
-    equipesFiltradas.forEach(eq => {
-      const sup = eq.supervisor || 'Sem Supervisor';
-      if (!map.has(sup)) map.set(sup, []);
-      map.get(sup)!.push(eq);
-    });
-    return Array.from(map.entries()).sort((a, b) => {
-      if (a[0] === 'Sem Supervisor') return 1;
-      if (b[0] === 'Sem Supervisor') return -1;
-      return a[0].localeCompare(b[0]);
-    });
-  }, [equipesFiltradas]);
-
   return (
     <div className="w-full bg-[#F7F6F3] text-[#23211E] font-sans antialiased space-y-4">
       {/* 5.1 CABEÇALHO */}
@@ -685,40 +764,40 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               <span
                 className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border"
                 style={{
-                  backgroundColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).fundo,
-                  color: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto,
-                  borderColor: getCorPctPlanejado(metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo).texto + '40',
+                  backgroundColor: getCorPctPlanejado(metricasFiltradas.aderenciaEquipesProgramadas || metricasFiltradas.aderenciaPeriodo).fundo,
+                  color: getCorPctPlanejado(metricasFiltradas.aderenciaEquipesProgramadas || metricasFiltradas.aderenciaPeriodo).texto,
+                  borderColor: getCorPctPlanejado(metricasFiltradas.aderenciaEquipesProgramadas || metricasFiltradas.aderenciaPeriodo).texto + '40',
                 }}
                 title="Aderência calculada sobre as equipes com programação"
               >
-                Prog: {metricas.aderenciaEquipesProgramadas || metricas.aderenciaPeriodo}%
+                Prog: {metricasFiltradas.aderenciaEquipesProgramadas || metricasFiltradas.aderenciaPeriodo}%
               </span>
             </div>
             <div className="flex items-baseline gap-2 mt-1.5">
               <span
                 className="text-2xl font-mono font-bold"
-                style={{ color: getCorPctPlanejado(metricas.aderenciaPeriodo).texto }}
+                style={{ color: getCorPctPlanejado(metricasFiltradas.aderenciaPeriodo).texto }}
               >
-                {metricas.aderenciaPeriodo}%
+                {metricasFiltradas.aderenciaPeriodo}%
               </span>
-              <span className="text-xs text-[#6B6660] font-mono">aderência global ({metricas.totalEquipesGeral || equipes.length} eqs)</span>
+              <span className="text-xs text-[#6B6660] font-mono">aderência ({metricasFiltradas.totalEquipesGeral} eqs)</span>
             </div>
             <p className="text-[11.5px] text-[#6B6660] mt-1 font-mono">
-              R$ {metricas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ {metricas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {metricasFiltradas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ {metricasFiltradas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
-            {metricas.totalEquipesProgramadas > 0 && metricas.totalEquipesProgramadas < (metricas.totalEquipesGeral || equipes.length) && (
+            {metricasFiltradas.totalEquipesProgramadas > 0 && metricasFiltradas.totalEquipesProgramadas < metricasFiltradas.totalEquipesGeral && (
               <p className="text-[10.5px] text-[#8C877D] mt-0.5 font-mono">
-                Meta {metricas.totalEquipesProgramadas} eqs prog.: R$ {metricas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                Meta {metricasFiltradas.totalEquipesProgramadas} eqs prog.: R$ {metricasFiltradas.metaEquipesProgramadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             )}
           </div>
 
           <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
-              {metricas.equipesAcimaMeta} {metricas.equipesAcimaMeta === 1 ? 'equipe' : 'equipes'} ≥100%
+              {metricasFiltradas.equipesAcimaMeta} {metricasFiltradas.equipesAcimaMeta === 1 ? 'equipe' : 'equipes'} ≥100%
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
-              {metricas.equipesAbaixoMeta} abaixo
+              {metricasFiltradas.equipesAbaixoMeta} abaixo
             </span>
           </div>
         </div>
@@ -730,8 +809,8 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               Jornada média das equipes
             </span>
             <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold" style={{ color: getCorJornada(metricas.jornadaMediaMin).texto }}>
-                {formatMinToHours(metricas.jornadaMediaMin)}
+              <span className="text-2xl font-mono font-bold" style={{ color: getCorJornada(metricasFiltradas.jornadaMediaMin).texto }}>
+                {formatMinToHours(metricasFiltradas.jornadaMediaMin)}
               </span>
               <span className="text-xs text-[#6B6660]">por turno</span>
             </div>
@@ -742,10 +821,10 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
           <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBF2DA] text-[#A06A16] font-semibold border border-[#E8C9A0]">
-              {metricas.turnosAbaixo8} &lt; 08:00
+              {metricasFiltradas.turnosAbaixo8} &lt; 08:00
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#F9E4E1] text-[#B03028] font-semibold border border-[#F2C0B8]">
-              {metricas.turnosAcima10} &gt; 10:00
+              {metricasFiltradas.turnosAcima10} &gt; 10:00
             </span>
           </div>
         </div>
@@ -757,8 +836,8 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               Deslocamento médio na semana
             </span>
             <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold" style={{ color: getCorDeslocamento(metricas.deslocamentoMedioH).texto }}>
-                {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
+              <span className="text-2xl font-mono font-bold" style={{ color: getCorDeslocamento(metricasFiltradas.deslocamentoMedioH).texto }}>
+                {metricasFiltradas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
               </span>
               <span className="text-xs text-[#6B6660]">por turno</span>
             </div>
@@ -769,10 +848,10 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
           <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E6E3DD] text-[11px] font-medium text-[#6B6660]">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F2EA] text-[#17794C] font-semibold border border-[#A0D4B2]">
-              {metricas.turnosDentroMetaDesloc} na meta
+              {metricasFiltradas.turnosDentroMetaDesloc} na meta
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#FBEBDC] text-[#B4581A] font-semibold border border-[#F5D3B3]">
-              {metricas.turnosAcima2h} &gt; 2,0h
+              {metricasFiltradas.turnosAcima2h} &gt; 2,0h
             </span>
           </div>
         </div>
@@ -833,7 +912,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       {blocos.mapa && (
         <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
           <PlanejamentoEquipesMap
-            data={equipesMapData || []}
+            data={filteredMapData}
             dates={diasDaSemana}
             height={760}
             className="w-full min-h-[760px] rounded-none border-0"
@@ -1305,29 +1384,29 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 ))}
 
                 <div className="text-right pr-2 text-[#23211E] font-mono text-xs">
-                  R$ {metricas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  R$ {metricasFiltradas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
 
                 <div className="text-right pr-2 text-[#6B6660] font-mono text-[10px]">
-                  R$ {metricas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  R$ {metricasFiltradas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
 
                 <div className="text-center">
                   <span
                     className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold font-mono"
                     style={{
-                      backgroundColor: getCorPctPlanejado(metricas.aderenciaPeriodo).fundo,
-                      color: getCorPctPlanejado(metricas.aderenciaPeriodo).texto,
+                      backgroundColor: getCorPctPlanejado(metricasFiltradas.aderenciaPeriodo).fundo,
+                      color: getCorPctPlanejado(metricasFiltradas.aderenciaPeriodo).texto,
                     }}
                   >
-                    {metricas.aderenciaPeriodo}%
+                    {metricasFiltradas.aderenciaPeriodo}%
                   </span>
                 </div>
 
                 {/* Status Produção */}
                 <div className="text-center">
                   {(() => {
-                    const pctGeral = metricas.aderenciaPeriodo;
+                    const pctGeral = metricasFiltradas.aderenciaPeriodo;
                     const corBadgeGeral = pctGeral >= 100 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : pctGeral >= 70 ? 'text-[#A06A16] bg-[#FBF2DA] border border-[#E8C9A0]' : 'text-[#C0392E] bg-[#F9E4E1] border border-[#F2C0B8]';
                     const statusTextoGeral = pctGeral >= 100 ? 'Meta Atingida' : pctGeral >= 70 ? 'Atenção' : 'Abaixo Meta';
                     return (
@@ -1340,13 +1419,13 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
                 {/* Média Deslocamento */}
                 <div className="text-center font-bold text-[#23211E] font-mono">
-                  {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
+                  {metricasFiltradas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
                 </div>
 
                 {/* Status Deslocamento */}
                 <div className="text-center">
                   {(() => {
-                    const deslocGeral = metricas.deslocamentoMedioH;
+                    const deslocGeral = metricasFiltradas.deslocamentoMedioH;
                     const corDeslocGeral = deslocGeral <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
                     const textoDeslocGeral = deslocGeral <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
                     return (
@@ -1498,19 +1577,19 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       )}
 
       {/* 5.6 ALOJAMENTOS */}
-      {blocos.alojamentos && alojamentos.length > 0 && (
+      {blocos.alojamentos && alojamentosFiltrados.length > 0 && (
         <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs space-y-3">
           <div className="flex items-center justify-between border-b border-[#E6E3DD] pb-2.5">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-[#E07A1F]" />
               <h3 className="text-sm font-bold text-[#23211E]">
-                Alojamentos e Bases ({alojamentos.length})
+                Alojamentos e Bases ({alojamentosFiltrados.length})
               </h3>
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            {alojamentos.map((aloj, idx) => (
+            {alojamentosFiltrados.map((aloj, idx) => (
               <div
                 key={idx}
                 className="p-2.5 rounded-lg border border-[#E6E3DD] bg-[#FBFAF7] flex flex-col gap-1"
