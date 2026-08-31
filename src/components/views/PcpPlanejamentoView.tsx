@@ -241,6 +241,7 @@ export const PcpPlanejamentoView = () => {
   // Alojamentos
   const { alojamentos } = useAlojamentos();
   const [selectedAlojamentoId, setSelectedAlojamentoId] = useState<string>('nenhum');
+  const [equipesAlojamentoPadraoMap, setEquipesAlojamentoPadraoMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_eq_aloj_map', {});
 
   // Hook Principal de Dados
   const {
@@ -580,19 +581,25 @@ export const PcpPlanejamentoView = () => {
     let defaultOrigemId = 'BASE';
     let defaultDestinoId = 'BASE';
 
-    if (selectedAlojamentoId && selectedAlojamentoId !== 'nenhum') {
+    // Se diaId contiver prefixo de equipe (ex: EH156_dia_1) ou estiver no modo equipe, usa o alojamento padrão específico daquela equipe
+    const eqPrefix = diaId.includes('_') ? diaId.split('_')[0] : (planningMode === 'equipe' ? (selectedEquipes[0] || null) : null);
+    const targetAlojId = (eqPrefix && equipesAlojamentoPadraoMap[eqPrefix])
+      ? equipesAlojamentoPadraoMap[eqPrefix]
+      : selectedAlojamentoId;
+
+    if (targetAlojId && targetAlojId !== 'nenhum') {
       if (totalDias === 1) {
         defaultOrigemId = 'BASE';
         defaultDestinoId = 'BASE';
       } else if (idx === 0) {
         defaultOrigemId = 'BASE';
-        defaultDestinoId = selectedAlojamentoId;
+        defaultDestinoId = targetAlojId;
       } else if (idx === totalDias - 1) {
-        defaultOrigemId = selectedAlojamentoId;
+        defaultOrigemId = targetAlojId;
         defaultDestinoId = 'BASE';
       } else {
-        defaultOrigemId = selectedAlojamentoId;
-        defaultDestinoId = selectedAlojamentoId;
+        defaultOrigemId = targetAlojId;
+        defaultDestinoId = targetAlojId;
       }
     }
 
@@ -641,7 +648,7 @@ export const PcpPlanejamentoView = () => {
       isManualIda: Boolean(customAl.manualIda),
       isManualVolta: Boolean(customAl.manualVolta),
     };
-  }, [selectedAlojamentoId, diasCustomAlojMap, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra]);
+  }, [selectedAlojamentoId, equipesAlojamentoPadraoMap, planningMode, selectedEquipes, diasCustomAlojMap, unidadeAtivaInfo, alojamentosDaUnidade, selectedObra]);
 
   // Handler de troca de unidade com reset
   const handleUnidadeChange = (newUnitId: string) => {
@@ -1425,7 +1432,7 @@ export const PcpPlanejamentoView = () => {
     try {
       // Resolver alojamento do dia (Ida = Origem / Volta = Destino)
       const diaIdx = diasProgramados.indexOf(diaTarget);
-      const disp = getDayDisplacement(diaId, diaIdx, diasProgramados.length);
+      const disp = getDayDisplacement(compositeKey, diaIdx, diasProgramados.length, obraParaEnviar);
       const alojIda = disp.origemNome || alojamentoPadrao;
       const alojVolta = disp.destinoNome || alojamentoPadrao;
 
@@ -1502,7 +1509,7 @@ export const PcpPlanejamentoView = () => {
             if (allActs.length === 0 && !isSemAtividadesPermitido) continue;
 
             const diaIdx = diasProgramados.indexOf(d);
-            const disp = getDayDisplacement(d.id, diaIdx, diasProgramados.length);
+            const disp = getDayDisplacement(compositeKey, diaIdx, diasProgramados.length, obraDoSlot);
             const alojIda = disp.origemNome || alojamentoPadrao;
             const alojVolta = disp.destinoNome || alojamentoPadrao;
 
@@ -2650,20 +2657,6 @@ export const PcpPlanejamentoView = () => {
                   </PopoverContent>
                 </Popover>
 
-                {/* Base / Alojamento Padrão */}
-                <Select value={selectedAlojamentoId} onValueChange={setSelectedAlojamentoId}>
-                  <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
-                    <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">BASE OU ALOJAMENTO PADRÃO</span>
-                    <span className="font-semibold text-[#23211E]">{alojamentoPadrao}</span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nenhum" className="text-xs font-semibold">{unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}</SelectItem>
-                    {alojamentosDaUnidade.map(a => (
-                      <SelectItem key={a.id} value={a.id} className="text-xs font-semibold">{a.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
                 {/* Supervisor */}
                 <Select value={supervisor} onValueChange={setSupervisor}>
                   <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
@@ -2760,16 +2753,15 @@ export const PcpPlanejamentoView = () => {
 
                 return (
                   <div key={equipeId} className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-                    {/* Header da Equipe (clicável) */}
-                    <button
-                      type="button"
-                      onClick={() => setExpandedEquipeIds(prev =>
-                        prev.includes(equipeId) ? prev.filter(e => e !== equipeId) : [...prev, equipeId]
-                      )}
-                      className="w-full flex items-center justify-between p-3 px-4 bg-[#FAF8F5] hover:bg-[#F2F0EC] transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-[#E07A1F] text-white flex items-center justify-center text-[10px] font-bold">
+                    {/* Header da Equipe com Alojamento Padrão individual por equipe */}
+                    <div className="w-full flex items-center justify-between p-3 px-4 bg-[#FAF8F5] hover:bg-[#F2F0EC] transition-colors">
+                      <div
+                        className="flex items-center gap-3 cursor-pointer flex-1"
+                        onClick={() => setExpandedEquipeIds(prev =>
+                          prev.includes(equipeId) ? prev.filter(e => e !== equipeId) : [...prev, equipeId]
+                        )}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-[#E07A1F] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
                           <UsersRound className="w-4 h-4" />
                         </div>
                         <div>
@@ -2781,8 +2773,50 @@ export const PcpPlanejamentoView = () => {
                           </div>
                         </div>
                       </div>
-                      <ChevronDown className={`w-4 h-4 text-[#6B6660] transition-transform ${isEquipeExpanded ? 'rotate-180' : ''}`} />
-                    </button>
+
+                      <div className="flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
+                        {/* Seletor de Base / Alojamento Padrão específico para ESTA equipe */}
+                        <Select
+                          value={equipesAlojamentoPadraoMap[equipeId] || selectedAlojamentoId || 'nenhum'}
+                          onValueChange={(val) => {
+                            setEquipesAlojamentoPadraoMap(prev => ({ ...prev, [equipeId]: val }));
+                          }}
+                        >
+                          <SelectTrigger className="h-7 px-2.5 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
+                            <Building2 className="w-3.5 h-3.5 text-[#E07A1F]" />
+                            <span className="text-[9.5px] uppercase tracking-wider text-[#A39E96] font-semibold">ALOJAMENTO PADRÃO:</span>
+                            <span className="font-semibold text-[#23211E]">
+                              {(() => {
+                                const curAlojId = equipesAlojamentoPadraoMap[equipeId] || selectedAlojamentoId;
+                                if (!curAlojId || curAlojId === 'nenhum') {
+                                  return unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base');
+                                }
+                                const found = alojamentosDaUnidade.find(a => a.id === curAlojId || a.nome === curAlojId);
+                                return found ? found.nome : (unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : 'Base');
+                              })()}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="nenhum" className="text-xs font-semibold">
+                              {unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}
+                            </SelectItem>
+                            {alojamentosDaUnidade.map(a => (
+                              <SelectItem key={a.id} value={a.id} className="text-xs font-semibold">{a.nome}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <button
+                          type="button"
+                          onClick={() => setExpandedEquipeIds(prev =>
+                            prev.includes(equipeId) ? prev.filter(e => e !== equipeId) : [...prev, equipeId]
+                          )}
+                          className="p-1.5 hover:bg-[#E6E3DD] rounded-lg transition-colors text-[#6B6660]"
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isEquipeExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
 
                     {/* Corpo expandido: Dias com seletor de obra */}
                     {isEquipeExpanded && (
