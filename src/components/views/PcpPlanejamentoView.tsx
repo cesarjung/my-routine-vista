@@ -32,7 +32,9 @@ import {
   Clock,
   DollarSign,
   Info,
-  Mail
+  Mail,
+  UsersRound,
+  Briefcase
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -47,8 +49,10 @@ import {
   ParsedPlanejamentoExistente,
   MaterialPontoBudget,
   MOTIVOS_REPROGRAMACAO_COL_AU,
-  isEtapaSemAtividades
+  isEtapaSemAtividades,
+  sortPontosAndVaos
 } from '@/hooks/usePcpPlanejamentoData';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -75,7 +79,7 @@ import { useAlojamentos } from '@/hooks/useAlojamentos';
 import { useVistoriaRisk } from '@/hooks/usePcpAiPlanner';
 import { usePlanejamentoSemanal } from '@/hooks/usePlanejamentoSemanal';
 import { toast } from 'sonner';
-import { PcpDiaRow, getMetaColorScale } from './PcpDiaRow';
+import { PcpDiaRow, getMetaColorScale, getSituacaoDia } from './PcpDiaRow';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
 function calcDistanceKM(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -162,6 +166,53 @@ function formatMinToHours(minutes: number): string {
 export const PcpPlanejamentoView = () => {
   const queryClient = useQueryClient();
 
+  // Modo de Planejamento: por Obra (padrão) ou por Equipe
+  const [planningMode, setPlanningMode] = useInMemorySessionState<'obra' | 'equipe'>('pcp_mem_planning_mode', 'obra');
+
+  // Estado do modo Equipe: mapa de obra selecionada por chave composta equipe_diaId
+  const [diasObraEquipeMap, setDiasObraEquipeMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_dias_obra_equipe', {});
+  // Equipes expandidas no accordion do modo equipe
+  const [expandedEquipeIds, setExpandedEquipeIds] = useInMemorySessionState<string[]>('pcp_mem_expanded_equipes', []);
+
+  // Helper: gera chave composta baseada no modo
+  const getDiaKey = useCallback((diaId: string, equipeId?: string): string => {
+    if (planningMode === 'equipe' && equipeId) {
+      return `${equipeId}_${diaId}`;
+    }
+    return diaId;
+  }, [planningMode]);
+
+  // Handler: trocar modo de planejamento
+  const handleTogglePlanningMode = useCallback((mode: 'obra' | 'equipe') => {
+    if (mode === planningMode) return;
+    setPlanningMode(mode);
+    // Reset estados de planejamento ao trocar
+    setDiasPontosMap({});
+    setDiasPontosGroupedMap({});
+    setDiasDateOverrideMap({});
+    setDiasCarregadosList([]);
+    setDiasReprogramarMap({});
+    setDiasMotivoReprogramarMap({});
+    setDiasPesMap({});
+    setDiasEtapasMap({});
+    setDiasCustomAlojMap({});
+    setDiasMotivoDescumprimentoMap({});
+    setDiasPercentualCumprimentoMap({});
+    setDiasObraEquipeMap({});
+    setExpandedEquipeIds([]);
+    if (mode === 'equipe') {
+      setSelectedObraId('');
+    }
+  }, [planningMode]);
+
+  // Cache de dados de orçamento por projeto (modo Equipe)
+  // Armazena pontos e orcamento para cada obra selecionada nos slots equipe_dia
+  interface ObraDataCacheEntry {
+    pontos: string[];
+    orcamento: Map<string, MaterialPontoBudget[]>;
+  }
+  const [obraDataCache, setObraDataCache] = useState<Record<string, ObraDataCacheEntry>>({});
+
   // Limpeza de session storage legado ao inicializar
   useEffect(() => {
     try {
@@ -211,6 +262,195 @@ export const PcpPlanejamentoView = () => {
     salvarProgramacao,
     servicosBase
   } = usePcpPlanejamentoData(selectedUnidadeId, selectedObraId);
+
+  // Fetch de orçamento para novas obras selecionadas no modo Equipe
+  useEffect(() => {
+    if (planningMode !== 'equipe') return;
+
+    const uniqueObraCodes = Array.from(new Set(Object.values(diasObraEquipeMap).filter(Boolean)));
+    const missingCodes = uniqueObraCodes.filter(code => !obraDataCache[code]);
+
+    if (missingCodes.length === 0) return;
+
+    const fetchObraData = async (projetoCode: string) => {
+      try {
+        let cleanCode = projetoCode.trim();
+        const rawNum = cleanCode.replace(/^[A-Z]-/, '').trim();
+        const codeVariants = Array.from(new Set([cleanCode, `B-${rawNum}`, `B-0${rawNum}`, rawNum, `0${rawNum}`]));
+
+        // Buscar atividades_por_ponto
+        let allAtivs: any[] = [];
+        let from = 0;
+        const batchSize = 1000;
+        let hasMore = true;
+
+        while (hasMore && from < 100000) {
+          const { data: pageData, error } = await supabase
+            .from('atividades_por_ponto')
+            .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara, unidade_medida')
+            .in('com_mascara', codeVariants)
+            .range(from, from + batchSize - 1);
+
+          if (error || !pageData || pageData.length === 0) {
+            hasMore = false;
+          } else {
+            allAtivs.push(...pageData);
+            if (pageData.length < batchSize) hasMore = false;
+            else from += batchSize;
+          }
+        }
+
+        let rawData: any[] = [];
+        if (allAtivs.length > 0) {
+          rawData = allAtivs.map((r: any) => ({ ...r, _source: 'atividades' }));
+        } else {
+          const { data: dataComMascara } = await supabase
+            .from('materiais_por_ponto')
+            .select('*')
+            .in('com_mascara', codeVariants)
+            .limit(2000);
+
+          if (dataComMascara && dataComMascara.length > 0) {
+            rawData = dataComMascara.map((r: any) => ({ ...r, _source: 'materiais' }));
+          } else {
+            from = 0;
+            hasMore = true;
+            let dataProjetoAll: any[] = [];
+            while (hasMore && from < 100000) {
+              const { data: dataProjeto, error } = await supabase
+                .from('atividades_por_ponto')
+                .select('ponto_obra, etapa, codigo_atividade, descricao, quantidade, com_mascara, com_ponto_mascara')
+                .in('projeto', codeVariants)
+                .range(from, from + batchSize - 1);
+
+              if (error || !dataProjeto || dataProjeto.length === 0) hasMore = false;
+              else {
+                dataProjetoAll.push(...dataProjeto);
+                if (dataProjeto.length < batchSize) hasMore = false;
+                else from += batchSize;
+              }
+            }
+            rawData = (dataProjetoAll || []).map((r: any) => ({ ...r, _source: 'atividades' }));
+          }
+        }
+
+        const map = new Map<string, MaterialPontoBudget[]>();
+        if (rawData.length > 0) {
+          const firstItem = rawData[0] as any;
+          const isAtividadesSource = firstItem?._source === 'atividades';
+
+          if (isAtividadesSource) {
+            const pontoMap = new Map<string, Map<string, { qty: number; etapa: string; codigo: string; descricao: string }>>();
+            rawData.forEach((item: any) => {
+              let pontoRaw = String(item.ponto_obra || item.com_ponto_mascara || '').trim();
+              if (pontoRaw.includes('_')) pontoRaw = pontoRaw.split('_').pop() || pontoRaw;
+              if (!pontoRaw) pontoRaw = 'P1';
+              const pontoKey = pontoRaw.toUpperCase();
+              const descricao = String(item.descricao || '').trim().toUpperCase();
+              if (!descricao) return;
+              const etapa = String(item.etapa || '').trim();
+              const codigo = String(item.codigo_atividade || '').trim();
+              const qty = Math.max(1, Math.round(Number(item.quantidade) || 1));
+              if (!pontoMap.has(pontoKey)) pontoMap.set(pontoKey, new Map());
+              const atvsMap = pontoMap.get(pontoKey)!;
+              const ativKey = `${codigo}___${descricao}___${etapa}`;
+              if (!atvsMap.has(ativKey)) atvsMap.set(ativKey, { qty, etapa, codigo, descricao });
+            });
+
+            pontoMap.forEach((atvsMap, pontoKey) => {
+              const list: MaterialPontoBudget[] = [];
+              atvsMap.forEach((info) => {
+                const cod = String(info.codigo || '').trim();
+                let foundServ = cod ? servicosBase.find(s => s.codigo && s.codigo === cod) : undefined;
+                if (!foundServ) foundServ = servicosBase.find(s => s.servico === info.descricao);
+                if (!foundServ) foundServ = servicosBase.find(s => info.descricao.includes(s.servico) || s.servico.includes(info.descricao))
+                  || (servicosBase.length > 0 ? servicosBase[0] : { codigo: cod, servico: info.descricao, tempoMinutosPorUnidade: 15, valorPorUnidade: 0 } as any);
+                const totalQty = Math.max(1, Math.round(info.qty));
+                list.push({
+                  id: `${pontoKey}-${cod || 'NOCOD'}-${info.descricao.replace(/\s+/g, '_').slice(0, 30)}-${info.etapa.replace(/\s+/g, '_').slice(0, 15)}`,
+                  ponto: pontoKey, codigo: info.codigo, descricao: info.descricao, quantidade: totalQty, unidade: 'UND',
+                  servicoPrevisto: info.descricao, etapaPrevista: info.etapa,
+                  tempoMinutos: Math.round(foundServ.tempoMinutosPorUnidade * totalQty),
+                  valorEstimado: Math.round(foundServ.valorPorUnidade * totalQty * 100) / 100,
+                  valorUnitario: foundServ.valorPorUnidade, tempoUnitarioMinutos: foundServ.tempoMinutosPorUnidade,
+                });
+              });
+              if (list.length > 0) map.set(pontoKey, list);
+            });
+          } else {
+            const pontoAtividadesMap = new Map<string, Map<string, number[]>>();
+            rawData.forEach((item: any) => {
+              let pontoRaw = String(item.ponto_obra || item.mascara_e_ponto || '').trim();
+              if (pontoRaw.includes('_')) pontoRaw = pontoRaw.split('_').pop() || pontoRaw;
+              if (!pontoRaw) pontoRaw = 'P1';
+              const pontoKey = pontoRaw.toUpperCase();
+              const desc = String(item.descricao || '').toUpperCase();
+              const itemQty = Number(item.quantidade || 1);
+              let servico = '';
+              let isPrimaryItem = false;
+              if (desc.includes('POSTE')) {
+                servico = (desc.includes('14M') || desc.includes('14 METRO') || desc.includes('15/') || desc.includes('16/'))
+                  ? 'INSTALAR POSTE 14 METROS OU SUPERIOR' : 'INSTALAR POSTE 9 A 14 METROS';
+                isPrimaryItem = desc.includes('POSTE CONCRETO') || desc.includes('POSTE DE CONCRETO') || desc.includes('POSTE MADEIRA');
+                if (!isPrimaryItem) servico = '';
+              } else if (desc.includes('ESCAVA') || desc.includes('APILOA') || (desc.includes('CAVA') && !desc.includes('CABO'))) {
+                servico = 'ESCAVAR SOLO NORMAL'; isPrimaryItem = true;
+              } else if (desc.includes('ESTAI')) {
+                servico = 'INSTALAR ESTAI EM SOLO'; isPrimaryItem = true;
+              } else if (desc.includes('CABO') || desc.includes('MPLX') || desc.includes('MULTIPLEXADO')) {
+                servico = 'LAN\u00c7AMENTO DE CABO MULTIPLEXADO'; isPrimaryItem = desc.includes('CABO') || desc.includes('FIO');
+              } else if (desc.includes('TRAFO') || desc.includes('TRANSFORMADOR')) {
+                servico = 'INSTALAR TRAFO MONOFASICO'; isPrimaryItem = true;
+              } else if (desc.includes('CHAVE') && desc.includes('FUSIVEL')) {
+                servico = 'INSTALAR CHAVE FUSIVEL'; isPrimaryItem = true;
+              } else if (desc.includes('CHAVE') && desc.includes('FACA')) {
+                servico = 'INSTALAR CHAVE FACA'; isPrimaryItem = true;
+              } else if (desc.includes('CRUZ') || desc.includes('CRUZETA')) {
+                servico = 'INSTALAR EST CRUZ DUPLA 1 ANCORAGEM'; isPrimaryItem = true;
+              }
+              if (!servico || !isPrimaryItem) return;
+              if (!pontoAtividadesMap.has(pontoKey)) pontoAtividadesMap.set(pontoKey, new Map());
+              const ativsMap = pontoAtividadesMap.get(pontoKey)!;
+              if (!ativsMap.has(servico)) ativsMap.set(servico, [itemQty]);
+              else ativsMap.get(servico)!.push(itemQty);
+            });
+            pontoAtividadesMap.forEach((ativsMap, pontoKey) => {
+              const list: MaterialPontoBudget[] = [];
+              ativsMap.forEach((quantities, servico) => {
+                const foundServ = servicosBase.find(s => s.servico === servico) || (servicosBase.length > 0 ? servicosBase[0] : { servico, tempoMinutosPorUnidade: 15, valorPorUnidade: 0 } as any);
+                const totalQty = Math.max(1, Math.round(quantities.reduce((a, b) => a + b, 0)));
+                list.push({
+                  id: `${pontoKey}-${servico.replace(/\s+/g, '_')}`, ponto: pontoKey, codigo: '', descricao: servico,
+                  quantidade: totalQty, unidade: 'UNID', servicoPrevisto: servico,
+                  tempoMinutos: foundServ.tempoMinutosPorUnidade * totalQty,
+                  valorEstimado: foundServ.valorPorUnidade * totalQty,
+                  valorUnitario: foundServ.valorPorUnidade, tempoUnitarioMinutos: foundServ.tempoMinutosPorUnidade,
+                });
+              });
+              if (list.length > 0) map.set(pontoKey, list);
+            });
+          }
+        }
+
+        const setPontos = new Set<string>(map.keys());
+        if (setPontos.size === 0) {
+          const obraObj = obras.find(o => o.projeto === projetoCode);
+          const qtdPostes = Math.max(1, obraObj?.qtdPostesDisponiveis || 1);
+          for (let i = 1; i <= qtdPostes; i++) setPontos.add(`P${i}`);
+        }
+        const pontos = Array.from(setPontos).sort(sortPontosAndVaos);
+
+        setObraDataCache(prev => ({
+          ...prev,
+          [projetoCode]: { pontos, orcamento: map }
+        }));
+      } catch (err) {
+        console.error(`Erro ao carregar or\u00e7amento da obra ${projetoCode}:`, err);
+      }
+    };
+
+    missingCodes.forEach(code => fetchObraData(code));
+  }, [planningMode, diasObraEquipeMap, obraDataCache, servicosBase, obras]);
 
   const selectedUnidadeObj = useMemo(() => {
     if (!selectedUnidadeId) return null;
@@ -301,6 +541,17 @@ export const PcpPlanejamentoView = () => {
     ? riskCache[selectedObra.projeto]
     : null;
 
+  // No modo equipe, dispara analyzeRisk para cada obra distinta selecionada nos slots
+  useEffect(() => {
+    if (planningMode !== 'equipe') return;
+    const distinctObras = Array.from(new Set(Object.values(diasObraEquipeMap).filter(Boolean)));
+    distinctObras.forEach(obraCode => {
+      if (!riskCache[obraCode]) {
+        analyzeRisk(obraCode);
+      }
+    });
+  }, [planningMode, diasObraEquipeMap, analyzeRisk, riskCache]);
+
   // Informações da Base e Alojamentos da Unidade Ativa
   const unidadeAtivaInfo = useMemo(() => {
     return UNIDADES_PLANEJAMENTO.find(u => u.id === selectedUnidadeId) || null;
@@ -324,7 +575,7 @@ export const PcpPlanejamentoView = () => {
   const FATOR_ESTRADA = 1.25;
   const fatorCaminhaoMult = 1.30;
 
-  const getDayDisplacement = useCallback((diaId: string, idx: number, totalDias: number) => {
+  const getDayDisplacement = useCallback((diaId: string, idx: number, totalDias: number, overrideObra?: any) => {
     let defaultOrigemId = 'BASE';
     let defaultDestinoId = 'BASE';
 
@@ -351,6 +602,8 @@ export const PcpPlanejamentoView = () => {
     const baseInfo = unidadeAtivaInfo || UNIDADES_PLANEJAMENTO[1];
     const alojList = alojamentosDaUnidade;
 
+    const targetObra = overrideObra !== undefined ? overrideObra : selectedObra;
+
     const origemObj = finalOrigemId === 'BASE' || finalOrigemId === baseInfo.baseNome
       ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
       : (alojList.find(a => a.id === finalOrigemId || a.nome === finalOrigemId) || { id: finalOrigemId, nome: finalOrigemId, latitude: null, longitude: null });
@@ -361,15 +614,15 @@ export const PcpPlanejamentoView = () => {
 
     let distIdaKm = 0;
     let calcTempoIdaMin = 15;
-    if (origemObj.latitude && origemObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
-      distIdaKm = Math.round(calcDistanceKM(origemObj.latitude, origemObj.longitude, selectedObra.latitude, selectedObra.longitude) * FATOR_ESTRADA * 10) / 10;
+    if (origemObj.latitude && origemObj.longitude && targetObra?.latitude && targetObra?.longitude) {
+      distIdaKm = Math.round(calcDistanceKM(origemObj.latitude, origemObj.longitude, targetObra.latitude, targetObra.longitude) * FATOR_ESTRADA * 10) / 10;
       calcTempoIdaMin = Math.max(5, Math.round(distIdaKm * 1.33 * fatorCaminhaoMult));
     }
 
     let distVoltaKm = 0;
     let calcTempoVoltaMin = 15;
-    if (destinoObj.latitude && destinoObj.longitude && selectedObra?.latitude && selectedObra?.longitude) {
-      distVoltaKm = Math.round(calcDistanceKM(selectedObra.latitude, selectedObra.longitude, destinoObj.latitude, destinoObj.longitude) * FATOR_ESTRADA * 10) / 10;
+    if (destinoObj.latitude && destinoObj.longitude && targetObra?.latitude && targetObra?.longitude) {
+      distVoltaKm = Math.round(calcDistanceKM(targetObra.latitude, targetObra.longitude, destinoObj.latitude, destinoObj.longitude) * FATOR_ESTRADA * 10) / 10;
       calcTempoVoltaMin = Math.max(5, Math.round(distVoltaKm * 1.33 * fatorCaminhaoMult));
     }
 
@@ -566,7 +819,15 @@ export const PcpPlanejamentoView = () => {
     if (existingDay && existingDay[pUpper]) {
       return existingDay[pUpper];
     }
-    const budgetItems = orcamentoPorPontoMap.get(pUpper) || [];
+    // Resolver orcamento: no modo equipe, usar cache por obra do slot; no modo obra, usar global
+    let resolvedMap = orcamentoPorPontoMap;
+    if (planningMode === 'equipe') {
+      const obraCode = diasObraEquipeMap[diaId] || '';
+      if (obraCode && obraDataCache[obraCode]) {
+        resolvedMap = obraDataCache[obraCode].orcamento;
+      }
+    }
+    const budgetItems = resolvedMap.get(pUpper) || [];
     if (budgetItems.length > 0) {
       return budgetItems.map((bItem, idx) => ({
         id: `${diaId}-${pUpper}-${bItem.id || idx}`,
@@ -588,7 +849,7 @@ export const PcpPlanejamentoView = () => {
       }));
     }
     return [];
-  }, [diasPontosGroupedMap, orcamentoPorPontoMap]);
+  }, [diasPontosGroupedMap, orcamentoPorPontoMap, planningMode, diasObraEquipeMap, obraDataCache]);
 
   // Handlers de Expansão
   const handleToggleExpandDay = (diaId: string) => {
@@ -887,9 +1148,16 @@ export const PcpPlanejamentoView = () => {
   };
 
   const handleSelectAllPontosNoDia = (diaId: string) => {
+    let pontosToSelect = pontosDisponiveisDoProjeto;
+    if (planningMode === 'equipe') {
+      const obraCode = diasObraEquipeMap[diaId] || '';
+      if (obraCode && obraDataCache[obraCode]) {
+        pontosToSelect = obraDataCache[obraCode].pontos;
+      }
+    }
     setDiasPontosMap(prev => ({
       ...prev,
-      [diaId]: [...pontosDisponiveisDoProjeto]
+      [diaId]: [...pontosToSelect]
     }));
     setDiasPontosGroupedMap(prev => {
       if (!prev || !prev[diaId]) return prev;
@@ -1101,22 +1369,43 @@ export const PcpPlanejamentoView = () => {
   };
 
   // Envio de Programação (usando salvarProgramacao.mutateAsync)
-  const handleEnviarPlanPrincipalDia = async (diaId: string) => {
-    if (!selectedObra) {
-      toast.error('Nenhuma obra selecionada para enviar.');
-      return;
+  const handleEnviarPlanPrincipalDia = async (diaId: string, equipeIdOverride?: string) => {
+    // Resolver equipe e obra baseado no modo
+    const equipeAtiva = equipeIdOverride || (selectedEquipes[0] || 'EH156');
+    const compositeKey = planningMode === 'equipe' ? `${equipeAtiva}_${diaId}` : diaId;
+
+    // Resolver obra: no modo equipe, busca do diasObraEquipeMap
+    let obraParaEnviar: PcpObra | null = null;
+    if (planningMode === 'equipe') {
+      const obraCode = diasObraEquipeMap[compositeKey];
+      if (!obraCode) {
+        toast.error(`Nenhuma obra selecionada para ${equipeAtiva} no dia ${diaId}.`);
+        return;
+      }
+      obraParaEnviar = obras.find(o => o.projeto === obraCode) || null;
+      if (!obraParaEnviar) {
+        toast.error(`Obra ${obraCode} não encontrada na carteira.`);
+        return;
+      }
+    } else {
+      if (!selectedObra) {
+        toast.error('Nenhuma obra selecionada para enviar.');
+        return;
+      }
+      obraParaEnviar = selectedObra;
     }
+
     const diaTarget = diasProgramados.find(d => d.id === diaId);
     if (!diaTarget) return;
 
-    const etapaGeral = (diasEtapasMap[diaId] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
+    const etapaGeral = (diasEtapasMap[compositeKey] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
     const isSemAtividadesPermitido = isEtapaSemAtividades(etapaGeral);
 
-    const pontosDia = diasPontosMap[diaId] || [];
-    const filtroLv = diasFiltroLvMap[diaId] || 'COMPLETO';
+    const pontosDia = diasPontosMap[compositeKey] || [];
+    const filtroLv = diasFiltroLvMap[compositeKey] || 'COMPLETO';
     const allActivitiesDia: PcpPontoItem[] = [];
     pontosDia.forEach(p => {
-      const items = getItemsDoPontoNoDia(diaId, p);
+      const items = getItemsDoPontoNoDia(compositeKey, p);
       const filtered = items.filter(item => {
         if (!item.selected) return false;
         const isLv = (item.servico || '').toUpperCase().includes(' LV') || (item.descricaoMaterial || '').toUpperCase().includes(' LV');
@@ -1144,14 +1433,14 @@ export const PcpPlanejamentoView = () => {
         dataProgramacao: diaTarget.dataCompleta,
         dateObj: diaTarget.dateObj,
         supervisor,
-        equipe: selectedEquipes[0] || 'EH156',
+        equipe: equipeAtiva,
         etapaGeral: etapaGeral,
-        obra: selectedObra,
+        obra: obraParaEnviar,
         pontos: allActivitiesDia,
-        isPes: diasPesMap[diaId] || false,
-        reprogramar: diasReprogramarMap[diaId] || false,
-        motivoReprogramacao: diasMotivoReprogramarMap[diaId] || '',
-        motivoDescumprimento: diasMotivoDescumprimentoMap[diaId] || '',
+        isPes: diasPesMap[compositeKey] || false,
+        reprogramar: diasReprogramarMap[compositeKey] || false,
+        motivoReprogramacao: diasMotivoReprogramarMap[compositeKey] || '',
+        motivoDescumprimento: diasMotivoDescumprimentoMap[compositeKey] || '',
         metaEquipeValor: metaEquipeInput,
         alojamentoIda: alojIda,
         alojamentoVolta: alojVolta,
@@ -1163,36 +1452,16 @@ export const PcpPlanejamentoView = () => {
         deletedSchedules: diasExcluidosList,
       });
       setDiasExcluidosList([]);
-      toast.success(`Programação de ${diaTarget.dataStr} enviada com sucesso para a Plan_Principal!`, { id: 'salvar-programacao' });
+      toast.success(`Programação de ${equipeAtiva} - ${diaTarget.dataStr} enviada com sucesso!`, { id: 'salvar-programacao' });
     } catch (err: any) {
       toast.error(`Erro ao enviar dia: ${err.message || 'Erro inesperado'}`, { id: 'salvar-programacao' });
     }
   };
 
-  const handleEnviarTodosOsDias = async () => {
-    if (!selectedObra) {
-      toast.error('Selecione uma obra antes de enviar.');
-      return;
-    }
-    const diasComAtividadesOuEtapaPermitida = diasProgramados.filter(d => {
-      const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
-      const isSemAtividadesPermitido = isEtapaSemAtividades(etapaGeral);
-      const pts = diasPontosMap[d.id] || [];
-      const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
-      const hasActs = pts.some(p =>
-        getItemsDoPontoNoDia(d.id, p).some(i => {
-          if (!i.selected) return false;
-          const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.descricaoMaterial || '').toUpperCase().includes(' LV');
-          if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
-          if (filtroLv === 'SEM_LV' && isLv) return false;
-          return true;
-        })
-      );
-      return hasActs || isSemAtividadesPermitido;
-    });
 
-    if (diasComAtividadesOuEtapaPermitida.length === 0 && diasExcluidosList.length === 0) {
-      toast.error('Nenhum dia possui atividades marcadas ou etapa permitida sem atividades para envio.');
+  const handleEnviarTodosOsDias = async () => {
+    if (planningMode === 'obra' && !selectedObra) {
+      toast.error('Selecione uma obra antes de enviar.');
       return;
     }
 
@@ -1201,50 +1470,130 @@ export const PcpPlanejamentoView = () => {
       const allForms: PcpProgramacaoForm[] = [];
       const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
 
-      for (const d of diasComAtividadesOuEtapaPermitida) {
-        const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
-        const pts = diasPontosMap[d.id] || [];
-        const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
-        const allActs: PcpPontoItem[] = [];
-        pts.forEach(p => {
-          const items = getItemsDoPontoNoDia(d.id, p);
-          const filtered = items.filter(item => {
-            if (!item.selected) return false;
-            const isLv = (item.servico || '').toUpperCase().includes(' LV') || (item.descricaoMaterial || '').toUpperCase().includes(' LV');
-            if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
-            if (filtroLv === 'SEM_LV' && isLv) return false;
-            return true;
-          });
-          allActs.push(...filtered);
+      if (planningMode === 'equipe') {
+        // Modo equipe: iterar equipes × dias
+        for (const eq of equipesToSend) {
+          for (const d of diasProgramados) {
+            const compositeKey = `${eq}_${d.id}`;
+            const obraCode = diasObraEquipeMap[compositeKey];
+            if (!obraCode) continue; // Sem obra selecionada, pula
+
+            const obraDoSlot = obras.find(o => o.projeto === obraCode);
+            if (!obraDoSlot) continue;
+
+            const etapaGeral = (diasEtapasMap[compositeKey] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
+            const isSemAtividadesPermitido = isEtapaSemAtividades(etapaGeral);
+            const pts = diasPontosMap[compositeKey] || [];
+            const filtroLv = diasFiltroLvMap[compositeKey] || 'COMPLETO';
+            const allActs: PcpPontoItem[] = [];
+            pts.forEach(p => {
+              const items = getItemsDoPontoNoDia(compositeKey, p);
+              const filtered = items.filter(item => {
+                if (!item.selected) return false;
+                const isLv = (item.servico || '').toUpperCase().includes(' LV') || (item.descricaoMaterial || '').toUpperCase().includes(' LV');
+                if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
+                if (filtroLv === 'SEM_LV' && isLv) return false;
+                return true;
+              });
+              allActs.push(...filtered);
+            });
+
+            if (allActs.length === 0 && !isSemAtividadesPermitido) continue;
+
+            const diaIdx = diasProgramados.indexOf(d);
+            const disp = getDayDisplacement(d.id, diaIdx, diasProgramados.length);
+            const alojIda = disp.origemNome || alojamentoPadrao;
+            const alojVolta = disp.destinoNome || alojamentoPadrao;
+
+            allForms.push({
+              unidadeId: selectedUnidadeId,
+              dataProgramacao: d.dataCompleta,
+              dateObj: d.dateObj,
+              supervisor,
+              equipe: eq,
+              etapaGeral: etapaGeral,
+              obra: obraDoSlot,
+              pontos: allActs,
+              isPes: diasPesMap[compositeKey] || false,
+              reprogramar: diasReprogramarMap[compositeKey] || false,
+              motivoReprogramacao: diasMotivoReprogramarMap[compositeKey] || '',
+              motivoDescumprimento: diasMotivoDescumprimentoMap[compositeKey] || '',
+              metaEquipeValor: metaEquipeInput,
+              alojamentoIda: alojIda,
+              alojamentoVolta: alojVolta,
+              alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
+            });
+          }
+        }
+      } else {
+        // Modo obra: comportamento original
+        const diasComAtividadesOuEtapaPermitida = diasProgramados.filter(d => {
+          const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
+          const isSemAtividadesPermitido = isEtapaSemAtividades(etapaGeral);
+          const pts = diasPontosMap[d.id] || [];
+          const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
+          const hasActs = pts.some(p =>
+            getItemsDoPontoNoDia(d.id, p).some(i => {
+              if (!i.selected) return false;
+              const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.descricaoMaterial || '').toUpperCase().includes(' LV');
+              if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
+              if (filtroLv === 'SEM_LV' && isLv) return false;
+              return true;
+            })
+          );
+          return hasActs || isSemAtividadesPermitido;
         });
 
-        for (const eq of equipesToSend) {
-          // Resolver alojamento do dia (Ida = Origem / Volta = Destino)
-          const diaIdx = diasComAtividadesOuEtapaPermitida.indexOf(d);
-          const disp = getDayDisplacement(d.id, diaIdx, diasComAtividadesOuEtapaPermitida.length);
-          const alojIda = disp.origemNome || alojamentoPadrao;
-          const alojVolta = disp.destinoNome || alojamentoPadrao;
-
-          allForms.push({
-            unidadeId: selectedUnidadeId,
-            dataProgramacao: d.dataCompleta,
-            dateObj: d.dateObj,
-            supervisor,
-            equipe: eq,
-            etapaGeral: etapaGeral,
-            obra: selectedObra,
-            pontos: allActs,
-            isPes: diasPesMap[d.id] || false,
-            reprogramar: diasReprogramarMap[d.id] || false,
-            motivoReprogramacao: diasMotivoReprogramarMap[d.id] || '',
-            motivoDescumprimento: diasMotivoDescumprimentoMap[d.id] || '',
-            metaEquipeValor: metaEquipeInput,
-            alojamentoIda: alojIda,
-            alojamentoVolta: alojVolta,
-            alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
+        for (const d of diasComAtividadesOuEtapaPermitida) {
+          const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
+          const pts = diasPontosMap[d.id] || [];
+          const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
+          const allActs: PcpPontoItem[] = [];
+          pts.forEach(p => {
+            const items = getItemsDoPontoNoDia(d.id, p);
+            const filtered = items.filter(item => {
+              if (!item.selected) return false;
+              const isLv = (item.servico || '').toUpperCase().includes(' LV') || (item.descricaoMaterial || '').toUpperCase().includes(' LV');
+              if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
+              if (filtroLv === 'SEM_LV' && isLv) return false;
+              return true;
+            });
+            allActs.push(...filtered);
           });
+
+          for (const eq of equipesToSend) {
+            const diaIdx = diasComAtividadesOuEtapaPermitida.indexOf(d);
+            const disp = getDayDisplacement(d.id, diaIdx, diasComAtividadesOuEtapaPermitida.length);
+            const alojIda = disp.origemNome || alojamentoPadrao;
+            const alojVolta = disp.destinoNome || alojamentoPadrao;
+
+            allForms.push({
+              unidadeId: selectedUnidadeId,
+              dataProgramacao: d.dataCompleta,
+              dateObj: d.dateObj,
+              supervisor,
+              equipe: eq,
+              etapaGeral: etapaGeral,
+              obra: selectedObra!,
+              pontos: allActs,
+              isPes: diasPesMap[d.id] || false,
+              reprogramar: diasReprogramarMap[d.id] || false,
+              motivoReprogramacao: diasMotivoReprogramarMap[d.id] || '',
+              motivoDescumprimento: diasMotivoDescumprimentoMap[d.id] || '',
+              metaEquipeValor: metaEquipeInput,
+              alojamentoIda: alojIda,
+              alojamentoVolta: alojVolta,
+              alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
+            });
+          }
         }
       }
+
+      if (allForms.length === 0 && diasExcluidosList.length === 0) {
+        toast.error('Nenhum dia possui atividades marcadas ou etapa permitida sem atividades para envio.');
+        return;
+      }
+
 
       await salvarProgramacao.mutateAsync({
         forms: allForms,
@@ -1783,6 +2132,34 @@ export const PcpPlanejamentoView = () => {
           </SelectContent>
         </Select>
 
+        {/* Toggle: Modo de Planejamento */}
+        <div className="inline-flex items-center rounded-lg border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold shrink-0 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => handleTogglePlanningMode('obra')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+              planningMode === 'obra'
+                ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
+                : 'text-[#6B6660] hover:text-[#23211E] hover:bg-white/50'
+            }`}
+          >
+            <Briefcase className="w-3.5 h-3.5 text-[#E07A1F]" />
+            <span>Por Obra</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTogglePlanningMode('equipe')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+              planningMode === 'equipe'
+                ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
+                : 'text-[#6B6660] hover:text-[#23211E] hover:bg-white/50'
+            }`}
+          >
+            <UsersRound className="w-3.5 h-3.5 text-[#E07A1F]" />
+            <span>Por Equipe</span>
+          </button>
+        </div>
+
         {/* Situação */}
         <Select value={selectedSituacao} onValueChange={setSelectedSituacao} disabled={!selectedUnidadeId}>
           <SelectTrigger className={`h-8 text-xs border font-medium ${selectedSituacao !== 'TODAS' ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold' : 'bg-white border-[#DEDAD3] text-[#5C574F]'}`}>
@@ -1925,9 +2302,10 @@ export const PcpPlanejamentoView = () => {
         </Button>
       </div>
 
-      {/* 3.3 GRID PRINCIPAL: 2 COLUNAS (330px | 1fr) */}
-      <div className="grid grid-cols-1 xl:grid-cols-[330px_1fr] gap-4 items-start">
-        {/* COLUNA ESQUERDA (FIXA / STICKY) */}
+      {/* 3.3 GRID PRINCIPAL */}
+      <div className={`grid gap-4 items-start ${planningMode === 'obra' ? 'grid-cols-1 xl:grid-cols-[330px_1fr]' : 'grid-cols-1'}`}>
+        {/* COLUNA ESQUERDA (FIXA / STICKY) - Apenas no modo Obra */}
+        {planningMode === 'obra' && (
         <aside className="space-y-3.5 xl:sticky xl:top-[125px]">
           {/* Card 1: Carteira de Obras */}
           <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs space-y-2.5">
@@ -2113,11 +2491,12 @@ export const PcpPlanejamentoView = () => {
             </div>
           )}
         </aside>
+        )}
 
         {/* COLUNA DIREITA (CONTEÚDO PRINCIPAL) */}
         <main className="space-y-3.5">
-          {/* Mensagem se nenhuma obra foi selecionada */}
-          {!selectedObra ? (
+          {/* MODO OBRA: Mensagem se nenhuma obra foi selecionada */}
+          {planningMode === 'obra' && !selectedObra ? (
             <div className="bg-white rounded-xl border border-[#E6E3DD] p-12 text-center shadow-2xs space-y-3">
               <div className="w-12 h-12 rounded-full bg-[#FBF5EC] border border-[#E8C9A0] flex items-center justify-center mx-auto text-[#E07A1F]">
                 <Layers className="w-6 h-6" />
@@ -2132,6 +2511,979 @@ export const PcpPlanejamentoView = () => {
                     : `Escolha uma das ${filteredObras.length} obras da carteira para visualizar a jornada, distribuir os pontos e montar o planejamento.`}
                 </p>
               </div>
+            </div>
+          ) : planningMode === 'equipe' ? (
+            /* ================================= */
+            /* MODO EQUIPE: Accordion de Equipes */
+            /* ================================= */
+            <div className="space-y-4">
+              {/* Header: Multi-seleção de Equipes + Período */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {/* Multi-seleção de Equipes */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!selectedUnidadeId}
+                      className={`h-8 px-3 text-xs border font-medium gap-1.5 ${
+                        selectedEquipes.length > 0
+                          ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold'
+                          : 'bg-white border-[#DEDAD3] text-[#5C574F]'
+                      }`}
+                    >
+                      <UsersRound className="w-3.5 h-3.5 text-[#E07A1F]" />
+                      <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">EQUIPES</span>
+                      <span className="font-mono font-bold">{selectedEquipes.length > 0 ? selectedEquipes.join(', ') : 'Selecione...'}</span>
+                      <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[260px] p-3 bg-white" align="start">
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-[#23211E] block">Selecionar equipes</span>
+                      <div className="max-h-[300px] overflow-y-auto space-y-1.5">
+                        {equipesDisponiveis.map(eq => (
+                          <label key={eq} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-[#F7F6F3] cursor-pointer text-xs">
+                            <Checkbox
+                              checked={selectedEquipes.includes(eq)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedEquipes(prev => [...prev, eq]);
+                                  if (!expandedEquipeIds.includes(eq)) {
+                                    setExpandedEquipeIds(prev => [...prev, eq]);
+                                  }
+                                } else {
+                                  setSelectedEquipes(prev => prev.filter(e => e !== eq));
+                                }
+                              }}
+                              className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4"
+                            />
+                            <span className="font-mono font-bold text-[#23211E]">{eq}</span>
+                            {metasPorEquipeMap.get(eq.toUpperCase()) && (
+                              <span className="text-[10px] text-[#6B6660] ml-auto">
+                                Meta: R$ {metasPorEquipeMap.get(eq.toUpperCase())?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="flex justify-between pt-1.5 border-t border-[#E6E3DD]">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setSelectedEquipes(equipesDisponiveis); setExpandedEquipeIds(equipesDisponiveis); }}
+                          className="text-[10px] h-6 px-2 text-[#E07A1F] font-bold"
+                        >
+                          Selecionar todas
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedEquipes([])}
+                          className="text-[10px] h-6 px-2 text-[#A39E96] font-bold"
+                        >
+                          Limpar
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Período */}
+                <Popover open={isDataRangeOpen} onOpenChange={setIsDataRangeOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold gap-1.5 w-auto">
+                      <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">PERÍODO</span>
+                      <span className="font-mono font-bold text-[#23211E]">
+                        {format(safeParseDate(dataInicio), 'dd/MM')} a {format(safeParseDate(dataFim), 'dd/MM')}
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 opacity-50 ml-0.5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3.5 bg-white" align="start">
+                    <div className="space-y-2.5 text-xs">
+                      <span className="font-bold text-[#23211E] block">Definir período do planejamento</span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <span className="text-[11px] text-[#A39E96] block mb-1">Data início</span>
+                          <input
+                            type="date"
+                            value={dataInicio}
+                            onChange={e => { setDataInicio(e.target.value); setDiasCarregadosList([]); }}
+                            className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-[#A39E96] block mb-1">Data fim</span>
+                          <input
+                            type="date"
+                            value={dataFim}
+                            onChange={e => { setDataFim(e.target.value); setDiasCarregadosList([]); }}
+                            className="w-full h-8 text-xs border border-[#DEDAD3] rounded px-2 font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Supervisor */}
+                <Select value={supervisor} onValueChange={setSupervisor}>
+                  <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
+                    <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">SUPERVISOR</span>
+                    <span className="font-semibold text-[#23211E]">{supervisor}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {supervisoresDisponiveis.map(s => (
+                      <SelectItem key={s} value={s} className="text-xs font-semibold">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Visualização: Jornada vs Alojamentos */}
+                <div className="inline-flex items-center rounded-lg border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold shrink-0 shadow-2xs ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('jornada')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      viewMode === 'jornada'
+                        ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
+                        : 'text-[#6B6660] hover:text-[#23211E] hover:bg-white/50'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-[#E07A1F]" />
+                    <span>Jornada</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('alojamentos')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      viewMode === 'alojamentos'
+                        ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
+                        : 'text-[#6B6660] hover:text-[#23211E] hover:bg-white/50'
+                    }`}
+                  >
+                    <Building2 className="w-3.5 h-3.5 text-[#E07A1F]" />
+                    <span>Alojamentos</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Chips das equipes selecionadas */}
+              {selectedEquipes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedEquipes.map(eq => (
+                    <Badge
+                      key={eq}
+                      variant="outline"
+                      className="bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-mono font-bold text-xs px-2.5 py-1 cursor-pointer hover:bg-[#F5EAD9] transition-colors"
+                      onClick={() => setExpandedEquipeIds(prev =>
+                        prev.includes(eq) ? prev.filter(e => e !== eq) : [...prev, eq]
+                      )}
+                    >
+                      <UsersRound className="w-3 h-3 mr-1" />
+                      {eq}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedEquipes(prev => prev.filter(e => e !== eq)); }}
+                        className="ml-1.5 text-[#A06A16]/50 hover:text-[#C0392E] text-sm font-bold"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Equipes vazio */}
+              {selectedEquipes.length === 0 && (
+                <div className="bg-white rounded-xl border border-[#E6E3DD] p-12 text-center shadow-2xs space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-[#FBF5EC] border border-[#E8C9A0] flex items-center justify-center mx-auto text-[#E07A1F]">
+                    <UsersRound className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#23211E]">
+                      {!selectedUnidadeId ? 'Selecione uma unidade no topo' : 'Selecione equipes para planejar'}
+                    </h3>
+                    <p className="text-xs text-[#6B6660] max-w-md mx-auto mt-1">
+                      Use o botão "Equipes" acima para selecionar as equipes que deseja programar.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Accordion de Equipes */}
+              {selectedEquipes.map(equipeId => {
+                const isEquipeExpanded = expandedEquipeIds.includes(equipeId);
+                const eqMeta = metasPorEquipeMap.get(equipeId.toUpperCase()) || metaEquipeInput;
+                // Contar quantos dias desta equipe têm obra e pontos preenchidos
+                const diasComConteudo = diasProgramados.filter(d => {
+                  const ck = `${equipeId}_${d.id}`;
+                  return diasObraEquipeMap[ck] && (diasPontosMap[ck] || []).length > 0;
+                }).length;
+
+                return (
+                  <div key={equipeId} className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
+                    {/* Header da Equipe (clicável) */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedEquipeIds(prev =>
+                        prev.includes(equipeId) ? prev.filter(e => e !== equipeId) : [...prev, equipeId]
+                      )}
+                      className="w-full flex items-center justify-between p-3 px-4 bg-[#FAF8F5] hover:bg-[#F2F0EC] transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-[#E07A1F] text-white flex items-center justify-center text-[10px] font-bold">
+                          <UsersRound className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-mono font-bold text-sm text-[#23211E]">{equipeId}</span>
+                          <div className="flex items-center gap-2 text-[11px] text-[#6B6660]">
+                            <span>Meta: R$ {eqMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-[#DEDAD3]">·</span>
+                            <span>{diasComConteudo}/{diasProgramados.length} dias preenchidos</span>
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-[#6B6660] transition-transform ${isEquipeExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Corpo expandido: Dias com seletor de obra */}
+                    {isEquipeExpanded && (
+                      <div className="border-t border-[#E6E3DD]">
+                        {viewMode === 'jornada' ? (
+                          /* Visualização normal de Jornada */
+                          diasProgramados.map((dia, idx) => {
+                            const compositeKey = `${equipeId}_${dia.id}`;
+                            const obraCodeDoDia = diasObraEquipeMap[compositeKey] || '';
+                            const obraDoSlot = obraCodeDoDia ? obras.find(o => o.projeto === obraCodeDoDia) : null;
+                            const isExpanded = expandedDayIds.includes(compositeKey);
+
+                            return (
+                              <div key={compositeKey} className="border-b border-[#E6E3DD] last:border-b-0">
+                                {(() => {
+                                  const tComp = diasTemposCompMap[compositeKey];
+                                  const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+                                  const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+                                  const disp = getDayDisplacement(compositeKey, idx, diasProgramados.length, obraDoSlot);
+                                  const cachedData = obraDataCache[obraCodeDoDia];
+                                  const resolvedPontos = cachedData?.pontos || [];
+                                  const resolvedOrcamento = cachedData?.orcamento || new Map<string, MaterialPontoBudget[]>();
+
+                                  // Obra selector element para injetar no header do PcpDiaRow
+                                  const obraSelector = (
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className={`h-6 text-[11px] border rounded-md font-semibold flex items-center gap-1 px-2 min-w-[160px] max-w-[280px] transition-all ${
+                                            obraCodeDoDia
+                                              ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#23211E]'
+                                              : 'bg-white border-[#DEDAD3] text-[#A39E96] hover:border-[#C5C0B8]'
+                                          }`}
+                                        >
+                                          <Building2 className="w-3 h-3 text-[#E07A1F] shrink-0" />
+                                          <span className={`truncate ${obraCodeDoDia ? 'font-mono font-bold text-[#23211E]' : ''}`}>
+                                            {obraDoSlot ? `${obraDoSlot.projeto} — ${(obraDoSlot.nomeProjeto || '').slice(0, 25)}` : 'Selecione a obra...'}
+                                          </span>
+                                          <ChevronDown className="w-2.5 h-2.5 opacity-40 shrink-0 ml-auto" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-[340px] p-0 bg-white" align="start" side="bottom">
+                                        <div className="p-2.5 border-b border-[#E6E3DD] bg-[#FAF8F5]">
+                                          <div className="relative">
+                                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#A39E96]" />
+                                            <input
+                                              placeholder="Buscar código, município..."
+                                              autoFocus
+                                              onChange={e => {
+                                                const target = e.target as HTMLInputElement;
+                                                target.closest('[data-radix-popper-content-wrapper]')?.querySelectorAll('[data-obra-card]').forEach(card => {
+                                                  const text = (card as HTMLElement).dataset.searchText || '';
+                                                  (card as HTMLElement).style.display = text.toLowerCase().includes(target.value.toLowerCase()) ? '' : 'none';
+                                                });
+                                              }}
+                                              className="w-full h-7 pl-8 pr-2 text-xs rounded-md border border-[#DEDAD3] bg-white focus:outline-none focus:ring-1 focus:ring-[#E07A1F] font-mono"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="max-h-[320px] overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
+                                          {obraCodeDoDia && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setDiasObraEquipeMap(prev => ({ ...prev, [compositeKey]: '' }));
+                                                setDiasPontosMap(prev => ({ ...prev, [compositeKey]: [] }));
+                                                setDiasPontosGroupedMap(prev => { const next = { ...prev }; delete next[compositeKey]; return next; });
+                                              }}
+                                              className="w-full p-2 rounded-md text-xs text-[#A39E96] hover:bg-[#F7F6F3] text-left font-medium transition-colors"
+                                              data-obra-card
+                                              data-search-text="limpar nenhuma"
+                                            >
+                                              — Limpar seleção —
+                                            </button>
+                                          )}
+                                          {filteredObras.map(o => {
+                                            const isObraSelected = o.projeto === obraCodeDoDia;
+                                            const isApta = (o.situacao || 'APTA').toUpperCase() === 'APTA';
+                                            return (
+                                              <button
+                                                key={o.projeto}
+                                                type="button"
+                                                data-obra-card
+                                                data-search-text={`${o.projeto} ${o.nomeProjeto} ${o.municipio} ${o.donoDaObra || ''}`}
+                                                onClick={() => {
+                                                  const newVal = o.projeto;
+                                                  setDiasObraEquipeMap(prev => ({ ...prev, [compositeKey]: newVal }));
+                                                  if (newVal !== obraCodeDoDia) {
+                                                    setDiasPontosMap(prev => ({ ...prev, [compositeKey]: [] }));
+                                                    setDiasPontosGroupedMap(prev => { const next = { ...prev }; delete next[compositeKey]; return next; });
+                                                  }
+                                                }}
+                                                className={`w-full p-2.5 rounded-lg border text-xs text-left transition-all ${
+                                                  isObraSelected
+                                                    ? 'bg-[#FBF5EC] border-[#E8C9A0] shadow-2xs'
+                                                    : 'bg-white border-[#E6E3DD] hover:border-[#DEDAD3] hover:bg-[#FBFAF7]'
+                                                }`}
+                                              >
+                                                <div className="flex items-center justify-between">
+                                                  <span className="font-mono font-bold text-xs text-[#23211E]">{o.projeto}</span>
+                                                  <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold ${isApta ? 'bg-[#E6F2EA] text-[#17794C]' : 'bg-[#F9E4E1] text-[#B03028]'}`}>
+                                                    {o.situacao || 'APTA'}
+                                                  </span>
+                                                </div>
+                                                <p className="text-xs text-[#5C574F] truncate mt-1">{o.nomeProjeto || (o as any).descricao}</p>
+                                                <div className="flex items-center justify-between text-[11px] text-[#A39E96] mt-1.5 pt-1.5 border-t border-[#E6E3DD]/60">
+                                                  <span className="truncate">{o.municipio}</span>
+                                                  <div className="flex items-center gap-2 font-mono shrink-0">
+                                                    <span className="text-[#5B7C99] font-bold">{o.qtdPostesDisponiveis || 0} post.</span>
+                                                    <span className="text-[#7E6BA8] font-bold">{o.qtdCabosDisponiveis || 0} m</span>
+                                                  </div>
+                                                </div>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+                                  );
+
+                                  return (
+                                    <PcpDiaRow
+                                      dia={dia}
+                                      totalDias={diasProgramados.length}
+                                      isExpanded={isExpanded}
+                                      onToggleExpand={() => {
+                                        setExpandedDayIds(prev =>
+                                          prev.includes(compositeKey) ? prev.filter(id => id !== compositeKey) : [...prev, compositeKey]
+                                        );
+                                      }}
+                                      viewMode="jornada"
+                                      headerExtra={obraSelector}
+                                      pontosDoDia={diasPontosMap[compositeKey] || []}
+                                      pontosDisponiveis={resolvedPontos}
+                                      orcamentoPorPontoMap={resolvedOrcamento}
+                                      getItemsDoPontoNoDia={(dId, p) => getItemsDoPontoNoDia(compositeKey, p)}
+                                      alojamentosDisponiveis={alojamentosDaUnidade}
+                                      metaEquipeDia={eqMeta}
+                                      etapaGeralDia={diasEtapasMap[compositeKey] || ['IMPLANTAÇÃO']}
+                                      isPesDia={diasPesMap[compositeKey] || false}
+                                      isReprogramarDia={diasReprogramarMap[compositeKey] || false}
+                                      motivoReprogramarDia={diasMotivoReprogramarMap[compositeKey] || ''}
+                                      filtroLvDoDia={diasFiltroLvMap[compositeKey] || 'COMPLETO'}
+                                      tempoSaidaBaseMin={sBase}
+                                      tempoSegurancaMin={sSeg}
+                                      tempoIdaMin={disp.tempoIdaMin}
+                                      tempoVoltaMin={disp.tempoVoltaMin}
+                                      distIdaKm={disp.distIdaKm}
+                                      distVoltaKm={disp.distVoltaKm}
+                                      baseNome={unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}
+                                      isIdaManual={disp.isManualIda}
+                                      isVoltaManual={disp.isManualVolta}
+                                      origemAloj={disp.origemNome}
+                                      destinoAloj={disp.destinoNome}
+                                      isTrocaAloj={disp.origemNome !== disp.destinoNome}
+                                      filteredServicosBase={servicosBase}
+                                      percentualCumprimentoDia={diasPercentualCumprimentoMap[compositeKey] || ''}
+                                      motivoDescumprimentoDia={diasMotivoDescumprimentoMap[compositeKey] || ''}
+                                      handleUpdateDiaAlojamento={(dId, field, val) => handleUpdateDiaAlojamento(compositeKey, field, val)}
+                                      handleUpdateDiaTempo={(dId, field, val) => handleUpdateDiaTempo(compositeKey, field, val)}
+                                      handleUpdateDiaTempoComp={(dId, field, val) => handleUpdateDiaTempoComp(compositeKey, field, val)}
+                                      handleUpdateDiaMotivoDescumprimento={(dId, mot) => handleUpdateDiaMotivoDescumprimento(compositeKey, mot)}
+                                      handleUpdateDiaDate={handleUpdateDiaDate}
+                                      handleRemoveDia={handleRemoveDia}
+                                      handleToggleReprogramarDia={(dId) => handleToggleReprogramarDia(compositeKey)}
+                                      handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [compositeKey]: mot }))}
+                                      handleTogglePesDia={(dId) => handleTogglePesDia(compositeKey)}
+                                      handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [compositeKey]: [et] }))}
+                                      handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [compositeKey]: f }))}
+                                      handleTogglePontoNoDia={(dId, ponto) => handleTogglePontoNoDia(compositeKey, ponto)}
+                                      handleSelectAllPontosNoDia={(dId) => handleSelectAllPontosNoDia(compositeKey)}
+                                      handleDeselectAllPontosNoDia={(dId) => handleDeselectAllPontosNoDia(compositeKey)}
+                                      handleAddCustomPontoNoDia={(dId, ponto) => handleAddCustomPontoNoDia(compositeKey, ponto)}
+                                      handleAddAtividadeNoPonto={(dId, ponto) => handleAddAtividadeNoPonto(compositeKey, ponto)}
+                                      handleResetPontoAtividades={(dId, ponto) => handleResetPontoAtividades(compositeKey, ponto)}
+                                      handleUpdateAtividade={(dId, ponto, itemId, field, val) => handleUpdateAtividade(compositeKey, ponto, itemId, field, val)}
+                                      handleRemoveAtividade={(dId, ponto, itemId) => handleRemoveAtividade(compositeKey, ponto, itemId)}
+                                      handleEnviarPlanPrincipalDia={(dId) => handleEnviarPlanPrincipalDia(dia.id, equipeId)}
+                                      isSubmitting={salvarProgramacao.isPending}
+                                    />
+                                  );
+                                })()}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          /* Visualização de Alojamentos */
+                          <div className="overflow-x-auto">
+                            <div style={{ minWidth: '1180px' }}>
+                              {/* CABEÇALHO DA GRADE: VISÃO ALOJAMENTOS */}
+                              <div
+                                className="flex items-center py-2 px-3 text-[10.5px] uppercase tracking-wider font-bold text-[#5C574F] bg-[#F2F0EC] border-b border-[#E6E3DD] gap-2"
+                                style={{ borderLeft: '4px solid transparent' }}
+                              >
+                                <div className="w-[180px]">Dia / Obra</div>
+                                <div className="w-[210px] px-1">Saída (ida)</div>
+                                <div className="w-[100px] px-1 text-center">Ida (hh:mm / km)</div>
+                                <div className="w-[210px] px-1">Retorno (volta)</div>
+                                <div className="w-[100px] px-1 text-center">Volta (hh:mm / km)</div>
+                                <div className="w-[110px] px-1 text-center">Desloc. (hh:mm / km)</div>
+                                <div className="w-[90px] px-1 text-center">Saída base (hh:mm)</div>
+                                <div className="w-[90px] px-1 text-center">Segurança (hh:mm)</div>
+                                <div className="w-[100px] text-center">Total comp. (hh:mm)</div>
+                                <div className="w-[36px] shrink-0" />
+                              </div>
+
+                              {/* LINHAS DOS DIAS */}
+                              {diasProgramados.map((dia, idx) => {
+                                const compositeKey = `${equipeId}_${dia.id}`;
+                                const obraCodeDoDia = diasObraEquipeMap[compositeKey] || '';
+                                const obraDoSlot = obraCodeDoDia ? obras.find(o => o.projeto === obraCodeDoDia) : null;
+                                const isExpanded = expandedDayIds.includes(compositeKey);
+                                const tComp = diasTemposCompMap[compositeKey];
+                                const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+                                const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+                                const disp = getDayDisplacement(compositeKey, idx, diasProgramados.length, obraDoSlot);
+                                const cachedData = obraDataCache[obraCodeDoDia];
+                                const resolvedPontos = cachedData?.pontos || [];
+                                const resolvedOrcamento = cachedData?.orcamento || new Map<string, MaterialPontoBudget[]>();
+
+                                // Obra selector element para injetar no header do PcpDiaRow
+                                const obraSelector = (
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className={`h-6 text-[10px] border rounded-md font-semibold flex items-center gap-1 px-1.5 w-full transition-all ${
+                                          obraCodeDoDia
+                                            ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#23211E]'
+                                            : 'bg-white border-[#DEDAD3] text-[#A39E96] hover:border-[#C5C0B8]'
+                                        }`}
+                                      >
+                                        <Building2 className="w-2.5 h-2.5 text-[#E07A1F] shrink-0 animate-pulse" />
+                                        <span className={`truncate ${obraCodeDoDia ? 'font-mono font-bold text-[#23211E]' : ''}`}>
+                                          {obraDoSlot ? `${obraDoSlot.projeto} — ${(obraDoSlot.nomeProjeto || '').slice(0, 15)}` : 'Selecione...'}
+                                        </span>
+                                        <ChevronDown className="w-2 h-2 opacity-40 shrink-0 ml-auto" />
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[340px] p-0 bg-white" align="start" side="bottom">
+                                      <div className="p-2.5 border-b border-[#E6E3DD] bg-[#FAF8F5]">
+                                        <div className="relative">
+                                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#A39E96]" />
+                                          <input
+                                            placeholder="Buscar código, município..."
+                                            autoFocus
+                                            onChange={e => {
+                                              const target = e.target as HTMLInputElement;
+                                              target.closest('[data-radix-popper-content-wrapper]')?.querySelectorAll('[data-obra-card]').forEach(card => {
+                                                const text = (card as HTMLElement).dataset.searchText || '';
+                                                (card as HTMLElement).style.display = text.toLowerCase().includes(target.value.toLowerCase()) ? '' : 'none';
+                                              });
+                                            }}
+                                            className="w-full h-7 pl-8 pr-2 text-xs rounded-md border border-[#DEDAD3] bg-white focus:outline-none focus:ring-1 focus:ring-[#E07A1F] font-mono"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="max-h-[320px] overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
+                                        {obraCodeDoDia && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setDiasObraEquipeMap(prev => ({ ...prev, [compositeKey]: '' }));
+                                              setDiasPontosMap(prev => ({ ...prev, [compositeKey]: [] }));
+                                              setDiasPontosGroupedMap(prev => { const next = { ...prev }; delete next[compositeKey]; return next; });
+                                            }}
+                                            className="w-full p-2 rounded-md text-xs text-[#A39E96] hover:bg-[#F7F6F3] text-left font-medium transition-colors"
+                                            data-obra-card
+                                            data-search-text="limpar nenhuma"
+                                          >
+                                            — Limpar seleção —
+                                          </button>
+                                        )}
+                                        {filteredObras.map(o => {
+                                          const isObraSelected = o.projeto === obraCodeDoDia;
+                                          const isApta = (o.situacao || 'APTA').toUpperCase() === 'APTA';
+                                          return (
+                                            <button
+                                              key={o.projeto}
+                                              type="button"
+                                              data-obra-card
+                                              data-search-text={`${o.projeto} ${o.nomeProjeto} ${o.municipio} ${o.donoDaObra || ''}`}
+                                              onClick={() => {
+                                                const newVal = o.projeto;
+                                                setDiasObraEquipeMap(prev => ({ ...prev, [compositeKey]: newVal }));
+                                                if (newVal !== obraCodeDoDia) {
+                                                  setDiasPontosMap(prev => ({ ...prev, [compositeKey]: [] }));
+                                                  setDiasPontosGroupedMap(prev => { const next = { ...prev }; delete next[compositeKey]; return next; });
+                                                }
+                                              }}
+                                              className={`w-full p-2.5 rounded-lg border text-xs text-left transition-all ${
+                                                isObraSelected
+                                                  ? 'bg-[#FBF5EC] border-[#E8C9A0] shadow-2xs'
+                                                  : 'bg-white border-[#E6E3DD] hover:border-[#DEDAD3] hover:bg-[#FBFAF7]'
+                                              }`}
+                                            >
+                                              <div className="flex items-center justify-between">
+                                                <span className="font-mono font-bold text-xs text-[#23211E]">{o.projeto}</span>
+                                                <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold ${isApta ? 'bg-[#E6F2EA] text-[#17794C]' : 'bg-[#F9E4E1] text-[#B03028]'}`}>
+                                                  {o.situacao || 'APTA'}
+                                                </span>
+                                              </div>
+                                              <p className="text-xs text-[#5C574F] truncate mt-1">{o.nomeProjeto || (o as any).descricao}</p>
+                                              <div className="flex items-center justify-between text-[11px] text-[#A39E96] mt-1.5 pt-1.5 border-t border-[#E6E3DD]/60">
+                                                <span className="truncate">{o.municipio}</span>
+                                                <div className="flex items-center gap-2 font-mono shrink-0">
+                                                  <span className="text-[#5B7C99] font-bold">{o.qtdPostesDisponiveis || 0} post.</span>
+                                                  <span className="text-[#7E6BA8] font-bold">{o.qtdCabosDisponiveis || 0} m</span>
+                                                </div>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                );
+
+                                return (
+                                  <PcpDiaRow
+                                    key={compositeKey}
+                                    dia={dia}
+                                    totalDias={diasProgramados.length}
+                                    isExpanded={isExpanded}
+                                    onToggleExpand={() => {
+                                      setExpandedDayIds(prev =>
+                                        prev.includes(compositeKey) ? prev.filter(id => id !== compositeKey) : [...prev, compositeKey]
+                                      );
+                                    }}
+                                    viewMode="alojamentos"
+                                    headerExtra={obraSelector}
+                                    pontosDoDia={diasPontosMap[compositeKey] || []}
+                                    pontosDisponiveis={resolvedPontos}
+                                    orcamentoPorPontoMap={resolvedOrcamento}
+                                    getItemsDoPontoNoDia={(dId, p) => getItemsDoPontoNoDia(compositeKey, p)}
+                                    alojamentosDisponiveis={alojamentosDaUnidade}
+                                    metaEquipeDia={eqMeta}
+                                    etapaGeralDia={diasEtapasMap[compositeKey] || ['IMPLANTAÇÃO']}
+                                    isPesDia={diasPesMap[compositeKey] || false}
+                                    isReprogramarDia={diasReprogramarMap[compositeKey] || false}
+                                    motivoReprogramarDia={diasMotivoReprogramarMap[compositeKey] || ''}
+                                    filtroLvDoDia={diasFiltroLvMap[compositeKey] || 'COMPLETO'}
+                                    tempoSaidaBaseMin={sBase}
+                                    tempoSegurancaMin={sSeg}
+                                    tempoIdaMin={disp.tempoIdaMin}
+                                    tempoVoltaMin={disp.tempoVoltaMin}
+                                    distIdaKm={disp.distIdaKm}
+                                    distVoltaKm={disp.distVoltaKm}
+                                    baseNome={unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}
+                                    isIdaManual={disp.isManualIda}
+                                    isVoltaManual={disp.isManualVolta}
+                                    origemAloj={disp.origemNome}
+                                    destinoAloj={disp.destinoNome}
+                                    isTrocaAloj={disp.origemNome !== disp.destinoNome}
+                                    filteredServicosBase={servicosBase}
+                                    percentualCumprimentoDia={diasPercentualCumprimentoMap[compositeKey] || ''}
+                                    motivoDescumprimentoDia={diasMotivoDescumprimentoMap[compositeKey] || ''}
+                                    handleUpdateDiaAlojamento={(dId, field, val) => handleUpdateDiaAlojamento(compositeKey, field, val)}
+                                    handleUpdateDiaTempo={(dId, field, val) => handleUpdateDiaTempo(compositeKey, field, val)}
+                                    handleUpdateDiaTempoComp={(dId, field, val) => handleUpdateDiaTempoComp(compositeKey, field, val)}
+                                    handleUpdateDiaMotivoDescumprimento={(dId, mot) => handleUpdateDiaMotivoDescumprimento(compositeKey, mot)}
+                                    handleUpdateDiaDate={handleUpdateDiaDate}
+                                    handleRemoveDia={handleRemoveDia}
+                                    handleToggleReprogramarDia={(dId) => handleToggleReprogramarDia(compositeKey)}
+                                    handleSelectMotivoReprogramarDia={(dId, mot) => setDiasMotivoReprogramarMap(p => ({ ...p, [compositeKey]: mot }))}
+                                    handleTogglePesDia={(dId) => handleTogglePesDia(compositeKey)}
+                                    handleToggleEtapaNoDia={(dId, et) => setDiasEtapasMap(p => ({ ...p, [compositeKey]: [et] }))}
+                                    handleSetFiltroLvNoDia={(dId, f) => setDiasFiltroLvMap(p => ({ ...p, [compositeKey]: f }))}
+                                    handleTogglePontoNoDia={(dId, ponto) => handleTogglePontoNoDia(compositeKey, ponto)}
+                                    handleSelectAllPontosNoDia={(dId) => handleSelectAllPontosNoDia(compositeKey)}
+                                    handleDeselectAllPontosNoDia={(dId) => handleDeselectAllPontosNoDia(compositeKey)}
+                                    handleAddCustomPontoNoDia={(dId, ponto) => handleAddCustomPontoNoDia(compositeKey, ponto)}
+                                    handleAddAtividadeNoPonto={(dId, ponto) => handleAddAtividadeNoPonto(compositeKey, ponto)}
+                                    handleResetPontoAtividades={(dId, ponto) => handleResetPontoAtividades(compositeKey, ponto)}
+                                    handleUpdateAtividade={(dId, ponto, itemId, field, val) => handleUpdateAtividade(compositeKey, ponto, itemId, field, val)}
+                                    handleRemoveAtividade={(dId, ponto, itemId) => handleRemoveAtividade(compositeKey, ponto, itemId)}
+                                    handleEnviarPlanPrincipalDia={(dId) => handleEnviarPlanPrincipalDia(dia.id, equipeId)}
+                                    isSubmitting={salvarProgramacao.isPending}
+                                  />
+                                );
+                              })}
+
+                              {/* TOTALIZADOR DA EQUIPE (VISÃO ALOJAMENTOS) */}
+                              {(() => {
+                                const totalKmIda = diasProgramados.reduce((acc, d, i) => {
+                                  const ck = `${equipeId}_${d.id}`;
+                                  const oCode = diasObraEquipeMap[ck] || '';
+                                  const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                                  return acc + (getDayDisplacement(ck, i, diasProgramados.length, oSlot).distIdaKm || 0);
+                                }, 0);
+                                const totalKmVolta = diasProgramados.reduce((acc, d, i) => {
+                                  const ck = `${equipeId}_${d.id}`;
+                                  const oCode = diasObraEquipeMap[ck] || '';
+                                  const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                                  return acc + (getDayDisplacement(ck, i, diasProgramados.length, oSlot).distVoltaKm || 0);
+                                }, 0);
+                                const totalKmGeral = Math.round((totalKmIda + totalKmVolta) * 10) / 10;
+                                const totalDeslocamentoMin = diasProgramados.reduce((acc, d, i) => {
+                                  const ck = `${equipeId}_${d.id}`;
+                                  const oCode = diasObraEquipeMap[ck] || '';
+                                  const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                                  return acc + (getDayDisplacement(ck, i, diasProgramados.length, oSlot).tempoTotalDeslocamentoMin || 0);
+                                }, 0);
+                                const totalSaidaBaseMin = diasProgramados.reduce((acc, d) => {
+                                  const ck = `${equipeId}_${d.id}`;
+                                  return acc + (diasTemposCompMap[ck]?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao);
+                                }, 0);
+                                const totalSegurancaMin = diasProgramados.reduce((acc, d) => {
+                                  const ck = `${equipeId}_${d.id}`;
+                                  return acc + (diasTemposCompMap[ck]?.tempoSegurancaMin ?? tempoSegurancaPadrao);
+                                }, 0);
+                                const totalCompMin = totalSaidaBaseMin + totalSegurancaMin + totalDeslocamentoMin;
+
+                                return (
+                                  <div
+                                    className="flex items-center py-2 px-3 text-xs font-mono font-bold bg-[#F2F0EC] border-t-2 border-[#DEDAD3] gap-2 animate-in fade-in duration-200"
+                                    style={{ borderLeft: '4px solid transparent' }}
+                                  >
+                                    <div className="w-[180px] text-[#23211E]">Total acumulado</div>
+                                    <div className="w-[210px] px-1 text-[#6B6660] text-[11px] font-sans font-medium">
+                                      {diasProgramados.length} {diasProgramados.length === 1 ? 'dia analisado' : 'dias analisados'}
+                                    </div>
+                                    <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
+                                      {formatMinToHours(diasProgramados.reduce((acc, d, i) => {
+                                        const ck = `${equipeId}_${d.id}`;
+                                        const oCode = diasObraEquipeMap[ck] || '';
+                                        const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                                        return acc + getDayDisplacement(ck, i, diasProgramados.length, oSlot).tempoIdaMin;
+                                      }, 0))}
+                                    </div>
+                                    <div className="w-[210px] px-1" />
+                                    <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
+                                      {formatMinToHours(diasProgramados.reduce((acc, d, i) => {
+                                        const ck = `${equipeId}_${d.id}`;
+                                        const oCode = diasObraEquipeMap[ck] || '';
+                                        const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                                        return acc + getDayDisplacement(ck, i, diasProgramados.length, oSlot).tempoVoltaMin;
+                                      }, 0))}
+                                    </div>
+                                    <div className="w-[110px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
+                                      {formatMinToHours(totalDeslocamentoMin)}
+                                    </div>
+                                    <div className="w-[90px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
+                                      {formatMinToHours(totalSaidaBaseMin)}
+                                    </div>
+                                    <div className="w-[90px] text-center shrink-0 flex items-center justify-center h-8 bg-white rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
+                                      {formatMinToHours(totalSegurancaMin)}
+                                    </div>
+                                    <div className="w-[100px] text-center shrink-0 flex items-center justify-center h-8 bg-[#F7F6F3] rounded border border-[#DEDAD3] font-mono font-bold text-xs text-[#23211E] shadow-2xs">
+                                      {formatMinToHours(totalCompMin)}
+                                    </div>
+                                    <div className="w-[36px] shrink-0" />
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Resumo do Deslocamento Previsto para a Equipe */}
+                        {viewMode === 'alojamentos' && (() => {
+                          const totalKmIda = diasProgramados.reduce((acc, d, i) => {
+                            const ck = `${equipeId}_${d.id}`;
+                            const oCode = diasObraEquipeMap[ck] || '';
+                            const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                            return acc + (getDayDisplacement(ck, i, diasProgramados.length, oSlot).distIdaKm || 0);
+                          }, 0);
+                          const totalKmVolta = diasProgramados.reduce((acc, d, i) => {
+                            const ck = `${equipeId}_${d.id}`;
+                            const oCode = diasObraEquipeMap[ck] || '';
+                            const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                            return acc + (getDayDisplacement(ck, i, diasProgramados.length, oSlot).distVoltaKm || 0);
+                          }, 0);
+                          const totalKmGeral = Math.round((totalKmIda + totalKmVolta) * 10) / 10;
+                          const mediaKmDia = diasProgramados.length > 0 ? Math.round((totalKmGeral / diasProgramados.length) * 10) / 10 : 0;
+                          const totalDeslocamentoMin = diasProgramados.reduce((acc, d, i) => {
+                            const ck = `${equipeId}_${d.id}`;
+                            const oCode = diasObraEquipeMap[ck] || '';
+                            const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                            return acc + (getDayDisplacement(ck, i, diasProgramados.length, oSlot).tempoTotalDeslocamentoMin || 0);
+                          }, 0);
+                          const mediaMinDeslocDia = diasProgramados.length > 0 ? Math.round(totalDeslocamentoMin / diasProgramados.length) : 0;
+                          const isMediaDeslocamentoAlto = mediaMinDeslocDia > 120;
+
+                          const alojamentosUsadosSet = new Set<string>();
+                          diasProgramados.forEach((d, i) => {
+                            const ck = `${equipeId}_${d.id}`;
+                            const oCode = diasObraEquipeMap[ck] || '';
+                            const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                            const disp = getDayDisplacement(ck, i, diasProgramados.length, oSlot);
+                            if (disp.origemNome) alojamentosUsadosSet.add(disp.origemNome);
+                            if (disp.destinoNome) alojamentosUsadosSet.add(disp.destinoNome);
+                          });
+                          const alojamentosUsadosList = Array.from(alojamentosUsadosSet);
+
+                          return (
+                            <div className="border-t border-[#E6E3DD] p-3.5 bg-[#FAF8F5] space-y-2.5 animate-in fade-in duration-200">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-[#E6E3DD]">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-md bg-[#E07A1F]/10 border border-[#E07A1F]/20 flex items-center justify-center text-[#E07A1F]">
+                                    <Navigation className="w-3.5 h-3.5" />
+                                  </div>
+                                  <h4 className="text-xs font-bold text-[#23211E]">Resumo do Deslocamento Previsto — {equipeId}</h4>
+                                </div>
+                                <span className="text-[10px] text-[#6B6660] font-mono">
+                                  {diasProgramados.length} {diasProgramados.length === 1 ? 'dia' : 'dias'}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                                  <span className="text-[10px] text-[#6B6660] font-medium block">Distância Total</span>
+                                  <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
+                                    {totalKmGeral > 0 ? `${totalKmGeral} km` : '—'}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-[#A39E96]">
+                                    {mediaKmDia > 0 ? `~${mediaKmDia}k/d` : ''}
+                                  </span>
+                                </div>
+
+                                <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                                  <span className="text-[10px] text-[#6B6660] font-medium block">Tempo Desloc.</span>
+                                  <span className="font-mono font-bold text-xs block mt-0.5" style={{ color: isMediaDeslocamentoAlto ? '#B03028' : '#23211E' }}>
+                                    {formatMinToHours(totalDeslocamentoMin)}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-[#A39E96]">
+                                    {`~${formatMinToHours(mediaMinDeslocDia)}/d`}
+                                  </span>
+                                </div>
+
+                                <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                                  <span className="text-[10px] text-[#6B6660] font-medium block">Ida Total</span>
+                                  <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
+                                    {formatMinToHours(diasProgramados.reduce((acc, d, i) => {
+                                      const ck = `${equipeId}_${d.id}`;
+                                      const oCode = diasObraEquipeMap[ck] || '';
+                                      const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                                      return acc + getDayDisplacement(ck, i, diasProgramados.length, oSlot).tempoIdaMin;
+                                    }, 0))}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-[#6B6660]">
+                                    {totalKmIda > 0 ? `${Math.round(totalKmIda * 10) / 10} km` : '—'}
+                                  </span>
+                                </div>
+
+                                <div className="bg-white rounded-lg p-2 border border-[#E6E3DD] shadow-2xs text-center">
+                                  <span className="text-[10px] text-[#6B6660] font-medium block">Volta Total</span>
+                                  <span className="font-mono font-bold text-xs text-[#23211E] block mt-0.5">
+                                    {formatMinToHours(diasProgramados.reduce((acc, d, i) => {
+                                      const ck = `${equipeId}_${d.id}`;
+                                      const oCode = diasObraEquipeMap[ck] || '';
+                                      const oSlot = oCode ? obras.find(o => o.projeto === oCode) : null;
+                                      return acc + getDayDisplacement(ck, i, diasProgramados.length, oSlot).tempoVoltaMin;
+                                    }, 0))}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-[#6B6660]">
+                                    {totalKmVolta > 0 ? `${Math.round(totalKmVolta * 10) / 10} km` : '—'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#E6E3DD] flex-wrap">
+                                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs border ${
+                                  isMediaDeslocamentoAlto
+                                    ? 'bg-[#FDF2F0] border-[#F2C0B8] text-[#B03028]'
+                                    : 'bg-[#E6F2EA] border-[#A0D4B2] text-[#17794C]'
+                                }`}>
+                                  <Info className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="text-[10.5px] leading-tight">
+                                    {isMediaDeslocamentoAlto
+                                      ? <>Média <strong>{formatMinToHours(mediaMinDeslocDia)}/dia</strong> acima do teto de 02:00.</>
+                                      : <>Média <strong>{formatMinToHours(mediaMinDeslocDia)}/dia</strong> dentro da janela ideal.</>
+                                    }
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {alojamentosUsadosList.map(aloj => (
+                                    <span
+                                      key={aloj}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white border border-[#DEDAD3] text-[10.5px] font-medium text-[#23211E]"
+                                    >
+                                      <Building2 className="w-3 h-3 text-[#E07A1F] shrink-0" />
+                                      <span className="truncate max-w-[130px]">{aloj}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Vistorias das obras selecionadas nesta equipe */}
+                        {(() => {
+                          const distinctObrasEquipe = Array.from(
+                            new Set(
+                              diasProgramados
+                                .map(d => diasObraEquipeMap[`${equipeId}_${d.id}`])
+                                .filter(Boolean)
+                            )
+                          );
+                          if (distinctObrasEquipe.length === 0) return null;
+                          return (
+                            <div className="border-t border-[#E6E3DD] p-3 space-y-2">
+                              <span className="text-[11px] font-bold text-[#5C574F] flex items-center gap-1.5">
+                                <ShieldAlert className="w-3 h-3 text-[#C0392E]" />
+                                Vistorias
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {distinctObrasEquipe.map(obraCode => {
+                                  const obraRisk = riskCache[obraCode] || null;
+                                  const obraInfo = obras.find(o => o.projeto === obraCode);
+                                  const isVermelho = obraRisk?.classificacao === 'Vermelho';
+                                  const isLaranja = obraRisk?.classificacao === 'Laranja';
+                                  return (
+                                    <details
+                                      key={obraCode}
+                                      className={`group rounded-lg border shadow-2xs min-w-[200px] max-w-[380px] flex-1 basis-[calc(50%-0.5rem)] transition-all ${
+                                        isVermelho
+                                          ? 'border-[#C0392E]/30 bg-[#FDF5F4]'
+                                          : isLaranja
+                                            ? 'border-[#E8C9A0] bg-[#FFFBF5]'
+                                            : 'border-[#A0D4B2] bg-[#F5FBF7]'
+                                      }`}
+                                    >
+                                      <summary className="flex items-center justify-between gap-2 px-2.5 py-2 cursor-pointer list-none select-none">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="font-mono font-bold text-[11px] text-[#23211E] truncate">
+                                            {obraCode}
+                                          </span>
+                                          {obraInfo && (
+                                            <span className="text-[10px] text-[#6B6660] truncate hidden sm:inline">
+                                              {(obraInfo.nomeProjeto || '').slice(0, 20)}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                            isVermelho
+                                              ? 'bg-[#C0392E] text-white'
+                                              : isLaranja
+                                                ? 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
+                                                : 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
+                                          }`}>
+                                            {obraRisk ? obraRisk.classificacao : 'OK'}
+                                          </span>
+                                          <ChevronDown className="w-3 h-3 text-[#A39E96] transition-transform group-open:rotate-180" />
+                                        </div>
+                                      </summary>
+
+                                      <div className="px-2.5 pb-2.5 space-y-1.5">
+                                        {obraRisk?.pontosDetalhados && obraRisk.pontosDetalhados.length > 0 ? (
+                                          <div className="flex flex-wrap gap-1">
+                                            {obraRisk.pontosDetalhados.map((pt, pIdx) => {
+                                              const isCritico = Boolean(pt.isCritico);
+                                              return (
+                                                <div
+                                                  key={pIdx}
+                                                  className={`inline-flex items-start gap-1 px-2 py-1 rounded-md text-[10px] leading-snug max-w-full ${
+                                                    isCritico
+                                                      ? 'bg-[#C0392E] text-white font-bold'
+                                                      : 'bg-white border border-[#E6E3DD] text-[#23211E]'
+                                                  }`}
+                                                >
+                                                  <span className="shrink-0">{pt.icone || (isCritico ? '🔴' : '📌')}</span>
+                                                  <span className="break-words">
+                                                    {pt.categoria && (
+                                                      <span className={`mr-0.5 uppercase text-[9px] tracking-wider ${isCritico ? 'text-red-100' : 'text-[#8A857D]'}`}>
+                                                        [{pt.categoria}]
+                                                      </span>
+                                                    )}
+                                                    {pt.texto}
+                                                  </span>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        ) : (
+                                          <div className="text-[10px] text-[#A39E96] py-0.5">
+                                            {obraRisk?.alerta || 'Sem impedimentos registrados.'}
+                                          </div>
+                                        )}
+                                        {obraRisk?.observacoesOriginais && (
+                                          <details className="text-[10px] text-[#5C574F] border-t border-[#E6E3DD]/60 pt-1 group/obs">
+                                            <summary className="font-semibold text-[#E07A1F] hover:text-[#C0392E] cursor-pointer list-none flex items-center gap-1">
+                                              <span>Campo</span>
+                                              <ChevronDown className="w-2.5 h-2.5 transition-transform group-open/obs:rotate-180 opacity-60" />
+                                            </summary>
+                                            <div className="mt-1 p-2 rounded bg-[#F7F6F3] border border-[#E6E3DD] font-mono text-[10px] leading-relaxed whitespace-pre-wrap select-text max-h-[120px] overflow-y-auto">
+                                              {obraRisk.observacoesOriginais}
+                                            </div>
+                                          </details>
+                                        )}
+                                      </div>
+                                    </details>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Barra de Ações do modo Equipe */}
+              {selectedEquipes.length > 0 && (
+                <div className="bg-white rounded-xl border border-[#E6E3DD] p-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-[#6B6660]">
+                      <span className="font-semibold">{selectedEquipes.length} equipes</span>
+                      <span className="text-[#DEDAD3]">·</span>
+                      <span className="font-semibold">{diasProgramados.length} dias</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={salvarProgramacao.isPending}
+                      onClick={handleEnviarTodosOsDias}
+                      className="h-9 px-5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-2 shadow-2xs transition-all disabled:opacity-70"
+                    >
+                      {salvarProgramacao.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Enviando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>Enviar todos ({selectedEquipes.length} equipes × {diasProgramados.length} dias)</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <>

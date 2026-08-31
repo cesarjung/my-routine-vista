@@ -213,6 +213,7 @@ interface PcpDiaRowProps {
   handleRemoveAtividade: (diaId: string, pontoLabelTarget: string, itemIdOrIndex: string | number) => void;
   handleEnviarPlanPrincipalDia: (diaId: string) => void;
   isSubmitting?: boolean;
+  headerExtra?: React.ReactNode;
 }
 
 export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
@@ -268,6 +269,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   handleRemoveAtividade,
   handleEnviarPlanPrincipalDia,
   isSubmitting = false,
+  headerExtra,
 }) => {
   const [customPontoInput, setCustomPontoInput] = useState('');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -368,8 +370,15 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
             {pontosAtivos.length === 1 ? '1 ponto' : `${pontosAtivos.length} pontos`}
           </div>
 
+          {/* Header Extra (obra selector em modo equipe) */}
+          {headerExtra && (
+            <div className="shrink-0" onClick={e => e.stopPropagation()}>
+              {headerExtra}
+            </div>
+          )}
+
           {/* Ocupação da Jornada (Barra de 0 a 13h) */}
-          <div className="flex-1 min-w-[220px] px-2">
+          <div className="flex-1 min-w-[140px] px-2">
             <div className="relative h-[18px] bg-[#F4F2EE] rounded-md overflow-hidden flex shadow-inner">
               {/* Janela Alvo de 8h a 10h */}
               <div
@@ -521,8 +530,15 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
           }}
         >
           {/* Dia */}
-          <div className="w-[110px] font-semibold text-[#23211E] text-xs shrink-0">
-            <span className="capitalize">{dia.nomeDia.slice(0, 3)}</span>, {dia.dataStr}
+          <div className={`${headerExtra ? 'w-[180px]' : 'w-[110px]'} font-semibold text-[#23211E] text-xs shrink-0 flex flex-col gap-1`}>
+            <div>
+              <span className="capitalize">{dia.nomeDia.slice(0, 3)}</span>, {dia.dataStr}
+            </div>
+            {headerExtra && (
+              <div onClick={e => e.stopPropagation()}>
+                {headerExtra}
+              </div>
+            )}
           </div>
 
           {/* Saída (Alojamento de Origem) */}
