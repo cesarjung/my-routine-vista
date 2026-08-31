@@ -2650,6 +2650,20 @@ export const PcpPlanejamentoView = () => {
                   </PopoverContent>
                 </Popover>
 
+                {/* Base / Alojamento Padrão */}
+                <Select value={selectedAlojamentoId} onValueChange={setSelectedAlojamentoId}>
+                  <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
+                    <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">BASE OU ALOJAMENTO PADRÃO</span>
+                    <span className="font-semibold text-[#23211E]">{alojamentoPadrao}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nenhum" className="text-xs font-semibold">{unidadeAtivaInfo ? unidadeAtivaInfo.baseNome : (selectedUnidadeObj?.name ? `Base ${selectedUnidadeObj.name}` : 'Base')}</SelectItem>
+                    {alojamentosDaUnidade.map(a => (
+                      <SelectItem key={a.id} value={a.id} className="text-xs font-semibold">{a.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 {/* Supervisor */}
                 <Select value={supervisor} onValueChange={setSupervisor}>
                   <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">

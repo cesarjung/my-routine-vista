@@ -46,6 +46,7 @@ export interface EnvioPlanejamentoModalProps {
   equipes: EquipeSemanalItem[];
   metricas: MetricasSemana;
   alojamentos: Array<{ equipe: string; municipio: string; alojamento: string }>;
+  obrasConclusoes?: import('@/hooks/usePlanejamentoSemanal').ObraConclusaoItem[];
   ultimaAtualizacao?: string | null;
   /** Dados GPS reais das equipes, capturados do PlanejamentoEquipesMap ao vivo */
   mapDataGps?: ComputedMapData[];
@@ -62,6 +63,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   equipes,
   metricas,
   alojamentos,
+  obrasConclusoes = [],
   ultimaAtualizacao,
   mapDataGps = [],
 }) => {
@@ -124,7 +126,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   }, [unidadeId, getUnidadeConfig]);
 
   const [blocos, setBlocos] = useState<EmailBlocosConfig>({
-    resumo: true, calendario: true, vistorias: true, disponiveis: true, alojamentos: true, observacoes: true, mapa: true,
+    resumo: true, calendario: true, conclusoes: true, vistorias: true, disponiveis: true, alojamentos: true, observacoes: true, mapa: true,
   });
   const [escopo, setEscopo] = useState<'todas' | 'com_programacao'>('todas');
   const [densidade, setDensidade] = useState<'detalhado' | 'compacto'>('detalhado');
@@ -287,6 +289,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
           diaSemana: format(d, 'EEE', { locale: ptBR }),
         })),
         alojamentos: alojamentos,
+        obrasConclusoes: obrasConclusoes,
         mapa: {
           center: mapPosition.center,
           zoom: mapPosition.zoom,
@@ -548,6 +551,14 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#23211E]">Quadro de conclusões</span>
+                    <Switch
+                      checked={blocos.conclusoes !== false}
+                      onCheckedChange={v => setBlocos(p => ({ ...p, conclusoes: v }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-[#23211E]">Análise de vistorias</span>
                     <Switch
                       checked={blocos.vistorias !== false}
@@ -651,6 +662,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
               equipes={equipes}
               metricas={metricas}
               alojamentos={alojamentos}
+              obrasConclusoes={obrasConclusoes}
               ultimaAtualizacao={ultimaAtualizacao}
               escopo={escopo}
               setEscopo={setEscopo}

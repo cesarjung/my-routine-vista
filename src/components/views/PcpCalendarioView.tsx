@@ -58,6 +58,7 @@ export const PcpCalendarioView: React.FC = () => {
     equipes,
     metricas,
     alojamentos,
+    obrasConclusoes,
     avisoBdConfig,
     ultimaAtualizacao,
   } = usePlanejamentoSemanal({
@@ -75,6 +76,7 @@ export const PcpCalendarioView: React.FC = () => {
   const [blocos, setBlocos] = useState<EmailBlocosConfig>({
     resumo: true,
     calendario: true,
+    conclusoes: true,
     vistorias: true,
     disponiveis: true,
     alojamentos: true,
@@ -281,6 +283,15 @@ export const PcpCalendarioView: React.FC = () => {
 
             <label className="flex items-center gap-1.5 cursor-pointer">
               <Switch
+                checked={blocos.conclusoes !== false}
+                onCheckedChange={v => setBlocos(p => ({ ...p, conclusoes: v }))}
+                className="scale-75"
+              />
+              <span>Conclusões</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <Switch
                 checked={blocos.vistorias !== false}
                 onCheckedChange={v => setBlocos(p => ({ ...p, vistorias: v }))}
                 className="scale-75"
@@ -330,6 +341,7 @@ export const PcpCalendarioView: React.FC = () => {
           equipes={equipes}
           metricas={metricas}
           alojamentos={alojamentos}
+          obrasConclusoes={obrasConclusoes}
           avisoBdConfig={avisoBdConfig}
           ultimaAtualizacao={ultimaAtualizacao}
           escopo={escopo}
@@ -353,6 +365,7 @@ export const PcpCalendarioView: React.FC = () => {
         equipes={equipes}
         metricas={metricas}
         alojamentos={alojamentos}
+        obrasConclusoes={obrasConclusoes}
         ultimaAtualizacao={ultimaAtualizacao}
         mapDataGps={mapDataGps}
       />

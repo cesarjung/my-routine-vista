@@ -19,6 +19,7 @@ export interface PcpObra {
   situacao: string; // 'APTA' | 'INAPTA'
   qtdPostesDisponiveis: number; // Coluna Y (index 24 em Carteira_Planejador)
   qtdCabosDisponiveis: number;  // Coluna AE (index 30 em Carteira_Planejador)
+  valorConsiderado: number;     // Coluna AM (index 38 em Carteira_Planejador)
   carteirasStr: string;         // Coluna G (index 6 em Carteira_Planejador, ex: "mai./25, jun./25")
   meses: string[];              // Lista dos meses/carteira da obra
   latitude?: number | null;
@@ -375,10 +376,13 @@ export const inferEtapaFromServico = (servicoName: string): string => {
   if (s.includes(' LV') || s.includes('LINHA VIVA') || s.includes('LV/') || s.endsWith('LV')) {
     return 'ATIVIDADE LV';
   }
-  if (s.includes('POSTE') || s.includes('ESCAVA') || s.includes('CAVA') || s.includes('DISTRIBUIÇÃO DE POSTES') || s.includes('ESTAI')) {
+  if (s.includes('POSTE') || s.includes('DISTRIBUIÇÃO DE POSTES') || s.includes('ESTAI')) {
     return 'IMPLANTAÇÃO';
   }
-  if (s.includes('ESTRUTURA') || s.includes('CRUZ') || s.includes('FERRAGEM') || s.includes('ISOLADOR') || s.includes('CHAVE')) {
+  if (s.includes('CAVA') || s.includes('ESCAVA') || s.includes('ROCHA') || s.includes('SOLO')) {
+    return 'ESCAVAÇÃO';
+  }
+  if (s.includes('ESTRUTURA') || s.includes('CRUZ') || s.includes('FERRAGEM') || s.includes('ISOLADOR') || s.includes('CHAVE') || s.includes('ACABAMENTO') || s.includes('ARMACAO')) {
     return 'ESTRUTURA';
   }
   if (s.includes('CABO') || s.includes('FIO') || s.includes('CONDUTOR') || s.includes('MULTIPLEX') || s.includes('TENSIONAR')) {
@@ -386,6 +390,9 @@ export const inferEtapaFromServico = (servicoName: string): string => {
   }
   if (s.includes('TRAFO') || s.includes('TRANSFORMADOR') || s.includes('RELIGADOR') || s.includes('DESLIGAMENTO')) {
     return 'DESLIGAMENTO';
+  }
+  if (s.includes('PODA') || s.includes('ÁRVORE') || s.includes('ARVORE')) {
+    return 'PODA';
   }
   return 'CONCLUSÃO';
 };
@@ -655,6 +662,7 @@ export const usePcpPlanejamentoData = (
           situacao,
           qtdPostesDisponiveis: parseNumericCell(row[24]), // Coluna Y (PT DISP.)
           qtdCabosDisponiveis: parseNumericCell(row[30]),  // Coluna AE (CABO DISP.)
+          valorConsiderado: parseNumericCell(row[38]),     // Coluna AM (VALOR CONSIDERADO)
           carteirasStr,
           meses,
           latitude: !isNaN(lat) && lat !== 0 ? lat : null,
@@ -1154,15 +1162,23 @@ export const usePcpPlanejamentoData = (
       }
 
       const s = (p.servico || '').toUpperCase();
-      if (s.includes('POSTE')) {
+      const et = (p.etapaPrevista || cleanEtapaGeral || '').toUpperCase();
+
+      const isPoste = s.includes('POSTE') || s.includes('DISTRIBUIÇÃO DE POSTES') || s.includes('ESTAI');
+      const isCavaRocha = s.includes('ROCHA') || s.includes('CAVA EM ROCHA') || s.includes('EXPLOSIVO');
+      const isCabo = s.includes('CABO') || s.includes('FIO') || s.includes('CONDUTOR') || s.includes('MULTIPLEX') || s.includes('TENSIONAR');
+      const isTrafo = s.includes('TRAFO') || s.includes('TRANSFORMADOR') || s.includes('RELIGADOR') || s.includes('CHAVE FUSÍVEL');
+      const isEstrutura = s.includes('ESTRUTURA') || s.includes('CRUZ') || s.includes('ISOLADOR') || s.includes('ACABAMENTO') || s.includes('ARMACAO') || s.includes('FERRAGEM') || et.includes('ESTRUTURA') || et.includes('ACABAMENTO');
+
+      if (isPoste) {
         qtdPostes += p.quantidade;
-      } else if (s.includes('ROCHA') || s.includes('CAVA EM ROCHA')) {
+      } else if (isCavaRocha) {
         qtdCavaRocha += p.quantidade;
-      } else if (s.includes('CABO') || s.includes('FIO') || s.includes('CONDUTOR') || s.includes('MULTIPLEX')) {
+      } else if (isCabo) {
         qtdCabos += p.quantidade;
-      } else if (s.includes('TRAFO') || s.includes('TRANSFORMADOR') || s.includes('RELIGADOR')) {
+      } else if (isTrafo) {
         qtdTrafos += p.quantidade;
-      } else {
+      } else if (isEstrutura) {
         qtdEstruturas += p.quantidade;
       }
 
@@ -1197,8 +1213,8 @@ export const usePcpPlanejamentoData = (
     }
 
     if (qtdCavaRocha > 0) newRow[18] = formatQuantityDisplay(qtdCavaRocha);   // Col S: Cava em Rocha
-    if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);         // Col U: Postes
-    if (qtdEstruturas > 0) newRow[22] = formatQuantityDisplay(qtdEstruturas); // Col W: Estruturas
+    if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);         // Col U (20): IMPLANTAÇÃO = Postes
+    if (qtdEstruturas > 0) newRow[22] = formatQuantityDisplay(qtdEstruturas); // Col W (22): ACABAMENTO = Estruturas
     if (qtdCabos > 0) newRow[24] = formatQuantityDisplay(qtdCabos);           // Col Y: Cabos
     if (qtdTrafos > 0) newRow[29] = formatQuantityDisplay(qtdTrafos);         // Col AD: Trafos/Equipamentos
 
@@ -1244,7 +1260,7 @@ export const usePcpPlanejamentoData = (
     const mTot = tTotalGeral % 60;
     newRow[67] = `${String(hTot).padStart(2, '0')}:${String(mTot).padStart(2, '0')}:00`; // Col BP (67): Tempo Total Geral Somado
 
-    newRow[68] = pctMetaFormatted;                          // Col BQ (68): % Previsto da Meta
+    newRow[68] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col BQ (68): Planejado TPM (Valor Planejado em R$)
 
     const etapasAtividadesUnicas = Array.from(
       new Set(

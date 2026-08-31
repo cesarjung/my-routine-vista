@@ -6,6 +6,21 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
+export interface ObraConclusaoItem {
+  obra: string;
+  titulo: string;
+  municipio: string;
+  dono: string;
+  supervisores: string[];
+  equipes: string[];
+  etapas: string[];
+  pontos: string[];
+  qtdPontos: number;
+  valorConsiderado: number;
+  valorPlanejadoSemana: number;
+  statusExecucao: string;
+}
+
 export interface EquipeSemanalItem {
   codigo: string;
   supervisor: string;
@@ -328,8 +343,8 @@ export function usePlanejamentoSemanal({
       console.error('Erro ao ler Plan_Principal no semanal:', e);
     }
 
-    // Mapa de Projetos da Carteira_Planejador para extrair Município real e Coordenadas
-    const projetoInfoMap = new Map<string, { municipio: string; titulo: string; lat: number | null; lng: number | null }>();
+    // Mapa de Projetos da Carteira_Planejador para extrair Município real, Coordenadas e Valor Considerado
+    const projetoInfoMap = new Map<string, { municipio: string; titulo: string; lat: number | null; lng: number | null; valorConsiderado: number; dono: string; statusExecucao: string }>();
     try {
       if (rawData.carteira) {
         const carteiraParsed = typeof rawData.carteira === 'string' ? JSON.parse(rawData.carteira) : rawData.carteira;
@@ -344,12 +359,19 @@ export function usePlanejamentoSemanal({
             const lngStr = String(row[47] || '').replace(',', '.').trim();
             const lat = parseFloat(latStr) || null;
             const lng = parseFloat(lngStr) || null;
+            const valConsStr = String(row[38] || '').replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+            const valorConsiderado = parseFloat(valConsStr) || 0;
+            const dono = String(row[58] || row[15] || 'COELBA').trim();
+            const statusExecucao = String(row[11] || 'EM ANDAMENTO').trim();
             if (proj) {
               projetoInfoMap.set(proj, {
                 municipio: muni || '',
                 titulo: tit,
                 lat,
                 lng,
+                valorConsiderado,
+                dono,
+                statusExecucao,
               });
             }
           }
@@ -699,6 +721,68 @@ export function usePlanejamentoSemanal({
       }
     });
 
+    // 6. Agrupamento de Conclusões de Obras
+    const conclusoesMap = new Map<string, {
+      obra: string;
+      titulo: string;
+      municipio: string;
+      dono: string;
+      supervisores: Set<string>;
+      equipes: Set<string>;
+      etapas: Set<string>;
+      pontos: Set<string>;
+      valorConsiderado: number;
+      valorPlanejadoSemana: number;
+      statusExecucao: string;
+    }>();
+
+    equipesResultado.forEach(eq => {
+      Object.values(eq.dias).forEach(dia => {
+        if (dia && dia.obra && !dia.isFolga && !dia.isFeriado) {
+          const key = dia.obra.trim().toUpperCase();
+          if (!conclusoesMap.has(key)) {
+            const pInfo = projetoInfoMap.get(key);
+            conclusoesMap.set(key, {
+              obra: dia.obra.trim(),
+              titulo: pInfo?.titulo || dia.obra,
+              municipio: pInfo?.municipio || dia.municipio || 'BASE',
+              dono: pInfo?.dono || 'COELBA',
+              supervisores: new Set(),
+              equipes: new Set(),
+              etapas: new Set(),
+              pontos: new Set(),
+              valorConsiderado: pInfo?.valorConsiderado || 0,
+              valorPlanejadoSemana: 0,
+              statusExecucao: pInfo?.statusExecucao || 'EM ANDAMENTO',
+            });
+          }
+          const c = conclusoesMap.get(key)!;
+          if (eq.supervisor) c.supervisores.add(eq.supervisor);
+          c.equipes.add(eq.codigo);
+          if (dia.etapa) c.etapas.add(dia.etapa);
+          if (Array.isArray(dia.pontos)) {
+            cleanPontosList(dia.pontos).forEach(pt => c.pontos.add(pt));
+          }
+          c.valorPlanejadoSemana += dia.valorPlanejado || 0;
+        }
+      });
+    });
+
+    const obrasConclusoes: ObraConclusaoItem[] = Array.from(conclusoesMap.values()).map(c => ({
+      obra: c.obra,
+      titulo: c.titulo,
+      municipio: c.municipio,
+      dono: c.dono,
+      supervisores: Array.from(c.supervisores),
+      equipes: Array.from(c.equipes),
+      etapas: Array.from(c.etapas),
+      pontos: Array.from(c.pontos),
+      qtdPontos: c.pontos.size,
+      valorConsiderado: c.valorConsiderado,
+      valorPlanejadoSemana: c.valorPlanejadoSemana,
+      statusExecucao: c.statusExecucao,
+    })).sort((a, b) => b.valorPlanejadoSemana - a.valorPlanejadoSemana);
+
     return {
       equipes: equipesResultado,
       metricas: {
@@ -721,6 +805,7 @@ export function usePlanejamentoSemanal({
         turnosDentroMetaDesloc,
       },
       alojamentos: alojamentosPorEquipe,
+      obrasConclusoes,
       avisoBdConfig,
       ultimaAtualizacao: rawData.updated_at || null,
     };
@@ -739,6 +824,7 @@ export function usePlanejamentoSemanal({
     equipes: processamento.equipes,
     metricas: processamento.metricas,
     alojamentos: processamento.alojamentos,
+    obrasConclusoes: processamento.obrasConclusoes,
     avisoBdConfig: processamento.avisoBdConfig,
     ultimaAtualizacao: processamento.ultimaAtualizacao,
   };

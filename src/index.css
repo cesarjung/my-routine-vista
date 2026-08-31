@@ -302,10 +302,10 @@
   }
 }
 
-/* Regras Globais de Impressão e PDF (Formato Retrato / Portrait) */
+/* Regras Globais de Impressão e PDF (Formato Paisagem / Landscape) */
 @media print {
   @page {
-    size: portrait;
+    size: landscape;
     margin: 6mm 8mm;
   }
 

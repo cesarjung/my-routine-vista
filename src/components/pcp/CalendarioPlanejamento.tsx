@@ -206,12 +206,14 @@ export interface CalendarioPlanejamentoProps {
   blocos?: {
     resumo: boolean;
     calendario: boolean;
+    conclusoes?: boolean;
     vistorias?: boolean;
     disponiveis: boolean;
     alojamentos: boolean;
     observacoes: boolean;
     mapa: boolean;
   };
+  obrasConclusoes?: import('@/hooks/usePlanejamentoSemanal').ObraConclusaoItem[];
   onUpdateBloco?: (bloco: string, valor: boolean) => void;
   observacoes?: string[];
   onUpdateObservacoes?: (obs: string[]) => void;
@@ -246,6 +248,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     turnosDentroMetaDesloc: 0,
   },
   alojamentos = [],
+  obrasConclusoes = [],
   avisoBdConfig = false,
   ultimaAtualizacao,
   escopo = 'todas',
@@ -255,6 +258,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   blocos = {
     resumo: true,
     calendario: true,
+    conclusoes: true,
     disponiveis: true,
     alojamentos: true,
     observacoes: true,
@@ -573,6 +577,15 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       equipes: Array.from(o.equipes),
     }));
   }, [equipesFiltradas]);
+
+  // Conclusões de Obras filtradas pelas equipes visíveis
+  const conclusoesFiltradas = useMemo(() => {
+    if (obrasConclusoes && obrasConclusoes.length > 0) {
+      const equipesPermitidas = new Set(equipesFiltradas.map(e => e.codigo.toUpperCase()));
+      return obrasConclusoes.filter(c => c.equipes.some(eq => equipesPermitidas.has(eq.toUpperCase())));
+    }
+    return [];
+  }, [obrasConclusoes, equipesFiltradas]);
 
   // Busca vistoria real via Supabase para cada obra do período
   const obraIds = useMemo(() => obrasResumo.map(o => o.obra), [obrasResumo]);
@@ -1437,6 +1450,114 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5.4.5 QUADRO DE CONCLUSÕES DE OBRAS */}
+      {blocos.conclusoes !== false && conclusoesFiltradas.length > 0 && (
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E6E3DD] pb-2.5">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#E07A1F]" />
+              <h3 className="text-sm font-bold text-[#23211E]">
+                Quadro de Conclusões de Obras ({conclusoesFiltradas.length})
+              </h3>
+            </div>
+            <span className="text-[11px] text-[#6B6660]">
+              Valor Considerado da Carteira vs Planejado na Semana
+            </span>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border border-[#E6E3DD]">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-[#FAF8F5] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider">
+                  <th className="py-2.5 px-3">Obra / Dono</th>
+                  <th className="py-2.5 px-3">Título & Município</th>
+                  <th className="py-2.5 px-3">Supervisão / Equipes</th>
+                  <th className="py-2.5 px-3">Etapas</th>
+                  <th className="py-2.5 px-3 text-center">Pontos</th>
+                  <th className="py-2.5 px-3 text-right">Valor Considerado</th>
+                  <th className="py-2.5 px-3 text-right">Planejado Semana</th>
+                  <th className="py-2.5 px-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0EDE8]">
+                {conclusoesFiltradas.map((c, idx) => {
+                  const pctCob = c.valorConsiderado > 0 ? Math.round((c.valorPlanejadoSemana / c.valorConsiderado) * 100) : 0;
+                  const isConcluida = (c.statusExecucao || '').toUpperCase().includes('CONCLU');
+
+                  return (
+                    <tr key={c.obra + idx} className="hover:bg-[#FAF8F5] transition-colors">
+                      <td className="py-2.5 px-3 align-top whitespace-nowrap">
+                        <span className="font-mono font-bold text-xs text-[#E07A1F] block">{c.obra}</span>
+                        <span className="text-[10px] text-[#8C877D] uppercase font-semibold">{c.dono || 'COELBA'}</span>
+                      </td>
+                      <td className="py-2.5 px-3 align-top max-w-[240px]">
+                        <span className="font-bold text-[#23211E] text-xs block leading-snug">{c.titulo}</span>
+                        <span className="text-[10px] text-[#6B6660] uppercase font-medium">{c.municipio}</span>
+                      </td>
+                      <td className="py-2.5 px-3 align-top text-xs text-[#5C574F]">
+                        <span className="font-semibold text-[#23211E] block">{c.supervisores.join(', ') || 'SUPERVISÃO'}</span>
+                        <span className="font-mono text-[#E07A1F] font-bold text-[11px]">{c.equipes.join(', ')}</span>
+                      </td>
+                      <td className="py-2.5 px-3 align-top">
+                        <div className="flex flex-wrap gap-1">
+                          {c.etapas.map(et => (
+                            <span key={et} className="px-1.5 py-0.5 rounded bg-[#F2F0EC] text-[#5C574F] text-[9.5px] font-bold uppercase tracking-wider">
+                              {et}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 align-top text-center font-mono">
+                        <span className="font-bold text-xs text-[#23211E] block">{c.qtdPontos}</span>
+                        {c.pontos && c.pontos.length > 0 && (
+                          <span className="text-[9.5px] text-[#8C877D] block truncate max-w-[120px]" title={c.pontos.join(', ')}>
+                            {c.pontos.join(', ')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 align-top text-right font-mono font-bold text-xs text-[#23211E] whitespace-nowrap">
+                        {c.valorConsiderado > 0 ? `R$ ${c.valorConsiderado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 align-top text-right font-mono font-bold text-xs text-[#17794C] whitespace-nowrap">
+                        R$ ${c.valorPlanejadoSemana.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2.5 px-3 align-top text-center whitespace-nowrap">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          isConcluida
+                            ? 'bg-[#E6F2EA] text-[#17794C] border border-[#A0D4B2]'
+                            : 'bg-[#FBF2DA] text-[#A06A16] border border-[#E8C9A0]'
+                        }`}>
+                          {c.statusExecucao || (pctCob >= 100 ? 'CONCLUÍDA' : 'EM ANDAMENTO')}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-[#FAF8F5] border-t-2 border-[#DEDAD3] font-bold text-xs text-[#23211E]">
+                  <td colSpan={4} className="py-2.5 px-3 uppercase text-[10px] text-[#5C574F] tracking-wider">
+                    Total ({conclusoesFiltradas.length} obras)
+                  </td>
+                  <td className="py-2.5 px-3 text-center font-mono">
+                    {conclusoesFiltradas.reduce((acc, c) => acc + (c.qtdPontos || 0), 0)} pts
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">
+                    {conclusoesFiltradas.reduce((acc, c) => acc + (c.valorConsiderado || 0), 0) > 0
+                      ? `R$ ${conclusoesFiltradas.reduce((acc, c) => acc + (c.valorConsiderado || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : '—'}
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono text-[#17794C] whitespace-nowrap">
+                    R$ ${conclusoesFiltradas.reduce((acc, c) => acc + (c.valorPlanejadoSemana || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div>
       )}

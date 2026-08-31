@@ -463,7 +463,36 @@ export default async function handler(req, res) {
       return -1;
     };
 
+function getWeekdayNumber(dataStr) {
+  if (!dataStr) return 1;
+  const m = String(dataStr).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) {
+    const d = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+    return d.getDay();
+  }
+  const mIso = String(dataStr).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (mIso) {
+    const d = new Date(parseInt(mIso[1], 10), parseInt(mIso[2], 10) - 1, parseInt(mIso[3], 10));
+    return d.getDay();
+  }
+  return 1;
+}
+
+function getRowBackgroundColor(dayOfWeek) {
+  if (dayOfWeek === 0) {
+    // Domingo: Cinza Escuro
+    return { red: 0.80, green: 0.80, blue: 0.80 };
+  } else if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
+    // Segunda, Quarta, Sexta: Cinza Claro
+    return { red: 0.95, green: 0.95, blue: 0.95 };
+  } else {
+    // Terça, Quinta, Sábado: Amarelo Claro
+    return { red: 1.0, green: 0.95, blue: 0.80 };
+  }
+}
+
     const cellUpdates = [];
+    const formatRequests = [];
     const usedTargetIndices = new Set();
 
     plannedOperations.forEach((op) => {
@@ -513,8 +542,55 @@ export default async function handler(req, res) {
         36, 37, 38, 39, 46, 56, 62, 63, 64, 65, 66, 67, 68, 76, 77, 78
       ]);
 
+      const dataStrForDay = extractDate(op.rowCells[1]) || op.novaDataStr;
+      const dayOfWeek = getWeekdayNumber(dataStrForDay);
+
+      // Formatação de cor por dia da semana
+      formatRequests.push({
+        repeatCell: {
+          range: {
+            sheetId: planPrincipalSheetId,
+            startRowIndex: targetRowIndex,
+            endRowIndex: targetRowIndex + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 79
+          },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: getRowBackgroundColor(dayOfWeek)
+            }
+          },
+          fields: 'userEnteredFormat.backgroundColor'
+        }
+      });
+
+      // Formatação numérica da Coluna B como data com dia da semana
+      formatRequests.push({
+        repeatCell: {
+          range: {
+            sheetId: planPrincipalSheetId,
+            startRowIndex: targetRowIndex,
+            endRowIndex: targetRowIndex + 1,
+            startColumnIndex: 1,
+            endColumnIndex: 2
+          },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: {
+                type: 'DATE',
+                pattern: 'dd/mm/yyyy - dddd'
+              }
+            }
+          },
+          fields: 'userEnteredFormat.numberFormat'
+        }
+      });
+
       for (let cIdx = 0; cIdx < 79; cIdx++) {
-        const val = op.rowCells[cIdx];
+        let val = op.rowCells[cIdx];
+        if (cIdx === 1) {
+          val = extractDate(val) || val;
+        }
         const valStr = String(val ?? '').trim().replace(/^"|"$/g, '');
         if (MANAGED_COL_INDICES.has(cIdx)) {
           cellUpdates.push({
@@ -546,6 +622,22 @@ export default async function handler(req, res) {
       const batchData = await batchRes.json();
       if (!batchRes.ok) {
         throw new Error(`Erro ao atualizar Plan_Principal: ${JSON.stringify(batchData)}`);
+      }
+    }
+
+    // 10. Aplica formatação de cores e formato numérico de data
+    if (formatRequests.length > 0) {
+      try {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ requests: formatRequests })
+        });
+      } catch (fmtErr) {
+        console.error('Aviso ao aplicar formatação de cores e data:', fmtErr);
       }
     }
 
