@@ -596,6 +596,95 @@ export const usePcpPlanejamentoData = (
     return lista;
   }, [rawCacheQuery.data]);
 
+  // Parse BD_Config to extract activity classification mappings (Coluna AL/37 -> Coluna AU/46)
+  const atividadeGrupoMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!rawCacheQuery.data?.bd_metas) return map;
+
+    try {
+      const rawStr = rawCacheQuery.data.bd_metas;
+      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      const bdConfigRows = parsed?.bd_config || [];
+
+      for (let i = 1; i < bdConfigRows.length; i++) {
+        const row = bdConfigRows[i];
+        if (!row || row.length < 38) continue;
+        const atividade = String(row[37] || '').trim().toUpperCase();
+        const grupo = String(row[46] || '').trim().toUpperCase();
+        if (atividade && atividade !== 'DESCRIÇÃO ATIVIDADE' && grupo && grupo !== 'GRUPO') {
+          map.set(atividade, grupo);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao mapear atividade -> grupo em bd_config:', e);
+    }
+    return map;
+  }, [rawCacheQuery.data]);
+
+  const codigoGrupoMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!rawCacheQuery.data?.bd_metas) return map;
+
+    try {
+      const rawStr = rawCacheQuery.data.bd_metas;
+      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      const bdConfigRows = parsed?.bd_config || [];
+
+      for (let i = 1; i < bdConfigRows.length; i++) {
+        const row = bdConfigRows[i];
+        if (!row || row.length < 38) continue;
+        const codigo = String(row[36] || '').trim().toUpperCase();
+        const grupo = String(row[46] || '').trim().toUpperCase();
+        if (codigo && grupo && grupo !== 'GRUPO') {
+          map.set(codigo, grupo);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao mapear codigo -> grupo em bd_config:', e);
+    }
+    return map;
+  }, [rawCacheQuery.data]);
+
+  const getGrupoAtividade = (servicoOuDesc: string, cod?: string): string => {
+    const cleanDesc = (servicoOuDesc || '').trim().toUpperCase();
+    const cleanCod = (cod || '').trim().toUpperCase();
+
+    // 1. Match por código da BD_Config (Coluna AK / 36) -> Coluna AU / 46
+    if (cleanCod && codigoGrupoMap.has(cleanCod)) {
+      const g = codigoGrupoMap.get(cleanCod)!;
+      if (g) return g;
+    }
+
+    // 2. Match por descrição exata da BD_Config Coluna AL (37) -> Coluna AU (46)
+    if (atividadeGrupoMap.has(cleanDesc)) {
+      const g = atividadeGrupoMap.get(cleanDesc)!;
+      if (g) return g;
+    }
+
+    // 3. Match por aproximação / substring na BD_Config
+    for (const [ativBd, grp] of atividadeGrupoMap.entries()) {
+      if (cleanDesc.includes(ativBd) || ativBd.includes(cleanDesc)) {
+        if (grp) return grp;
+      }
+    }
+
+    // 4. Fallback estrito pelo nome do serviço (sem usar etapa dos materiais)
+    if (cleanDesc.includes('POSTE') || cleanDesc.includes('DISTRIBUIÇÃO DE POSTES')) return 'IMPLANT';
+    if (cleanDesc.includes('ROCHA') || cleanDesc.includes('EXPLOSIVO')) return 'CAVA EM ROCHA';
+    if (cleanDesc.includes('CAVA') || cleanDesc.includes('ESCAVA')) return 'CAVA NORMAL';
+    if (cleanDesc.includes('PODA') || cleanDesc.includes('ARVORE') || cleanDesc.includes('ÁRVORE')) return 'PODA';
+    if (cleanDesc.includes('TRAFO') || cleanDesc.includes('TRANSFORMADOR') || cleanDesc.includes('RELIGADOR') || cleanDesc.includes('CAPACITIV') || cleanDesc.includes('CHAVE FUSIVEL') || cleanDesc.includes('CHAVE FACA')) return 'EQUIPAM.';
+    if (cleanDesc.includes('CABO BT') || cleanDesc.includes('MULTIPLEX') || cleanDesc.includes('MPLX')) return 'CABO BT (METROS)';
+    if (cleanDesc.includes('CABO 4') || cleanDesc.includes('CAA 4')) return 'CABO 4 (METROS)';
+    if (cleanDesc.includes('CABO 1/0') || cleanDesc.includes('CAA 1/0')) return 'CABO 1/0 (METROS)';
+    if (cleanDesc.includes('CABO 4/0') || cleanDesc.includes('CAA 4/0')) return 'CABO 4/0 (METROS)';
+    if (cleanDesc.includes('CABO 336') || cleanDesc.includes('336,4') || cleanDesc.includes('336 MCM')) return 'CABO 336 (METROS)';
+    if (cleanDesc.includes('CABO COBERTO') || cleanDesc.includes('XLPE') || cleanDesc.includes('CABO MT')) return 'CABO MT XLPE (METROS)';
+    if (cleanDesc.includes('ESTRUTURA') || cleanDesc.includes('CRUZ') || cleanDesc.includes('ISOLADOR') || cleanDesc.includes('ACABAMENTO') || cleanDesc.includes('ARMACAO') || cleanDesc.includes('FERRAGEM') || cleanDesc.includes('ILUMIN')) return 'ACABAM.';
+
+    return '';
+  };
+
   // Parse Carteira_Planejador (com Qtd Postes Col Y / Index 24, Qtd Cabos Col AE / Index 30, Mês Col G / Index 6)
   const obras = useMemo(() => {
     if (!rawCacheQuery.data?.carteira) return [];
@@ -1142,10 +1231,14 @@ export const usePcpPlanejamentoData = (
     let tempoAtividadesMin = 0;
     let valorTotalAtividades = 0;
     let qtdPostes = 0;
+    let qtdEquipamentos = 0;
     let qtdEstruturas = 0;
-    let qtdCabos = 0;
+    let qtdCabosBt = 0;
+    let qtdCabos4 = 0;
+    let qtdCabos10 = 0;
+    let qtdCabosMtXlpe = 0;
+    let qtdPoda = 0;
     let qtdCavaRocha = 0;
-    let qtdTrafos = 0;
 
     const blocos = selectedPontos.map(p => {
       const h = Math.floor(p.tempoEstimadoMinutos / 60);
@@ -1161,25 +1254,28 @@ export const usePcpPlanejamentoData = (
         cleanEtapaPonto = cleanEtapaPonto.replace(/^\d+\s*-\s*/, '').trim();
       }
 
-      const s = (p.servico || '').toUpperCase();
-      const et = (p.etapaPrevista || cleanEtapaGeral || '').toUpperCase();
+      // Classificar a quantidade utilizando estritamente a BD_Config (Coluna AL -> Coluna AU)
+      const grupo = getGrupoAtividade(p.servico || p.descricao || '', p.codigo || (p as any).codigoAtividade || '');
+      const qtd = Number(p.quantidade || 1);
 
-      const isPoste = s.includes('POSTE') || s.includes('DISTRIBUIÇÃO DE POSTES') || s.includes('ESTAI');
-      const isCavaRocha = s.includes('ROCHA') || s.includes('CAVA EM ROCHA') || s.includes('EXPLOSIVO');
-      const isCabo = s.includes('CABO') || s.includes('FIO') || s.includes('CONDUTOR') || s.includes('MULTIPLEX') || s.includes('TENSIONAR');
-      const isTrafo = s.includes('TRAFO') || s.includes('TRANSFORMADOR') || s.includes('RELIGADOR') || s.includes('CHAVE FUSÍVEL');
-      const isEstrutura = s.includes('ESTRUTURA') || s.includes('CRUZ') || s.includes('ISOLADOR') || s.includes('ACABAMENTO') || s.includes('ARMACAO') || s.includes('FERRAGEM') || et.includes('ESTRUTURA') || et.includes('ACABAMENTO');
-
-      if (isPoste) {
-        qtdPostes += p.quantidade;
-      } else if (isCavaRocha) {
-        qtdCavaRocha += p.quantidade;
-      } else if (isCabo) {
-        qtdCabos += p.quantidade;
-      } else if (isTrafo) {
-        qtdTrafos += p.quantidade;
-      } else if (isEstrutura) {
-        qtdEstruturas += p.quantidade;
+      if (grupo === 'IMPLANT' || grupo === 'IMPLANTAÇÃO' || grupo === 'POSTE') {
+        qtdPostes += qtd;
+      } else if (grupo === 'EQUIPAM.' || grupo === 'EQUIPAMENTO' || grupo === 'EQUIPAMENTOS') {
+        qtdEquipamentos += qtd;
+      } else if (grupo === 'ACABAM.' || grupo === 'ACABAMENTO' || grupo === 'EST. DUPLA LV' || grupo === 'EST. SIMPLES LV') {
+        qtdEstruturas += qtd;
+      } else if (grupo === 'CABO BT (METROS)' || grupo === 'CABO BT') {
+        qtdCabosBt += qtd;
+      } else if (grupo === 'CABO 4 (METROS)' || grupo === 'CABO 4') {
+        qtdCabos4 += qtd;
+      } else if (grupo === 'CABO 1/0 (METROS)' || grupo === 'CABO 1/0') {
+        qtdCabos10 += qtd;
+      } else if (grupo === 'CABO MT XLPE (METROS)' || grupo === 'CABO MT XLPE') {
+        qtdCabosMtXlpe += qtd;
+      } else if (grupo === 'PODA') {
+        qtdPoda += qtd;
+      } else if (grupo === 'CAVA EM ROCHA') {
+        qtdCavaRocha += qtd;
       }
 
       return `${p.ponto} - [${cleanEtapaPonto}] ${p.servico} - Qtd: ${qtdStr} - Hr. Prev: ${hrPrevStr}`;
@@ -1212,11 +1308,15 @@ export const usePcpPlanejamentoData = (
       newRow[16] = 'TRUE';                                  // Col Q (16): PES (Checkbox marcado como TRUE)
     }
 
-    if (qtdCavaRocha > 0) newRow[18] = formatQuantityDisplay(qtdCavaRocha);   // Col S: Cava em Rocha
-    if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);         // Col U (20): IMPLANTAÇÃO = Postes
-    if (qtdEstruturas > 0) newRow[22] = formatQuantityDisplay(qtdEstruturas); // Col W (22): ACABAMENTO = Estruturas
-    if (qtdCabos > 0) newRow[24] = formatQuantityDisplay(qtdCabos);           // Col Y: Cabos
-    if (qtdTrafos > 0) newRow[29] = formatQuantityDisplay(qtdTrafos);         // Col AD: Trafos/Equipamentos
+    if (qtdCavaRocha > 0) newRow[18] = formatQuantityDisplay(qtdCavaRocha);       // Col S (18): CAVA EM ROCHA
+    if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);             // Col U (20): IMPLANT. (Postes)
+    if (qtdEquipamentos > 0) newRow[21] = formatQuantityDisplay(qtdEquipamentos); // Col V (21): EQUIPAM. (Trafos e Equipamentos)
+    if (qtdEstruturas > 0) newRow[22] = formatQuantityDisplay(qtdEstruturas);     // Col W (22): ACABAM. (Estruturas / Acabamento)
+    if (qtdCabosBt > 0) newRow[23] = formatQuantityDisplay(qtdCabosBt);           // Col X (23): CABO BT (metros)
+    if (qtdCabos4 > 0) newRow[24] = formatQuantityDisplay(qtdCabos4);             // Col Y (24): CABO 4 (metros)
+    if (qtdCabos10 > 0) newRow[25] = formatQuantityDisplay(qtdCabos10);           // Col Z (25): CABO 1/0 (metros)
+    if (qtdCabosMtXlpe > 0) newRow[28] = formatQuantityDisplay(qtdCabosMtXlpe);   // Col AC (28): CABO MT XLPE (metros)
+    if (qtdPoda > 0) newRow[29] = formatQuantityDisplay(qtdPoda);                 // Col AD (29): PODA
 
     newRow[36] = 'NÃO';                                     // Col AK (36): ANALISAR PRODUÇÃO?
     newRow[37] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col AL (37): Valor Planejado
