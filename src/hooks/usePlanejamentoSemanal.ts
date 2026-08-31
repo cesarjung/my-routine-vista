@@ -735,16 +735,15 @@ export function usePlanejamentoSemanal({
             }
           }
 
-          let tipoEtapa = 'CONCLUSÃO';
           const etUpper = (dia.etapa || '').toUpperCase();
-          if (etUpper.includes('DESLIG') && etUpper.includes('CONCLU')) {
+          let tipoEtapa = '';
+          if (etUpper.includes('DESLIG') && (etUpper.includes('CONCLU') || etUpper.includes('CONCL'))) {
             tipoEtapa = 'DESLIGAMENTO/CONCLUSÃO';
-          } else if (etUpper.includes('DESLIG')) {
-            tipoEtapa = 'DESLIGAMENTO/CONCLUSÃO';
-          } else if (etUpper.includes('CONCLU')) {
+          } else if (etUpper.includes('CONCLU') || etUpper.includes('CONCL')) {
             tipoEtapa = 'CONCLUSÃO';
-          } else if (dia.etapa) {
-            tipoEtapa = dia.etapa.replace(/^\d+\s*-\s*/, '').trim().toUpperCase();
+          } else {
+            // Somente obras que possuem etapa CONCLUSÃO ou DESLIGAMENTO/CONCLUSÃO
+            return;
           }
 
           // Formatar data
