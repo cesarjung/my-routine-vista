@@ -50,7 +50,8 @@ import {
   MaterialPontoBudget,
   MOTIVOS_REPROGRAMACAO_COL_AU,
   isEtapaSemAtividades,
-  sortPontosAndVaos
+  sortPontosAndVaos,
+  inferEtapaFromServico
 } from '@/hooks/usePcpPlanejamentoData';
 import { supabase } from '@/integrations/supabase/client';
 import {
