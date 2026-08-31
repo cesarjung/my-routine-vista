@@ -515,7 +515,7 @@ export const PcpPlanejamentoView = () => {
   // Modal Carregar Planejamento
   const [isCarregarPlanModalOpen, setIsCarregarPlanModalOpen] = useState(false);
   const [selectedExistingPlanKeys, setSelectedExistingPlanKeys] = useState<string[]>([]);
-  const [filterEquipeExistingPlan, setFilterEquipeExistingPlan] = useState<string>('TODAS');
+  const [filterEquipesExistingPlan, setFilterEquipesExistingPlan] = useState<string[]>([]);
   const [filterOnlyCurrentPeriod, setFilterOnlyCurrentPeriod] = useState<boolean>(false);
   const [filterOnlyCurrentObra, setFilterOnlyCurrentObra] = useState<boolean>(false);
   const [filterDataInicioExistingPlan, setFilterDataInicioExistingPlan] = useState<string>('');
@@ -1957,7 +1957,7 @@ export const PcpPlanejamentoView = () => {
   const filteredExistingPlans = useMemo(() => {
     const list = planejamentosExistentesList || [];
     return list.filter(p => {
-      if (filterEquipeExistingPlan !== 'TODAS' && p.equipe.toUpperCase() !== filterEquipeExistingPlan.toUpperCase()) {
+      if (filterEquipesExistingPlan.length > 0 && !filterEquipesExistingPlan.map(e => e.toUpperCase()).includes(p.equipe.toUpperCase())) {
         return false;
       }
       if (filterOnlyCurrentObra && selectedObraId && p.projeto !== selectedObraId) {
@@ -1984,7 +1984,7 @@ export const PcpPlanejamentoView = () => {
     });
   }, [
     planejamentosExistentesList,
-    filterEquipeExistingPlan,
+    filterEquipesExistingPlan,
     filterOnlyCurrentObra,
     filterDataInicioExistingPlan,
     filterDataFimExistingPlan,
@@ -4215,17 +4215,73 @@ export const PcpPlanejamentoView = () => {
               )}
             </div>
 
-            <Select value={filterEquipeExistingPlan} onValueChange={setFilterEquipeExistingPlan}>
-              <SelectTrigger className="h-8 text-xs bg-white border-[#DEDAD3] w-[140px]">
-                <SelectValue placeholder="Todas as equipes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TODAS" className="text-xs">Todas as equipes</SelectItem>
-                {equipesDisponiveis.map(eq => (
-                  <SelectItem key={eq} value={eq} className="text-xs">{eq}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-8 px-3 text-xs border font-medium gap-1.5 ${
+                    filterEquipesExistingPlan.length > 0
+                      ? 'bg-[#FBF5EC] border-[#E8C9A0] text-[#A06A16] font-bold'
+                      : 'bg-white border-[#DEDAD3] text-[#5C574F]'
+                  }`}
+                >
+                  <UsersRound className="w-3.5 h-3.5 text-[#E07A1F]" />
+                  <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">Equipes</span>
+                  <span className="font-mono font-bold">
+                    {filterEquipesExistingPlan.length > 0
+                      ? (filterEquipesExistingPlan.length <= 2
+                          ? filterEquipesExistingPlan.join(', ')
+                          : `${filterEquipesExistingPlan.length} sel.`)
+                      : 'Todas'}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[240px] p-3 bg-white" align="start">
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-[#23211E] block">Filtrar por equipes</span>
+                  <div className="max-h-[220px] overflow-y-auto space-y-1.5">
+                    {equipesDisponiveis.map(eq => (
+                      <label key={eq} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-[#F7F6F3] cursor-pointer text-xs">
+                        <Checkbox
+                          checked={filterEquipesExistingPlan.includes(eq)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setFilterEquipesExistingPlan(prev => [...prev, eq]);
+                            } else {
+                              setFilterEquipesExistingPlan(prev => prev.filter(e => e !== eq));
+                            }
+                          }}
+                          className="rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] h-4 w-4"
+                        />
+                        <span className="font-mono font-bold text-[#23211E]">{eq}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex justify-between pt-1.5 border-t border-[#E6E3DD]">
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      size="sm"
+                      onClick={() => setFilterEquipesExistingPlan(equipesDisponiveis)}
+                      className="text-[10px] h-6 px-2 text-[#E07A1F] font-bold"
+                    >
+                      Todas
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      size="sm"
+                      onClick={() => setFilterEquipesExistingPlan([])}
+                      className="text-[10px] h-6 px-2 text-[#A39E96] font-bold"
+                    >
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <label className="flex items-center gap-1.5 cursor-pointer text-xs text-[#5C574F] font-medium">
               <input
