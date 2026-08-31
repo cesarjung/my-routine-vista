@@ -611,8 +611,8 @@ export const usePcpPlanejamentoData = (
         if (!row || row.length < 38) continue;
         const atividade = String(row[37] || '').trim().toUpperCase();
         const grupo = String(row[46] || '').trim().toUpperCase();
-        if (atividade && atividade !== 'DESCRIÇÃO ATIVIDADE' && grupo && grupo !== 'GRUPO') {
-          map.set(atividade, grupo);
+        if (atividade && atividade !== 'DESCRIÇÃO ATIVIDADE') {
+          map.set(atividade, grupo === 'GRUPO' ? '' : grupo);
         }
       }
     } catch (e) {
@@ -635,8 +635,8 @@ export const usePcpPlanejamentoData = (
         if (!row || row.length < 38) continue;
         const codigo = String(row[36] || '').trim().toUpperCase();
         const grupo = String(row[46] || '').trim().toUpperCase();
-        if (codigo && grupo && grupo !== 'GRUPO') {
-          map.set(codigo, grupo);
+        if (codigo && codigo !== '-') {
+          map.set(codigo, grupo === 'GRUPO' ? '' : grupo);
         }
       }
     } catch (e) {
@@ -649,38 +649,36 @@ export const usePcpPlanejamentoData = (
     const cleanDesc = (servicoOuDesc || '').trim().toUpperCase();
     const cleanCod = (cod || '').trim().toUpperCase();
 
-    // 1. Match por código da BD_Config (Coluna AK / 36) -> Coluna AU / 46
+    // 1. Match por código na BD_Config (Coluna AK / 36) -> Coluna AU / 46
     if (cleanCod && codigoGrupoMap.has(cleanCod)) {
-      const g = codigoGrupoMap.get(cleanCod)!;
-      if (g) return g;
+      return codigoGrupoMap.get(cleanCod) || '';
     }
 
-    // 2. Match por descrição exata da BD_Config Coluna AL (37) -> Coluna AU (46)
+    // 2. Match por descrição exata na BD_Config Coluna AL (37) -> Coluna AU (46)
     if (atividadeGrupoMap.has(cleanDesc)) {
-      const g = atividadeGrupoMap.get(cleanDesc)!;
-      if (g) return g;
+      return atividadeGrupoMap.get(cleanDesc) || '';
     }
 
-    // 3. Match por aproximação / substring na BD_Config
+    // 3. Match por prefixo / aproximação estrita na BD_Config
     for (const [ativBd, grp] of atividadeGrupoMap.entries()) {
-      if (cleanDesc.includes(ativBd) || ativBd.includes(cleanDesc)) {
-        if (grp) return grp;
+      if (cleanDesc === ativBd || cleanDesc.startsWith(ativBd) || ativBd.startsWith(cleanDesc)) {
+        return grp || '';
       }
     }
 
-    // 4. Fallback estrito pelo nome do serviço (sem usar etapa dos materiais)
-    if (cleanDesc.includes('POSTE') || cleanDesc.includes('DISTRIBUIÇÃO DE POSTES')) return 'IMPLANT';
-    if (cleanDesc.includes('ROCHA') || cleanDesc.includes('EXPLOSIVO')) return 'CAVA EM ROCHA';
-    if (cleanDesc.includes('CAVA') || cleanDesc.includes('ESCAVA')) return 'CAVA NORMAL';
-    if (cleanDesc.includes('PODA') || cleanDesc.includes('ARVORE') || cleanDesc.includes('ÁRVORE')) return 'PODA';
-    if (cleanDesc.includes('TRAFO') || cleanDesc.includes('TRANSFORMADOR') || cleanDesc.includes('RELIGADOR') || cleanDesc.includes('CAPACITIV') || cleanDesc.includes('CHAVE FUSIVEL') || cleanDesc.includes('CHAVE FACA')) return 'EQUIPAM.';
-    if (cleanDesc.includes('CABO BT') || cleanDesc.includes('MULTIPLEX') || cleanDesc.includes('MPLX')) return 'CABO BT (METROS)';
-    if (cleanDesc.includes('CABO 4') || cleanDesc.includes('CAA 4')) return 'CABO 4 (METROS)';
-    if (cleanDesc.includes('CABO 1/0') || cleanDesc.includes('CAA 1/0')) return 'CABO 1/0 (METROS)';
-    if (cleanDesc.includes('CABO 4/0') || cleanDesc.includes('CAA 4/0')) return 'CABO 4/0 (METROS)';
-    if (cleanDesc.includes('CABO 336') || cleanDesc.includes('336,4') || cleanDesc.includes('336 MCM')) return 'CABO 336 (METROS)';
-    if (cleanDesc.includes('CABO COBERTO') || cleanDesc.includes('XLPE') || cleanDesc.includes('CABO MT')) return 'CABO MT XLPE (METROS)';
-    if (cleanDesc.includes('ESTRUTURA') || cleanDesc.includes('CRUZ') || cleanDesc.includes('ISOLADOR') || cleanDesc.includes('ACABAMENTO') || cleanDesc.includes('ARMACAO') || cleanDesc.includes('FERRAGEM') || cleanDesc.includes('ILUMIN')) return 'ACABAM.';
+    // 4. Fallback estrito apenas para atividades não cadastradas na BD_Config
+    if (/^(INSTALAR|SUBSTITUIR|IMPLANTAR)\s+POSTE/.test(cleanDesc)) return 'IMPLANT';
+    if (/^CAVA EM ROCHA/.test(cleanDesc)) return 'CAVA EM ROCHA';
+    if (/^CAVA NORMAL/.test(cleanDesc)) return 'CAVA NORMAL';
+    if (/^(PODA|CORTE DE ARVORE)/.test(cleanDesc)) return 'PODA';
+    if (/^INSTALAR\s+(TRAFO|TRANSFORMADOR|RELIGADOR|CELULA)/.test(cleanDesc)) return 'EQUIPAM.';
+    if (/^INSTALAR\s+CABO\s+(MULTIPLEX|BT)/.test(cleanDesc)) return 'CABO BT (METROS)';
+    if (/^INSTALAR\s+CABO\s+(AL\s+)?(CAA\s+)?4($|\s)/.test(cleanDesc)) return 'CABO 4 (METROS)';
+    if (/^INSTALAR\s+CABO\s+(AL\s+)?(CAA\s+)?1\/0/.test(cleanDesc)) return 'CABO 1/0 (METROS)';
+    if (/^INSTALAR\s+CABO\s+(AL\s+)?(CAA\s+)?4\/0/.test(cleanDesc)) return 'CABO 4/0 (METROS)';
+    if (/^INSTALAR\s+CABO\s+(AL\s+)?(336|CAA\s+336)/.test(cleanDesc)) return 'CABO 336 (METROS)';
+    if (/^INSTALAR\s+CABO\s+(COBERTO|XLPE|MT)/.test(cleanDesc)) return 'CABO MT XLPE (METROS)';
+    if (/^INSTALAR\s+EST/.test(cleanDesc)) return 'ACABAM.';
 
     return '';
   };
