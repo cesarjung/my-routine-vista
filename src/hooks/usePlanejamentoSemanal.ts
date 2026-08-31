@@ -9,6 +9,7 @@ import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 export interface EquipeSemanalItem {
   codigo: string;
   supervisor: string;
+  tipoEquipe: string; // CONSTRUÇÃO, LINHA VIVA, MANUTENÇÃO, KIT, PODA, LINHA VIVA MANUT.
   metaSemanal: number;
   metaDiaria: number;
   temProgramacao: boolean;
@@ -39,6 +40,10 @@ export interface DiaProgramacaoItem {
   isFolga?: boolean;
   isFeriado?: boolean;
   isDomingo?: boolean;
+  isIndisponivel?: boolean;
+  alojamento?: string;
+  alojamentoIda?: string;
+  alojamentoVolta?: string;
 }
 
 export interface MetricasSemana {
@@ -81,7 +86,7 @@ export function getCorPctPlanejado(pct: number) {
   if (pct >= 150) return COR_REGUA.otimo;
   if (pct >= 100) return COR_REGUA.bom;
   if (pct >= 70) return COR_REGUA.atencao;
-  if (pct >= 30) return COR_REGUA.ruim;
+  if (pct >= 50) return COR_REGUA.ruim;
   return COR_REGUA.critico;
 }
 
@@ -249,8 +254,13 @@ export function usePlanejamentoSemanal({
       };
     }
 
-    // 1. Extrair Metas por Equipe de BD_Metas
-    const metasMap = new Map<string, number>();
+    // 1. Extrair Metas e Tipo de Equipe por Equipe×Data de BD_Metas
+    const metasMap = new Map<string, number>(); // Equipe → maior meta (fallback)
+    // Mapa: Equipe → Data(ISO) → TIPO (CONSTRUÇÃO, MANUTENÇÃO, KIT, PODA, LINHA VIVA, LINHA VIVA MANUT.)
+    const tipoEquipeDataMap = new Map<string, Map<string, string>>();
+    // Mapa: Equipe → Data(ISO) → Meta do dia (valor real da BD_Metas)
+    const metaDiariaDataMap = new Map<string, Map<string, number>>();
+    const TIPOS_MANUTENCAO = ['KIT', 'PODA', 'MANUTENÇÃO', 'MANUTENCAO', 'LINHA VIVA MANUT.', 'LINHA VIVA MANUT'];
     try {
       const metasParsed = typeof rawData.bd_metas === 'string' ? JSON.parse(rawData.bd_metas) : rawData.bd_metas;
       const rowsMetas = metasParsed?.bd_metas || [];
@@ -262,6 +272,23 @@ export function usePlanejamentoSemanal({
         const num = parseFloat(valStr) || 0;
         if (eq && num > 0) {
           metasMap.set(eq, num);
+        }
+        // Extrair tipo (coluna E, idx 4) e data (coluna C, idx 2)
+        const tipo = String(row[4] || '').trim().toUpperCase();
+        const dataStr = String(row[2] || '').trim();
+        if (eq && tipo && dataStr) {
+          if (!tipoEquipeDataMap.has(eq)) tipoEquipeDataMap.set(eq, new Map());
+          if (!metaDiariaDataMap.has(eq)) metaDiariaDataMap.set(eq, new Map());
+          // Converter data BR para ISO
+          const matchBr = dataStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (matchBr) {
+            const d = new Date(parseInt(matchBr[3]), parseInt(matchBr[2]) - 1, parseInt(matchBr[1]));
+            if (!isNaN(d.getTime())) {
+              const dIso = format(d, 'yyyy-MM-dd');
+              tipoEquipeDataMap.get(eq)!.set(dIso, tipo);
+              metaDiariaDataMap.get(eq)!.set(dIso, num); // meta do dia (pode ser 0)
+            }
+          }
         }
       }
     } catch (e) {
@@ -319,7 +346,7 @@ export function usePlanejamentoSemanal({
             const lng = parseFloat(lngStr) || null;
             if (proj) {
               projetoInfoMap.set(proj, {
-                municipio: muni || 'BOM JESUS DA LAPA',
+                municipio: muni || '',
                 titulo: tit,
                 lat,
                 lng,
@@ -439,8 +466,8 @@ export function usePlanejamentoSemanal({
       const obra = String(row[7] || '').trim().toUpperCase();
       
       const projInfo = projetoInfoMap.get(obra);
-      const municipio = projInfo?.municipio || String(row[10] || '').trim().toUpperCase() || 'BOM JESUS DA LAPA';
-      const etapa = String(row[12] || 'IMPLANTAÇÃO').trim();
+      const municipio = projInfo?.municipio || String(row[10] || '').trim().toUpperCase();
+      const etapa = String(row[12] || '').trim();
       const pontosCol8 = String(row[8] || '').trim();
       const pontosRaw = String(row[14] || '').trim();
       const pontosList = cleanPontosList(
@@ -449,6 +476,14 @@ export function usePlanejamentoSemanal({
 
       const isFolga = etapa.toUpperCase() === 'FOLGA' || obra.toUpperCase() === 'FOLGA';
       const isFeriado = etapa.toUpperCase() === 'FERIADO' || obra.toUpperCase() === 'FERIADO';
+      const isIndisponivel = etapa.toUpperCase() === 'INDISPONÍVEL' || etapa.toUpperCase() === 'INDISPONIVEL';
+
+      // Ignorar linhas sem dados reais (etapa vazia + obra vazia + sem pontos + sem valor)
+      // Isso evita que linhas vazias da planilha apareçam como "IMPLANTAÇÃO" na grade
+      if (!etapa && !obra && pontosList.length === 0) {
+        const valCheck = String(row[37] || row[50] || row[45] || '').replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+        if (!parseFloat(valCheck)) continue;
+      }
 
       // Valor planejado real da Coluna 37 (ou 50/45)
       const valStr = String(row[37] || row[50] || row[45] || '').replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
@@ -457,8 +492,8 @@ export function usePlanejamentoSemanal({
       // Deslocamento real da Coluna 64 ("1:45:00") e Jornada da Coluna 67 ("8:34:00")
       const tempoDeslocamentoMin = parseTimeInMin(row[64], municipio.includes('LAPA') ? 45 : 90);
       const tempoTotalMin = parseTimeInMin(row[67], tempoDeslocamentoMin + 450);
-      const metaDiaria = metasMap.get(eq) || 5500;
-      const pctMetaDia = metaDiaria > 0 ? Math.round((valorPlanejado / metaDiaria) * 100) : 0;
+      const metaDiariaDoDay = metaDiariaDataMap.get(eq)?.get(dataIso) ?? (metasMap.get(eq) || 5500);
+      const pctMetaDia = metaDiariaDoDay > 0 ? Math.round((valorPlanejado / metaDiariaDoDay) * 100) : 0;
 
       if (!programacoesPorEquipeData.has(eq)) {
         programacoesPorEquipeData.set(eq, new Map());
@@ -470,17 +505,23 @@ export function usePlanejamentoSemanal({
         diaSemanaStr: format(dateObj, 'EEE', { locale: ptBR }),
         equipe: eq,
         supervisor: supervisor || equipesConfigMap.get(eq) || 'SUPERVISOR',
-        obra: obra || 'OBRA',
+        obra: obra,
         municipio,
-        etapa,
+        etapa: etapa || (isFolga ? 'FOLGA' : isFeriado ? 'FERIADO' : isIndisponivel ? 'INDISPONÍVEL' : ''),
         pontos: pontosList,
-        valorPlanejado,
-        pctMetaDia,
-        tempoTotalMin,
-        tempoDeslocamentoMin,
-        tempoServicoMin: Math.max(0, tempoTotalMin - tempoDeslocamentoMin),
+        valorPlanejado: isIndisponivel ? 0 : valorPlanejado,
+        pctMetaDia: isIndisponivel ? 0 : pctMetaDia,
+        tempoTotalMin: isIndisponivel ? 0 : tempoTotalMin,
+        tempoDeslocamentoMin: isIndisponivel ? 0 : tempoDeslocamentoMin,
+        tempoServicoMin: isIndisponivel ? 0 : Math.max(0, tempoTotalMin - tempoDeslocamentoMin),
         isFolga,
         isFeriado,
+        isIndisponivel,
+        alojamentoIda: String(row[77] || '').trim(),
+        alojamentoVolta: String(row[78] || '').trim(),
+        alojamento: String(row[77] || '').trim() === String(row[78] || '').trim()
+          ? String(row[77] || '').trim()
+          : (String(row[77] || '').trim() && String(row[78] || '').trim() ? `${String(row[77] || '').trim()} / ${String(row[78] || '').trim()}` : (String(row[77] || '').trim() || String(row[78] || '').trim())),
       });
     }
 
@@ -503,48 +544,93 @@ export function usePlanejamentoSemanal({
 
     listaEquipesOrdenadas.forEach(eq => {
       const sup = equipesConfigMap.get(eq) || 'SUPERVISOR';
-      const metaDiaria = metasMap.get(eq) || 5500;
-      const diasUteisNoPeriodo = diasDaSemana.filter(d => d.getDay() !== 0).length || diasDaSemana.length;
-      const metaSemanal = metaDiaria * Math.max(1, diasUteisNoPeriodo);
+      const metaDiariaFallback = metasMap.get(eq) || 5500; // fallback se BD_Metas não tiver data específica
+      const metasDaEquipe = metaDiariaDataMap.get(eq);
+
+      const tiposDaEquipe = tipoEquipeDataMap.get(eq);
 
       let equipePlanejado = 0;
       let equipeJornadaMin = 0;
       let equipeDeslocMin = 0;
       let diasComProgCount = 0;
+      let metaSemanal = 0;
+      let diasManutNoPeriodo = 0;
+      let diasObrasNoPeriodo = 0;
+      let diasComTipoNoPeriodo = 0;
 
       const diasMap: Record<string, DiaProgramacaoItem | null> = {};
 
       diasDaSemana.forEach((diaData, idx) => {
         const diaIso = format(diaData, 'yyyy-MM-dd');
         const prog = programacoesPorEquipeData.get(eq)?.get(diaIso) || null;
+        const isDom = diaData.getDay() === 0;
+
+        // Tipo do DIA ESPECÍFICO direto da BD_Metas (fonte de verdade)
+        const tipoDia = tiposDaEquipe?.get(diaIso) || '';
+        const temMetaNoDia = !!tipoDia; // só conta meta se BD_Metas tiver linha pra esse dia
+        const isManutDia = TIPOS_MANUTENCAO.includes(tipoDia);
+
+        if (temMetaNoDia) {
+          diasComTipoNoPeriodo++;
+          if (isManutDia) diasManutNoPeriodo++;
+          else diasObrasNoPeriodo++;
+        }
+
+        // Calcular meta condicional por dia
+        // Usa o valor REAL da meta daquele dia na BD_Metas (pode ser 0 em sábados/folgas)
+        const metaDoDia = metasDaEquipe?.get(diaIso) ?? (temMetaNoDia ? metaDiariaFallback : 0);
+        if (!isDom && temMetaNoDia && metaDoDia > 0) {
+          if (isManutDia) {
+            // Manutenção: só conta meta nos dias com obra programada (não folga, não feriado, não indisponível)
+            if (prog && !prog.isFolga && !prog.isFeriado && !prog.isIndisponivel) {
+              metaSemanal += metaDoDia;
+            }
+          } else {
+            // Obras (CONSTRUÇÃO, LINHA VIVA): meta conta todos os dias que BD_Metas registra com valor > 0
+            metaSemanal += metaDoDia;
+          }
+        }
 
         if (prog) {
           diasMap[diaIso] = prog;
-          equipePlanejado += prog.valorPlanejado;
-          equipeJornadaMin += prog.tempoTotalMin;
-          equipeDeslocMin += prog.tempoDeslocamentoMin;
-          diasComProgCount += 1;
+          if (!prog.isIndisponivel) {
+            equipePlanejado += prog.valorPlanejado;
+            equipeJornadaMin += prog.tempoTotalMin;
+            equipeDeslocMin += prog.tempoDeslocamentoMin;
+            diasComProgCount += 1;
 
-          // Métricas agregadas por turno
-          totalTurnos += 1;
-          totalJornadaMinutos += prog.tempoTotalMin;
-          totalDeslocamentoMinutos += prog.tempoDeslocamentoMin;
+            // Métricas agregadas por turno (não conta indisponível)
+            totalTurnos += 1;
+            totalJornadaMinutos += prog.tempoTotalMin;
+            totalDeslocamentoMinutos += prog.tempoDeslocamentoMin;
 
-          if (prog.tempoTotalMin < 480) turnosAbaixo8 += 1;
-          if (prog.tempoTotalMin > 600) turnosAcima10 += 1;
-          if (prog.tempoDeslocamentoMin > 120) turnosAcima2h += 1;
-          if (prog.tempoDeslocamentoMin <= 120) turnosDentroMetaDesloc += 1;
+            if (prog.tempoTotalMin < 480) turnosAbaixo8 += 1;
+            if (prog.tempoTotalMin > 600) turnosAcima10 += 1;
+            if (prog.tempoDeslocamentoMin > 120) turnosAcima2h += 1;
+            if (prog.tempoDeslocamentoMin <= 120) turnosDentroMetaDesloc += 1;
+          }
         } else {
-          // Dia sem programação (Folga, Feriado ou Domingo)
-          const isDom = idx === 6;
           diasMap[diaIso] = null;
         }
       });
 
       const temProgramacao = diasComProgCount > 0;
+      // Tipo para exibição: usa o tipo mais frequente no período
+      const tipoEquipe = diasManutNoPeriodo >= diasObrasNoPeriodo && diasComTipoNoPeriodo > 0
+        ? (tiposDaEquipe ? Array.from(tiposDaEquipe.entries())
+            .filter(([d]) => diasDaSemana.some(dia => format(dia, 'yyyy-MM-dd') === d) && TIPOS_MANUTENCAO.includes(tiposDaEquipe.get(d) || ''))
+            .map(([, t]) => t)[0] || 'MANUTENÇÃO' : 'MANUTENÇÃO')
+        : 'CONSTRUÇÃO';
+      const isManutencao = diasComTipoNoPeriodo > 0 && diasManutNoPeriodo >= diasObrasNoPeriodo;
+
       const mediaJornadaMin = diasComProgCount > 0 ? Math.round(equipeJornadaMin / diasComProgCount) : 0;
       const mediaDeslocamentoH = diasComProgCount > 0 ? Math.round((equipeDeslocMin / diasComProgCount / 60) * 10) / 10 : 0;
       const pctMeta = metaSemanal > 0 ? Math.round((equipePlanejado / metaSemanal) * 100) : 0;
+
+      // Equipes de manutenção sem nenhum dia programado na semana: não exibir na grade
+      if (isManutencao && !temProgramacao) {
+        return; // pula esta equipe
+      }
 
       if (pctMeta >= 100) {
         equipesAcimaMeta += 1;
@@ -558,8 +644,9 @@ export function usePlanejamentoSemanal({
       equipesResultado.push({
         codigo: eq,
         supervisor: sup,
+        tipoEquipe,
         metaSemanal,
-        metaDiaria,
+        metaDiaria: metaDiariaFallback,
         temProgramacao,
         totalPlanejado: equipePlanejado,
         totalJornadaMin: equipeJornadaMin,
@@ -589,8 +676,16 @@ export function usePlanejamentoSemanal({
       Object.values(eq.dias).forEach(d => {
         if (d && d.municipio && !d.isFolga && !d.isFeriado && d.municipio !== 'FOLGA') {
           mSet.add(d.municipio);
-          const alojNome = d.municipio.includes('LAPA') ? 'Base Central (Bom Jesus da Lapa)' : `Alojamento ${d.municipio}`;
-          aSet.add(alojNome);
+          const ida = (d as any).alojamentoIda;
+          const volta = (d as any).alojamentoVolta;
+          if (ida && ida.trim()) aSet.add(ida.trim());
+          if (volta && volta.trim()) aSet.add(volta.trim());
+          if (!ida && !volta) {
+            const alojNome = (d as any).alojamento && (d as any).alojamento.trim()
+              ? (d as any).alojamento.trim()
+              : (d.municipio.includes('LAPA') ? 'Base Central (Bom Jesus da Lapa)' : `Alojamento ${d.municipio}`);
+            aSet.add(alojNome);
+          }
         }
       });
 

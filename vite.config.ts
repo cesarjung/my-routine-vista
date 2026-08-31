@@ -45,6 +45,10 @@ const pcpSyncApiPlugin = (): Plugin => ({
                 cmd += ` --motivo="${safeMotivo}"`;
               }
             }
+            if (data.deletedSchedules && Array.isArray(data.deletedSchedules) && data.deletedSchedules.length > 0) {
+              const safeJson = JSON.stringify(data.deletedSchedules).replace(/"/g, '\\"');
+              cmd += ` --deleted-schedules="${safeJson}"`;
+            }
 
             console.log(`[API PCP] 🚀 Disparando upload pro Drive e gravação direta na Plan_Principal: ${cmd}`);
             exec(cmd, { cwd: __dirname }, (error, stdout, stderr) => {

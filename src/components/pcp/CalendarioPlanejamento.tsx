@@ -17,7 +17,13 @@ import {
   Plus,
   Trash2,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Filter,
+  Search,
+  ZoomIn,
+  ZoomOut,
+  Wrench,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
@@ -272,6 +278,56 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   const handleSetEscopo = setEscopo || setLocalEscopo;
   const handleSetDensidade = setDensidade || setLocalDensidade;
 
+  // Filtros da grade
+  const [filtroSupervisor, setFiltroSupervisor] = useState<string>('');
+  const [filtroEquipe, setFiltroEquipe] = useState<string>('');
+  const TODOS_TIPOS_CONHECIDOS = ['CONSTRUÇÃO', 'LINHA VIVA', 'MANUTENÇÃO', 'KIT', 'PODA', 'LINHA VIVA MANUT.'];
+  const [tiposSelecionados, setTiposSelecionados] = useState<Set<string>>(new Set(TODOS_TIPOS_CONHECIDOS));
+  const [tipoDropdownAberto, setTipoDropdownAberto] = useState(false);
+  const tipoDropdownRef = useRef<HTMLDivElement>(null);
+  const [filtroDisponibilidade, setFiltroDisponibilidade] = useState<string>('');
+  const [filtroMeta, setFiltroMeta] = useState<string>('');
+  const [filtroJornada, setFiltroJornada] = useState<string>('');
+  const [filtroDeslocamento, setFiltroDeslocamento] = useState<string>('');
+  const [zoomGrade, setZoomGrade] = useState(100);
+
+  // Fechar dropdown de tipos ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tipoDropdownRef.current && !tipoDropdownRef.current.contains(e.target as Node)) {
+        setTipoDropdownAberto(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleTipo = (tipo: string) => {
+    setTiposSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(tipo)) next.delete(tipo);
+      else next.add(tipo);
+      return next;
+    });
+  };
+
+  const selecionarTodosTipos = () => setTiposSelecionados(new Set(tiposUnicos));
+  const limparTodosTipos = () => setTiposSelecionados(new Set());
+
+  // Listas únicas para os selects
+  const supervisoresUnicos = useMemo(() => {
+    const set = new Set(equipes.map(e => e.supervisor || 'Sem Supervisor'));
+    return Array.from(set).sort();
+  }, [equipes]);
+
+  const tiposUnicos = useMemo(() => {
+    // Sempre incluir todos os tipos conhecidos + quaisquer extras dos dados
+    const TODOS_TIPOS_CONHECIDOS = ['CONSTRUÇÃO', 'LINHA VIVA', 'MANUTENÇÃO', 'KIT', 'PODA', 'LINHA VIVA MANUT.'];
+    const set = new Set(TODOS_TIPOS_CONHECIDOS);
+    equipes.forEach(e => { if (e.tipoEquipe) set.add(e.tipoEquipe); });
+    return Array.from(set).sort();
+  }, [equipes]);
+
   // Force re-render counter (para edições in-place de vistorias)
   const [, setForceRender] = useState(0);
 
@@ -444,13 +500,69 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     });
   };
 
-  // Equipes filtradas pelo escopo
+  // Equipes filtradas pelo escopo + filtros avançados
   const equipesFiltradas = useMemo(() => {
+    let filtered = [...equipes];
+
+    // Escopo
     if (activeEscopo === 'com_programacao') {
-      return equipes.filter(e => e.temProgramacao);
+      filtered = filtered.filter(e => e.temProgramacao);
     }
-    return equipes;
-  }, [equipes, activeEscopo]);
+
+    // Filtro Supervisor
+    if (filtroSupervisor) {
+      filtered = filtered.filter(e => (e.supervisor || 'Sem Supervisor') === filtroSupervisor);
+    }
+
+    // Filtro Equipe (busca textual)
+    if (filtroEquipe) {
+      const search = filtroEquipe.toUpperCase();
+      filtered = filtered.filter(e => e.codigo.toUpperCase().includes(search));
+    }
+
+    // Filtro Tipo (multi-select)
+    if (tiposSelecionados.size > 0 && tiposSelecionados.size < tiposUnicos.length) {
+      filtered = filtered.filter(e => tiposSelecionados.has(e.tipoEquipe || 'CONSTRUÇÃO'));
+    }
+
+    // Filtro Disponibilidade
+    if (filtroDisponibilidade === 'disponiveis') {
+      filtered = filtered.filter(e => e.temProgramacao);
+    } else if (filtroDisponibilidade === 'paradas') {
+      // Equipes que tem EQUIPE PARADA em algum dia
+      filtered = filtered.filter(e => {
+        if (!e.dias) return false;
+        return Object.values(e.dias).some((d: any) => d?.etapa?.toUpperCase().includes('EQUIPE PARADA'));
+      });
+    } else if (filtroDisponibilidade === 'sem_programacao') {
+      filtered = filtered.filter(e => !e.temProgramacao);
+    }
+
+    // Filtro Meta
+    if (filtroMeta === 'na_meta') {
+      filtered = filtered.filter(e => e.pctMeta >= 100);
+    } else if (filtroMeta === 'abaixo') {
+      filtered = filtered.filter(e => e.pctMeta < 100 && e.metaSemanal > 0);
+    }
+
+    // Filtro Jornada
+    if (filtroJornada === 'abaixo_8') {
+      filtered = filtered.filter(e => e.mediaJornadaMin > 0 && e.mediaJornadaMin < 480);
+    } else if (filtroJornada === 'acima_10') {
+      filtered = filtered.filter(e => e.mediaJornadaMin > 600);
+    } else if (filtroJornada === 'na_meta') {
+      filtered = filtered.filter(e => e.mediaJornadaMin >= 480 && e.mediaJornadaMin <= 600);
+    }
+
+    // Filtro Deslocamento
+    if (filtroDeslocamento === 'na_meta') {
+      filtered = filtered.filter(e => e.mediaDeslocamentoH > 0 && e.mediaDeslocamentoH <= 2.0);
+    } else if (filtroDeslocamento === 'acima') {
+      filtered = filtered.filter(e => e.mediaDeslocamentoH > 2.0);
+    }
+
+    return filtered;
+  }, [equipes, activeEscopo, filtroSupervisor, filtroEquipe, tiposSelecionados, tiposUnicos, filtroDisponibilidade, filtroMeta, filtroJornada, filtroDeslocamento]);
 
   // Totalizadores diários para a grade
   const totalizadoresDiarios = useMemo(() => {
@@ -618,7 +730,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               Jornada média das equipes
             </span>
             <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold text-[#23211E]">
+              <span className="text-2xl font-mono font-bold" style={{ color: getCorJornada(metricas.jornadaMediaMin).texto }}>
                 {formatMinToHours(metricas.jornadaMediaMin)}
               </span>
               <span className="text-xs text-[#6B6660]">por turno</span>
@@ -645,7 +757,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               Deslocamento médio na semana
             </span>
             <div className="flex items-baseline gap-2 mt-1.5">
-              <span className="text-2xl font-mono font-bold text-[#23211E]">
+              <span className="text-2xl font-mono font-bold" style={{ color: getCorDeslocamento(metricas.deslocamentoMedioH).texto }}>
                 {metricas.deslocamentoMedioH.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}h
               </span>
               <span className="text-xs text-[#6B6660]">por turno</span>
@@ -735,93 +847,140 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
       {/* 5.4 CALENDÁRIO POR EQUIPE */}
       {blocos.calendario && (
         <div className="bg-white rounded-xl border border-[#E6E3DD] shadow-2xs overflow-hidden">
-          {/* Faixa de Controles do Calendário: Escopo e Densidade */}
-          <div className="p-3 px-4 border-b border-[#E6E3DD] bg-[#FAF8F5] flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
-            <div className="flex items-center gap-4 flex-wrap">
-              {/* Escopo do Calendário */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-[#A39E96]">
-                  ESCOPO
-                </span>
-                <div className="inline-flex rounded-lg border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => handleSetEscopo('todas')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                      activeEscopo === 'todas'
-                        ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
-                        : 'text-[#6B6660] hover:text-[#23211E]'
-                    }`}
-                  >
-                    Todas as equipes ({equipes.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetEscopo('com_programacao')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                      activeEscopo === 'com_programacao'
-                        ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
-                        : 'text-[#6B6660] hover:text-[#23211E]'
-                    }`}
-                  >
-                    Somente com programação ({equipes.filter(e => e.temProgramacao).length})
-                  </button>
-                </div>
-              </div>
-
-              {/* Densidade das Células */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-[#A39E96]">
-                  DENSIDADE
-                </span>
-                <div className="inline-flex rounded-lg border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => handleSetDensidade('detalhado')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                      activeDensidade === 'detalhado'
-                        ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
-                        : 'text-[#6B6660] hover:text-[#23211E]'
-                    }`}
-                  >
-                    Detalhado
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetDensidade('compacto')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                      activeDensidade === 'compacto'
-                        ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]'
-                        : 'text-[#6B6660] hover:text-[#23211E]'
-                    }`}
-                  >
-                    Compacto
-                  </button>
-                </div>
-              </div>
+          {/* Barra de Controles e Filtros do Calendário - Linha Única */}
+          <div className="px-3 py-2.5 border-b border-[#E6E3DD] bg-[#FAF8F5] flex items-center gap-2 flex-wrap print:hidden">
+            {/* Escopo */}
+            <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-[10px] font-bold">
+              <button type="button" onClick={() => handleSetEscopo('todas')}
+                className={`px-2 py-1 rounded transition-all ${activeEscopo === 'todas' ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]' : 'text-[#6B6660]'}`}
+              >Todas ({equipes.length})</button>
+              <button type="button" onClick={() => handleSetEscopo('com_programacao')}
+                className={`px-2 py-1 rounded transition-all ${activeEscopo === 'com_programacao' ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]' : 'text-[#6B6660]'}`}
+              >Com Prog.</button>
             </div>
 
-            {/* Legenda Resumida */}
-            <div className="hidden lg:flex items-center gap-3 text-[10.5px] text-[#6B6660]">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#17794C]" /> ≥100%
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#C9A227]" /> Atenção
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#C0392E]" /> Crítico
-              </span>
+            {/* Densidade */}
+            <div className="inline-flex rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 text-[10px] font-bold">
+              <button type="button" onClick={() => handleSetDensidade('detalhado')}
+                className={`px-2 py-1 rounded transition-all ${activeDensidade === 'detalhado' ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]' : 'text-[#6B6660]'}`}
+              >Det.</button>
+              <button type="button" onClick={() => handleSetDensidade('compacto')}
+                className={`px-2 py-1 rounded transition-all ${activeDensidade === 'compacto' ? 'bg-white text-[#23211E] shadow-2xs border border-[#DEDAD3]' : 'text-[#6B6660]'}`}
+              >Comp.</button>
             </div>
+
+            {/* Zoom */}
+            <div className="inline-flex items-center rounded-md border border-[#DEDAD3] bg-[#F2F0EC] p-0.5 gap-0.5">
+              <button type="button" onClick={() => setZoomGrade(z => Math.max(60, z - 10))} className="p-0.5 rounded hover:bg-white">
+                <ZoomOut className="w-3 h-3 text-[#6B6660]" />
+              </button>
+              <span className="text-[9px] font-bold text-[#23211E] w-7 text-center">{zoomGrade}%</span>
+              <button type="button" onClick={() => setZoomGrade(z => Math.min(150, z + 10))} className="p-0.5 rounded hover:bg-white">
+                <ZoomIn className="w-3 h-3 text-[#6B6660]" />
+              </button>
+            </div>
+
+            <span className="w-px h-5 bg-[#DEDAD3]" />
+
+            {/* Filtro Supervisor */}
+            <select value={filtroSupervisor} onChange={e => setFiltroSupervisor(e.target.value)}
+              className="text-[10px] font-semibold border border-[#DEDAD3] rounded px-1.5 py-1 bg-white text-[#23211E] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]">
+              <option value="">Supervisor</option>
+              {supervisoresUnicos.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            {/* Buscar Equipe */}
+            <div className="relative">
+              <Search className="w-2.5 h-2.5 text-[#A39E96] absolute left-1.5 top-1/2 -translate-y-1/2" />
+              <input type="text" value={filtroEquipe} onChange={e => setFiltroEquipe(e.target.value)}
+                placeholder="Equipe..."
+                className="text-[10px] font-semibold border border-[#DEDAD3] rounded pl-5 pr-1.5 py-1 bg-white text-[#23211E] focus:outline-none focus:ring-1 focus:ring-[#E07A1F] w-[80px]"
+              />
+            </div>
+
+            {/* Tipo (multi-select dropdown) */}
+            <div className="relative" ref={tipoDropdownRef}>
+              <button type="button" onClick={() => setTipoDropdownAberto(!tipoDropdownAberto)}
+                className={`text-[10px] font-semibold border rounded px-1.5 py-1 bg-white text-[#23211E] focus:outline-none inline-flex items-center gap-1 ${
+                  tiposSelecionados.size < tiposUnicos.length ? 'border-[#E07A1F] ring-1 ring-[#E07A1F]/30' : 'border-[#DEDAD3]'
+                }`}>
+                Tipos ({tiposSelecionados.size}/{tiposUnicos.length})
+                <ChevronDown className={`w-3 h-3 transition-transform ${tipoDropdownAberto ? 'rotate-180' : ''}`} />
+              </button>
+              {tipoDropdownAberto && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-[#DEDAD3] rounded-md shadow-lg z-50 min-w-[180px] py-1">
+                  <div className="flex items-center justify-between px-2 py-1 border-b border-[#F2F0EC]">
+                    <button type="button" onClick={selecionarTodosTipos} className="text-[9px] font-bold text-[#1D58B5] hover:underline">Todos</button>
+                    <button type="button" onClick={limparTodosTipos} className="text-[9px] font-bold text-[#C0392E] hover:underline">Nenhum</button>
+                  </div>
+                  {tiposUnicos.map(tipo => (
+                    <label key={tipo} className="flex items-center gap-2 px-2 py-1 hover:bg-[#FAF8F5] cursor-pointer">
+                      <input type="checkbox" checked={tiposSelecionados.has(tipo)} onChange={() => toggleTipo(tipo)}
+                        className="w-3 h-3 rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] accent-[#E07A1F]" />
+                      <span className="text-[10px] font-semibold text-[#23211E]">{tipo}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Disponibilidade */}
+            <select value={filtroDisponibilidade} onChange={e => setFiltroDisponibilidade(e.target.value)}
+              className="text-[10px] font-semibold border border-[#DEDAD3] rounded px-1.5 py-1 bg-white text-[#23211E] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]">
+              <option value="">Disponibilidade</option>
+              <option value="disponiveis">Disponíveis</option>
+              <option value="paradas">Equipes Paradas</option>
+              <option value="sem_programacao">Sem Programação</option>
+            </select>
+
+            {/* Meta */}
+            <select value={filtroMeta} onChange={e => setFiltroMeta(e.target.value)}
+              className="text-[10px] font-semibold border border-[#DEDAD3] rounded px-1.5 py-1 bg-white text-[#23211E] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]">
+              <option value="">Meta</option>
+              <option value="na_meta">Na Meta (≥100%)</option>
+              <option value="abaixo">Abaixo (&lt;100%)</option>
+            </select>
+
+            {/* Jornada */}
+            <select value={filtroJornada} onChange={e => setFiltroJornada(e.target.value)}
+              className="text-[10px] font-semibold border border-[#DEDAD3] rounded px-1.5 py-1 bg-white text-[#23211E] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]">
+              <option value="">Jornada</option>
+              <option value="na_meta">Na Meta (8-10h)</option>
+              <option value="abaixo_8">Abaixo (&lt;8h)</option>
+              <option value="acima_10">Acima (&gt;10h)</option>
+            </select>
+
+            {/* Deslocamento */}
+            <select value={filtroDeslocamento} onChange={e => setFiltroDeslocamento(e.target.value)}
+              className="text-[10px] font-semibold border border-[#DEDAD3] rounded px-1.5 py-1 bg-white text-[#23211E] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]">
+              <option value="">Deslocamento</option>
+              <option value="na_meta">Na Meta (≤2h)</option>
+              <option value="acima">Acima (&gt;2h)</option>
+            </select>
+
+            {/* Limpar */}
+            {(filtroSupervisor || filtroEquipe || tiposSelecionados.size < tiposUnicos.length || filtroDisponibilidade || filtroMeta || filtroJornada || filtroDeslocamento) && (
+              <button type="button"
+                onClick={() => { setFiltroSupervisor(''); setFiltroEquipe(''); setTiposSelecionados(new Set(tiposUnicos)); setFiltroDisponibilidade(''); setFiltroMeta(''); setFiltroJornada(''); setFiltroDeslocamento(''); }}
+                className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-[10px] font-bold text-[#C0392E] hover:bg-[#F9E4E1]">
+                <X className="w-3 h-3" /> Limpar
+              </button>
+            )}
+
+            {/* Contador */}
+            <span className="text-[9px] font-bold text-[#A39E96] ml-auto">
+              {equipesFiltradas.length}/{equipes.length}
+            </span>
           </div>
+
 
           {/* Grade do Calendário */}
           <div className="overflow-x-auto">
-            <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 115 + 475)}px` }}>
+            <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 180 + 340)}px`, transform: `scale(${zoomGrade / 100})`, transformOrigin: 'top left', width: `${10000 / zoomGrade}%` }}>
               {/* Cabeçalho da Grade */}
               <div
                 className="bg-[#F2F0EC] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider py-2 px-3 items-center grid"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px` }}
+                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px` }}
               >
                 <div>Equipe</div>
                 {diasDaSemana.map((diaData, idx) => {
@@ -873,7 +1032,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                         {/* Header do Supervisor na Grade com Totais */}
                         <div
                           className="bg-[#FAF8F5] border-y border-[#E6E3DD] text-xs font-bold text-[#5C574F] py-2 px-3 items-center grid"
-                          style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px` }}
+                          style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px` }}
                         >
                           <div className="col-span-1 flex items-center gap-1 text-[10.5px] select-none" style={{ gridColumn: `1 / span ${1 + diasDaSemana.length}` }}>
                             <span>👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})</span>
@@ -930,7 +1089,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                               key={eq.codigo}
                               className="px-3 py-2.5 items-center hover:bg-[#FAF8F5] transition-colors text-xs grid"
                               style={{
-                                gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px`,
+                                gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px`,
                                 borderLeft: `3px solid ${temProg ? corFaixa : '#BFB9B0'}`
                               }}
                             >
@@ -952,14 +1111,29 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                 const diaIso = format(diaData, 'yyyy-MM-dd');
                                 const prog = eq.dias?.[diaIso];
 
-                                if (!prog || prog.isFolga) {
+                                if (!prog) {
                                   return (
                                     <div
                                       key={diaIso}
-                                      className="mx-1 h-[96px] rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
+                                      className="mx-1 h-[150px] rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
+                                    >
+                                      {diaData.getDay() === 0 && (
+                                        <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
+                                          Domingo
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                }
+
+                                if (prog.isFolga) {
+                                  return (
+                                    <div
+                                      key={diaIso}
+                                      className="mx-1 h-[150px] rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
                                     >
                                       <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
-                                        {diaData.getDay() === 0 ? 'Domingo' : 'Folga'}
+                                        Folga
                                       </span>
                                     </div>
                                   );
@@ -969,10 +1143,23 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                   return (
                                     <div
                                       key={diaIso}
-                                      className="mx-1 h-[96px] rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
+                                      className="mx-1 h-[150px] rounded-md border border-[#E6E3DD]/60 bg-[#FAF8F5] flex flex-col items-center justify-center p-1"
                                     >
                                       <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
                                         Feriado
+                                      </span>
+                                    </div>
+                                  );
+                                }
+
+                                if (prog.isIndisponivel) {
+                                  return (
+                                    <div
+                                      key={diaIso}
+                                      className="mx-1 h-[150px] rounded-md border border-[#E8C9A0]/60 bg-[#FBF5EC] flex flex-col items-center justify-center p-1"
+                                    >
+                                      <span className="text-[10px] font-bold text-[#B4581A] uppercase tracking-wider">
+                                        Indisponível
                                       </span>
                                     </div>
                                   );
@@ -985,11 +1172,13 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                     : prog.tempoTotalMin >= 450
                                       ? '#17794C'
                                       : '#C9A227';
+                                const deslocH = prog.tempoDeslocamentoMin / 60;
+                                const corDotDesloc = getCorDeslocamento(deslocH).texto;
 
                                 return (
                                   <div
                                     key={diaIso}
-                                    className="mx-1 h-[96px] rounded-md border border-[#E6E3DD] bg-white p-1.5 flex flex-col justify-between shadow-2xs hover:border-[#DEDAD3] transition-colors"
+                                    className="mx-1 h-[150px] rounded-md border border-[#E6E3DD] bg-white p-1.5 flex flex-col justify-between shadow-2xs hover:border-[#DEDAD3] transition-colors"
                                   >
                                     {/* Faixa Superior: % Meta Diária e Município */}
                                     <div className="flex items-center justify-between gap-1">
@@ -999,14 +1188,19 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                       >
                                         {prog.pctMetaDia > 0 ? `${prog.pctMetaDia}%` : '-'}
                                       </span>
-                                      <span className="px-1.5 py-0.2 rounded bg-[#F2F0EC] text-[#6B6660] text-[9px] font-bold uppercase truncate max-w-[65px]" title={prog.municipio}>
-                                        {prog.municipio}
-                                      </span>
+                                      {prog.municipio && (
+                                        <span className="px-1.5 py-0.2 rounded bg-[#F2F0EC] text-[#6B6660] text-[8px] font-bold uppercase truncate max-w-[120px]" title={prog.municipio}>
+                                          {prog.municipio}
+                                        </span>
+                                      )}
                                     </div>
 
                                     {/* Etapa e Obra */}
                                     <div className="leading-tight my-0.5">
-                                      <span className="font-bold text-[10px] text-[#23211E] uppercase line-clamp-1 block" title={prog.etapa}>
+                                      <span
+                                        className={`font-bold text-[10px] uppercase line-clamp-1 block ${prog.etapa?.toUpperCase().includes('EQUIPE PARADA') ? 'text-[#C0392E]' : 'text-[#23211E]'}`}
+                                        title={prog.etapa}
+                                      >
                                         {prog.etapa}
                                       </span>
                                       <span className="font-mono text-[9px] text-[#6B6660] truncate block" title={prog.obra}>
@@ -1020,15 +1214,18 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                         <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: corDotJornada }} />
                                         <span className="font-bold text-[#23211E]">{formatMinToHours(prog.tempoTotalMin)}</span>
                                       </div>
-                                      <span className="text-[9px] text-[#6B6660]">
-                                        desl {(prog.tempoDeslocamentoMin / 60).toFixed(1).replace('.', ',')}h
-                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: corDotDesloc }} />
+                                        <span className="font-bold text-[9px]" style={{ color: corDotDesloc }}>
+                                          desl {deslocH.toFixed(1).replace('.', ',')}h
+                                        </span>
+                                      </div>
                                     </div>
 
-                                    {/* Pontos / Vãos (se houver e couber) */}
+                                    {/* Pontos / Vãos */}
                                     {activeDensidade === 'detalhado' && prog.pontos && prog.pontos.length > 0 && (
-                                      <div className="text-[8.5px] font-mono text-[#8C877D] truncate pt-0.5" title={prog.pontos.join(', ')}>
-                                        {prog.pontos.slice(0, 2).join(', ')}{prog.pontos.length > 2 ? ` +${prog.pontos.length - 2}` : ''}
+                                      <div className="text-[8.5px] font-mono text-[#8C877D] pt-0.5 leading-[1.3] flex-1 overflow-hidden" style={{ wordBreak: 'break-word' }}>
+                                        {prog.pontos.join(', ')}
                                       </div>
                                     )}
                                   </div>
@@ -1036,19 +1233,19 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                               })}
 
                               {/* Coluna Planejado */}
-                              <div className="text-right pr-2 font-mono font-bold text-xs text-[#17794C]">
-                                R$ {eq.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              <div className="text-right pr-1 font-mono font-bold text-[9px] text-[#17794C] leading-tight">
+                                R${eq.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                               </div>
 
                               {/* Coluna Meta */}
-                              <div className="text-right pr-2 font-mono text-[10px] text-[#6B6660]">
-                                R$ {eq.metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              <div className="text-right pr-1 font-mono text-[9px] text-[#6B6660] leading-tight">
+                                R${eq.metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                               </div>
 
                               {/* Coluna % Meta */}
                               <div className="text-center">
                                 <span
-                                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold font-mono"
+                                  className="inline-block px-1 py-0.5 rounded text-[9px] font-bold font-mono"
                                   style={{
                                     backgroundColor: getCorPctPlanejado(eq.pctMeta).fundo,
                                     color: getCorPctPlanejado(eq.pctMeta).texto,
@@ -1060,20 +1257,20 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
                               {/* Coluna Status Produção */}
                               <div className="text-center">
-                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadge}`}>
+                                <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-bold whitespace-nowrap ${corBadge}`}>
                                   {statusTexto}
                                 </span>
                               </div>
 
                               {/* Coluna Média Deslocamento */}
-                              <div className="text-center font-bold text-[#23211E] font-mono">
+                              <div className="text-center font-bold text-[9px] text-[#23211E] font-mono">
                                 {temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
                               </div>
 
                               {/* Coluna Status Deslocamento */}
                               <div className="text-center">
                                 {temProg ? (
-                                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corDesloc}`}>
+                                  <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-bold whitespace-nowrap ${corDesloc}`}>
                                     {textoDesloc}
                                   </span>
                                 ) : '-'}
@@ -1090,7 +1287,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               {/* Linha de Totais do Período */}
               <div
                 className="bg-[#FAF8F5] border-t-2 border-[#DEDAD3] text-xs font-bold py-2.5 px-3 items-center grid text-[#23211E]"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(115px, 1fr)) 85px 80px 45px 100px 55px 110px` }}
+                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px` }}
               >
                 <div className="pl-1 uppercase tracking-wider text-[11px] text-[#5C574F]">
                   Total Geral

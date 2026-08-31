@@ -45,3 +45,5 @@ google_credentials.json
 scratch/
 
 supabase/.temp/
+__pycache__/
+*.pyc

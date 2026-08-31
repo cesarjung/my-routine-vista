@@ -186,7 +186,7 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             # Limite maximo de colunas a extrair de cada aba (para evitar lixo infinito)
             MAX_COLS = {
                 "Carteira_Planejador": 80,
-                "Plan_Principal": 78,
+                "Plan_Principal": 80,
                 "Reprogramadas": 55,
                 "Base_Curva": 10,
                 "BD_Config": 100,
@@ -196,7 +196,7 @@ def fetch_google_sheets(unidade_id, gc, retries=3):
             # Colunas (índices 0-based) que o frontend de fato consome. O resto é lixo que incha o payload.
             USED_COLS = {
                 # Carteira liberada até 80 colunas (incluindo Coluna BG / Dono da Obra) para busca dinâmica de cabeçalhos
-                "Plan_Principal": {0, 1, 4, 6, 7, 8, 12, 14, 20, 21, 22, 23, 24, 25, 28, 29, 37, 38, 40, 42, 53, 64, 67, 76},
+                "Plan_Principal": {0, 1, 4, 6, 7, 8, 10, 12, 14, 16, 18, 20, 21, 22, 23, 24, 25, 28, 29, 36, 37, 38, 39, 40, 41, 42, 45, 46, 50, 53, 56, 62, 63, 64, 65, 66, 67, 68, 76, 77, 78},
                 "Reprogramadas": {0, 1, 4, 6, 7, 12, 20, 28, 29, 37, 38, 40, 42}
             }
             

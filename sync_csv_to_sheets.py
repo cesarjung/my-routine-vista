@@ -110,7 +110,7 @@ def upload_csv_to_gdrive(drive_service, unit_sigla, csv_filepath):
         logging.error(f"Erro ao enviar arquivo para o Google Drive: {e}")
         return None
 
-def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprogramar=False, motivo=None):
+def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprogramar=False, motivo=None, deleted_schedules=None):
     sheet_id = UNIDADES_MAP.get(unit_sigla)
     if not sheet_id:
         logging.error(f"Sigla de unidade desconhecida '{unit_sigla}'")
@@ -123,103 +123,282 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
         with open(csv_filepath, 'r', encoding='utf-8-sig') as f:
             lines = [l.strip() for l in f if l.strip()]
 
-        if len(lines) < 2:
+        if len(lines) < 2 and not deleted_schedules:
             logging.warning("CSV sem linhas de dados.")
             return False
 
         # Process all data lines from the CSV
-        data_lines = lines[1:]
+        data_lines = lines[1:] if len(lines) > 1 else []
 
-        # 1. Identify keys to check for existing rows
-        # Col BK is index 62 (ex: EH156_21092026)
-        keys_to_replace = set()
-        for line in data_lines:
-            cells = line.split(';')
-            bk_val = cells[62].strip().strip('"') if len(cells) > 62 else ""
-            if bk_val:
-                keys_to_replace.add(bk_val)
+        # Helpers
+        import re
+        def extract_date(s):
+            if not s: return ""
+            m = re.search(r'(\d{2}/\d{2}/\d{4})', str(s))
+            if m: return m.group(1)
+            m2 = re.search(r'(\d{4}-\d{2}-\d{2})', str(s))
+            if m2:
+                parts = m2.group(1).split('-')
+                return f"{parts[2]}/{parts[1]}/{parts[0]}"
+            return str(s).strip()
 
-        # 2. Check if keys already exist in Plan_Principal (Col BK is column 63 in 1-based indexing)
-        col_bk_values = worksheet.col_values(63)
-        rows_to_remove = []
-        for r_idx, val in enumerate(col_bk_values):
-            if r_idx < 5: # Rows 1-5 are headers
-                continue
-            if val.strip() in keys_to_replace:
-                rows_to_remove.append(r_idx + 1) # 1-based row index
+        def clean_code(c):
+            if not c: return ""
+            return re.sub(r'[^A-Z0-9]', '', re.sub(r'^[BP]-', '', str(c).strip().upper()))
 
-        # If existing rows were found:
-        if rows_to_remove:
-            logging.info(f"  [SHEETS] Encontradas {len(rows_to_remove)} linha(s) existentes na Plan_Principal para substituição/reprogramação: {rows_to_remove}")
-            
-            if is_reprogramar:
-                # Open Reprogramadas worksheet
+        def get_col_letter(col_idx):
+            if col_idx < 26:
+                return chr(65 + col_idx)
+            return chr(65 + (col_idx // 26) - 1) + chr(65 + (col_idx % 26))
+
+        # 1. Read all rows from Plan_Principal
+        raw_all_rows = worksheet.get_all_values()
+
+        # 2. Helpers to find existing rows or empty slots
+        def find_existing_planned_row(rows, target_eq, target_dt, target_bk, exclude=set()):
+            for i in range(5, len(rows)):
+                if i in exclude: continue
+                r = rows[i]
+                if not r or len(r) == 0: continue
+                exist_proj = clean_code(r[7] if len(r) > 7 else "")
+                if not exist_proj: continue
+                exist_bk = str(r[62] if len(r) > 62 else "").strip()
+                exist_eq = str(r[6] if len(r) > 6 else "").strip().upper()
+                exist_dt = extract_date(r[1] if len(r) > 1 else "")
+                if (target_bk and exist_bk and exist_bk == target_bk) or \
+                   (target_eq and exist_eq == target_eq and target_dt and exist_dt == target_dt):
+                    return i
+            return -1
+
+        def find_template_slot(rows, target_eq, target_dt, exclude=set()):
+            for i in range(5, len(rows)):
+                if i in exclude: continue
+                r = rows[i]
+                if not r or len(r) == 0: continue
+                exist_proj = clean_code(r[7] if len(r) > 7 else "")
+                if exist_proj: continue
+                exist_eq = str(r[6] if len(r) > 6 else "").strip().upper()
+                exist_dt = extract_date(r[1] if len(r) > 1 else "")
+                if target_eq and exist_eq == target_eq and target_dt and exist_dt == target_dt:
+                    return i
+            return -1
+
+        def find_first_empty_row(rows, exclude=set()):
+            for i in range(5, len(rows)):
+                if i in exclude: continue
+                r = rows[i]
+                if not r or len(r) == 0: return i
+                val_b = str(r[1] if len(r) > 1 else "").strip()
+                val_g = str(r[6] if len(r) > 6 else "").strip()
+                val_h = str(r[7] if len(r) > 7 else "").strip()
+                if not val_b and not val_g and not val_h:
+                    return i
+            return max(5, len(rows))
+
+        reprog_updates = []
+        rows_to_delete = []
+        planned_operations = []
+
+        # Process explicit deleted schedules (requests to delete rows from Plan_Principal)
+        if deleted_schedules:
+            for ds in deleted_schedules:
+                del_eq = str(ds.get('equipe', '')).strip().upper()
+                del_dt = extract_date(ds.get('dataCompleta') or ds.get('dataStr') or ds.get('data', ''))
+                del_bk = str(ds.get('chaveBk', '')).strip()
+                del_idx = find_existing_planned_row(raw_all_rows, del_eq, del_dt, del_bk, set(rows_to_delete))
+                if del_idx != -1 and del_idx not in rows_to_delete:
+                    rows_to_delete.append(del_idx)
+                    logging.info(f"  [SHEETS] Linha {del_idx + 1} marcada para exclusão definitiva na Plan_Principal (equipe={del_eq}, data={del_dt}).")
+
+        # Find next available row in Reprogramadas tab if needed
+        next_reprog_row = 6
+        if is_reprogramar:
+            try:
                 ws_reprog = spreadsheet.worksheet("Reprogramadas")
-                # Find first empty row in Reprogramadas (Col B / Data)
                 reprog_b_vals = ws_reprog.col_values(2)
-                target_reprog_row = None
+                found_reprog = False
                 for i in range(5, len(reprog_b_vals)):
                     if not reprog_b_vals[i].strip():
-                        target_reprog_row = i + 1
+                        next_reprog_row = i + 1
+                        found_reprog = True
                         break
-                if target_reprog_row is None:
-                    target_reprog_row = len(reprog_b_vals) + 1
+                if not found_reprog:
+                    next_reprog_row = max(6, len(reprog_b_vals) + 1)
+            except Exception as e:
+                logging.warning(f"Aba Reprogramadas aviso: {e}")
 
-                # Copy each existing row from Plan_Principal to Reprogramadas
-                for offset, r_num in enumerate(rows_to_remove):
-                    existing_vals = worksheet.row_values(r_num)
-                    # Preenche o Motivo da Reprogramação na Coluna AU (índice 46)
-                    if motivo:
-                        while len(existing_vals) <= 46:
-                            existing_vals.append("")
-                        existing_vals[46] = str(motivo).strip()
-
-                    reprog_row_num = target_reprog_row + offset
-                    reprog_updates = []
-                    for c_idx, val in enumerate(existing_vals):
-                        val_str = str(val if val is not None else '').strip()
-                        if val_str:
-                            col_letter = chr(65+c_idx) if c_idx < 26 else (chr(65+c_idx//26 - 1) + chr(65+c_idx%26))
-                            reprog_updates.append({
-                                'range': f"{col_letter}{reprog_row_num}",
-                                'values': [[val_str]]
-                            })
-                    if reprog_updates:
-                        ws_reprog.batch_update(reprog_updates, value_input_option='USER_ENTERED')
-                logging.info(f"  [SHEETS] Linhas antigas copiadas com sucesso para a aba Reprogramadas (motivo='{motivo}')!")
-
-            # Delete old rows in reverse order to maintain correct indices
-            for r_num in sorted(rows_to_remove, reverse=True):
-                worksheet.delete_rows(r_num)
-                logging.info(f"  [SHEETS] Linha antiga {r_num} removida da Plan_Principal.")
-
-        # 3. Find first empty row starting at line 6 (index 5) by checking Column B (Data)
-        col_b_values = worksheet.col_values(2)
-        target_row_idx = None
-
-        for i in range(5, len(col_b_values)):
-            val = col_b_values[i].strip() if i < len(col_b_values) else ""
-            if not val:
-                target_row_idx = i + 1 # 1-indexed row number
-                break
-
-        if target_row_idx is None:
-            target_row_idx = len(col_b_values) + 1
-
-        logging.info(f"  [SHEETS] Inserindo {len(data_lines)} linha(s) a partir da Linha {target_row_idx} preservando listas suspensas e validações...")
-
-        # APENAS ATUALIZA AS CÉLULAS QUE POSSUEM DADOS!
-        # Células vazias NUNCA são enviadas para preservar 100% dos botões de lista suspensa, caixas de seleção e fórmulas pré-existentes.
-        cell_updates = []
-        for r_offset, line in enumerate(data_lines):
-            current_row = target_row_idx + r_offset
+        # 3. Categorize each data line
+        for line in data_lines:
             row_cells = line.split(';')
+            nova_dt = extract_date(row_cells[1] if len(row_cells) > 1 else "")
+            nova_eq = str(row_cells[6] if len(row_cells) > 6 else "").strip().upper()
+            novo_proj = clean_code(row_cells[7] if len(row_cells) > 7 else "")
+            nova_bk = str(row_cells[62] if len(row_cells) > 62 else "").strip().strip('"')
+            is_line_reprog = is_reprogramar or ('REPROG' in str(row_cells[0]).upper()) or (str(row_cells[0]).upper() == 'TRUE')
 
-            for c_idx, val in enumerate(row_cells[:78]):
+            existing_idx = find_existing_planned_row(raw_all_rows, nova_eq, nova_dt, nova_bk, set(rows_to_delete))
+            has_existing = existing_idx != -1
+            old_proj = clean_code(raw_all_rows[existing_idx][7] if has_existing and len(raw_all_rows[existing_idx]) > 7 else "")
+            is_same_obra = (novo_proj == old_proj) if (has_existing and novo_proj and old_proj) else True
+
+            if is_line_reprog:
+                # 1. Copia a linha (existente ou atual) para a aba Reprogramadas (sem nada na Coluna A e com Motivo na Coluna AU)
+                source_row = raw_all_rows[existing_idx] if has_existing else row_cells
+                copy_row = list(source_row)
+                while len(copy_row) <= 79: copy_row.append("")
+                copy_row[0] = "" # Coluna A vazia na aba Reprogramadas conforme especificado
+                motivo_linha = (str(row_cells[46]).strip() if len(row_cells) > 46 and str(row_cells[46]).strip() else "") or (str(motivo).strip() if motivo else "") or (str(source_row[46]).strip() if len(source_row) > 46 and str(source_row[46]).strip() else "") or ""
+                if motivo_linha:
+                    copy_row[46] = str(motivo_linha).strip()
+
+                dest_reprog = next_reprog_row
+                next_reprog_row += 1
+
+                for c_idx, val in enumerate(copy_row):
+                    if c_idx >= 77: # Reprogramadas tab has 77 columns (A to BY)
+                        continue
+                    val_str = str(val if val is not None else '').strip()
+                    if val_str:
+                        reprog_updates.append({
+                            'range': f"{get_col_letter(c_idx)}{dest_reprog}",
+                            'values': [[val_str]]
+                        })
+
+                # Na Plan_Principal, a nova programação fica com Coluna AU vazia (sem motivo ainda)
+                while len(row_cells) <= 46: row_cells.append("")
+                row_cells[46] = ""
+
+                # 2. Comportamento na Plan_Principal
+                if has_existing and is_same_obra:
+                    old_compilado = str(raw_all_rows[existing_idx][14] if len(raw_all_rows[existing_idx]) > 14 else "").strip()
+                    new_compilado = str(row_cells[14] if len(row_cells) > 14 else "").strip()
+
+                    old_val = str(raw_all_rows[existing_idx][37] if len(raw_all_rows[existing_idx]) > 37 else "").strip().replace("R$", "").replace(" ", "").replace(",", ".")
+                    new_val = str(row_cells[37] if len(row_cells) > 37 else "").strip().replace("R$", "").replace(" ", "").replace(",", ".")
+
+                    old_pontos = str(raw_all_rows[existing_idx][8] if len(raw_all_rows[existing_idx]) > 8 else "").strip()
+                    new_pontos = str(row_cells[8] if len(row_cells) > 8 else "").strip()
+
+                    old_etapa = str(raw_all_rows[existing_idx][12] if len(raw_all_rows[existing_idx]) > 12 else "").strip()
+                    new_etapa = str(row_cells[12] if len(row_cells) > 12 else "").strip()
+
+                    has_diff = (old_compilado != new_compilado) or (old_val != new_val) or (old_pontos != new_pontos) or (old_etapa != new_etapa)
+
+                    if has_diff:
+                        # Cenário 1B: Mesma Obra com valores/atividades diferentes -> Altera a linha na Plan_Principal (não exclui)
+                        planned_operations.append({
+                            'type': 'OVERWRITE_SAME_ROW',
+                            'original_idx': existing_idx,
+                            'row_cells': row_cells
+                        })
+                    else:
+                        # Cenário 1A: Mesma Obra sem alterações de valores -> Apenas exclui a linha da Plan_Principal
+                        rows_to_delete.append(existing_idx)
+
+                elif has_existing and not is_same_obra:
+                    # Cenário 2: Outra Obra -> Apaga a linha da obra original antiga e grava a nova programação na primeira linha em branco
+                    rows_to_delete.append(existing_idx)
+                    planned_operations.append({
+                        'type': 'APPEND',
+                        'row_cells': row_cells
+                    })
+                else:
+                    # Nova programação
+                    planned_operations.append({
+                        'type': 'NEW_OR_TEMPLATE',
+                        'nova_eq': nova_eq,
+                        'nova_dt': nova_dt,
+                        'row_cells': row_cells
+                    })
+            else:
+                # CASO 2: NÃO REPROGRAMAR (SOBRESCREVER MESMA LINHA)
+                if has_existing:
+                    planned_operations.append({
+                        'type': 'OVERWRITE_SAME_ROW',
+                        'original_idx': existing_idx,
+                        'row_cells': row_cells
+                    })
+                else:
+                    planned_operations.append({
+                        'type': 'NEW_OR_TEMPLATE',
+                        'nova_eq': nova_eq,
+                        'nova_dt': nova_dt,
+                        'row_cells': row_cells
+                    })
+
+        # 4. Grava linhas na aba Reprogramadas (se houver)
+        if reprog_updates:
+            ws_reprog = spreadsheet.worksheet("Reprogramadas")
+            ws_reprog.batch_update(reprog_updates, value_input_option='USER_ENTERED')
+            logging.info(f"  [SHEETS] {len(reprog_updates)} células gravadas na aba Reprogramadas!")
+
+        # 5. Exclui fisicamente as linhas antigas (se houver reprogramação)
+        if rows_to_delete:
+            for idx in sorted(set(rows_to_delete), reverse=True):
+                worksheet.delete_rows(idx + 1)
+                logging.info(f"  [SHEETS] Linha antiga {idx + 1} removida da Plan_Principal.")
+
+        # 6. Atualiza o estado das linhas
+        current_rows = worksheet.get_all_values()
+        cell_updates = []
+        used_target_indices = set()
+
+        for op in planned_operations:
+            if op['type'] == 'OVERWRITE_SAME_ROW':
+                adjusted_idx = op['original_idx']
+                if rows_to_delete:
+                    del_before = len([d for d in rows_to_delete if d < op['original_idx']])
+                    adjusted_idx = op['original_idx'] - del_before
+                target_row_idx = adjusted_idx
+                used_target_indices.add(target_row_idx)
+
+            elif op['type'] == 'NEW_OR_TEMPLATE':
+                slot_idx = find_template_slot(current_rows, op['nova_eq'], op['nova_dt'], used_target_indices)
+                if slot_idx != -1:
+                    target_row_idx = slot_idx
+                else:
+                    blank_idx = find_first_empty_row(current_rows, used_target_indices)
+                    while blank_idx in used_target_indices:
+                        blank_idx += 1
+                    target_row_idx = blank_idx
+                used_target_indices.add(target_row_idx)
+                while len(current_rows) <= target_row_idx:
+                    current_rows.append([])
+                current_rows[target_row_idx] = op['row_cells']
+
+            else:
+                # APPEND
+                blank_idx = find_first_empty_row(current_rows, used_target_indices)
+                while blank_idx in used_target_indices:
+                    blank_idx += 1
+                target_row_idx = blank_idx
+                used_target_indices.add(target_row_idx)
+                while len(current_rows) <= target_row_idx:
+                    current_rows.append([])
+                current_rows[target_row_idx] = op['row_cells']
+
+            target_row_num = target_row_idx + 1 # 1-indexed for Sheets
+
+            MANAGED_COL_INDICES = {
+                0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16,
+                17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+                36, 37, 38, 39, 46, 56, 62, 63, 64, 65, 66, 67, 68, 76, 77, 78
+            }
+            for c_idx in range(80):
+                if c_idx >= len(op['row_cells']) and c_idx not in MANAGED_COL_INDICES:
+                    continue
+                val = op['row_cells'][c_idx] if c_idx < len(op['row_cells']) else ""
                 val_str = str(val if val is not None else '').strip().strip('"')
-                if val_str:
-                    col_letter = chr(65+c_idx) if c_idx < 26 else (chr(65+c_idx//26 - 1) + chr(65+c_idx%26))
-                    cell_range = f"{col_letter}{current_row}"
+                if c_idx in MANAGED_COL_INDICES:
+                    col_letter = get_col_letter(c_idx)
+                    cell_range = f"{col_letter}{target_row_num}"
+                    cell_updates.append({
+                        'range': cell_range,
+                        'values': [[val_str]]
+                    })
+                elif val_str:
+                    col_letter = get_col_letter(c_idx)
+                    cell_range = f"{col_letter}{target_row_num}"
                     cell_updates.append({
                         'range': cell_range,
                         'values': [[val_str]]
@@ -227,7 +406,10 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
 
         if cell_updates:
             worksheet.batch_update(cell_updates, value_input_option='USER_ENTERED')
-            logging.info(f"  [SHEETS OK] {len(cell_updates)} células com dados atualizadas a partir da Linha {target_row_idx} da Plan_Principal (listas suspensas preservadas)!")
+            logging.info(f"  [SHEETS OK] {len(cell_updates)} células com dados atualizadas na Plan_Principal (listas suspensas preservadas)!")
+            return True
+        elif rows_to_delete:
+            logging.info(f"  [SHEETS OK] {len(rows_to_delete)} linha(s) excluída(s) com sucesso da Plan_Principal!")
             return True
         else:
             logging.warning("Nenhuma célula com dados para atualizar.")
@@ -238,7 +420,7 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
         logging.error(f"  [SHEETS ERRO] Não foi possível escrever diretamente na Plan_Principal: {err_msg}")
         return False
 
-def process_csv_file(csv_filepath, is_reprogramar=False, motivo=None):
+def process_csv_file(csv_filepath, is_reprogramar=False, motivo=None, deleted_schedules=None):
     filename = os.path.basename(csv_filepath)
     sigla = get_unit_from_filename(filename)
     if not sigla:
@@ -255,11 +437,11 @@ def process_csv_file(csv_filepath, is_reprogramar=False, motivo=None):
 
     logging.info(f"Iniciando processamento imediato do arquivo {filename} para a unidade {sigla} (reprogramar={is_reprogramar}, motivo='{motivo}')...")
 
-    # 1. Salva o CSV na pasta do Google Drive da unidade (ex: BJL)
-    upload_res = upload_csv_to_gdrive(drive_service, sigla, csv_filepath)
+    # 1. Upload CSV to Drive
+    upload_csv_to_gdrive(drive_service, sigla, csv_filepath)
 
-    # 2. Insere IMEDIATAMENTE os dados na primeira linha em branco da Plan_Principal do Sheets preservando listas suspensas!
-    paste_res = paste_row_directly_to_plan_principal(gc, sigla, csv_filepath, is_reprogramar=is_reprogramar, motivo=motivo)
+    # 2. Cola as linhas diretamente na Plan_Principal
+    paste_res = paste_row_directly_to_plan_principal(gc, sigla, csv_filepath, is_reprogramar=is_reprogramar, motivo=motivo, deleted_schedules=deleted_schedules)
 
     # 3. Sincroniza a Plan_Principal atualizada de volta pro Supabase imediatamente!
     sheet_id = UNIDADES_MAP.get(sigla)
@@ -274,13 +456,19 @@ def process_csv_file(csv_filepath, is_reprogramar=False, motivo=None):
     return paste_res
 
 if __name__ == "__main__":
+    import json
     is_reprog = '--reprogramar' in sys.argv
     motivo_arg = None
+    deleted_schedules_arg = None
+
     for a in sys.argv[1:]:
         if a.startswith('--motivo='):
             motivo_arg = a.split('=', 1)[1]
-        elif a == '--motivo' and sys.argv.index(a) + 1 < len(sys.argv):
-            motivo_arg = sys.argv[sys.argv.index(a) + 1]
+        elif a.startswith('--deleted-schedules='):
+            try:
+                deleted_schedules_arg = json.loads(a.split('=', 1)[1])
+            except Exception as e:
+                logging.warning(f"Erro ao parsear --deleted-schedules: {e}")
 
     clean_args = [a for a in sys.argv[1:] if not a.startswith('--') and (motivo_arg is None or a != motivo_arg)]
     if len(clean_args) > 0:
@@ -290,4 +478,4 @@ if __name__ == "__main__":
 
     for f in files:
         if os.path.exists(f):
-            process_csv_file(f, is_reprogramar=is_reprog, motivo=motivo_arg)
+            process_csv_file(f, is_reprogramar=is_reprog, motivo=motivo_arg, deleted_schedules=deleted_schedules_arg)

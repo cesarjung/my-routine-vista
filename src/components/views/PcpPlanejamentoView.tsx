@@ -46,7 +46,8 @@ import {
   ServicoBase,
   ParsedPlanejamentoExistente,
   MaterialPontoBudget,
-  MOTIVOS_REPROGRAMACAO_COL_AU
+  MOTIVOS_REPROGRAMACAO_COL_AU,
+  isEtapaSemAtividades
 } from '@/hooks/usePcpPlanejamentoData';
 import {
   Dialog,
@@ -266,6 +267,8 @@ export const PcpPlanejamentoView = () => {
   const [diasFiltroLvMap, setDiasFiltroLvMap] = useInMemorySessionState<Record<string, 'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>>('pcp_mem_filtro_lv', {});
   const [diasExtrasList, setDiasExtrasList] = useInMemorySessionState<string[]>('pcp_mem_dias_extras', []);
   const [diasCarregadosList, setDiasCarregadosList] = useInMemorySessionState<string[]>('pcp_mem_dias_carregados', []);
+  const [diasDateOverrideMap, setDiasDateOverrideMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_dias_date_override', {});
+  const [diasExcluidosList, setDiasExcluidosList] = useInMemorySessionState<Array<{ diaId: string, dataCompleta: string, equipe: string, projeto: string, chaveBk?: string }>>('pcp_mem_dias_excluidos', []);
   const [diasPercentualCumprimentoMap, setDiasPercentualCumprimentoMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_perc_cump', {});
   const [diasMotivoDescumprimentoMap, setDiasMotivoDescumprimentoMap] = useInMemorySessionState<Record<string, string>>('pcp_mem_motivo_descump', {});
 
@@ -400,6 +403,7 @@ export const PcpPlanejamentoView = () => {
     setSearchObra('');
     setDiasPontosMap({});
     setDiasPontosGroupedMap({});
+    setDiasDateOverrideMap({});
     setDiasCarregadosList([]);
     toast.success('Unidade alterada com sucesso.');
   };
@@ -411,20 +415,21 @@ export const PcpPlanejamentoView = () => {
       if (diasCarregadosList && diasCarregadosList.length > 0) {
         const sortedDays = Array.from(new Set(diasCarregadosList)).sort();
         return sortedDays.map((dayId, idx) => {
-          const dateObj = safeParseDate(dayId);
+          const effectiveDayId = diasDateOverrideMap[dayId] || dayId;
+          const dateObj = safeParseDate(effectiveDayId);
           const nomeDia = format(dateObj, 'EEEE', { locale: ptBR });
           const dataStr = format(dateObj, 'dd/MM');
           const dataCompleta = format(dateObj, 'dd/MM/yyyy');
           return {
-            id: dayId,
+            id: effectiveDayId,
             index: idx + 1,
             nomeDia: nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1),
             dataStr,
             dataCompleta,
             dateObj,
-            isPes: diasPesMap[dayId] || false,
-            reprogramar: diasReprogramarMap[dayId] || false,
-            motivoReprogramar: diasMotivoReprogramarMap[dayId] || '',
+            isPes: diasPesMap[effectiveDayId] || false,
+            reprogramar: diasReprogramarMap[effectiveDayId] || false,
+            motivoReprogramar: diasMotivoReprogramarMap[effectiveDayId] || '',
           };
         });
       }
@@ -436,37 +441,40 @@ export const PcpPlanejamentoView = () => {
       const intervalDays = eachDayOfInterval({ start, end });
       const baseDays = intervalDays.map((dateObj, idx) => {
         const id = format(dateObj, 'yyyy-MM-dd');
-        const nomeDia = format(dateObj, 'EEEE', { locale: ptBR });
-        const dataStr = format(dateObj, 'dd/MM');
-        const dataCompleta = format(dateObj, 'dd/MM/yyyy');
+        const effectiveDayId = diasDateOverrideMap[id] || id;
+        const effectiveDateObj = safeParseDate(effectiveDayId);
+        const nomeDia = format(effectiveDateObj, 'EEEE', { locale: ptBR });
+        const dataStr = format(effectiveDateObj, 'dd/MM');
+        const dataCompleta = format(effectiveDateObj, 'dd/MM/yyyy');
         return {
-          id,
+          id: effectiveDayId,
           index: idx + 1,
           nomeDia: nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1),
           dataStr,
           dataCompleta,
-          dateObj,
-          isPes: diasPesMap[id] || false,
-          reprogramar: diasReprogramarMap[id] || false,
-          motivoReprogramar: diasMotivoReprogramarMap[id] || '',
+          dateObj: effectiveDateObj,
+          isPes: diasPesMap[effectiveDayId] || false,
+          reprogramar: diasReprogramarMap[effectiveDayId] || false,
+          motivoReprogramar: diasMotivoReprogramarMap[effectiveDayId] || '',
         };
       });
 
       const extraDays = diasExtrasList.map((extraId, idx) => {
-        const dateObj = safeParseDate(extraId);
+        const effectiveDayId = diasDateOverrideMap[extraId] || extraId;
+        const dateObj = safeParseDate(effectiveDayId);
         const nomeDia = format(dateObj, 'EEEE', { locale: ptBR });
         const dataStr = format(dateObj, 'dd/MM');
         const dataCompleta = format(dateObj, 'dd/MM/yyyy');
         return {
-          id: extraId,
+          id: effectiveDayId,
           index: baseDays.length + idx + 1,
           nomeDia: nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1),
           dataStr,
           dataCompleta,
           dateObj,
-          isPes: diasPesMap[extraId] || false,
-          reprogramar: diasReprogramarMap[extraId] || false,
-          motivoReprogramar: diasMotivoReprogramarMap[extraId] || '',
+          isPes: diasPesMap[effectiveDayId] || false,
+          reprogramar: diasReprogramarMap[effectiveDayId] || false,
+          motivoReprogramar: diasMotivoReprogramarMap[effectiveDayId] || '',
         };
       });
 
@@ -474,7 +482,7 @@ export const PcpPlanejamentoView = () => {
     } catch {
       return [];
     }
-  }, [diasCarregadosList, dataInicio, dataFim, diasPesMap, diasReprogramarMap, diasMotivoReprogramarMap, diasExtrasList]);
+  }, [diasCarregadosList, dataInicio, dataFim, diasPesMap, diasReprogramarMap, diasMotivoReprogramarMap, diasExtrasList, diasDateOverrideMap]);
 
   // Obras Filtradas
   const filteredObras = useMemo(() => {
@@ -602,6 +610,7 @@ export const PcpPlanejamentoView = () => {
     setSelectedObraId(projetoCode);
     setDiasPontosMap({});
     setDiasPontosGroupedMap({});
+    setDiasDateOverrideMap({});
     setDiasCarregadosList([]); // Retorna ao período normal do calendário para a nova obra
   };
 
@@ -631,6 +640,23 @@ export const PcpPlanejamentoView = () => {
   };
 
   const handleRemoveDia = (diaId: string) => {
+    const diaTarget = diasProgramados.find(d => d.id === diaId);
+    if (diaTarget) {
+      const cleanDateNum = diaTarget.dataCompleta.replace(/\//g, '');
+      const eq = selectedEquipes[0] || 'EH156';
+      const chaveBk = `${eq}_${cleanDateNum}`;
+      setDiasExcluidosList(prev => [
+        ...prev.filter(x => x.diaId !== diaId && x.chaveBk !== chaveBk),
+        {
+          diaId,
+          dataCompleta: diaTarget.dataCompleta,
+          equipe: eq,
+          projeto: selectedObraId,
+          chaveBk,
+        }
+      ]);
+    }
+
     if (diasCarregadosList.includes(diaId)) {
       setDiasCarregadosList(prev => prev.filter(d => d !== diaId));
     }
@@ -643,32 +669,127 @@ export const PcpPlanejamentoView = () => {
       return next;
     });
     setExpandedDayIds(prev => prev.filter(id => id !== diaId));
-    toast.success('Dia removido do planejamento.');
+    toast.success('Dia removido. Ao salvar/enviar, a linha correspondente será excluída da Plan_Principal.');
   };
 
   const handleUpdateDiaDate = (diaId: string, newDate: Date) => {
     const newId = format(newDate, 'yyyy-MM-dd');
+    if (newId === diaId) return;
+
+    if (diasCarregadosList.includes(diaId)) {
+      setDiasCarregadosList(prev => prev.map(d => (d === diaId ? newId : d)));
+    }
     if (diasExtrasList.includes(diaId)) {
-      setDiasExtrasList(prev => prev.map(d => d === diaId ? newId : d));
+      setDiasExtrasList(prev => prev.map(d => (d === diaId ? newId : d)));
     }
-    if (newId !== diaId) {
-      setDiasPontosMap(prev => {
-        const next = { ...prev };
-        if (next[diaId]) {
-          next[newId] = next[diaId];
-          delete next[diaId];
-        }
-        return next;
-      });
-      setDiasPontosGroupedMap(prev => {
-        const next = { ...prev };
-        if (next[diaId]) {
-          next[newId] = next[diaId];
-          delete next[diaId];
-        }
-        return next;
-      });
-    }
+
+    setDiasDateOverrideMap(prev => ({
+      ...prev,
+      [diaId]: newId,
+      [newId]: newId,
+    }));
+
+    setDiasPontosMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasPontosGroupedMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasEtapasMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasFiltroLvMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasPesMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasReprogramarMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasMotivoReprogramarMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasCustomAlojMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasTemposCompMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasPercentualCumprimentoMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setDiasMotivoDescumprimentoMap(prev => {
+      const next = { ...prev };
+      if (next[diaId] !== undefined) {
+        next[newId] = next[diaId];
+        delete next[diaId];
+      }
+      return next;
+    });
+
+    setExpandedDayIds(prev => prev.map(id => (id === diaId ? newId : id)));
+
     toast.success(`Data do dia atualizada para ${format(newDate, 'dd/MM/yyyy')}.`);
   };
 
@@ -724,7 +845,7 @@ export const PcpPlanejamentoView = () => {
     setDiasReprogramarMap(prev => {
       const nextVal = !prev[diaId];
       if (nextVal && !diasMotivoReprogramarMap[diaId]) {
-        setDiasMotivoReprogramarMap(m => ({ ...m, [diaId]: 'CHUVA' }));
+        setDiasMotivoReprogramarMap(m => ({ ...m, [diaId]: MOTIVOS_REPROGRAMACAO_COL_AU[0] }));
       }
       return {
         ...prev,
@@ -735,13 +856,34 @@ export const PcpPlanejamentoView = () => {
 
   // Handlers de Pontos
   const handleTogglePontoNoDia = (diaId: string, pontoLabel: string) => {
+    const pUpper = pontoLabel.toUpperCase();
     setDiasPontosMap(prev => {
       const current = prev[diaId] || [];
-      const next = current.includes(pontoLabel)
+      const isRemoving = current.includes(pontoLabel);
+      const next = isRemoving
         ? current.filter(p => p !== pontoLabel)
         : [...current, pontoLabel];
       return { ...prev, [diaId]: next };
     });
+
+    // Se o usuário desmarcou o ponto, limpa o estado customizado para restaurar as atividades originais ao selecionar novamente
+    setDiasPontosGroupedMap(prev => {
+      if (!prev || !prev[diaId] || !prev[diaId][pUpper]) return prev;
+      const nextDay = { ...prev[diaId] };
+      delete nextDay[pUpper];
+      return { ...prev, [diaId]: nextDay };
+    });
+  };
+
+  const handleResetPontoAtividades = (diaId: string, pontoLabel: string) => {
+    const pUpper = pontoLabel.toUpperCase();
+    setDiasPontosGroupedMap(prev => {
+      if (!prev || !prev[diaId]) return prev;
+      const nextDay = { ...prev[diaId] };
+      delete nextDay[pUpper];
+      return { ...prev, [diaId]: nextDay };
+    });
+    toast.success(`Atividades do ponto ${pUpper} restauradas para o padrão do orçamento.`);
   };
 
   const handleSelectAllPontosNoDia = (diaId: string) => {
@@ -749,6 +891,13 @@ export const PcpPlanejamentoView = () => {
       ...prev,
       [diaId]: [...pontosDisponiveisDoProjeto]
     }));
+    setDiasPontosGroupedMap(prev => {
+      if (!prev || !prev[diaId]) return prev;
+      const next = { ...prev };
+      delete next[diaId];
+      return next;
+    });
+    toast.success('Todos os pontos restaurados com suas atividades originais.');
   };
 
   const handleDeselectAllPontosNoDia = (diaId: string) => {
@@ -756,6 +905,13 @@ export const PcpPlanejamentoView = () => {
       ...prev,
       [diaId]: []
     }));
+    setDiasPontosGroupedMap(prev => {
+      if (!prev || !prev[diaId]) return prev;
+      const next = { ...prev };
+      delete next[diaId];
+      return next;
+    });
+    toast.success('Pontos do dia limpos.');
   };
 
   const handleAddCustomPontoNoDia = (diaId: string, customPontoName: string) => {
@@ -936,7 +1092,7 @@ export const PcpPlanejamentoView = () => {
     });
   };
 
-  // Atualização de Motivo de Descumprimento (Coluna AU)
+  // Atualização de Motivo de Descumprimento (Coluna AU) - Exclusivo para Plan_Principal
   const handleUpdateDiaMotivoDescumprimento = (diaId: string, motivo: string) => {
     setDiasMotivoDescumprimentoMap(prev => ({
       ...prev,
@@ -954,22 +1110,35 @@ export const PcpPlanejamentoView = () => {
     if (!diaTarget) return;
 
     const etapaGeral = (diasEtapasMap[diaId] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
-    const isDeslocamento = etapaGeral.toUpperCase().includes('DESLOCAMENTO');
+    const isSemAtividadesPermitido = isEtapaSemAtividades(etapaGeral);
 
     const pontosDia = diasPontosMap[diaId] || [];
+    const filtroLv = diasFiltroLvMap[diaId] || 'COMPLETO';
     const allActivitiesDia: PcpPontoItem[] = [];
     pontosDia.forEach(p => {
       const items = getItemsDoPontoNoDia(diaId, p);
-      allActivitiesDia.push(...items.filter(i => i.selected));
+      const filtered = items.filter(item => {
+        if (!item.selected) return false;
+        const isLv = (item.servico || '').toUpperCase().includes(' LV') || (item.descricaoMaterial || '').toUpperCase().includes(' LV');
+        if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
+        if (filtroLv === 'SEM_LV' && isLv) return false;
+        return true;
+      });
+      allActivitiesDia.push(...filtered);
     });
 
-    if (allActivitiesDia.length === 0 && !isDeslocamento) {
-      toast.error(`O dia ${diaTarget.dataStr} não possui nenhuma atividade marcada. Selecione atividades ou altere a etapa para DESLOCAMENTO.`);
+    if (allActivitiesDia.length === 0 && !isSemAtividadesPermitido) {
+      toast.error(`O dia ${diaTarget.dataStr} não possui nenhuma atividade marcada. Selecione atividades ou altere a etapa para uma etapa sem atividades (ex: ${etapaGeral}).`);
       return;
     }
 
     try {
-      toast.loading(`Enviando programação de ${diaTarget.dataStr} para a Plan_Principal...`, { id: 'salvar-programacao' });
+      // Resolver alojamento do dia (Ida = Origem / Volta = Destino)
+      const diaIdx = diasProgramados.indexOf(diaTarget);
+      const disp = getDayDisplacement(diaId, diaIdx, diasProgramados.length);
+      const alojIda = disp.origemNome || alojamentoPadrao;
+      const alojVolta = disp.destinoNome || alojamentoPadrao;
+
       const formPayload: PcpProgramacaoForm = {
         unidadeId: selectedUnidadeId,
         dataProgramacao: diaTarget.dataCompleta,
@@ -984,9 +1153,16 @@ export const PcpPlanejamentoView = () => {
         motivoReprogramacao: diasMotivoReprogramarMap[diaId] || '',
         motivoDescumprimento: diasMotivoDescumprimentoMap[diaId] || '',
         metaEquipeValor: metaEquipeInput,
+        alojamentoIda: alojIda,
+        alojamentoVolta: alojVolta,
+        alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
       };
 
-      await salvarProgramacao.mutateAsync([formPayload]);
+      await salvarProgramacao.mutateAsync({
+        forms: [formPayload],
+        deletedSchedules: diasExcluidosList,
+      });
+      setDiasExcluidosList([]);
       toast.success(`Programação de ${diaTarget.dataStr} enviada com sucesso para a Plan_Principal!`, { id: 'salvar-programacao' });
     } catch (err: any) {
       toast.error(`Erro ao enviar dia: ${err.message || 'Erro inesperado'}`, { id: 'salvar-programacao' });
@@ -998,33 +1174,57 @@ export const PcpPlanejamentoView = () => {
       toast.error('Selecione uma obra antes de enviar.');
       return;
     }
-    const diasComAtividadesOuDesloc = diasProgramados.filter(d => {
+    const diasComAtividadesOuEtapaPermitida = diasProgramados.filter(d => {
       const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
-      const isDeslocamento = etapaGeral.toUpperCase().includes('DESLOCAMENTO');
+      const isSemAtividadesPermitido = isEtapaSemAtividades(etapaGeral);
       const pts = diasPontosMap[d.id] || [];
-      const hasActs = pts.some(p => getItemsDoPontoNoDia(d.id, p).some(i => i.selected));
-      return hasActs || isDeslocamento;
+      const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
+      const hasActs = pts.some(p =>
+        getItemsDoPontoNoDia(d.id, p).some(i => {
+          if (!i.selected) return false;
+          const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.descricaoMaterial || '').toUpperCase().includes(' LV');
+          if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
+          if (filtroLv === 'SEM_LV' && isLv) return false;
+          return true;
+        })
+      );
+      return hasActs || isSemAtividadesPermitido;
     });
 
-    if (diasComAtividadesOuDesloc.length === 0) {
-      toast.error('Nenhum dia possui atividades marcadas ou etapa de DESLOCAMENTO para envio.');
+    if (diasComAtividadesOuEtapaPermitida.length === 0 && diasExcluidosList.length === 0) {
+      toast.error('Nenhum dia possui atividades marcadas ou etapa permitida sem atividades para envio.');
       return;
     }
 
     try {
-      toast.loading(`Enviando programação de todos os ${diasComAtividadesOuDesloc.length} dias para a Plan_Principal...`, { id: 'salvar-programacao' });
+      toast.loading(`Enviando programação para a Plan_Principal...`, { id: 'salvar-programacao' });
       const allForms: PcpProgramacaoForm[] = [];
       const equipesToSend = selectedEquipes.length > 0 ? selectedEquipes : ['EH156'];
 
-      for (const d of diasComAtividadesOuDesloc) {
+      for (const d of diasComAtividadesOuEtapaPermitida) {
         const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
         const pts = diasPontosMap[d.id] || [];
+        const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
         const allActs: PcpPontoItem[] = [];
         pts.forEach(p => {
-          allActs.push(...getItemsDoPontoNoDia(d.id, p).filter(i => i.selected));
+          const items = getItemsDoPontoNoDia(d.id, p);
+          const filtered = items.filter(item => {
+            if (!item.selected) return false;
+            const isLv = (item.servico || '').toUpperCase().includes(' LV') || (item.descricaoMaterial || '').toUpperCase().includes(' LV');
+            if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
+            if (filtroLv === 'SEM_LV' && isLv) return false;
+            return true;
+          });
+          allActs.push(...filtered);
         });
 
         for (const eq of equipesToSend) {
+          // Resolver alojamento do dia (Ida = Origem / Volta = Destino)
+          const diaIdx = diasComAtividadesOuEtapaPermitida.indexOf(d);
+          const disp = getDayDisplacement(d.id, diaIdx, diasComAtividadesOuEtapaPermitida.length);
+          const alojIda = disp.origemNome || alojamentoPadrao;
+          const alojVolta = disp.destinoNome || alojamentoPadrao;
+
           allForms.push({
             unidadeId: selectedUnidadeId,
             dataProgramacao: d.dataCompleta,
@@ -1039,12 +1239,19 @@ export const PcpPlanejamentoView = () => {
             motivoReprogramacao: diasMotivoReprogramarMap[d.id] || '',
             motivoDescumprimento: diasMotivoDescumprimentoMap[d.id] || '',
             metaEquipeValor: metaEquipeInput,
+            alojamentoIda: alojIda,
+            alojamentoVolta: alojVolta,
+            alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
           });
         }
       }
 
-      await salvarProgramacao.mutateAsync(allForms);
-      toast.success(`Programação de todos os ${diasComAtividadesOuDesloc.length} dias enviada com sucesso para a Plan_Principal!`, { id: 'salvar-programacao' });
+      await salvarProgramacao.mutateAsync({
+        forms: allForms,
+        deletedSchedules: diasExcluidosList,
+      });
+      setDiasExcluidosList([]);
+      toast.success(`Programação atualizada com sucesso na Plan_Principal!`, { id: 'salvar-programacao' });
     } catch (err: any) {
       toast.error(`Erro ao enviar dias: ${err.message || 'Erro inesperado'}`, { id: 'salvar-programacao' });
     }
@@ -1133,6 +1340,7 @@ export const PcpPlanejamentoView = () => {
     const sortedDayKeys = Array.from(dateMap.keys()).sort();
 
     // 2. Carregar EXATAMENTE os dias dos planejamentos selecionados sem alterar o calendário de novos planejamentos
+    setDiasDateOverrideMap({});
     if (sortedDayKeys.length > 0) {
       setDiasCarregadosList(sortedDayKeys);
       setExpandedDayIds(sortedDayKeys);
@@ -1141,8 +1349,11 @@ export const PcpPlanejamentoView = () => {
     // 3. Montar mapas limpos apenas com os dados dos planejamentos carregados
     const nextDiasPontosMap: Record<string, string[]> = {};
     const nextDiasPontosGroupedMap: Record<string, Record<string, PcpPontoItem[]>> = {};
+    const nextDiasEtapasMap: Record<string, string[]> = {};
+    const nextDiasPesMap: Record<string, boolean> = {};
     const nextDiasPercentualCumprimentoMap: Record<string, string> = {};
     const nextDiasMotivoDescumprimentoMap: Record<string, string> = {};
+    const nextDiasCustomAlojMap: Record<string, any> = { ...diasCustomAlojMap };
 
     plansToLoad.forEach(plan => {
       let dayId = '';
@@ -1156,11 +1367,24 @@ export const PcpPlanejamentoView = () => {
       }
 
       if (dayId) {
+        if (plan.etapasGeral && plan.etapasGeral.length > 0) {
+          nextDiasEtapasMap[dayId] = plan.etapasGeral;
+        }
+        if (plan.isPes !== undefined) {
+          nextDiasPesMap[dayId] = plan.isPes;
+        }
         if (plan.percentualCumprimento) {
           nextDiasPercentualCumprimentoMap[dayId] = plan.percentualCumprimento;
         }
         if (plan.motivoDescumprimento) {
           nextDiasMotivoDescumprimentoMap[dayId] = plan.motivoDescumprimento;
+        }
+        if (plan.alojamentoIda || plan.alojamentoVolta || plan.alojamento) {
+          nextDiasCustomAlojMap[dayId] = {
+            ...nextDiasCustomAlojMap[dayId],
+            origem: plan.alojamentoIda || plan.alojamento || 'BASE',
+            destino: plan.alojamentoVolta || plan.alojamento || 'BASE',
+          };
         }
       }
 
@@ -1278,20 +1502,39 @@ export const PcpPlanejamentoView = () => {
 
     setDiasPontosMap(nextDiasPontosMap);
     setDiasPontosGroupedMap(nextDiasPontosGroupedMap);
+    setDiasEtapasMap(nextDiasEtapasMap);
+    setDiasPesMap(nextDiasPesMap);
     setDiasPercentualCumprimentoMap(nextDiasPercentualCumprimentoMap);
     setDiasMotivoDescumprimentoMap(nextDiasMotivoDescumprimentoMap);
+    setDiasCustomAlojMap(nextDiasCustomAlojMap);
     setIsCarregarPlanModalOpen(false);
     setSelectedExistingPlanKeys([]);
     toast.success(`${plansToLoad.length} ${plansToLoad.length === 1 ? 'planejamento carregado' : 'planejamentos carregados'} com sucesso.`);
   };
 
   // Resumo de Status do Fluxo para as Pílulas do Header
-  const diasSemPontosCount = diasProgramados.filter(d => (diasPontosMap[d.id] || []).length === 0).length;
-  const diasAcima10hCount = diasProgramados.filter(d => {
+  const diasSemPontosCount = diasProgramados.filter(d => {
+    const etapaGeral = (diasEtapasMap[d.id] || ['IMPLANTAÇÃO'])[0] || 'IMPLANTAÇÃO';
+    if (isEtapaSemAtividades(etapaGeral)) return false;
+    return (diasPontosMap[d.id] || []).length === 0;
+  }).length;
+  const diasAcima10hCount = diasProgramados.filter((d, idx) => {
     const pts = diasPontosMap[d.id] || [];
-    let totMin = tempoSaidaBasePadrao + tempoSegurancaPadrao + 80;
+    const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
+    const tComp = diasTemposCompMap[d.id];
+    const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+    const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+    const disp = getDayDisplacement(d.id, idx, diasProgramados.length);
+    let totMin = sBase + sSeg + disp.tempoIdaMin + disp.tempoVoltaMin;
+
     pts.forEach(p => {
-      totMin += getItemsDoPontoNoDia(d.id, p).filter(i => i.selected).reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
+      totMin += getItemsDoPontoNoDia(d.id, p).filter(i => {
+        if (!i.selected) return false;
+        const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.descricaoMaterial || '').toUpperCase().includes(' LV');
+        if (filtroLv === 'SOMENTE_LV' && !isLv) return false;
+        if (filtroLv === 'SEM_LV' && isLv) return false;
+        return true;
+      }).reduce((acc, i) => acc + (i.tempoEstimadoMinutos || 0), 0);
     });
     return totMin / 60 > 10.0;
   }).length;
@@ -1313,10 +1556,15 @@ export const PcpPlanejamentoView = () => {
     const disp = getDayDisplacement(d.id, idx, diasProgramados.length);
     const ida = disp.tempoIdaMin;
     const volta = disp.tempoVoltaMin;
+    const filtroLv = diasFiltroLvMap[d.id] || 'COMPLETO';
 
     let servMin = 0;
     pts.forEach(p => {
       getItemsDoPontoNoDia(d.id, p).forEach(i => {
+        const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.descricaoMaterial || '').toUpperCase().includes(' LV');
+        if (filtroLv === 'SOMENTE_LV' && !isLv) return;
+        if (filtroLv === 'SEM_LV' && isLv) return;
+
         if (i.selected) {
           servMin += (i.tempoEstimadoMinutos || 0);
           totalValorPeriodo += (i.valorEstimado || 0);
@@ -2188,6 +2436,7 @@ export const PcpPlanejamentoView = () => {
                             handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
                             handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
                             handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
+                            handleResetPontoAtividades={handleResetPontoAtividades}
                             handleUpdateAtividade={handleUpdateAtividade}
                             handleRemoveAtividade={handleRemoveAtividade}
                             handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
@@ -2321,6 +2570,7 @@ export const PcpPlanejamentoView = () => {
                                   handleDeselectAllPontosNoDia={handleDeselectAllPontosNoDia}
                                   handleAddCustomPontoNoDia={handleAddCustomPontoNoDia}
                                   handleAddAtividadeNoPonto={handleAddAtividadeNoPonto}
+                                  handleResetPontoAtividades={handleResetPontoAtividades}
                                   handleUpdateAtividade={handleUpdateAtividade}
                                   handleRemoveAtividade={handleRemoveAtividade}
                                   handleEnviarPlanPrincipalDia={handleEnviarPlanPrincipalDia}
@@ -2650,6 +2900,7 @@ export const PcpPlanejamentoView = () => {
                     <th className="p-2.5">Data</th>
                     <th className="p-2.5">Equipe</th>
                     <th className="p-2.5">Projeto</th>
+                    <th className="p-2.5">Alojamento</th>
                     <th className="p-2.5">Pontos</th>
                     <th className="p-2.5 text-right">Valor</th>
                   </tr>
@@ -2680,6 +2931,7 @@ export const PcpPlanejamentoView = () => {
                         <td className="p-2.5 font-mono font-bold text-[#23211E]">{plan.dataCompleta}</td>
                         <td className="p-2.5 font-mono">{plan.equipe}</td>
                         <td className="p-2.5 font-mono font-bold text-[#E07A1F]">{plan.projeto}</td>
+                        <td className="p-2.5 font-mono text-[11px] text-[#6B6660]">{plan.alojamento || '-'}</td>
                         <td className="p-2.5 font-mono text-[#5C574F]">{plan.pontosStr || `${plan.pontos.length} pontos`}</td>
                         <td className="p-2.5 text-right font-mono font-semibold text-[#17794C]">
                           R$ {(

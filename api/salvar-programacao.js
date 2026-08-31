@@ -161,9 +161,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { csvFilename, csvContent, unitSigla = 'BJL', reprogramar = false, motivo = '' } = req.body || {};
-    if (!csvContent) {
-      return res.status(400).json({ error: 'csvContent is required' });
+    const { csvFilename, csvContent, unitSigla = 'BJL', reprogramar = false, motivo = '', deletedSchedules = [] } = req.body || {};
+    if (!csvContent && (!deletedSchedules || deletedSchedules.length === 0)) {
+      return res.status(400).json({ error: 'csvContent ou deletedSchedules é obrigatório' });
     }
 
     const token = await getAccessToken();
@@ -195,8 +195,8 @@ export default async function handler(req, res) {
     const planPrincipalSheet = (metaData.sheets || []).find(s => s.properties?.title === 'Plan_Principal');
     const planPrincipalSheetId = planPrincipalSheet ? planPrincipalSheet.properties.sheetId : 0;
 
-    // 4. Read current full Plan_Principal (Col A to BZ)
-    const readRowsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Plan_Principal!A1:BZ`;
+    // 4. Read current full Plan_Principal (Col A to CA)
+    const readRowsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Plan_Principal!A1:CA`;
     const allRowsRes = await fetch(readRowsUrl, { headers: { Authorization: `Bearer ${token}` } });
     const allRowsData = await allRowsRes.json();
     const allRows = allRowsData.values || [];
@@ -252,6 +252,19 @@ export default async function handler(req, res) {
     const rowIndicesToDelete = [];
     const plannedOperations = [];
 
+    // Process explicit deletions requested from frontend
+    if (Array.isArray(deletedSchedules) && deletedSchedules.length > 0) {
+      deletedSchedules.forEach((ds) => {
+        const delEq = String(ds.equipe || '').trim().toUpperCase();
+        const delDt = extractDate(ds.dataCompleta || ds.dataStr || ds.data || '');
+        const delBk = String(ds.chaveBk || '').trim();
+        const delIdx = findExistingPlannedRowIndex(allRows, delEq, delDt, delBk, new Set(rowIndicesToDelete));
+        if (delIdx !== -1 && !rowIndicesToDelete.includes(delIdx)) {
+          rowIndicesToDelete.push(delIdx);
+        }
+      });
+    }
+
     // 5. Categorize each dataLine according to business rules
     dataLines.forEach((line) => {
       const rowCells = line.split(';');
@@ -268,37 +281,75 @@ export default async function handler(req, res) {
 
       if (isLineReprog) {
         // === CASO 1: BOTÃO REPROGRAMAR MARCADO ===
-        // 1.1 Se existir programação anterior, copia a linha original para a aba Reprogramadas
-        if (hasExistingPlan) {
-          const oldRowData = allRows[existingPlannedIdx] || [];
-          const copyRow = [...oldRowData];
-          while (copyRow.length <= 78) copyRow.push('');
-          copyRow[0] = 'REPROGRAMADA';
-          const motivoLinha = motivo || rowCells[46] || oldRowData[46] || '';
-          if (motivoLinha) copyRow[46] = String(motivoLinha).trim();
+        // 1.1 Copia a linha (existente ou atual) para a aba Reprogramadas (sem nada na Coluna A e com motivo na Coluna AU)
+        const sourceRow = hasExistingPlan ? (allRows[existingPlannedIdx] || []) : rowCells;
+        const copyRow = [...sourceRow];
+        while (copyRow.length <= 79) copyRow.push('');
+        copyRow[0] = ''; // Coluna A vazia na aba Reprogramadas conforme especificado
+        const motivoLinha = (rowCells[46] && String(rowCells[46]).trim()) ? String(rowCells[46]).trim() : (motivo ? String(motivo).trim() : (sourceRow[46] ? String(sourceRow[46]).trim() : ''));
+        if (motivoLinha) copyRow[46] = String(motivoLinha).trim();
 
-          const destReprogRow = nextReprogRowNumber;
-          nextReprogRowNumber++;
+        const destReprogRow = nextReprogRowNumber;
+        nextReprogRowNumber++;
 
-          copyRow.forEach((val, cIdx) => {
-            const valStr = String(val ?? '').trim();
-            if (valStr) {
-              reprogUpdates.push({
-                range: `Reprogramadas!${getColumnLetter(cIdx)}${destReprogRow}`,
-                values: [[valStr]]
-              });
-            }
-          });
-
-          // 1.2 Marca a linha original para EXCLUSÃO FÍSICA de Plan_Principal
-          rowIndicesToDelete.push(existingPlannedIdx);
-        }
-
-        // 1.3 Insere a nova programação na primeira linha em branco de Plan_Principal
-        plannedOperations.push({
-          type: 'APPEND',
-          rowCells
+        copyRow.forEach((val, cIdx) => {
+          if (cIdx >= 77) return; // Aba Reprogramadas possui 77 colunas (A a BY)
+          const valStr = String(val ?? '').trim();
+          if (valStr) {
+            reprogUpdates.push({
+              range: `Reprogramadas!${getColumnLetter(cIdx)}${destReprogRow}`,
+              values: [[valStr]]
+            });
+          }
         });
+
+        // Na Plan_Principal, a nova programação fica com Coluna AU vazia (sem motivo ainda)
+        while (rowCells.length <= 46) rowCells.push('');
+        rowCells[46] = '';
+
+        // 1.2 Comportamento na Plan_Principal
+        if (hasExistingPlan && isSameObra) {
+          const oldCompilado = String(allRows[existingPlannedIdx][14] || '').trim();
+          const newCompilado = String(rowCells[14] || '').trim();
+
+          const oldVal = String(allRows[existingPlannedIdx][37] || '').trim().replace(/R\$|\s/g, '').replace(',', '.');
+          const newVal = String(rowCells[37] || '').trim().replace(/R\$|\s/g, '').replace(',', '.');
+
+          const oldPontos = String(allRows[existingPlannedIdx][8] || '').trim();
+          const newPontos = String(rowCells[8] || '').trim();
+
+          const oldEtapa = String(allRows[existingPlannedIdx][12] || '').trim();
+          const newEtapa = String(rowCells[12] || '').trim();
+
+          const hasDiff = (oldCompilado !== newCompilado) || (oldVal !== newVal) || (oldPontos !== newPontos) || (oldEtapa !== newEtapa);
+
+          if (hasDiff) {
+            // Cenário 1B: Mesma obra com valores/atividades alteradas -> Altera a linha na Plan_Principal (não exclui)
+            plannedOperations.push({
+              type: 'OVERWRITE_SAME_ROW',
+              originalRowIndex: existingPlannedIdx,
+              rowCells
+            });
+          } else {
+            // Cenário 1A: Mesma obra sem alterações de valores -> Apenas exclui a linha da Plan_Principal
+            rowIndicesToDelete.push(existingPlannedIdx);
+          }
+        } else if (hasExistingPlan && !isSameObra) {
+          // Cenário 2: Outra Obra -> Apaga a linha da obra original antiga e grava a nova programação na primeira em branco
+          rowIndicesToDelete.push(existingPlannedIdx);
+          plannedOperations.push({
+            type: 'APPEND',
+            rowCells
+          });
+        } else {
+          // Nova programação sem anterior
+          plannedOperations.push({
+            type: 'NEW_OR_TEMPLATE',
+            novaEquipe,
+            novaDataStr,
+            rowCells
+          });
+        }
 
       } else {
         // === CASO 2: BOTÃO REPROGRAMAR NÃO MARCADO ===
@@ -456,16 +507,27 @@ export default async function handler(req, res) {
       }
 
       const targetRowNumber = targetRowIndex + 1; // 1-indexed for Google Sheets
+      const MANAGED_COL_INDICES = new Set([
+        0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+        36, 37, 38, 39, 46, 56, 62, 63, 64, 65, 66, 67, 68, 76, 77, 78
+      ]);
 
-      op.rowCells.slice(0, 78).forEach((val, cIdx) => {
+      for (let cIdx = 0; cIdx < 79; cIdx++) {
+        const val = op.rowCells[cIdx];
         const valStr = String(val ?? '').trim().replace(/^"|"$/g, '');
-        if (valStr) {
+        if (MANAGED_COL_INDICES.has(cIdx)) {
+          cellUpdates.push({
+            range: `Plan_Principal!${getColumnLetter(cIdx)}${targetRowNumber}`,
+            values: [[valStr]]
+          });
+        } else if (valStr) {
           cellUpdates.push({
             range: `Plan_Principal!${getColumnLetter(cIdx)}${targetRowNumber}`,
             values: [[valStr]]
           });
         }
-      });
+      }
     });
 
     // 9. Grava as novas programações e atualizações na Plan_Principal

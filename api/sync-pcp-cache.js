@@ -86,12 +86,12 @@ export default async function handler(req, res) {
 
     // Fetch required sheets: Carteira_Planejador, Plan_Principal, BD_Metas, Reprogramadas, Base_Curva, BD_Config
     const ranges = [
-      'Carteira_Planejador!A1:BZ',
-      'Plan_Principal!A1:BZ',
-      'BD_Metas!A1:BZ',
-      'Reprogramadas!A1:BZ',
-      'Base_Curva!A1:BZ',
-      'BD_Config!A1:BZ'
+      'Carteira_Planejador!A1:CA',
+      'Plan_Principal!A1:CA',
+      'BD_Metas!A1:CA',
+      'Reprogramadas!A1:CA',
+      'Base_Curva!A1:CA',
+      'BD_Config!A1:CA'
     ];
 
     const fetchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&')}`;

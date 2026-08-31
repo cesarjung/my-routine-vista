@@ -208,6 +208,7 @@ interface PcpDiaRowProps {
   handleDeselectAllPontosNoDia: (diaId: string) => void;
   handleAddCustomPontoNoDia: (diaId: string, customPontoName: string) => void;
   handleAddAtividadeNoPonto: (diaId: string, pontoLabelTarget: string) => void;
+  handleResetPontoAtividades?: (diaId: string, pontoLabel: string) => void;
   handleUpdateAtividade: (diaId: string, pontoLabelTarget: string, itemIdOrIndex: string | number, field: keyof PcpPontoItem, value: any) => void;
   handleRemoveAtividade: (diaId: string, pontoLabelTarget: string, itemIdOrIndex: string | number) => void;
   handleEnviarPlanPrincipalDia: (diaId: string) => void;
@@ -262,6 +263,7 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   handleDeselectAllPontosNoDia,
   handleAddCustomPontoNoDia,
   handleAddAtividadeNoPonto,
+  handleResetPontoAtividades,
   handleUpdateAtividade,
   handleRemoveAtividade,
   handleEnviarPlanPrincipalDia,
@@ -315,6 +317,10 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
   pontosAtivos.forEach(p => {
     const items = getItemsDoPontoNoDia(dia.id, p);
     items.forEach(i => {
+      const isLv = (i.servico || '').toUpperCase().includes(' LV') || (i.descricaoMaterial || '').toUpperCase().includes(' LV');
+      if (filtroLvDoDia === 'SOMENTE_LV' && !isLv) return;
+      if (filtroLvDoDia === 'SEM_LV' && isLv) return;
+
       if (i.selected) {
         tempoServicoMin += (i.tempoEstimadoMinutos || 0);
         valorPlanejado += (i.valorEstimado || 0);
@@ -1134,6 +1140,17 @@ export const PcpDiaRow: React.FC<PcpDiaRowProps> = ({
                         <span className="font-mono font-bold text-[#17794C] text-sm">
                           R$ {subValor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
+                        {handleResetPontoAtividades && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleResetPontoAtividades(dia.id, pLabel)}
+                            className="h-7 px-2 text-xs text-[#6B6660] hover:text-[#E07A1F] gap-1 font-medium hover:bg-white/80"
+                            title={`Restaurar todas as atividades orçadas para o Ponto ${pLabel}`}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" /> Restaurar ponto
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"

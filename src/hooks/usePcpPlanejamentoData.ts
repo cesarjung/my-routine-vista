@@ -50,6 +50,7 @@ export interface PcpProgramacaoForm {
   dateObj?: Date;
   equipe: string;
   supervisor: string;
+  encarregado?: string;
   obra: PcpObra;
   etapaGeral: string;
   pontos: PcpPontoItem[];
@@ -62,6 +63,9 @@ export interface PcpProgramacaoForm {
   tempoSegurancaMinutos?: number;
   metaEquipeValor?: number;
   observacao?: string;
+  alojamento?: string;
+  alojamentoIda?: string;
+  alojamentoVolta?: string;
 }
 
 export const MOTIVOS_REPROGRAMACAO_COL_AU = [
@@ -124,6 +128,9 @@ export interface ParsedPlanejamentoExistente {
   percentualCumprimento?: string; // Coluna AP (Index 41)
   motivoDescumprimento?: string;  // Coluna AU (Index 46)
   chaveBk: string;
+  alojamento?: string;            // Resumo
+  alojamentoIda?: string;         // Coluna BZ (Index 77)
+  alojamentoVolta?: string;       // Coluna CA (Index 78)
 }
 
 export interface PlanPrincipalRow {
@@ -194,6 +201,30 @@ export const ETAPAS_PADRAO = [
   'TREINAMENTO'
 ];
 
+// LISTA DE ETAPAS QUE PODEM SER ENVIADAS SEM ATIVIDADES/PONTOS
+export const ETAPAS_SEM_ATIVIDADES_OBRIGATORIAS = [
+  'ATENDIMENTO A OC',
+  'DESLOCAMENTO',
+  'DOMINGO/FERIADO',
+  'EQUIPE PARADA',
+  'FOLGA',
+  'OFICINA',
+  'PLANO DE MANUTENÇÃO',
+  'PODA',
+  'PREPARAÇÃO DESLIGAMENTO',
+  'REALOCAÇÃO',
+  'TREINAMENTO'
+];
+
+export function isEtapaSemAtividades(etapa?: string): boolean {
+  if (!etapa) return false;
+  const upper = etapa.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return ETAPAS_SEM_ATIVIDADES_OBRIGATORIAS.some(e => {
+    const eNorm = e.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    return upper === eNorm || upper.includes(eNorm) || eNorm.includes(upper);
+  });
+}
+
 // LISTA DE ETAPAS DAS ATIVIDADES DA BASE DO PRÉ-FECHAMENTO (COLUNA BY)
 export const ETAPAS_ATIVIDADES_PRE_FECHAMENTO = [
   'ESCAVAÇÃO',
@@ -209,19 +240,23 @@ export const ETAPAS_ATIVIDADES_PRE_FECHAMENTO = [
   'TRANSPORTE'
 ];
 
-// Exact Column Header titles from line 4 of Plan_Principal sheet in Google Sheets
+// Exact Column Header titles from line 5 of Plan_Principal sheet in Google Sheets (Col A to CA / index 0 to 78)
 export const EXACT_PLAN_PRINCIPAL_HEADERS = [
-  'SELECIONAR', 'DATA', 'Inicio', 'Fim', 'Supervisor', 'Encarregado', 'Equipe', 'Projeto',
+  'Reprog.', 'Data', 'Inicio', 'Fim', 'Supervisor', 'Encarregado', 'Equipe', 'Projeto',
   'Observação', 'Titulo', 'Município', 'Prioridade', 'Etapa', 'Descrição PES',
-  'Descrição do Serviço', 'Pontos/Vãos', '', '', 'CAVA EM ROCHA', '',
-  '', '', '', '', '', '', '', '',
-  '', '', '', '', 'EST. DUPLA LV', 'Nº FASES', '', '',
-  'ANALISAR PRODUÇÃO?', '', '', '', '', '', '', '',
-  'Observações Equipe GPM', 'ANÁLISE REALIZADA?', 'Motivo da não conclusão', 'PROJETO', 'Observações', '',
-  '', '', 'Descrição Atividades', '', 'Motivo Indisponibilidade', 'Pontos Disponíveis (GPM)', 'Unidade Plan',
-  '% Chuva', 'Prev. Descrição', 'Máscara & Obra & Ponto', '', 'Máscara e Obra', 'Equipe & Data', '',
-  '', '', '', '', '', '', '', '',
-  'Acesso', 'Alojamento', 'Materiais', 'Entrega na Obra', ''
+  'Descrição do Serviço', 'Observações PaP', 'PES', 'CAVA NORMAL', 'CAVA EM ROCHA', 'FUNDAÇ. ESPECIAL',
+  'IMPLANTAÇÃO', 'EQUIPAM.', 'ACABAMENTO', 'CABO BT (metros)', 'CABO 4 (metros)', 'CABO 1/0 (metros)',
+  'CABO 4/0 (metros)', 'CABO 336 (metros)', 'CABO MT XLPE (metros)', 'PODA', 'ATER. CERCA',
+  'EST. SIMPLES LV', 'EST. DUPLA LV', 'Nº FASES', '18', '19', 'ANALISAR PRODUÇÃO?',
+  'Planejado R$', 'Meta R$', '% Plan.', 'Realizado Planejado (R$)', '% Cumprimento Planejado',
+  'Produção GPM (R$)', '% Produção', 'Observações Equipe GPM', 'ANÁLISE REALIZADA?', 'Motivo da não conclusão',
+  'PROJETO', 'Observações', 'PTs INSTALADOS', 'KM PRIM REAL', 'KM SEC REAL', 'Descrição Atividades',
+  'Equipe disponível?', 'Motivo Indisponibilidade', 'Pontos Disponíveis (GPM)', 'Unidade Plan',
+  '% Chuva', 'Prev. Descrição', 'Máscara & Obra & Ponto', 'Valida Importação', 'Máscara e Obra',
+  'Equipe & Data', 'Tempo Serviço', 'Tempo Deslocamento', 'Tempo Saída Base', 'Tempo Segurança',
+  'Tempo Total', 'Planejado TPM', 'Reserva Solicitada', 'Reserva Atendida', 'Vistoria',
+  'Acesso', 'Alojamento', 'Materiais', 'Entrega na Obra', 'ETAPA MATERIAIS',
+  'ALOJAMENTO IDA', 'ALOJAMENTO VOLTA'
 ];
 
 // Helper to format quantity cleanly (integer if whole, 1 decimal if fraction) matching Prog_TPM macro:
@@ -465,6 +500,30 @@ export const usePcpPlanejamentoData = (
       console.error('Erro ao parsear bd_metas:', e);
     }
 
+    return map;
+  }, [rawCacheQuery.data]);
+
+  // Parse BD_Config to extract Encarregado per Equipe (Coluna D=Equipe, Coluna E=Encarregado)
+  const encarregadosPorEquipeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!rawCacheQuery.data?.bd_metas) return map;
+    try {
+      const rawStr = rawCacheQuery.data.bd_metas;
+      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      const bdConfigRows = parsed?.bd_config || [];
+
+      for (let i = 2; i < bdConfigRows.length; i++) {
+        const row = bdConfigRows[i];
+        if (!row || row.length < 5) continue;
+        const eq = String(row[3] || '').trim().toUpperCase();
+        const enc = String(row[4] || '').trim();
+        if (eq && enc && enc.toUpperCase() !== 'ENCARREGADO') {
+          map.set(eq, enc);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao parsear encarregados de bd_config:', e);
+    }
     return map;
   }, [rawCacheQuery.data]);
 
@@ -1054,11 +1113,6 @@ export const usePcpPlanejamentoData = (
 
   // Helper to generate a single 78-column row for a form item
   const buildPlanPrincipalRow = (form: PcpProgramacaoForm): any[] => {
-    const selectedPontos = form.pontos.filter(p => p.selected);
-    if (selectedPontos.length === 0) {
-      throw new Error(`Nenhuma atividade selecionada para a equipe ${form.equipe} em ${form.dataProgramacao}.`);
-    }
-
     const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === form.unidadeId) || UNIDADES_DISPONIVEIS[0];
     const nomeUnidadePlanejadaUpper = unidadeObj.name.toUpperCase();
 
@@ -1069,6 +1123,13 @@ export const usePcpPlanejamentoData = (
       .filter(Boolean)
       .join('/');
     if (!cleanEtapaGeral) cleanEtapaGeral = 'IMPLANTAÇÃO';
+
+    const isSemAtivPermitido = isEtapaSemAtividades(cleanEtapaGeral) || isEtapaSemAtividades(form.etapaGeral);
+    const selectedPontos = (form.pontos || []).filter(p => p.selected);
+
+    if (selectedPontos.length === 0 && !isSemAtivPermitido) {
+      throw new Error(`Nenhuma atividade selecionada para a equipe ${form.equipe} em ${form.dataProgramacao}.`);
+    }
 
     let tempoAtividadesMin = 0;
     let valorTotalAtividades = 0;
@@ -1111,18 +1172,25 @@ export const usePcpPlanejamentoData = (
     const compiledStr = blocos.join(' | ');
     const formattedDateWithDay = formatDateWithWeekday(form.dataProgramacao, form.dateObj);
 
-    const newRow = new Array(78).fill('');
+    const encarregado = form.encarregado || encarregadosPorEquipeMap.get((form.equipe || '').trim().toUpperCase()) || '';
+    const titulo = form.obra.nomeProjeto || (form.obra as any).titulo || (form.obra as any).descricao || '';
+    const prioridade = form.obra.prioridade || '';
+
+    const newRow = new Array(79).fill('');
     newRow[0] = form.reprogramar ? 'REPROGRAMADA' : '';    // Col A (0): Reprog.
-    newRow[1] = formattedDateWithDay;                       // Col B: Data
-    newRow[4] = form.supervisor;                            // Col E: Supervisor
-    newRow[6] = form.equipe;                                // Col G: Equipe
-    newRow[7] = form.obra.projeto;                          // Col H: Projeto
+    newRow[1] = formattedDateWithDay;                       // Col B (1): Data
+    newRow[4] = form.supervisor;                            // Col E (4): Supervisor
+    newRow[5] = encarregado;                                // Col F (5): Encarregado
+    newRow[6] = form.equipe;                                // Col G (6): Equipe
+    newRow[7] = form.obra.projeto;                          // Col H (7): Projeto
 
     const pontosUnicos = Array.from(new Set(selectedPontos.map(p => p.ponto))).sort().join(', ');
-    newRow[8] = pontosUnicos;                               // Col I: Resumo de Pontos
-    newRow[10] = form.obra.municipio;                       // Col K: Município da Obra
-    newRow[12] = cleanEtapaGeral;                           // Col M: Etapa(s) Prevista(s) do Topo
-    newRow[14] = compiledStr;                               // Col O: Compilado de atividades
+    newRow[8] = pontosUnicos;                               // Col I (8): Resumo de Pontos
+    newRow[9] = titulo;                                     // Col J (9): Titulo
+    newRow[10] = form.obra.municipio;                       // Col K (10): Município da Obra
+    newRow[11] = prioridade;                                // Col L (11): Prioridade
+    newRow[12] = cleanEtapaGeral;                           // Col M (12): Etapa(s) Prevista(s) do Topo
+    newRow[14] = compiledStr;                               // Col O (14): Compilado de atividades
 
     if (form.isPes) {
       newRow[16] = 'TRUE';                                  // Col Q (16): PES (Checkbox marcado como TRUE)
@@ -1144,10 +1212,10 @@ export const usePcpPlanejamentoData = (
     const pctMetaFormatted = `${pctMeta.toFixed(1)}%`;
     newRow[39] = pctMetaFormatted;                          // Col AN (39): Percentual Planejado da Meta
 
-    if (form.motivoDescumprimento) {
+    if (form.reprogramar) {
+      newRow[46] = '';                                      // Col AU (46): Vazio na Plan_Principal (motivo vai apenas para Reprogramadas)
+    } else if (form.motivoDescumprimento) {
       newRow[46] = form.motivoDescumprimento;               // Col AU (46): Motivo Descumprimento
-    } else if (form.motivoReprogramacao) {
-      newRow[46] = form.motivoReprogramacao;                // Col AU (46): Motivo Reprogramação
     }
 
     newRow[56] = nomeUnidadePlanejadaUpper;                 // Col BE (56): Unidade Planejada
@@ -1185,26 +1253,41 @@ export const usePcpPlanejamentoData = (
           .filter(Boolean)
       )
     );
-    newRow[76] = etapasAtividadesUnicas.join('/');          // Col BY (76): Etapas da base do pré-fechamento
+    newRow[76] = etapasAtividadesUnicas.length > 0 ? etapasAtividadesUnicas.join('/') : ''; // Col BY (76): ETAPA MATERIAIS (apenas etapas dos pontos com materiais)
+
+    newRow[77] = form.alojamentoIda || form.alojamento || ''; // Col BZ (77): Alojamento de Ida
+    newRow[78] = form.alojamentoVolta || form.alojamento || ''; // Col CA (78): Alojamento de Volta
 
     return newRow;
   };
 
   // Mutation to append new daily schedule(s) to Plan_Principal atomically in a single CSV batch
   const salvarProgramacao = useMutation({
-    mutationFn: async (formInput: PcpProgramacaoForm | PcpProgramacaoForm[]) => {
-      const formsArray = Array.isArray(formInput) ? formInput : [formInput];
-      if (formsArray.length === 0) {
+    mutationFn: async (input: PcpProgramacaoForm | PcpProgramacaoForm[] | { forms: PcpProgramacaoForm[]; deletedSchedules?: any[] }) => {
+      let formsArray: PcpProgramacaoForm[] = [];
+      let deletedSchedules: any[] = [];
+
+      if (input && typeof input === 'object' && 'forms' in input && Array.isArray((input as any).forms)) {
+        formsArray = (input as any).forms;
+        deletedSchedules = (input as any).deletedSchedules || [];
+      } else if (Array.isArray(input)) {
+        formsArray = input;
+      } else if (input) {
+        formsArray = [input as PcpProgramacaoForm];
+      }
+
+      if (formsArray.length === 0 && deletedSchedules.length === 0) {
         throw new Error('Nenhum dado informado para envio.');
       }
 
       const allNewRows = formsArray.map(form => buildPlanPrincipalRow(form));
       const firstForm = formsArray[0];
-      const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === firstForm.unidadeId) || UNIDADES_DISPONIVEIS[0];
+      const targetUnidadeId = firstForm?.unidadeId || selectedUnidadeId;
+      const unidadeObj = UNIDADES_DISPONIVEIS.find(u => u.id === targetUnidadeId) || UNIDADES_DISPONIVEIS[0];
 
       // Generate filename with pattern UNIDADE_ddmmhhmmss.csv
-      const csvFilename = generateCsvFilename(firstForm.unidadeId);
-      const csvContent = buildCsvContent(allNewRows);
+      const csvFilename = generateCsvFilename(targetUnidadeId);
+      const csvContent = formsArray.length > 0 ? buildCsvContent(allNewRows) : EXACT_PLAN_PRINCIPAL_HEADERS.join(';') + '\n';
 
       const isReprogramar = formsArray.some(f => Boolean(f.reprogramar));
       const motivo = formsArray.find(f => Boolean(f.motivoReprogramacao))?.motivoReprogramacao || '';
@@ -1219,6 +1302,7 @@ export const usePcpPlanejamentoData = (
           unitSigla: unidadeObj.sigla,
           reprogramar: isReprogramar,
           motivo: motivo,
+          deletedSchedules: deletedSchedules,
         }),
       });
       const apiData = await apiRes.json().catch(() => ({}));
@@ -1326,6 +1410,13 @@ export const usePcpPlanejamentoData = (
           }
         });
 
+        // Coluna BZ (Index 77): Alojamento de Ida | Coluna CA (Index 78): Alojamento de Volta
+        const alojamentoIda = String(row[77] || '').trim();
+        const alojamentoVolta = String(row[78] || '').trim();
+        const alojamento = alojamentoIda === alojamentoVolta
+          ? alojamentoIda
+          : (alojamentoIda && alojamentoVolta ? `${alojamentoIda} ➔ ${alojamentoVolta}` : (alojamentoIda || alojamentoVolta));
+
         result.push({
           rowIdx: idx,
           dataStr,
@@ -1349,6 +1440,9 @@ export const usePcpPlanejamentoData = (
           percentualCumprimento,
           motivoDescumprimento,
           chaveBk,
+          alojamento,
+          alojamentoIda,
+          alojamentoVolta,
         });
       });
 
@@ -1374,6 +1468,7 @@ export const usePcpPlanejamentoData = (
     supervisoresCarteira,
     statusesCarteira,
     metasPorEquipeMap,
+    encarregadosPorEquipeMap,
     orcamentoPontosQuery,
     orcamentoPorPontoMap,
     pontosDisponiveisDoProjeto,

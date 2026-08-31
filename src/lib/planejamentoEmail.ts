@@ -361,11 +361,11 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
         </span>
       </div>
       <div style="overflow-x: auto;">
-        <table class="data-table" style="table-layout: fixed; width: 1320px; border-collapse: collapse;">
+        <table class="data-table" style="table-layout: fixed; width: 1520px; border-collapse: collapse;">
           <thead>
             <tr>
               <th style="text-align: left; width: 90px; padding: 6px 4px;">Equipe</th>
-              ${dias.map(d => `<th style="text-align: center; width: 105px; padding: 6px 2px;">${d.diaSemana}<br><span style="font-weight: normal; font-size: 8px;">${d.label || d.data}</span></th>`).join('')}
+              ${dias.map(d => `<th style="text-align: center; width: 140px; padding: 6px 2px;">${d.diaSemana}<br><span style="font-weight: normal; font-size: 8px;">${d.label || d.data}</span></th>`).join('')}
               <th style="text-align: right; width: 75px; padding: 6px 4px;">Planejado</th>
               <th style="text-align: right; width: 65px; padding: 6px 4px;">Meta</th>
               <th style="text-align: center; width: 42px; padding: 6px 2px;">%</th>
@@ -464,7 +464,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
                   return `
                   <tr>
-                    <td style="font-weight: bold; color: #23211E; border-left: 3px solid ${temProg ? corBadge : '#BFB9B0'}; vertical-align: top; padding: 5px 6px; height: 86px; box-sizing: border-box;">
+                    <td style="font-weight: bold; color: #23211E; border-left: 3px solid ${temProg ? corBadge : '#BFB9B0'}; vertical-align: top; padding: 5px 6px; height: 130px; box-sizing: border-box;">
                       <span style="font-size: 11.5px; color: #23211E; display: block; white-space: nowrap;">${eq.codigo}</span>
                       <span style="font-size: 9px; font-weight: normal; color: #6B6660; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75px;" title="${eq.supervisor || ''}">${eq.supervisor || ''}</span>
                       ${temProg ? `
@@ -483,11 +483,19 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                         }
                       }
 
-                      if (!diaInfo || diaInfo.isFolga || diaInfo.folga) {
+                      if (!diaInfo) {
                         return `
-                          <td style="text-align: center; vertical-align: middle; background-color: #F7F6F3; padding: 4px 2px; height: 86px; box-sizing: border-box;">
+                          <td style="text-align: center; vertical-align: middle; background-color: #F7F6F3; padding: 4px 2px; height: 130px; box-sizing: border-box;">
+                            ${d.diaSemana?.toLowerCase() === 'dom' ? '<span style="color: #8C877D; font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Domingo</span>' : ''}
+                          </td>
+                        `;
+                      }
+
+                      if (diaInfo.isFolga || diaInfo.folga) {
+                        return `
+                          <td style="text-align: center; vertical-align: middle; background-color: #F7F6F3; padding: 4px 2px; height: 130px; box-sizing: border-box;">
                             <span style="color: #8C877D; font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                              ${d.diaSemana?.toLowerCase() === 'dom' ? 'Domingo' : 'Folga'}
+                              Folga
                             </span>
                           </td>
                         `;
@@ -495,8 +503,16 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
 
                       if (diaInfo.isFeriado) {
                         return `
-                          <td style="text-align: center; vertical-align: middle; background-color: #F7F6F3; padding: 4px 2px; height: 86px; box-sizing: border-box;">
+                          <td style="text-align: center; vertical-align: middle; background-color: #F7F6F3; padding: 4px 2px; height: 130px; box-sizing: border-box;">
                             <span style="color: #8C877D; font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Feriado</span>
+                          </td>
+                        `;
+                      }
+
+                      if (diaInfo.isIndisponivel) {
+                        return `
+                          <td style="text-align: center; vertical-align: middle; background-color: #FBF5EC; border: 1px solid #E8C9A0; padding: 4px 2px; height: 130px; box-sizing: border-box;">
+                            <span style="color: #B4581A; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Indisponível</span>
                           </td>
                         `;
                       }
@@ -515,12 +531,13 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                       
                       const deslocMin = diaInfo.tempoDeslocamentoMin || 60;
                       const deslocH = (deslocMin / 60).toFixed(1).replace('.', ',');
+                      const corDeslocDot = deslocMin / 60 <= 1.2 ? '#17794C' : deslocMin / 60 <= 2.0 ? '#48A866' : deslocMin / 60 <= 2.5 ? '#C9A227' : '#C0392E';
 
                       const rawPontos = Array.isArray(diaInfo.pontos) ? diaInfo.pontos : [];
                       const cleanPontos = cleanPontosList(rawPontos);
 
                       return `
-                        <td style="text-align: left; vertical-align: top; background-color: #FFFFFF; padding: 4px 5px; height: 86px; box-sizing: border-box; overflow: hidden;">
+                        <td style="text-align: left; vertical-align: top; background-color: #FFFFFF; padding: 4px 5px; height: 130px; box-sizing: border-box; overflow: hidden;">
                           <!-- Faixa Superior: % e Município -->
                           <table style="width: 100%; border-collapse: collapse; margin-bottom: 2px;">
                             <tr>
@@ -529,7 +546,7 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                                   ${pctDia > 0 ? `${pctDia}%` : '-'}
                                 </span>
                               </td>
-                              <td style="text-align: right; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px;">
+                              <td style="text-align: right; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;">
                                 <span style="background-color: #F2F0EC; color: #6B6660; font-weight: bold; font-size: 8px; padding: 1px 3px; border-radius: 2px; text-transform: uppercase;" title="${municipio}">
                                   ${municipio}
                                 </span>
@@ -551,14 +568,15 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                           <div style="font-family: monospace; font-size: 8.5px; color: #5C574F; margin-top: 2px; line-height: 1.1; white-space: nowrap;">
                             <span style="color: ${corJornadaDot}; font-weight: bold;">•</span>
                             <strong style="color: #23211E;">${jornadaH}</strong>
-                            <span style="color: #A39E96;">•</span>
-                            <span style="color: #6B6660;">desl ${deslocH}h</span>
+                            <span style="color: #A39E96;">·</span>
+                            <span style="color: ${corDeslocDot}; font-weight: bold;">•</span>
+                            <span style="color: ${corDeslocDot}; font-weight: bold;">desl ${deslocH}h</span>
                           </div>
 
                           <!-- Pontos e Vãos -->
                           ${cleanPontos.length > 0 ? `
-                            <div style="font-family: monospace; font-size: 8px; color: #8C877D; border-top: 1px solid #F0EDE8; margin-top: 2px; padding-top: 1px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${cleanPontos.join(', ')}">
-                              ${cleanPontos.slice(0, 3).join(', ')}${cleanPontos.length > 3 ? ` +${cleanPontos.length - 3}` : ''}
+                            <div style="font-family: monospace; font-size: 8px; color: #8C877D; border-top: 1px solid #F0EDE8; margin-top: 2px; padding-top: 1px; line-height: 1.25; word-break: break-word; overflow: hidden;" title="${cleanPontos.join(', ')}">
+                              ${cleanPontos.join(', ')}
                             </div>
                           ` : ''}
                         </td>
@@ -724,10 +742,17 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
       };
       obrasArr.sort((a, b) => riskOrder(a) - riskOrder(b));
 
-      // Split obras em 2 colunas
+      // Distribuir em 2 colunas balanceando pelo "peso" (nº de pontos detalhados = altura estimada)
       const col1: typeof obrasArr = [];
       const col2: typeof obrasArr = [];
-      obrasArr.forEach((o, i) => { (i % 2 === 0 ? col1 : col2).push(o); });
+      let h1 = 0, h2 = 0;
+      obrasArr.forEach(o => {
+        const risk = vistorias[o.obra];
+        const numPontos = risk?.pontosDetalhados?.length || 0;
+        const peso = 1 + numPontos;
+        if (h1 <= h2) { col1.push(o); h1 += peso; }
+        else { col2.push(o); h2 += peso; }
+      });
 
       return `
       <div style="padding: 0 14px 16px 14px;">
