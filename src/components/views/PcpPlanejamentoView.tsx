@@ -1659,17 +1659,27 @@ export const PcpPlanejamentoView = () => {
       toast.error('Nenhum planejamento selecionado para carregar.');
       return;
     }
-    const firstPlan = plansToLoad[0];
-    const obraEncontrada = obras.find(o => o.projeto === firstPlan.projeto);
-    if (obraEncontrada) {
-      setSelectedObraId(obraEncontrada.projeto);
-    } else {
-      setSelectedObraId(firstPlan.projeto);
-    }
 
-    if (firstPlan.supervisor) setSupervisor(firstPlan.supervisor);
-    const distinctEquipes = Array.from(new Set(plansToLoad.map(p => p.equipe).filter(Boolean)));
-    if (distinctEquipes.length > 0) setSelectedEquipes(distinctEquipes);
+    const isEquipe = planningMode === 'equipe';
+
+    if (isEquipe) {
+      const distinctEquipes = Array.from(new Set(plansToLoad.map(p => p.equipe).filter(Boolean)));
+      if (distinctEquipes.length > 0) {
+        setSelectedEquipes(prev => Array.from(new Set([...prev, ...distinctEquipes])));
+        setExpandedEquipeIds(prev => Array.from(new Set([...prev, ...distinctEquipes])));
+      }
+    } else {
+      const firstPlan = plansToLoad[0];
+      const obraEncontrada = obras.find(o => o.projeto === firstPlan.projeto);
+      if (obraEncontrada) {
+        setSelectedObraId(obraEncontrada.projeto);
+      } else {
+        setSelectedObraId(firstPlan.projeto);
+      }
+      if (firstPlan.supervisor) setSupervisor(firstPlan.supervisor);
+      const distinctEquipes = Array.from(new Set(plansToLoad.map(p => p.equipe).filter(Boolean)));
+      if (distinctEquipes.length > 0) setSelectedEquipes(distinctEquipes);
+    }
 
     // 1. Extrair e ordenar todas as datas dos planejamentos selecionados via regex robusto
     const dateMap = new Map<string, Date>(); // key: 'yyyy-MM-dd', value: Date
@@ -1696,13 +1706,14 @@ export const PcpPlanejamentoView = () => {
     }
 
     // 3. Montar mapas limpos apenas com os dados dos planejamentos carregados
-    const nextDiasPontosMap: Record<string, string[]> = {};
-    const nextDiasPontosGroupedMap: Record<string, Record<string, PcpPontoItem[]>> = {};
-    const nextDiasEtapasMap: Record<string, string[]> = {};
-    const nextDiasPesMap: Record<string, boolean> = {};
-    const nextDiasPercentualCumprimentoMap: Record<string, string> = {};
-    const nextDiasMotivoDescumprimentoMap: Record<string, string> = {};
+    const nextDiasPontosMap: Record<string, string[]> = isEquipe ? { ...diasPontosMap } : {};
+    const nextDiasPontosGroupedMap: Record<string, Record<string, PcpPontoItem[]>> = isEquipe ? { ...diasPontosGroupedMap } : {};
+    const nextDiasEtapasMap: Record<string, string[]> = isEquipe ? { ...diasEtapasMap } : {};
+    const nextDiasPesMap: Record<string, boolean> = isEquipe ? { ...diasPesMap } : {};
+    const nextDiasPercentualCumprimentoMap: Record<string, string> = isEquipe ? { ...diasPercentualCumprimentoMap } : {};
+    const nextDiasMotivoDescumprimentoMap: Record<string, string> = isEquipe ? { ...diasMotivoDescumprimentoMap } : {};
     const nextDiasCustomAlojMap: Record<string, any> = { ...diasCustomAlojMap };
+    const nextDiasObraEquipeMap: Record<string, string> = { ...diasObraEquipeMap };
 
     plansToLoad.forEach(plan => {
       let dayId = '';
@@ -1715,22 +1726,28 @@ export const PcpPlanejamentoView = () => {
         dayId = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       }
 
+      const mapKey = (isEquipe && plan.equipe) ? `${plan.equipe}_${dayId}` : dayId;
+
       if (dayId) {
+        if (isEquipe && plan.equipe) {
+          nextDiasObraEquipeMap[mapKey] = plan.projeto;
+        }
+
         if (plan.etapasGeral && plan.etapasGeral.length > 0) {
-          nextDiasEtapasMap[dayId] = plan.etapasGeral;
+          nextDiasEtapasMap[mapKey] = plan.etapasGeral;
         }
         if (plan.isPes !== undefined) {
-          nextDiasPesMap[dayId] = plan.isPes;
+          nextDiasPesMap[mapKey] = plan.isPes;
         }
         if (plan.percentualCumprimento) {
-          nextDiasPercentualCumprimentoMap[dayId] = plan.percentualCumprimento;
+          nextDiasPercentualCumprimentoMap[mapKey] = plan.percentualCumprimento;
         }
         if (plan.motivoDescumprimento) {
-          nextDiasMotivoDescumprimentoMap[dayId] = plan.motivoDescumprimento;
+          nextDiasMotivoDescumprimentoMap[mapKey] = plan.motivoDescumprimento;
         }
         if (plan.alojamentoIda || plan.alojamentoVolta || plan.alojamento) {
-          nextDiasCustomAlojMap[dayId] = {
-            ...nextDiasCustomAlojMap[dayId],
+          nextDiasCustomAlojMap[mapKey] = {
+            ...nextDiasCustomAlojMap[mapKey],
             origem: plan.alojamentoIda || plan.alojamento || 'BASE',
             destino: plan.alojamentoVolta || plan.alojamento || 'BASE',
           };
@@ -1747,13 +1764,15 @@ export const PcpPlanejamentoView = () => {
       const pontosLista = Array.from(allPontosSet);
 
       if (dayId) {
-        nextDiasPontosMap[dayId] = pontosLista;
-        if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
+        nextDiasPontosMap[mapKey] = pontosLista;
+        if (!nextDiasPontosGroupedMap[mapKey]) nextDiasPontosGroupedMap[mapKey] = {};
       }
 
       pontosLista.forEach(pUpper => {
         const ativsDoPonto = (plan.parsedAtividades || []).filter(a => (a.ponto || '').toUpperCase() === pUpper);
-        const budgetItems = orcamentoPorPontoMap.get(pUpper) || [];
+        const budgetItems = (isEquipe
+          ? obraDataCache[plan.projeto]?.orcamento?.get(pUpper)
+          : orcamentoPorPontoMap.get(pUpper)) || [];
         const combinedItems: PcpPontoItem[] = [];
 
         if (ativsDoPonto.length > 0) {
@@ -1773,7 +1792,7 @@ export const PcpPlanejamentoView = () => {
             const vTotal = vUnit > 0 ? vUnit * (a.quantidade || 1) : (matchedBudget?.valorEstimado || 0);
 
             combinedItems.push({
-              id: `loaded-${dayId || 'day'}-${pUpper}-${aIdx}`,
+              id: `loaded-${mapKey || 'day'}-${pUpper}-${aIdx}`,
               ponto: pUpper,
               servico: a.servico,
               codigoMaterial: matchedBudget?.codigo || servBase?.codigo || '',
@@ -1794,7 +1813,7 @@ export const PcpPlanejamentoView = () => {
         } else if (budgetItems.length > 0) {
           budgetItems.forEach((bItem, bIdx) => {
             combinedItems.push({
-              id: `budget-${dayId || 'day'}-${pUpper}-${bIdx}`,
+              id: `budget-${mapKey || 'day'}-${pUpper}-${bIdx}`,
               ponto: pUpper,
               servico: bItem.servicoPrevisto || bItem.descricao,
               codigoMaterial: bItem.codigo,
@@ -1823,7 +1842,7 @@ export const PcpPlanejamentoView = () => {
             valorPorUnidade: isVao ? 50 : 100,
           };
           combinedItems.push({
-            id: `default-${dayId || 'day'}-${pUpper}-0`,
+            id: `default-${mapKey || 'day'}-${pUpper}-0`,
             ponto: pUpper,
             servico: defaultServico,
             codigoMaterial: servBase.codigo || '',
@@ -1843,8 +1862,8 @@ export const PcpPlanejamentoView = () => {
         }
 
         if (dayId) {
-          if (!nextDiasPontosGroupedMap[dayId]) nextDiasPontosGroupedMap[dayId] = {};
-          nextDiasPontosGroupedMap[dayId][pUpper] = combinedItems;
+          if (!nextDiasPontosGroupedMap[mapKey]) nextDiasPontosGroupedMap[mapKey] = {};
+          nextDiasPontosGroupedMap[mapKey][pUpper] = combinedItems;
         }
       });
     });
@@ -1856,6 +1875,9 @@ export const PcpPlanejamentoView = () => {
     setDiasPercentualCumprimentoMap(nextDiasPercentualCumprimentoMap);
     setDiasMotivoDescumprimentoMap(nextDiasMotivoDescumprimentoMap);
     setDiasCustomAlojMap(nextDiasCustomAlojMap);
+    if (isEquipe) {
+      setDiasObraEquipeMap(nextDiasObraEquipeMap);
+    }
     setIsCarregarPlanModalOpen(false);
     setSelectedExistingPlanKeys([]);
     toast.success(`${plansToLoad.length} ${plansToLoad.length === 1 ? 'planejamento carregado' : 'planejamentos carregados'} com sucesso.`);
