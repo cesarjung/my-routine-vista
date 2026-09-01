@@ -6,6 +6,51 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
+export function parseMoedaPtBr(val: any): number {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+
+  let str = String(val).trim().replace(/^R\$\s*/i, '').replace(/\s+/g, '');
+  if (!str) return 0;
+
+  const hasComma = str.includes(',');
+  const hasDot = str.includes('.');
+
+  if (hasComma && hasDot) {
+    const lastComma = str.lastIndexOf(',');
+    const lastDot = str.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // 1.234,56 ou 1.042.938,50 -> ponto é milhar, vírgula é decimal
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      // 1,234.56 ou 1,042,938.50 -> vírgula é milhar, ponto é decimal
+      str = str.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    const parts = str.split(',');
+    if (parts.length > 2) {
+      str = str.replace(/,/g, '');
+    } else {
+      str = str.replace(',', '.');
+    }
+  } else if (hasDot) {
+    const parts = str.split('.');
+    if (parts.length > 2) {
+      str = str.replace(/\./g, '');
+    } else {
+      const decPart = parts[1];
+      if (decPart.length !== 3 || parts[0].length > 3) {
+        // Decimal (ex: 10429.38 ou 10429.380) -> mantém o ponto
+      } else {
+        str = str.replace(/\./g, '');
+      }
+    }
+  }
+
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : num;
+}
+
 export interface ObraConclusaoItem {
   data: string;             // "22/07/2026"
   dataObj: Date;
@@ -288,8 +333,7 @@ export function usePlanejamentoSemanal({
         const row = rowsMetas[i];
         if (!row || row.length < 4) continue;
         const eq = String(row[1] || '').trim().toUpperCase();
-        const valStr = String(row[3] || '').trim().replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-        const num = parseFloat(valStr) || 0;
+        const num = parseMoedaPtBr(row[3]);
         if (eq && num > 0) {
           metasMap.set(eq, num);
         }
@@ -364,8 +408,7 @@ export function usePlanejamentoSemanal({
             const lngStr = String(row[47] || '').replace(',', '.').trim();
             const lat = parseFloat(latStr) || null;
             const lng = parseFloat(lngStr) || null;
-            const valConsStr = String(row[38] || '').replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-            const valorConsiderado = parseFloat(valConsStr) || 0;
+            const valorConsiderado = parseMoedaPtBr(row[38]);
             const dono = String(row[58] || row[15] || 'COELBA').trim();
             const statusExecucao = String(row[11] || 'EM ANDAMENTO').trim();
             if (proj) {
@@ -508,13 +551,12 @@ export function usePlanejamentoSemanal({
       // Ignorar linhas sem dados reais (etapa vazia + obra vazia + sem pontos + sem valor)
       // Isso evita que linhas vazias da planilha apareçam como "IMPLANTAÇÃO" na grade
       if (!etapa && !obra && pontosList.length === 0) {
-        const valCheck = String(row[37] || row[50] || row[45] || '').replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-        if (!parseFloat(valCheck)) continue;
+        const valCheck = parseMoedaPtBr(row[37] || row[50] || row[45]);
+        if (!valCheck) continue;
       }
 
       // Valor planejado real da Coluna 37 (ou 50/45)
-      const valStr = String(row[37] || row[50] || row[45] || '').replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-      const valorPlanejado = parseFloat(valStr) || (pontosList.length > 0 ? pontosList.length * 1500 : 0);
+      const valorPlanejado = parseMoedaPtBr(row[37] || row[50] || row[45]) || (pontosList.length > 0 ? pontosList.length * 1500 : 0);
 
       // Deslocamento real da Coluna 64 ("1:45:00") e Jornada da Coluna 67 ("8:34:00")
       const tempoDeslocamentoMin = parseTimeInMin(row[64], municipio.includes('LAPA') ? 45 : 90);

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseMoedaPtBr } from './usePlanejamentoSemanal';
 
 export interface PcpObra {
   projeto: string;
@@ -496,8 +497,7 @@ export const usePcpPlanejamentoData = (
         if (!row || row.length < 4) continue;
 
         const eq = String(row[1] || '').trim().toUpperCase();
-        const valStr = String(row[3] || '').trim().replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-        const num = parseFloat(valStr) || 0;
+        const num = parseMoedaPtBr(row[3]);
 
         if (eq && num > 0) {
           map.set(eq, num);
@@ -572,10 +572,10 @@ export const usePcpPlanejamentoData = (
         // Prioriza o Valor Contratual / Valor com Fator K da Unidade (Coluna AT / Index 45)
         let valor = 0;
         if (valKStr) {
-           valor = parseFloat(valKStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+           valor = parseMoedaPtBr(valKStr);
         }
         if (valor === 0 && valStr) {
-           valor = parseFloat(valStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
+           valor = parseMoedaPtBr(valStr);
         }
 
         lista.push({
