@@ -1591,54 +1591,115 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                     </div>
 
                     {/* Pontos detalhados da vistoria - editáveis */}
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {risk?.pontosDetalhados && risk.pontosDetalhados.length > 0 ? (
                         risk.pontosDetalhados.map((pt, pIdx) => {
                           const isCritico = Boolean(pt.isCritico);
+                          const inputClassId = `vistoria-input-${obra.obra.replace(/[^a-zA-Z0-9]/g, '_')}`;
                           return (
                             <div
                               key={pIdx}
-                              className={`group p-1.5 rounded-lg text-[10.5px] leading-snug break-words flex items-start gap-1.5 ${
+                              className={`group p-1.5 rounded-lg text-[11px] leading-snug flex items-center gap-1.5 transition-all shadow-2xs ${
                                 isCritico
-                                  ? 'bg-[#C0392E] text-white font-bold border border-[#A93226]'
-                                  : 'bg-white border border-[#E6E3DD] text-[#23211E]'
+                                  ? 'bg-[#C0392E] text-white border border-[#A93226]'
+                                  : 'bg-white border border-[#E6E3DD] text-[#23211E] hover:border-[#DEDAD3]'
                               }`}
                             >
-                              <span className="text-[10px] shrink-0 mt-0.5">{pt.icone || (isCritico ? '🔴' : '📌')}</span>
-                              <div className="flex-1 min-w-0">
-                                {pt.categoria && (
-                                  <span className={`mr-1 text-[9px] uppercase tracking-wider ${
-                                    isCritico ? 'text-red-100 font-bold' : 'text-[#8A857D] font-semibold'
-                                  }`}>
-                                    [{pt.categoria}]
-                                  </span>
-                                )}
-                                <span className={`break-words whitespace-normal ${isCritico ? 'text-white' : 'text-[#23211E]'}`}>
-                                  {pt.texto}
-                                </span>
-                              </div>
+                              {/* Ícone com Toggle de Gravidade (Crítico / Normal) */}
                               <button
                                 type="button"
                                 onClick={() => {
-                                  // Remove este ponto da vistoria (local)
+                                  pt.isCritico = !pt.isCritico;
+                                  pt.icone = pt.isCritico ? '🔴' : '📌';
+                                  setForceRender(v => v + 1);
+                                }}
+                                className="text-xs shrink-0 cursor-pointer hover:scale-115 transition-transform print:hidden"
+                                title={pt.isCritico ? 'Tópico Crítico (clique para alternar para Normal)' : 'Tópico Normal (clique para alternar para Crítico)'}
+                              >
+                                {pt.icone || (isCritico ? '🔴' : '📌')}
+                              </button>
+
+                              {/* Categoria do Tópico (Ex: ACESSO, PODAS, SEGURANÇA) */}
+                              <div className="flex items-center shrink-0">
+                                <span className={`text-[9px] font-bold ${isCritico ? 'text-red-200' : 'text-[#8A857D]'}`}>[</span>
+                                <input
+                                  type="text"
+                                  value={pt.categoria || ''}
+                                  onChange={e => {
+                                    pt.categoria = e.target.value.toUpperCase();
+                                    setForceRender(v => v + 1);
+                                  }}
+                                  placeholder="GERAL"
+                                  className={`text-[9px] uppercase tracking-wider font-bold w-16 sm:w-20 bg-transparent border-none px-0.5 text-center focus:outline-none focus:bg-black/5 rounded ${
+                                    isCritico ? 'text-red-100 placeholder:text-red-300' : 'text-[#8A857D] placeholder:text-[#A39E96]'
+                                  }`}
+                                  title="Categoria do tópico (ex: SEGURANÇA, ACESSO, PODAS, GERAL)"
+                                />
+                                <span className={`text-[9px] font-bold ${isCritico ? 'text-red-200' : 'text-[#8A857D]'}`}>]</span>
+                              </div>
+
+                              {/* Campo de Texto Principal do Tópico */}
+                              <input
+                                type="text"
+                                value={pt.texto || ''}
+                                onChange={e => {
+                                  pt.texto = e.target.value;
+                                  setForceRender(v => v + 1);
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (!risk.pontosDetalhados) risk.pontosDetalhados = [];
+                                    risk.pontosDetalhados.splice(pIdx + 1, 0, {
+                                      categoria: pt.categoria || 'GERAL',
+                                      icone: '📌',
+                                      texto: '',
+                                      isCritico: false,
+                                    });
+                                    setForceRender(v => v + 1);
+                                    setTimeout(() => {
+                                      const inputs = document.querySelectorAll<HTMLInputElement>(`.${inputClassId}`);
+                                      if (inputs[pIdx + 1]) inputs[pIdx + 1].focus();
+                                    }, 50);
+                                  } else if (e.key === 'Backspace' && pt.texto === '' && risk.pontosDetalhados.length > 1) {
+                                    e.preventDefault();
+                                    risk.pontosDetalhados.splice(pIdx, 1);
+                                    setForceRender(v => v + 1);
+                                    setTimeout(() => {
+                                      const inputs = document.querySelectorAll<HTMLInputElement>(`.${inputClassId}`);
+                                      const prevIdx = Math.max(0, pIdx - 1);
+                                      if (inputs[prevIdx]) inputs[prevIdx].focus();
+                                    }, 50);
+                                  }
+                                }}
+                                placeholder="Descreva a observação ou impeditivo da obra..."
+                                className={`${inputClassId} flex-1 min-w-0 bg-transparent text-[10.5px] leading-snug px-1.5 py-0.5 rounded border border-transparent focus:outline-none focus:bg-black/5 focus:border-black/10 transition-colors ${
+                                  isCritico ? 'text-white placeholder:text-red-200 font-bold' : 'text-[#23211E] placeholder:text-[#A39E96]'
+                                }`}
+                              />
+
+                              {/* Botão de Excluir Tópico */}
+                              <button
+                                type="button"
+                                onClick={() => {
                                   if (risk?.pontosDetalhados) {
                                     risk.pontosDetalhados.splice(pIdx, 1);
-                                    // Force re-render via state update
                                     setForceRender(v => v + 1);
                                   }
                                 }}
-                                className={`opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 print:hidden ${
+                                className={`opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer print:hidden ${
                                   isCritico ? 'text-red-200 hover:text-white' : 'text-[#A39E96] hover:text-[#C0392E]'
                                 }`}
+                                title="Remover tópico"
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           );
                         })
                       ) : (
-                        <div className="text-[10.5px] text-[#A39E96] italic">
-                          {risk ? 'Nenhum impeditivo crítico registrado.' : 'Vistoria não realizada para esta obra.'}
+                        <div className="text-[10.5px] text-[#A39E96] italic py-1">
+                          {risk ? 'Nenhum impeditivo registrado. Clique em + Tópico abaixo para incluir.' : 'Vistoria não realizada para esta obra. Clique em + Tópico abaixo para incluir observações.'}
                         </div>
                       )}
                     </div>
@@ -1647,14 +1708,37 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        if (!risk) return;
-                        if (!risk.pontosDetalhados) risk.pontosDetalhados = [];
-                        risk.pontosDetalhados.push({ categoria: '', icone: '📌', texto: 'Novo tópico...', isCritico: false });
-                        setForceRender(v => v + 1);
+                        const inputClassId = `vistoria-input-${obra.obra.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                        if (!risk) {
+                          if (vistoriasMap) {
+                            (vistoriasMap as any)[obra.obra] = {
+                              classificacao: 'Verde',
+                              pontosDetalhados: [],
+                            };
+                          }
+                        }
+                        const currentRisk = vistoriasMap?.[obra.obra] || risk;
+                        if (currentRisk) {
+                          if (!currentRisk.pontosDetalhados) currentRisk.pontosDetalhados = [];
+                          currentRisk.pontosDetalhados.push({
+                            categoria: 'GERAL',
+                            icone: '📌',
+                            texto: '',
+                            isCritico: false,
+                          });
+                          setForceRender(v => v + 1);
+                          setTimeout(() => {
+                            const inputs = document.querySelectorAll<HTMLInputElement>(`.${inputClassId}`);
+                            if (inputs.length > 0) {
+                              const lastInput = inputs[inputs.length - 1];
+                              lastInput.focus();
+                            }
+                          }, 50);
+                        }
                       }}
-                      className="flex items-center gap-1 text-[10.5px] font-semibold text-[#E07A1F] hover:text-[#C0671A] transition-colors print:hidden"
+                      className="flex items-center gap-1 text-[11px] font-bold text-[#E07A1F] hover:text-[#C0671A] transition-colors print:hidden px-1.5 py-1 rounded hover:bg-[#E07A1F]/10 cursor-pointer"
                     >
-                      <Plus className="w-3 h-3" /> Tópico
+                      <Plus className="w-3.5 h-3.5" /> Tópico
                     </button>
                   </div>
                 );
