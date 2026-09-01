@@ -664,10 +664,23 @@ export function usePlanejamentoSemanal({
     let equipesAcimaMeta = 0;
     let equipesAbaixoMeta = 0;
 
-    const listaEquipesOrdenadas = Array.from(equipesConfigMap.keys()).sort();
+    // Conjunto unificado de todas as equipes (cadastradas na BD_Config ou com programação na Plan_Principal)
+    const allEquipesSet = new Set<string>();
+    for (const eq of equipesConfigMap.keys()) allEquipesSet.add(eq);
+    for (const eq of programacoesPorEquipeData.keys()) allEquipesSet.add(eq);
+
+    const listaEquipesOrdenadas = Array.from(allEquipesSet).sort();
 
     listaEquipesOrdenadas.forEach(eq => {
-      const sup = equipesConfigMap.get(eq) || 'SUPERVISOR';
+      let sup = equipesConfigMap.get(eq);
+      if (!sup || sup === 'SUPERVISOR') {
+        const progDays = programacoesPorEquipeData.get(eq);
+        if (progDays) {
+          const found = Array.from(progDays.values()).find(d => d && d.supervisor && d.supervisor !== 'SUPERVISOR');
+          if (found) sup = found.supervisor;
+        }
+      }
+      sup = sup || 'SUPERVISOR';
       const metaDiariaFallback = metasMap.get(eq) || 5500; // fallback se BD_Metas não tiver data específica
       const metasDaEquipe = metaDiariaDataMap.get(eq);
 

@@ -84,27 +84,45 @@ export default async function handler(req, res) {
 
     const token = await getAccessToken();
 
-    // Fetch required sheets: Carteira_Planejador, Plan_Principal, BD_Metas, Reprogramadas, Base_Curva, BD_Config
+    // Fetch required sheets com ranges otimizados
     const ranges = [
-      'Carteira_Planejador!A1:CA',
-      'Plan_Principal!A1:CA',
-      'BD_Metas!A1:CA',
-      'Reprogramadas!A1:CA',
-      'Base_Curva!A1:CA',
-      'BD_Config!A1:CA'
+      'Carteira_Planejador!A1:BH',
+      'Plan_Principal!A1:CB',
+      'BD_Metas!A1:E',
+      'Reprogramadas!A1:AZ',
+      'Base_Curva!A1:Z',
+      'BD_Config!A1:BA'
     ];
 
     const fetchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&')}`;
     const sheetsRes = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${token}` } });
     const sheetsData = await sheetsRes.json();
 
+    if (!sheetsRes.ok) {
+      throw new Error(`Erro ao consultar Google Sheets: ${JSON.stringify(sheetsData)}`);
+    }
+
+    const trimRow = (row) => {
+      if (!Array.isArray(row)) return [];
+      let lastIdx = row.length - 1;
+      while (lastIdx >= 0 && (row[lastIdx] === '' || row[lastIdx] === null || row[lastIdx] === undefined)) {
+        lastIdx--;
+      }
+      return row.slice(0, lastIdx + 1);
+    };
+
+    const cleanRows = (rows) => {
+      if (!Array.isArray(rows)) return [];
+      return rows.map(trimRow).filter(r => r.length > 0);
+    };
+
     const valueRanges = sheetsData.valueRanges || [];
-    const carteira = valueRanges[0]?.values || [];
-    const principal = valueRanges[1]?.values || [];
-    const bdMetas = valueRanges[2]?.values || [];
-    const reprogramadas = valueRanges[3]?.values || [];
-    const baseCurva = valueRanges[4]?.values || [];
-    const bdConfig = valueRanges[5]?.values || [];
+    const carteira = cleanRows(valueRanges[0]?.values || []);
+    const principal = cleanRows(valueRanges[1]?.values || []);
+    const bdMetas = cleanRows(valueRanges[2]?.values || []);
+    const reprogramadas = cleanRows(valueRanges[3]?.values || []);
+    const baseCurva = cleanRows(valueRanges[4]?.values || []);
+    const bdConfig = cleanRows(valueRanges[5]?.values || []);
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://curyufedazpkhtxrwhkn.supabase.co';
     const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1cnl1ZmVkYXpwa2h0eHJ3aGtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5NzU5NTIsImV4cCI6MjA4MjU1MTk1Mn0.DGKJPQBmLCTw5YyKwg7LfRQMseeVgXzljD5Z6lCESRs';
