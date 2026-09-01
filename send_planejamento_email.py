@@ -21,7 +21,7 @@ def send_email_from_payload(payload_path):
     assunto = data.get("assunto", "Programação Semanal PCP")
     html_content = data.get("html", "")
 
-    host = smtp_cfg.get("host", "smtp.office365.com").strip()
+    host = smtp_cfg.get("host", "smtp.sirtec.com.br").strip()
     port = int(smtp_cfg.get("port", 587))
     secure = smtp_cfg.get("secure", "tls").lower().strip()
     user = smtp_cfg.get("user", "").strip()

@@ -34,6 +34,11 @@ import { usePlanejamentoEmailSettings } from '@/hooks/usePlanejamentoEmailSettin
 import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
 import { useVistoriasBatch } from '@/hooks/useVistoriasBatch';
 import type { RiskResult } from '@/hooks/usePcpAiPlanner';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
+import { useProfiles } from '@/hooks/useProfiles';
+import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
 export interface EnvioPlanejamentoModalProps {
   open: boolean;
@@ -70,8 +75,32 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   // ════════════════════════════════════════════════════════════════
   // TODOS os hooks DEVEM ficar antes de qualquer return condicional
   // ════════════════════════════════════════════════════════════════
+  const { user } = useAuth();
+  const { data: userRole } = useUserRole();
+  const { data: unitManagers } = useUnitManagers();
+  const { data: profiles } = useProfiles();
+  const myProfile = profiles?.find(p => p.id === user?.id);
+
   const { getUnidadeConfig, getUserSignature, smtpConfig } = usePlanejamentoEmailSettings();
   const [isSending, setIsSending] = useState(false);
+
+  // Verificação de permissão do usuário para enviar e-mail desta unidade
+  const isGestorOrAdmin = userRole === 'admin' || userRole === 'gestor';
+  const myManagedUnitIds = useMemo(() => {
+    return unitManagers?.filter(m => m.user_id === user?.id).map(m => m.unit_id) || [];
+  }, [unitManagers, user?.id]);
+
+  const hasUnitPermission = useMemo(() => {
+    if (isGestorOrAdmin) return true;
+    if (!user) return false;
+    if (myProfile?.unit_id === unidadeId) return true;
+    if (myManagedUnitIds.includes(unidadeId)) return true;
+    const unitObj = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeId);
+    if (unitObj && myProfile?.unit_id && unitObj.nome.toLowerCase().includes(myProfile.unit_id.toLowerCase())) {
+      return true;
+    }
+    return false;
+  }, [isGestorOrAdmin, user, myProfile, myManagedUnitIds, unidadeId]);
 
   // Extrair obras únicas de todas as equipes para buscar vistorias
   const obraIds = useMemo(() => {
@@ -101,7 +130,7 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
     return d1 && d2 ? `Programação Semanal PCP · ${unidadeNome} · ${d1} a ${d2}` : `Programação Semanal PCP · ${unidadeNome}`;
   });
 
-  const initialConfig = getUnidadeConfig(unidadeId);
+  const initialConfig = getUnidadeConfig(unidadeId, user?.id);
   const [destinatariosPara, setDestinatariosPara] = useState<string[]>(
     initialConfig.destinatariosPara?.length > 0
       ? initialConfig.destinatariosPara
@@ -119,11 +148,11 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
 
   useEffect(() => {
     if (unidadeId) {
-      const uConfig = getUnidadeConfig(unidadeId);
+      const uConfig = getUnidadeConfig(unidadeId, user?.id);
       if (uConfig.destinatariosPara?.length > 0) setDestinatariosPara(uConfig.destinatariosPara);
       if (uConfig.destinatariosCc?.length > 0) setDestinatariosCc(uConfig.destinatariosCc);
     }
-  }, [unidadeId, getUnidadeConfig]);
+  }, [unidadeId, user?.id, getUnidadeConfig]);
 
   const [blocos, setBlocos] = useState<EmailBlocosConfig>({
     resumo: true, calendario: true, conclusoes: true, vistorias: true, disponiveis: true, alojamentos: true, observacoes: true, mapa: true,
@@ -173,11 +202,16 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
       return;
     }
 
+    if (!hasUnitPermission) {
+      toast.error(`Acesso negado: Seu usuário não possui permissão para enviar o planejamento da unidade ${unidadeNome}.`);
+      return;
+    }
+
     setIsSending(true);
-    const toastId = toast.loading('Conectando ao servidor SMTP e disparando e-mail...');
+    const toastId = toast.loading('Gerando mapa e enviando e-mail de planejamento via SMTP...');
 
     try {
-      const userSig = getUserSignature();
+      const userSig = getUserSignature(user?.id, myProfile);
 
       const equipesParaMapa = equipes.filter(e => e.temProgramacao).map(eq => {
         const munSet = new Set<string>();
@@ -612,12 +646,23 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
               </div>
             </div>
 
+            {/* Alerta se o usuário não tem permissão para a unidade */}
+            {!hasUnitPermission && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                <div>
+                  <p className="font-bold">Acesso Restrito</p>
+                  <p>Seu usuário não possui permissão ativa para a unidade <b>{unidadeNome}</b>. O envio está bloqueado.</p>
+                </div>
+              </div>
+            )}
+
             {/* Rodapé Fixo da Coluna Esquerda */}
             <div className="space-y-2 pt-3 border-t border-[#E6E3DD]">
               <Button
                 onClick={handleEnviarPlanejamento}
-                disabled={isSending}
-                className="w-full h-9 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-1.5 shadow-2xs"
+                disabled={isSending || !hasUnitPermission}
+                className="w-full h-9 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 gap-1.5 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSending ? (
                   <>

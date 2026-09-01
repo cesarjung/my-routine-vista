@@ -23,6 +23,7 @@ import { AdminUsersManagement } from '@/components/AdminUsersManagement';
 import { MultiAssigneeSelect } from '@/components/MultiAssigneeSelect';
 import { UserPermissionsTab } from '@/components/UserPermissionsTab';
 import { PlanejamentoEmailSettings } from '@/components/settings/PlanejamentoEmailSettings';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
 
 type AppRole = 'admin' | 'gestor' | 'usuario';
 
@@ -40,8 +41,13 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
   const { data: units } = useUnits();
+  const { data: unitManagers } = useUnitManagers();
   const { data: profiles, refetch: refetchProfiles } = useProfiles();
   const queryClient = useQueryClient();
+
+  const myManagedUnits = useMemo(() => {
+    return unitManagers?.filter(m => m.user_id === user?.id).map(m => m.unit_id) || [];
+  }, [unitManagers, user?.id]);
 
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
@@ -645,9 +651,11 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
 
           <TabsContent value="planejamento_email">
             <PlanejamentoEmailSettings
-              isAdmin={false}
-              isGestor={false}
-              userUnitId={userUnit?.id || myProfile?.unit_id}
+              isAdmin={isAdmin}
+              isGestor={canManageUsers && !isAdmin}
+              userUnitId={myProfile?.unit_id}
+              userManagedUnits={myManagedUnits}
+              userId={user?.id}
             />
           </TabsContent>
 
@@ -1005,6 +1013,8 @@ export const SettingsView = ({ hideHeader }: SettingsViewProps) => {
             isAdmin={isAdmin}
             isGestor={canManageUsers && !isAdmin}
             userUnitId={myProfile?.unit_id}
+            userManagedUnits={myManagedUnits}
+            userId={user?.id}
           />
         </TabsContent>
 

@@ -1,45 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 import {
   Mail,
   Server,
   Shield,
-  ShieldAlert,
   Lock,
-  Eye,
-  EyeOff,
   Plus,
   X,
   Info,
   CheckCircle2,
   Building2,
   Send,
-  HelpCircle,
-  Users,
-  FileCode,
-  Sparkles,
+  Eye,
+  EyeOff,
   PenTool,
-  RotateCcw
+  Phone,
+  Briefcase,
+  User,
+  Sparkles,
+  AlertTriangle,
+  Code2,
+  Copy,
 } from 'lucide-react';
 import { UNIDADES_PLANEJAMENTO, UnidadePlanejamento } from '@/constants/unidades';
 import {
   usePlanejamentoEmailSettings,
   SmtpConfig,
-  UnidadeEmailConfig,
   UserSignatureConfig,
+  generateOfficialHtmlSignature,
+  generateOfficialTextSignature,
   DEFAULT_SMTP_CONFIG,
-  DEFAULT_THUNDERBIRD_HTML_SIGNATURE,
-  DEFAULT_TEXT_SIGNATURE,
-  DEFAULT_USER_SIGNATURE
 } from '@/hooks/usePlanejamentoEmailSettings';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProfiles } from '@/hooks/useProfiles';
 
 interface PlanejamentoEmailSettingsProps {
   isAdmin?: boolean;
@@ -56,6 +55,11 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
   userManagedUnits = [],
   userId,
 }) => {
+  const { user } = useAuth();
+  const activeUserId = userId || user?.id;
+  const { data: profiles } = useProfiles();
+  const currentProfile = profiles?.find(p => p.id === activeUserId);
+
   const {
     config,
     saveSmtpConfig,
@@ -67,33 +71,119 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
 
   const canManageAllUnits = isAdmin || isGestor;
 
-  // Determinar unidades acessíveis pelo usuário
-  const allowedUnits: UnidadePlanejamento[] = React.useMemo(() => {
+  // 1. Filtrar unidades estritamente conforme permissão do usuário logado
+  const allowedUnits: UnidadePlanejamento[] = useMemo(() => {
     if (canManageAllUnits) {
       return UNIDADES_PLANEJAMENTO;
     }
-    // Usuário nível comum: apenas unidades atribuídas a si
+    // Usuário comum: apenas unidades associadas explicitamente no perfil ou em unit_managers
     const allowed = UNIDADES_PLANEJAMENTO.filter(u => {
-      const matchId = u.id === userUnitId || userManagedUnits.includes(u.id);
-      const matchName = userUnitId && u.nome.toLowerCase().includes(userUnitId.toLowerCase());
-      return matchId || matchName;
+      const matchPrimary = userUnitId && (u.id === userUnitId || u.nome.toLowerCase().includes(userUnitId.toLowerCase()));
+      const matchManaged = userManagedUnits && userManagedUnits.includes(u.id);
+      return matchPrimary || matchManaged;
     });
 
-    // Se nenhuma bateu explicitamente, permite a primeira unidade ou todas em modo leitura
     return allowed.length > 0 ? allowed : [UNIDADES_PLANEJAMENTO[0]];
   }, [canManageAllUnits, userUnitId, userManagedUnits]);
 
-  // Unidade atualmente selecionada para edição de destinatários
+  // Unidade atualmente selecionada no dropdown
   const [selectedUnidadeId, setSelectedUnidadeId] = useState<string>(
     allowedUnits[0]?.id || UNIDADES_PLANEJAMENTO[0]?.id
   );
 
-  // Estados locais do SMTP
-  const [smtpForm, setSmtpForm] = useState<SmtpConfig>(config.smtp);
+  // Garantir que selectedUnidadeId permaneça válido dentro das allowedUnits
+  useEffect(() => {
+    if (allowedUnits.length > 0 && !allowedUnits.some(u => u.id === selectedUnidadeId)) {
+      setSelectedUnidadeId(allowedUnits[0].id);
+    }
+  }, [allowedUnits, selectedUnidadeId]);
+
+  // ════════════════════════════════════════════════════════════════
+  // 1. ESTADOS DA ASSINATURA INDIVIDUAL
+  // ════════════════════════════════════════════════════════════════
+  const initialSig = getUserSignature(activeUserId, currentProfile);
+  const [sigNome, setSigNome] = useState(initialSig.nome || currentProfile?.full_name || 'Sirtec PCP');
+  const [sigCargo, setSigCargo] = useState(initialSig.cargo || 'Planejamento Operacional - PCP');
+  const [sigCelular, setSigCelular] = useState(initialSig.celular || '(77) 99999-9999');
+  const [sigTipo, setSigTipo] = useState<'html' | 'texto'>(initialSig.tipo || 'html');
+  const [showHtmlCode, setShowHtmlCode] = useState(false);
+  const [isSavingSignature, setIsSavingSignature] = useState(false);
+
+  // Sincroniza campos quando o usuário logado mudar
+  useEffect(() => {
+    const s = getUserSignature(activeUserId, currentProfile);
+    setSigNome(s.nome || currentProfile?.full_name || 'Sirtec PCP');
+    setSigCargo(s.cargo || 'Planejamento Operacional - PCP');
+    setSigCelular(s.celular || '(77) 99999-9999');
+    setSigTipo(s.tipo || 'html');
+  }, [activeUserId, currentProfile, getUserSignature]);
+
+  // HTML e texto gerados em tempo real a partir dos 3 campos
+  const previewHtml = useMemo(() => {
+    return generateOfficialHtmlSignature(sigNome, sigCargo, sigCelular);
+  }, [sigNome, sigCargo, sigCelular]);
+
+  const previewTexto = useMemo(() => {
+    return generateOfficialTextSignature(sigNome, sigCargo, sigCelular);
+  }, [sigNome, sigCargo, sigCelular]);
+
+  const handleSaveSignature = () => {
+    if (!sigNome.trim()) {
+      toast.error('Informe seu Nome para a assinatura.');
+      return;
+    }
+    setIsSavingSignature(true);
+    saveUserSignature({
+      tipo: sigTipo,
+      nome: sigNome.trim(),
+      cargo: sigCargo.trim(),
+      celular: sigCelular.trim(),
+      html: previewHtml,
+      texto: previewTexto,
+    }, activeUserId);
+
+    setTimeout(() => {
+      setIsSavingSignature(false);
+      toast.success('Assinatura salva com sucesso para o seu usuário!');
+    }, 200);
+  };
+
+  const handleCopyHtml = () => {
+    navigator.clipboard.writeText(previewHtml);
+    toast.success('Código HTML copiado para a área de transferência!');
+  };
+
+  // ════════════════════════════════════════════════════════════════
+  // 2. ESTADOS DO SERVIDOR SMTP
+  // ════════════════════════════════════════════════════════════════
+  const [smtpForm, setSmtpForm] = useState<SmtpConfig>(config.smtp || DEFAULT_SMTP_CONFIG);
   const [showPassword, setShowPassword] = useState(false);
   const [isSavingSmtp, setIsSavingSmtp] = useState(false);
 
-  // Estados locais da Unidade Selecionada
+  useEffect(() => {
+    setSmtpForm(config.smtp || DEFAULT_SMTP_CONFIG);
+  }, [config.smtp]);
+
+  const handleSaveSmtp = () => {
+    if (!canManageAllUnits) {
+      toast.error('Apenas Administradores e Gestores podem alterar as configurações do Servidor SMTP.');
+      return;
+    }
+    if (!smtpForm.host || !smtpForm.user) {
+      toast.error('Preencha o servidor e usuário do e-mail.');
+      return;
+    }
+    setIsSavingSmtp(true);
+    saveSmtpConfig(smtpForm);
+    setTimeout(() => {
+      setIsSavingSmtp(false);
+      toast.success('Configurações SMTP salvas com sucesso!');
+    }, 200);
+  };
+
+  // ════════════════════════════════════════════════════════════════
+  // 3. ESTADOS DOS DESTINATÁRIOS POR UNIDADE (POR USUÁRIO)
+  // ════════════════════════════════════════════════════════════════
   const [destPara, setDestPara] = useState<string[]>([]);
   const [destCc, setDestCc] = useState<string[]>([]);
   const [assuntoTemplate, setAssuntoTemplate] = useState<string>('');
@@ -101,64 +191,39 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
   const [novoCc, setNovoCc] = useState<string>('');
   const [isSavingUnidade, setIsSavingUnidade] = useState(false);
 
-  // Estados locais da Assinatura do Usuário
-  const [signatureForm, setSignatureForm] = useState<UserSignatureConfig>(() => getUserSignature(userId));
-  const [isSavingSignature, setIsSavingSignature] = useState(false);
-
-  // Sincroniza formulário SMTP quando a configuração carregar
-  useEffect(() => {
-    setSmtpForm(config.smtp);
-  }, [config.smtp]);
-
-  // Sincroniza assinatura quando o usuário mudar
-  useEffect(() => {
-    setSignatureForm(getUserSignature(userId));
-  }, [userId, getUserSignature]);
-
-  // Sincroniza dados da unidade quando a unidade selecionada mudar
   useEffect(() => {
     if (selectedUnidadeId) {
-      const uConfig = getUnidadeConfig(selectedUnidadeId);
+      const uConfig = getUnidadeConfig(selectedUnidadeId, activeUserId);
       setDestPara(uConfig.destinatariosPara || []);
       setDestCc(uConfig.destinatariosCc || []);
       setAssuntoTemplate(uConfig.assuntoTemplate || 'Programação Semanal PCP · {unidade} · {periodo}');
     }
-  }, [selectedUnidadeId, getUnidadeConfig]);
+  }, [selectedUnidadeId, activeUserId, getUnidadeConfig]);
 
-  // Adicionar destinatário Para
   const handleAddPara = () => {
     const email = novoPara.trim().toLowerCase();
     if (!email) return;
     if (!email.includes('@') || !email.includes('.')) {
-      toast({
-        title: 'E-mail inválido',
-        description: 'Digite um endereço de e-mail válido.',
-        variant: 'destructive',
-      });
+      toast.error('Digite um endereço de e-mail válido.');
       return;
     }
     if (destPara.includes(email)) {
-      toast({ title: 'Atenção', description: 'Este e-mail já está na lista.' });
+      toast.info('Este e-mail já está na lista.');
       return;
     }
     setDestPara(prev => [...prev, email]);
     setNovoPara('');
   };
 
-  // Adicionar destinatário Cc (Em Cópia)
   const handleAddCc = () => {
     const email = novoCc.trim().toLowerCase();
     if (!email) return;
     if (!email.includes('@') || !email.includes('.')) {
-      toast({
-        title: 'E-mail inválido',
-        description: 'Digite um endereço de e-mail válido.',
-        variant: 'destructive',
-      });
+      toast.error('Digite um endereço de e-mail válido.');
       return;
     }
     if (destCc.includes(email)) {
-      toast({ title: 'Atenção', description: 'Este e-mail já está em cópia.' });
+      toast.info('Este e-mail já está em cópia.');
       return;
     }
     setDestCc(prev => [...prev, email]);
@@ -173,534 +238,506 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
     setDestCc(prev => prev.filter(e => e !== email));
   };
 
-  // Salvar SMTP
-  const handleSaveSmtp = () => {
-    if (!canManageAllUnits) {
-      toast({
-        title: 'Acesso restrito',
-        description: 'Apenas Gestores e Administradores podem alterar o servidor SMTP.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!smtpForm.host || !smtpForm.user) {
-      toast({
-        title: 'Campos obrigatórios',
-        description: 'Preencha o servidor e usuário do e-mail.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSavingSmtp(true);
-    saveSmtpConfig(smtpForm);
-    setTimeout(() => {
-      setIsSavingSmtp(false);
-      toast({
-        title: 'Configurações salvas',
-        description: 'Servidor de envio e remetente atualizados com sucesso.',
-      });
-    }, 400);
-  };
-
-  // Salvar Destinatários da Unidade
   const handleSaveUnidade = () => {
     if (!selectedUnidadeId) return;
-
     setIsSavingUnidade(true);
-    saveUnidadeConfig(selectedUnidadeId, {
-      destinatariosPara: destPara,
-      destinatariosCc: destCc,
-      assuntoTemplate,
-    });
-
+    saveUnidadeConfig(
+      selectedUnidadeId,
+      {
+        destinatariosPara: destPara,
+        destinatariosCc: destCc,
+        assuntoTemplate: assuntoTemplate.trim(),
+      },
+      activeUserId
+    );
     setTimeout(() => {
       setIsSavingUnidade(false);
       const unitObj = UNIDADES_PLANEJAMENTO.find(u => u.id === selectedUnidadeId);
-      toast({
-        title: 'Destinatários atualizados',
-        description: `Lista padrão da unidade ${unitObj?.nome || ''} salva com sucesso.`,
-      });
-    }, 400);
-  };
-
-  // Salvar Assinatura do Usuário
-  const handleSaveSignature = () => {
-    setIsSavingSignature(true);
-    saveUserSignature(signatureForm, userId);
-    setTimeout(() => {
-      setIsSavingSignature(false);
-      toast({
-        title: 'Assinatura salva',
-        description: 'Sua assinatura de e-mail personalizada foi atualizada com sucesso.',
-      });
-    }, 350);
-  };
-
-  // Carregar Modelo Thunderbird padrão
-  const handleCarregarThunderbirdHtml = () => {
-    setSignatureForm(prev => ({
-      ...prev,
-      tipo: 'html',
-      html: DEFAULT_THUNDERBIRD_HTML_SIGNATURE,
-    }));
-    toast({
-      title: 'Modelo carregado',
-      description: 'O padrão HTML corporativo (Thunderbird/Sirtec) foi inserido com sucesso.',
-    });
+      toast.success(`Destinatários salvos para seu usuário na unidade ${unitObj?.nome || ''}!`);
+    }, 200);
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. GUIA E ORIENTAÇÕES DE CONFIGURAÇÃO */}
-      <Card className="border-[#E07A1F]/30 bg-gradient-to-r from-[#FAF8F5] to-white shadow-2xs">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-base font-bold flex items-center gap-2 text-[#23211E]">
-              <HelpCircle className="w-5 h-5 text-[#E07A1F]" />
-              Guia de Configuração e Envio de E-mails
-            </CardTitle>
-            <Badge variant="outline" className="bg-[#E07A1F]/10 text-[#E07A1F] border-[#E07A1F]/20 font-mono text-xs">
-              {canManageAllUnits ? 'Acesso Total (Admin/Gestor)' : 'Acesso da Unidade Atribuída'}
-            </Badge>
+    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      {/* Header com identificação do usuário logado */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-xl border bg-card/60 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-sirtec-navy text-white shadow-sm">
+            <Mail className="w-6 h-6 text-sirtec-orange" />
           </div>
-          <CardDescription className="text-xs text-[#5C574F]">
-            Orientações completas sobre o funcionamento do envio automático de planejamento semanal por e-mail.
-          </CardDescription>
+          <div>
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              Configurações de Envio de Planejamento
+              <Badge variant="outline" className="text-xs bg-sirtec-orange/10 text-sirtec-orange border-sirtec-orange/30">
+                PCP Operacional
+              </Badge>
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Configure sua assinatura corporativa, servidor de e-mail e os destinatários específicos para suas unidades autorizadas.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 bg-muted/60 px-3 py-1.5 rounded-lg border text-xs">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Usuário ativo:</span>
+          <span className="font-semibold text-foreground">
+            {currentProfile?.full_name || user?.email || 'Usuário'}
+          </span>
+          {canManageAllUnits ? (
+            <Badge className="bg-emerald-600 text-white text-[10px] h-5">Administrador / Gestor</Badge>
+          ) : (
+            <Badge variant="secondary" className="text-[10px] h-5">Operador</Badge>
+          )}
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* 1. ASSINATURA DE E-MAIL (COM CAMPOS E PREVIEW EM TEMPO REAL)   */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <Card className="border shadow-sm">
+        <CardHeader className="pb-3 border-b bg-muted/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PenTool className="w-5 h-5 text-sirtec-orange" />
+              <div>
+                <CardTitle className="text-base font-bold">Assinatura Corporativa de E-mail</CardTitle>
+                <CardDescription className="text-xs">
+                  O layout visual segue o padrão institucional Sirtec. Preencha seus dados para atualizar sua assinatura automaticamente.
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => setShowHtmlCode(!showHtmlCode)}
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                {showHtmlCode ? 'Ocultar HTML' : 'Ver Código HTML'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 bg-sirtec-navy hover:bg-sirtec-navy/90 text-white text-xs gap-1.5"
+                onClick={handleSaveSignature}
+                disabled={isSavingSignature}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {isSavingSignature ? 'Salvando...' : 'Salvar Minha Assinatura'}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-3 text-xs text-[#5C574F] leading-relaxed border-t border-[#E6E3DD] pt-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="p-3 bg-white rounded-lg border border-[#E6E3DD] space-y-1">
-              <span className="font-bold text-[#23211E] flex items-center gap-1.5 text-xs">
-                <Server className="w-3.5 h-3.5 text-[#E07A1F]" />
-                1. Servidor e Remetente (SMTP)
-              </span>
-              <p className="text-[11.5px] text-[#6B6660]">
-                Configuração da conta corporativa que envia os comunicados (ex: Microsoft 365 · <code>smtp.office365.com</code>, porta <code>587</code> com TLS).
-              </p>
+
+        <CardContent className="pt-5 space-y-5">
+          {/* Campos de Dados da Assinatura */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-sirtec-orange" />
+                Nome Completo *
+              </Label>
+              <Input
+                placeholder="Ex: Cesar Jung"
+                value={sigNome}
+                onChange={(e) => setSigNome(e.target.value)}
+                className="h-9 text-sm"
+              />
             </div>
 
-            <div className="p-3 bg-white rounded-lg border border-[#E6E3DD] space-y-1">
-              <span className="font-bold text-[#23211E] flex items-center gap-1.5 text-xs">
-                <Users className="w-3.5 h-3.5 text-[#17794C]" />
-                2. Destinatários e "Em Cópia" (Cc)
-              </span>
-              <p className="text-[11.5px] text-[#6B6660]">
-                <strong>Para:</strong> supervisores e líderes operacionais da base.<br />
-                <strong>Em cópia (Cc):</strong> gerência, coordenação e planejamento.
-              </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 text-sirtec-orange" />
+                Cargo / Função *
+              </Label>
+              <Input
+                placeholder="Ex: Coordenador de PCP - CCM"
+                value={sigCargo}
+                onChange={(e) => setSigCargo(e.target.value)}
+                className="h-9 text-sm"
+              />
             </div>
 
-            <div className="p-3 bg-white rounded-lg border border-[#E6E3DD] space-y-1">
-              <span className="font-bold text-[#23211E] flex items-center gap-1.5 text-xs">
-                <Shield className="w-3.5 h-3.5 text-[#B4581A]" />
-                3. Permissões de Acesso
-              </span>
-              <p className="text-[11.5px] text-[#6B6660]">
-                <strong>Gestores e Administradores:</strong> configuram qualquer unidade e servidor.<br />
-                <strong>Usuários:</strong> configuram apenas as unidades atribuídas.
-              </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-sirtec-orange" />
+                Celular / WhatsApp *
+              </Label>
+              <Input
+                placeholder="Ex: (55) 99708-7985"
+                value={sigCelular}
+                onChange={(e) => setSigCelular(e.target.value)}
+                className="h-9 text-sm"
+              />
             </div>
+          </div>
+
+          {/* Visualizador de Código HTML (Opcional) */}
+          {showHtmlCode && (
+            <div className="p-3 bg-muted/40 rounded-lg border space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                <span>Código HTML Oficial (Gerado Automaticamente)</span>
+                <Button variant="ghost" size="sm" className="h-6 text-[11px] gap-1" onClick={handleCopyHtml}>
+                  <Copy className="w-3 h-3" />
+                  Copiar HTML
+                </Button>
+              </div>
+              <pre className="text-[11px] font-mono bg-background p-3 rounded border overflow-x-auto max-h-36 whitespace-pre-wrap text-muted-foreground">
+                {previewHtml}
+              </pre>
+            </div>
+          )}
+
+          {/* Pré-visualização Visual Realista da Assinatura */}
+          <div className="p-4 rounded-xl border bg-white shadow-inner">
+            <div className="flex items-center justify-between pb-2 mb-3 border-b text-[11px] font-semibold text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-sirtec-orange" />
+                Pré-visualização da Assinatura no E-mail
+              </span>
+              <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
+                Padrão Institucional Sirtec
+              </Badge>
+            </div>
+
+            <div
+              className="prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 2. CONFIGURAÇÃO DE SERVIDOR DE E-MAIL (SMTP) */}
-        <Card className="shadow-2xs">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-bold flex items-center gap-2 text-[#23211E]">
-                <Server className="w-4 h-4 text-[#E07A1F]" />
-                Servidor de Envio e Remetente
-              </CardTitle>
-              {!canManageAllUnits && (
-                <Badge variant="secondary" className="text-[10px]">
-                  Somente Leitura
-                </Badge>
-              )}
-            </div>
-            <CardDescription className="text-xs">
-              Credenciais e parâmetros de conexão para disparo de e-mails corporativos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3.5">
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">Servidor SMTP (Host)</Label>
-                <Input
-                  value={smtpForm.host}
-                  onChange={e => setSmtpForm(p => ({ ...p, host: e.target.value }))}
-                  disabled={!canManageAllUnits}
-                  placeholder="smtp.office365.com"
-                  className="h-8 text-xs bg-white"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">Porta</Label>
-                <Input
-                  type="number"
-                  value={smtpForm.port}
-                  onChange={e => setSmtpForm(p => ({ ...p, port: parseInt(e.target.value) || 587 }))}
-                  disabled={!canManageAllUnits}
-                  placeholder="587"
-                  className="h-8 text-xs bg-white font-mono"
-                />
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* 2. SERVIDOR DE ENVIO SMTP (PADRÃO SIRTEC · BLOQUEADO P/ COMUM) */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <Card className="border shadow-sm">
+        <CardHeader className="pb-3 border-b bg-muted/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Server className="w-5 h-5 text-sirtec-orange" />
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  Servidor de Envio (SMTP)
+                  <Badge variant="outline" className="text-[11px] bg-slate-100 text-slate-800 border-slate-300">
+                    smtp.sirtec.com.br : 587 · STARTTLS
+                  </Badge>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {canManageAllUnits
+                    ? 'Configuração corporativa global do servidor de disparo de e-mails.'
+                    : 'Servidor corporativo padrão configurado e gerenciado por Administradores e Gestores.'}
+                </CardDescription>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Segurança / Criptografia</Label>
-                <Select
-                  value={smtpForm.secure}
-                  onValueChange={(v: 'tls' | 'ssl' | 'none') => setSmtpForm(p => ({ ...p, secure: v }))}
-                  disabled={!canManageAllUnits}
-                >
-                  <SelectTrigger className="h-8 text-xs bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tls">STARTTLS / TLS (Porta 587)</SelectItem>
-                    <SelectItem value="ssl">SSL (Porta 465)</SelectItem>
-                    <SelectItem value="none">Nenhum (Porta 25)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {canManageAllUnits ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 bg-sirtec-navy hover:bg-sirtec-navy/90 text-white text-xs gap-1.5"
+                onClick={handleSaveSmtp}
+                disabled={isSavingSmtp}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {isSavingSmtp ? 'Salvando...' : 'Salvar Servidor SMTP'}
+              </Button>
+            ) : (
+              <Badge variant="secondary" className="flex items-center gap-1.5 text-xs py-1 px-2.5 bg-muted">
+                <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                Configuração Protegida
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
 
-              <div className="space-y-1">
-                <Label className="text-xs">Nome de Exibição (From Name)</Label>
-                <Input
-                  value={smtpForm.senderName}
-                  onChange={e => setSmtpForm(p => ({ ...p, senderName: e.target.value }))}
-                  disabled={!canManageAllUnits}
-                  placeholder="Sirtec PCP · Planejamento"
-                  className="h-8 text-xs bg-white"
-                />
-              </div>
+        <CardContent className="pt-5 space-y-4">
+          {!canManageAllUnits && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-xs flex items-center gap-2.5">
+              <Info className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>
+                O envio utiliza o servidor padrão <b>smtp.sirtec.com.br (Porta 587 com STARTTLS)</b>. Apenas Administradores e Gestores possuem permissão para alterar esses parâmetros.
+              </span>
             </div>
+          )}
 
-            <div className="space-y-1">
-              <Label className="text-xs">E-mail do Remetente (Usuário de Autenticação)</Label>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Servidor SMTP (Host)</Label>
               <Input
-                type="email"
-                value={smtpForm.user}
-                onChange={e => setSmtpForm(p => ({ ...p, user: e.target.value, fromEmail: e.target.value }))}
+                value={smtpForm.host}
+                onChange={(e) => setSmtpForm(prev => ({ ...prev, host: e.target.value }))}
                 disabled={!canManageAllUnits}
-                placeholder="planejamento.ba@sirtec.com.br"
-                className="h-8 text-xs bg-white font-mono"
+                placeholder="smtp.sirtec.com.br"
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
               />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs">Senha de Acesso / Token de Aplicativo</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Porta</Label>
+              <Input
+                type="number"
+                value={smtpForm.port}
+                onChange={(e) => setSmtpForm(prev => ({ ...prev, port: parseInt(e.target.value, 10) || 587 }))}
+                disabled={!canManageAllUnits}
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Criptografia / Segurança</Label>
+              <Select
+                value={smtpForm.secure}
+                onValueChange={(val: any) => setSmtpForm(prev => ({ ...prev, secure: val }))}
+                disabled={!canManageAllUnits}
+              >
+                <SelectTrigger className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tls">STARTTLS (Porta 587 - Padrão)</SelectItem>
+                  <SelectItem value="ssl">SSL / TLS Direto (Porta 465)</SelectItem>
+                  <SelectItem value="none">Nenhuma (Porta 25)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Nome do Remetente</Label>
+              <Input
+                value={smtpForm.senderName}
+                onChange={(e) => setSmtpForm(prev => ({ ...prev, senderName: e.target.value }))}
+                disabled={!canManageAllUnits}
+                placeholder="Sirtec PCP · Planejamento"
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs font-semibold">E-mail do Remetente / Usuário SMTP</Label>
+              <Input
+                type="email"
+                value={smtpForm.user}
+                onChange={(e) => setSmtpForm(prev => ({ ...prev, user: e.target.value, fromEmail: e.target.value }))}
+                disabled={!canManageAllUnits}
+                placeholder="planejamento.ba@sirtec.com.br"
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs font-semibold">Senha / Senha de Aplicativo</Label>
               <div className="relative">
                 <Input
                   type={showPassword ? 'text' : 'password'}
                   value={smtpForm.password || ''}
-                  onChange={e => setSmtpForm(p => ({ ...p, password: e.target.value }))}
+                  onChange={(e) => setSmtpForm(prev => ({ ...prev, password: e.target.value }))}
                   disabled={!canManageAllUnits}
-                  placeholder={canManageAllUnits ? 'Digite a senha ou token de app...' : '••••••••••••'}
-                  className="h-8 text-xs bg-white pr-9 font-mono"
+                  placeholder="••••••••••••"
+                  className="h-9 text-sm pr-10 disabled:opacity-80 disabled:bg-muted/50"
                 />
                 {canManageAllUnits && (
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground pt-0.5">
-                Para contas Microsoft 365 corporativas com MFA, utilize uma <strong>Senha de Aplicativo</strong>.
-              </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            {canManageAllUnits && (
-              <div className="pt-2 flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={handleSaveSmtp}
-                  disabled={isSavingSmtp}
-                  className="h-8 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 shadow-2xs gap-1.5"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  {isSavingSmtp ? 'Salvando...' : 'Salvar Configurações SMTP'}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 3. DESTINATÁRIOS PADRÃO POR UNIDADE */}
-        <Card className="shadow-2xs">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-bold flex items-center gap-2 text-[#23211E]">
-                <Mail className="w-4 h-4 text-[#E07A1F]" />
-                Destinatários Padrão da Unidade
-              </CardTitle>
-              <Building2 className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <CardDescription className="text-xs">
-              Defina quem receberá automaticamente a programação semanal de cada base operacional.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3.5">
-            {/* Seletor de Unidade Operacional */}
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#23211E]">Selecione a Unidade Operacional</Label>
-              <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
-                <SelectTrigger className="h-8 text-xs bg-white font-semibold">
-                  <SelectValue placeholder="Selecione a unidade" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allowedUnits.map(u => (
-                    <SelectItem key={u.id} value={u.id} className="text-xs font-semibold">
-                      {u.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Campo Destinatários Principais (Para) */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-[#23211E] flex items-center justify-between">
-                <span>Destinatários Principais ("Para")</span>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {destPara.length} {destPara.length === 1 ? 'e-mail' : 'e-mails'}
-                </span>
-              </Label>
-
-              <div className="flex gap-1.5">
-                <Input
-                  type="email"
-                  value={novoPara}
-                  onChange={e => setNovoPara(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddPara())}
-                  placeholder="adicionar.email@sirtec.com.br"
-                  className="h-8 text-xs bg-white font-mono"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleAddPara}
-                  className="h-8 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#E07A1F] font-bold shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Adicionar
-                </Button>
-              </div>
-
-              {/* Lista de chips Para */}
-              <div className="flex flex-wrap gap-1.5 p-2 bg-[#FAF8F5] rounded-lg border border-[#E6E3DD] min-h-[46px] max-h-[100px] overflow-y-auto">
-                {destPara.length === 0 ? (
-                  <span className="text-[11px] text-muted-foreground italic">Nenhum e-mail adicionado</span>
-                ) : (
-                  destPara.map(email => (
-                    <span
-                      key={email}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-[#DEDAD3] text-[11px] font-mono text-[#23211E] shadow-2xs"
-                    >
-                      <span className="truncate max-w-[200px]">{email}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePara(email)}
-                        className="text-[#6B6660] hover:text-[#B03028] ml-0.5"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))
-                )}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* 3. DESTINATÁRIOS POR UNIDADE (INDIVIDUAL POR USUÁRIO + UNIDADE)*/}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <Card className="border shadow-sm">
+        <CardHeader className="pb-3 border-b bg-muted/20">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-sirtec-orange" />
+              <div>
+                <CardTitle className="text-base font-bold">Destinatários por Unidade</CardTitle>
+                <CardDescription className="text-xs">
+                  Configuração salva individualmente para o seu login. Cada usuário mantém seus destinatários para a unidade selecionada.
+                </CardDescription>
               </div>
             </div>
 
-            {/* Campo Em Cópia (Cc) */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-[#23211E] flex items-center justify-between">
-                <span>Em Cópia ("Cc")</span>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {destCc.length} {destCc.length === 1 ? 'e-mail' : 'e-mails'}
-                </span>
-              </Label>
-
-              <div className="flex gap-1.5">
-                <Input
-                  type="email"
-                  value={novoCc}
-                  onChange={e => setNovoCc(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddCc())}
-                  placeholder="coordenacao.gerencia@sirtec.com.br"
-                  className="h-8 text-xs bg-white font-mono"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleAddCc}
-                  className="h-8 px-2.5 text-xs bg-white border-[#DEDAD3] text-[#E07A1F] font-bold shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Adicionar
-                </Button>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="w-full md:w-64">
+                <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
+                  <SelectTrigger className="h-9 text-xs font-semibold bg-background border-sirtec-orange/40">
+                    <SelectValue placeholder="Selecione a Unidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allowedUnits.map(u => (
+                      <SelectItem key={u.id} value={u.id} className="text-xs font-medium">
+                        {u.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Lista de chips Cc */}
-              <div className="flex flex-wrap gap-1.5 p-2 bg-[#FAF8F5] rounded-lg border border-[#E6E3DD] min-h-[46px] max-h-[100px] overflow-y-auto">
-                {destCc.length === 0 ? (
-                  <span className="text-[11px] text-muted-foreground italic">Nenhum e-mail em cópia</span>
-                ) : (
-                  destCc.map(email => (
-                    <span
-                      key={email}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-[#DEDAD3] text-[11px] font-mono text-[#23211E] shadow-2xs"
-                    >
-                      <span className="truncate max-w-[200px]">{email}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCc(email)}
-                        className="text-[#6B6660] hover:text-[#B03028] ml-0.5"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Modelo de Assunto */}
-            <div className="space-y-1">
-              <Label className="text-xs">Modelo Padrão de Assunto</Label>
-              <Input
-                value={assuntoTemplate}
-                onChange={e => setAssuntoTemplate(e.target.value)}
-                placeholder="Programação Semanal PCP · {unidade} · {periodo}"
-                className="h-8 text-xs bg-white font-mono"
-              />
-              <p className="text-[10.5px] text-muted-foreground">
-                Tags disponíveis: <code>{'{unidade}'}</code>, <code>{'{periodo}'}</code>, <code>{'{inicio}'}</code>, <code>{'{fim}'}</code>
-              </p>
-            </div>
-
-            <div className="pt-2 flex justify-end">
               <Button
+                type="button"
                 size="sm"
+                className="h-9 bg-sirtec-navy hover:bg-sirtec-navy/90 text-white text-xs gap-1.5 whitespace-nowrap"
                 onClick={handleSaveUnidade}
-                disabled={isSavingUnidade}
-                className="h-8 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 shadow-2xs gap-1.5"
+                disabled={isSavingUnidade || !selectedUnidadeId}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {isSavingUnidade ? 'Salvando...' : 'Salvar Destinatários da Unidade'}
+                {isSavingUnidade ? 'Salvando...' : 'Salvar Unidade'}
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 4. ASSINATURA DE E-MAIL DO USUÁRIO (HTML / TEXTO LIVRE) */}
-      <Card className="shadow-2xs border-[#E6E3DD]">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-base font-bold flex items-center gap-2 text-[#23211E]">
-              <PenTool className="w-4 h-4 text-[#E07A1F]" />
-              Minha Assinatura de E-mail (PCP)
-            </CardTitle>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-[#FAF8F5] px-3 py-1 rounded-lg border border-[#DEDAD3]">
-                <Label htmlFor="switch-html" className="text-xs font-bold text-[#23211E] cursor-pointer">
-                  Usar HTML
-                </Label>
-                <Switch
-                  id="switch-html"
-                  checked={signatureForm.tipo === 'html'}
-                  onCheckedChange={checked =>
-                    setSignatureForm(p => ({ ...p, tipo: checked ? 'html' : 'texto' }))
-                  }
-                />
-              </div>
-
-              {signatureForm.tipo === 'html' && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCarregarThunderbirdHtml}
-                  className="h-8 px-2.5 text-xs font-semibold bg-white border-[#DEDAD3] text-[#5C574F] hover:text-[#23211E] gap-1.5"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-[#E07A1F]" />
-                  Carregar Padrão Thunderbird
-                </Button>
-              )}
-            </div>
           </div>
-          <CardDescription className="text-xs">
-            Esta assinatura será inserida automaticamente ao final dos comunicados e relatórios de planejamento enviados por você.
-          </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Editor de Conteúdo */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold flex items-center justify-between">
-                <span>{signatureForm.tipo === 'html' ? 'Código HTML da Assinatura' : 'Texto Livre da Assinatura'}</span>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {signatureForm.tipo === 'html' ? 'HTML Personalizado' : 'Texto simples'}
-                </span>
-              </Label>
+        <CardContent className="pt-5 space-y-5">
+          {/* Alerta de Escopo de Usuário */}
+          <div className="p-3 bg-muted/50 rounded-lg border text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span className="text-muted-foreground">
+                Editando lista de envio de <b>{currentProfile?.full_name || user?.email || 'Seu Usuário'}</b> para a unidade <b>{allowedUnits.find(u => u.id === selectedUnidadeId)?.nome || selectedUnidadeId}</b>.
+              </span>
+            </div>
+            <Badge variant="outline" className="text-[10px] bg-background">
+              Multi-usuário Ativo
+            </Badge>
+          </div>
 
-              {signatureForm.tipo === 'html' ? (
-                <Textarea
-                  value={signatureForm.html}
-                  onChange={e => setSignatureForm(p => ({ ...p, html: e.target.value }))}
-                  placeholder="Cole seu código HTML aqui..."
-                  className="font-mono text-xs h-[180px] bg-white leading-relaxed resize-y"
-                />
+          {/* Destinatários PARA */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold flex items-center gap-2">
+              <span>Destinatários Principais (Para)</span>
+              <Badge variant="secondary" className="text-[10px] h-4 font-normal">
+                {destPara.length} {destPara.length === 1 ? 'e-mail' : 'e-mails'}
+              </Badge>
+            </Label>
+            
+            <div className="flex flex-wrap gap-1.5 p-2.5 rounded-lg border bg-background min-h-[44px]">
+              {destPara.length === 0 ? (
+                <span className="text-xs text-muted-foreground italic self-center px-1">
+                  Nenhum destinatário principal adicionado.
+                </span>
               ) : (
-                <Textarea
-                  value={signatureForm.texto}
-                  onChange={e => setSignatureForm(p => ({ ...p, texto: e.target.value }))}
-                  placeholder="Digite seu nome, cargo, telefone e informações de contato..."
-                  className="text-xs h-[180px] bg-white leading-relaxed resize-y"
-                />
+                destPara.map(email => (
+                  <Badge
+                    key={email}
+                    variant="secondary"
+                    className="gap-1.5 py-1 px-2.5 text-xs bg-sirtec-orange/10 text-sirtec-navy hover:bg-sirtec-orange/20 border border-sirtec-orange/20"
+                  >
+                    <span>{email}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePara(email)}
+                      className="text-muted-foreground hover:text-red-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))
               )}
             </div>
 
-            {/* Prévia Visual em Tempo Real */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-[#5C574F]">
-                Prévia da Assinatura no E-mail
-              </Label>
-              <div className="h-[180px] overflow-y-auto p-3.5 bg-[#FAF8F5] rounded-lg border border-[#E6E3DD] text-xs">
-                {signatureForm.tipo === 'html' ? (
-                  <div
-                    dangerouslySetInnerHTML={{ __html: signatureForm.html || '<span class="text-muted-foreground italic">Nenhuma assinatura HTML informada</span>' }}
-                  />
-                ) : (
-                  <div className="whitespace-pre-line text-[#23211E] font-sans">
-                    {signatureForm.texto || <span className="text-muted-foreground italic">Nenhuma assinatura de texto informada</span>}
-                  </div>
-                )}
-              </div>
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                placeholder="Adicionar e-mail para envio principal (ex: supervisor@sirtec.com.br)"
+                value={novoPara}
+                onChange={(e) => setNovoPara(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPara())}
+                className="h-9 text-xs"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddPara}
+                className="h-9 text-xs gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Adicionar
+              </Button>
             </div>
           </div>
 
-          <div className="pt-2 flex justify-end">
-            <Button
-              size="sm"
-              onClick={handleSaveSignature}
-              disabled={isSavingSignature}
-              className="h-8 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 shadow-2xs gap-1.5"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              {isSavingSignature ? 'Salvando...' : 'Salvar Minha Assinatura'}
-            </Button>
+          {/* Destinatários CC (Em Cópia) */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold flex items-center gap-2">
+              <span>Destinatários em Cópia (Cc)</span>
+              <Badge variant="secondary" className="text-[10px] h-4 font-normal">
+                {destCc.length} {destCc.length === 1 ? 'e-mail' : 'e-mails'}
+              </Badge>
+            </Label>
+            
+            <div className="flex flex-wrap gap-1.5 p-2.5 rounded-lg border bg-background min-h-[44px]">
+              {destCc.length === 0 ? (
+                <span className="text-xs text-muted-foreground italic self-center px-1">
+                  Nenhum destinatário em cópia adicionado.
+                </span>
+              ) : (
+                destCc.map(email => (
+                  <Badge
+                    key={email}
+                    variant="secondary"
+                    className="gap-1.5 py-1 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80 border"
+                  >
+                    <span>{email}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCc(email)}
+                      className="text-muted-foreground hover:text-red-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                placeholder="Adicionar e-mail em cópia (ex: gerencia@sirtec.com.br)"
+                value={novoCc}
+                onChange={(e) => setNovoCc(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCc())}
+                className="h-9 text-xs"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddCc}
+                className="h-9 text-xs gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Adicionar
+              </Button>
+            </div>
+          </div>
+
+          {/* Modelo de Assunto */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Modelo de Assunto do E-mail</Label>
+            <Input
+              value={assuntoTemplate}
+              onChange={(e) => setAssuntoTemplate(e.target.value)}
+              placeholder="Programação Semanal PCP · {unidade} · {periodo}"
+              className="h-9 text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Variáveis disponíveis: <code className="bg-muted px-1 py-0.5 rounded text-[10px]">{'{unidade}'}</code> e <code className="bg-muted px-1 py-0.5 rounded text-[10px]">{'{periodo}'}</code>.
+            </p>
           </div>
         </CardContent>
       </Card>
