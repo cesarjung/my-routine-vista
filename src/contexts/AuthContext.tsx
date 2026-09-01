@@ -66,6 +66,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
+    try {
+      const { resetSessionCalendarState } = await import('@/components/views/PcpCalendarioView');
+      resetSessionCalendarState();
+    } catch {}
     await supabase.auth.signOut();
   };
 

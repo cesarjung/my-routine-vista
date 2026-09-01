@@ -208,19 +208,23 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
   }, [config.smtp]);
 
   const handleSaveSmtp = () => {
-    if (!canManageAllUnits) {
-      toast.error('Apenas Administradores e Gestores podem alterar as configurações do Servidor SMTP.');
+    if (!smtpForm.user) {
+      toast.error('Preencha o e-mail do remetente / usuário.');
       return;
     }
-    if (!smtpForm.host || !smtpForm.user) {
-      toast.error('Preencha o servidor e usuário do e-mail.');
-      return;
-    }
+    const payloadToSave: SmtpConfig = canManageAllUnits
+      ? smtpForm
+      : {
+          ...smtpForm,
+          host: 'smtp.sirtec.com.br',
+          port: 587,
+          secure: 'tls',
+        };
     setIsSavingSmtp(true);
-    saveSmtpConfig(smtpForm);
+    saveSmtpConfig(payloadToSave);
     setTimeout(() => {
       setIsSavingSmtp(false);
-      toast.success('Configurações SMTP salvas com sucesso!');
+      toast.success('Configurações de envio salvas com sucesso!');
     }, 200);
   };
 
@@ -519,23 +523,16 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
               </div>
             </div>
 
-            {canManageAllUnits ? (
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 bg-[#1E293B] hover:bg-[#0F172A] text-white font-semibold text-xs gap-1.5 shadow-sm"
-                onClick={handleSaveSmtp}
-                disabled={isSavingSmtp}
-              >
-                <Save className="w-3.5 h-3.5" />
-                {isSavingSmtp ? 'Salvando...' : 'Salvar Servidor SMTP'}
-              </Button>
-            ) : (
-              <Badge variant="secondary" className="flex items-center gap-1.5 text-xs py-1 px-2.5 bg-muted">
-                <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                Configuração Protegida
-              </Badge>
-            )}
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 bg-[#1E293B] hover:bg-[#0F172A] text-white font-semibold text-xs gap-1.5 shadow-sm"
+              onClick={handleSaveSmtp}
+              disabled={isSavingSmtp}
+            >
+              <Save className="w-3.5 h-3.5" />
+              {isSavingSmtp ? 'Salvando...' : 'Salvar Dados de Envio'}
+            </Button>
           </div>
         </CardHeader>
 
@@ -595,9 +592,8 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
               <Input
                 value={smtpForm.senderName}
                 onChange={(e) => setSmtpForm(prev => ({ ...prev, senderName: e.target.value }))}
-                disabled={!canManageAllUnits}
                 placeholder="Sirtec PCP · Planejamento"
-                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50 bg-background"
+                className="h-9 text-sm bg-background"
               />
             </div>
 
@@ -607,9 +603,8 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 type="email"
                 value={smtpForm.user}
                 onChange={(e) => setSmtpForm(prev => ({ ...prev, user: e.target.value, fromEmail: e.target.value }))}
-                disabled={!canManageAllUnits}
                 placeholder="planejamento.ba@sirtec.com.br"
-                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50 bg-background"
+                className="h-9 text-sm bg-background"
               />
             </div>
 
@@ -620,19 +615,16 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                   type={showPassword ? 'text' : 'password'}
                   value={smtpForm.password || ''}
                   onChange={(e) => setSmtpForm(prev => ({ ...prev, password: e.target.value }))}
-                  disabled={!canManageAllUnits}
                   placeholder="••••••••••••"
-                  className="h-9 text-sm pr-10 disabled:opacity-80 disabled:bg-muted/50 bg-background"
+                  className="h-9 text-sm pr-10 bg-background"
                 />
-                {canManageAllUnits && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
           </div>

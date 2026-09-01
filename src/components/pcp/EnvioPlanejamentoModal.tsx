@@ -182,12 +182,30 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   const [isAddingCc, setIsAddingCc] = useState(false);
 
   useEffect(() => {
-    if (unidadeId) {
+    if (open && unidadeId) {
       const uConfig = getUnidadeConfig(unidadeId, user?.id);
-      if (uConfig.destinatariosPara?.length > 0) setDestinatariosPara(uConfig.destinatariosPara);
-      if (uConfig.destinatariosCc?.length > 0) setDestinatariosCc(uConfig.destinatariosCc);
+      const d1 = formatSafeDate(inicioSemana, 'dd/MM');
+      const d2 = formatSafeDate(fimSemana, 'dd/MM/yyyy');
+      const periodoStr = d1 && d2 ? `${d1} a ${d2}` : '';
+      
+      const template = uConfig.assuntoTemplate || 'Programação Semanal PCP · {unidade} · {periodo}';
+      const novoAssunto = template
+        .replace(/{unidade}/gi, unidadeNome || 'Unidade')
+        .replace(/{periodo}/gi, periodoStr);
+      setAssunto(novoAssunto);
+
+      if (uConfig.destinatariosPara?.length > 0) {
+        setDestinatariosPara(uConfig.destinatariosPara);
+      } else {
+        setDestinatariosPara(['planejamento.ba@sirtec.com.br', 'supervisao.operacional@sirtec.com.br']);
+      }
+      if (uConfig.destinatariosCc?.length > 0) {
+        setDestinatariosCc(uConfig.destinatariosCc);
+      } else {
+        setDestinatariosCc(['gerencia.operacoes@sirtec.com.br']);
+      }
     }
-  }, [unidadeId, user?.id, getUnidadeConfig]);
+  }, [open, unidadeId, unidadeNome, inicioSemana, fimSemana, user?.id, getUnidadeConfig]);
 
   const [blocos, setBlocos] = useState<EmailBlocosConfig>({
     resumo: true, calendario: true, conclusoes: true, vistorias: true, disponiveis: true, alojamentos: true, observacoes: true, mapa: true,

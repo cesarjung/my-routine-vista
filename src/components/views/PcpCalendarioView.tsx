@@ -29,18 +29,47 @@ import { EnvioPlanejamentoModal } from '@/components/pcp/EnvioPlanejamentoModal'
 import { EmailBlocosConfig } from '@/lib/planejamentoEmail';
 import type { ComputedMapData } from '@/components/views/PlanejamentoEquipesMap';
 
+// Armazenamento em memória durante a sessão (mantém os filtros ao trocar de telas no sistema)
+// Reseta automaticamente ao recarregar a página (F5) ou deslogar.
+let sessionCalendarState = {
+  selectedUnidadeId: '',
+  dataInicioStr: '',
+  dataFimStr: '',
+};
+
+export const resetSessionCalendarState = () => {
+  sessionCalendarState = {
+    selectedUnidadeId: '',
+    dataInicioStr: '',
+    dataFimStr: '',
+  };
+};
+
 export const PcpCalendarioView: React.FC = () => {
-  const [selectedUnidadeId, setSelectedUnidadeId] = useState<string>(
-    UNIDADES_PLANEJAMENTO[1]?.id || UNIDADES_PLANEJAMENTO[0]?.id || ''
+  const [selectedUnidadeId, setSelectedUnidadeIdState] = useState<string>(
+    sessionCalendarState.selectedUnidadeId
   );
   
-  // Período Inicial e Final
-  const [dataInicioStr, setDataInicioStr] = useState<string>(
-    format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  // Período Inicial e Final (vazio por padrão até seleção)
+  const [dataInicioStr, setDataInicioStrState] = useState<string>(
+    sessionCalendarState.dataInicioStr
   );
-  const [dataFimStr, setDataFimStr] = useState<string>(
-    format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const [dataFimStr, setDataFimStrState] = useState<string>(
+    sessionCalendarState.dataFimStr
   );
+
+  const setSelectedUnidadeId = (val: string) => {
+    sessionCalendarState.selectedUnidadeId = val;
+    setSelectedUnidadeIdState(val);
+  };
+  const setDataInicioStr = (val: string) => {
+    sessionCalendarState.dataInicioStr = val;
+    setDataInicioStrState(val);
+  };
+  const setDataFimStr = (val: string) => {
+    sessionCalendarState.dataFimStr = val;
+    setDataFimStrState(val);
+  };
 
   // Modal de Envio de Planejamento por E-mail
   const [isEnvioModalOpen, setIsEnvioModalOpen] = useState(false);
@@ -63,12 +92,12 @@ export const PcpCalendarioView: React.FC = () => {
     ultimaAtualizacao,
   } = usePlanejamentoSemanal({
     unidadeId: selectedUnidadeId,
-    dataInicio: dataInicioStr,
-    dataFim: dataFimStr,
+    dataInicio: dataInicioStr || undefined,
+    dataFim: dataFimStr || undefined,
   });
 
   const selectedUnidadeObj = UNIDADES_PLANEJAMENTO.find(u => u.id === selectedUnidadeId);
-  const unidadeNome = selectedUnidadeObj?.nome || 'BOM JESUS DA LAPA';
+  const unidadeNome = selectedUnidadeObj?.nome || '';
 
   // Configurações da prévia
   const [escopo, setEscopo] = useState<'todas' | 'com_programacao'>('todas');
@@ -85,7 +114,7 @@ export const PcpCalendarioView: React.FC = () => {
   });
 
   const handleSemanaAnterior = () => {
-    const curStart = new Date(dataInicioStr);
+    const curStart = dataInicioStr ? new Date(dataInicioStr) : startOfWeek(new Date(), { weekStartsOn: 1 });
     const prevStart = subWeeks(curStart, 1);
     const prevEnd = endOfWeek(prevStart, { weekStartsOn: 1 });
     setDataInicioStr(format(prevStart, 'yyyy-MM-dd'));
@@ -93,7 +122,7 @@ export const PcpCalendarioView: React.FC = () => {
   };
 
   const handleProximaSemana = () => {
-    const curStart = new Date(dataInicioStr);
+    const curStart = dataInicioStr ? new Date(dataInicioStr) : startOfWeek(new Date(), { weekStartsOn: 1 });
     const nextStart = addWeeks(curStart, 1);
     const nextEnd = endOfWeek(nextStart, { weekStartsOn: 1 });
     setDataInicioStr(format(nextStart, 'yyyy-MM-dd'));
@@ -211,8 +240,8 @@ export const PcpCalendarioView: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={syncFromSheets}
-              disabled={isLoading || isRefetching}
-              className="h-[32px] px-3 text-xs font-semibold bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] hover:border-[#E8C9A0] shadow-2xs gap-1.5"
+              disabled={!selectedUnidadeId || !dataInicioStr || !dataFimStr || isLoading || isRefetching}
+              className="h-[32px] px-3 text-xs font-semibold bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] hover:border-[#E8C9A0] shadow-2xs gap-1.5 disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#5C574F] ${isLoading || isRefetching ? 'animate-spin' : ''}`} />
               <span>Sincronizar Sheets</span>
@@ -223,7 +252,8 @@ export const PcpCalendarioView: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={handleBaixarPdf}
-              className="h-[32px] px-3 text-xs font-semibold bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] shadow-2xs gap-1.5"
+              disabled={!selectedUnidadeId || !dataInicioStr || !dataFimStr}
+              className="h-[32px] px-3 text-xs font-semibold bg-white border-[#DEDAD3] text-[#23211E] hover:bg-[#FBF5EC] shadow-2xs gap-1.5 disabled:opacity-50"
             >
               <FileDown className="w-3.5 h-3.5 text-[#E07A1F]" />
               <span>PDF</span>
@@ -233,7 +263,8 @@ export const PcpCalendarioView: React.FC = () => {
             <Button
               size="sm"
               onClick={() => setIsEnvioModalOpen(true)}
-              className="h-[32px] px-3.5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 shadow-2xs gap-1.5 ml-1"
+              disabled={!selectedUnidadeId || !dataInicioStr || !dataFimStr}
+              className="h-[32px] px-3.5 text-xs font-bold bg-[#E07A1F] text-white hover:bg-[#E07A1F]/90 shadow-2xs gap-1.5 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Enviar planejamento</span>
@@ -251,10 +282,14 @@ export const PcpCalendarioView: React.FC = () => {
                 ? `Última sincronização: ${format(new Date(ultimaAtualizacao), 'dd/MM/yyyy às HH:mm')}`
                 : 'Sincronização em tempo real'}
             </span>
-            <span className="text-[#A39E96]">·</span>
-            <span className="font-mono font-semibold text-[#23211E]">
-              {diasDaSemana.length} {diasDaSemana.length === 1 ? 'dia' : 'dias'} no período ({format(inicioSemana, 'dd/MM')} a {format(fimSemana, 'dd/MM/yyyy')})
-            </span>
+            {diasDaSemana.length > 0 && (
+              <>
+                <span className="text-[#A39E96]">·</span>
+                <span className="font-mono font-semibold text-[#23211E]">
+                  {diasDaSemana.length} {diasDaSemana.length === 1 ? 'dia' : 'dias'} no período ({format(inicioSemana, 'dd/MM')} a {format(fimSemana, 'dd/MM/yyyy')})
+                </span>
+              </>
+            )}
           </div>
 
           {/* Painel de Blocos do e-mail (Switches rápidos) */}
@@ -329,10 +364,51 @@ export const PcpCalendarioView: React.FC = () => {
         </div>
       </header>
 
-      {/* 2. O CORPO: COMPONENTE COMPARTILHADO (modo='previa') */}
-      <main className="space-y-4">
-        <CalendarioPlanejamento
-          modo="previa"
+      {/* 2. O CORPO: COMPONENTE COMPARTILHADO OU ESTADO VAZIO */}
+      {!selectedUnidadeId || !dataInicioStr || !dataFimStr ? (
+        <div className="bg-white rounded-xl border border-[#E6E3DD] p-12 text-center shadow-2xs space-y-4 my-4">
+          <div className="w-14 h-14 mx-auto rounded-full bg-[#FAF8F5] border border-[#E8C9A0] flex items-center justify-center text-[#E07A1F]">
+            <Building2 className="w-7 h-7" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="text-base font-bold text-[#23211E]">Selecione uma Unidade e o Período</h3>
+            <p className="text-xs text-[#6B6660]">
+              {!selectedUnidadeId
+                ? 'Escolha a unidade operacional nos seletores acima para carregar o Calendário de Planejamento.'
+                : 'Defina as datas de início e fim nos campos acima ou clique em "Esta semana" para visualizar a programação.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <main className="space-y-4">
+          <CalendarioPlanejamento
+            modo="previa"
+            unidadeId={selectedUnidadeId}
+            unidadeNome={unidadeNome}
+            inicioSemana={inicioSemana}
+            fimSemana={fimSemana}
+            diasDaSemana={diasDaSemana}
+            equipes={equipes}
+            metricas={metricas}
+            alojamentos={alojamentos}
+            obrasConclusoes={obrasConclusoes}
+            avisoBdConfig={avisoBdConfig}
+            ultimaAtualizacao={ultimaAtualizacao}
+            escopo={escopo}
+            setEscopo={setEscopo}
+            densidade={densidade}
+            setDensidade={setDensidade}
+            blocos={blocos}
+            onMapDataReady={setMapDataGps}
+          />
+        </main>
+      )}
+
+      {/* 3. MODAL DE CONFIGURAÇÃO E DISPARO DE E-MAIL */}
+      {selectedUnidadeId && dataInicioStr && dataFimStr && (
+        <EnvioPlanejamentoModal
+          open={isEnvioModalOpen}
+          onOpenChange={setIsEnvioModalOpen}
           unidadeId={selectedUnidadeId}
           unidadeNome={unidadeNome}
           inicioSemana={inicioSemana}
@@ -342,33 +418,10 @@ export const PcpCalendarioView: React.FC = () => {
           metricas={metricas}
           alojamentos={alojamentos}
           obrasConclusoes={obrasConclusoes}
-          avisoBdConfig={avisoBdConfig}
           ultimaAtualizacao={ultimaAtualizacao}
-          escopo={escopo}
-          setEscopo={setEscopo}
-          densidade={densidade}
-          setDensidade={setDensidade}
-          blocos={blocos}
-          onMapDataReady={setMapDataGps}
+          mapDataGps={mapDataGps}
         />
-      </main>
-
-      {/* 3. MODAL DE CONFIGURAÇÃO E DISPARO DE E-MAIL */}
-      <EnvioPlanejamentoModal
-        open={isEnvioModalOpen}
-        onOpenChange={setIsEnvioModalOpen}
-        unidadeId={selectedUnidadeId}
-        unidadeNome={unidadeNome}
-        inicioSemana={inicioSemana}
-        fimSemana={fimSemana}
-        diasDaSemana={diasDaSemana}
-        equipes={equipes}
-        metricas={metricas}
-        alojamentos={alojamentos}
-        obrasConclusoes={obrasConclusoes}
-        ultimaAtualizacao={ultimaAtualizacao}
-        mapDataGps={mapDataGps}
-      />
+      )}
     </div>
   );
 };
