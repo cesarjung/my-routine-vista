@@ -1288,7 +1288,7 @@ export const usePcpPlanejamentoData = (
 
     const newRow = new Array(79).fill('');
     newRow[0] = form.reprogramar ? 'REPROGRAMADA' : '';    // Col A (0): Reprog.
-    newRow[1] = formattedDateWithDay;                       // Col B (1): Data
+    newRow[1] = form.dataProgramacao;                       // Col B (1): Data como valor de data puro (dd/MM/yyyy)
     newRow[4] = form.supervisor;                            // Col E (4): Supervisor
     newRow[5] = encarregado;                                // Col F (5): Encarregado
     newRow[6] = form.equipe;                                // Col G (6): Equipe

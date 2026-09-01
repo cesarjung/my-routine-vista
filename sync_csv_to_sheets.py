@@ -343,6 +343,7 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
         cell_updates = []
         used_target_indices = set()
 
+        format_requests = []
         for op in planned_operations:
             if op['type'] == 'OVERWRITE_SAME_ROW':
                 adjusted_idx = op['original_idx']
@@ -379,6 +380,28 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
 
             target_row_num = target_row_idx + 1 # 1-indexed for Sheets
 
+            # Formatação numérica da Coluna B como DATA com dia da semana (dd/mm/yyyy - dddd)
+            format_requests.append({
+                'repeatCell': {
+                    'range': {
+                        'sheetId': worksheet.id,
+                        'startRowIndex': target_row_idx,
+                        'endRowIndex': target_row_idx + 1,
+                        'startColumnIndex': 1,
+                        'endColumnIndex': 2
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'numberFormat': {
+                                'type': 'DATE',
+                                'pattern': 'dd/mm/yyyy - dddd'
+                            }
+                        }
+                    },
+                    'fields': 'userEnteredFormat.numberFormat'
+                }
+            })
+
             MANAGED_COL_INDICES = {
                 0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16,
                 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
@@ -389,6 +412,8 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
                     continue
                 val = op['row_cells'][c_idx] if c_idx < len(op['row_cells']) else ""
                 val_str = str(val if val is not None else '').strip().strip('"')
+                if c_idx == 1:
+                    val_str = extract_date(val_str) or val_str
                 if c_idx in MANAGED_COL_INDICES:
                     col_letter = get_col_letter(c_idx)
                     cell_range = f"{col_letter}{target_row_num}"
@@ -403,6 +428,12 @@ def paste_row_directly_to_plan_principal(gc, unit_sigla, csv_filepath, is_reprog
                         'range': cell_range,
                         'values': [[val_str]]
                     })
+
+        if format_requests:
+            try:
+                spreadsheet.batch_update({'requests': format_requests})
+            except Exception as fe:
+                logging.warning(f"Aviso ao formatar células: {fe}")
 
         if cell_updates:
             worksheet.batch_update(cell_updates, value_input_option='USER_ENTERED')
