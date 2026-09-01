@@ -681,12 +681,12 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
     <!-- 3.5 QUADRO DE CONCLUSÕES DE OBRAS -->
     ${(() => {
       if (blocos.conclusoes === false) return '';
-      const conclusoesList = data.obrasConclusoes || [];
+      const conclusoesList = payload.obrasConclusoes || [];
       if (conclusoesList.length === 0) return '';
 
       const totalValConsiderado = conclusoesList.reduce((acc, c) => acc + (c.valorObra || 0), 0);
-      const semanaLabel = data.semana?.inicio && data.semana?.fim
-        ? `${data.semana.inicio.split('-').reverse().slice(0, 2).join('/')} ATÉ ${data.semana.fim.split('-').reverse().slice(0, 2).join('/')}`
+      const semanaLabel = semana?.inicio && semana?.fim
+        ? `${semana.inicio.split('-').reverse().slice(0, 2).join('/')} ATÉ ${semana.fim.split('-').reverse().slice(0, 2).join('/')}`
         : 'SEMANA';
 
       return `
