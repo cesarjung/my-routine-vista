@@ -136,7 +136,15 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
       if (!eq.dias) return;
       const diasObj = Array.isArray(eq.dias) ? eq.dias : Object.values(eq.dias);
       diasObj.forEach((d: any) => {
-        if (d && d.obra && !d.isFolga && !d.isFeriado) set.add(d.obra);
+        if (d && !d.isFolga && !d.isFeriado) {
+          if (d.obras && Array.isArray(d.obras) && d.obras.length > 0) {
+            d.obras.forEach((sub: any) => {
+              if (sub.obra) set.add(sub.obra);
+            });
+          } else if (d.obra) {
+            set.add(d.obra);
+          }
+        }
       });
     });
     return Array.from(set);

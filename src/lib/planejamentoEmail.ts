@@ -545,6 +545,10 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                       const rawPontos = Array.isArray(diaInfo.pontos) ? diaInfo.pontos : [];
                       const cleanPontos = cleanPontosList(rawPontos);
 
+                      const subObrasList = Array.isArray(diaInfo.obras) && diaInfo.obras.length > 0
+                        ? diaInfo.obras
+                        : [{ obra, etapa, municipio, pontos: cleanPontos, valorPlanejado: diaInfo.valorPlanejado }];
+
                       return `
                         <td style="text-align: left; vertical-align: top; background-color: #FFFFFF; padding: 4px 5px; height: 130px; box-sizing: border-box; overflow: hidden;">
                           <!-- Faixa Superior: % e Município -->
@@ -563,31 +567,45 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
                             </tr>
                           </table>
 
-                          <!-- Etapa -->
-                          <div style="font-weight: bold; color: #23211E; font-size: 9px; text-transform: uppercase; line-height: 1.1; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${etapa}">
-                            ${etapa}
-                          </div>
-
-                          <!-- Obra -->
-                          <div style="color: #6B6660; font-family: monospace; font-size: 8.5px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${obra}">
-                            ${obra}
+                          <!-- Lista de Obras (suporte a 1 ou mais obras no mesmo dia) -->
+                          <div style="margin: 2px 0;">
+                            ${subObrasList.map((sub: any, sIdx: number) => {
+                              const subPontos = cleanPontosList(sub.pontos || []);
+                              return `
+                                <div style="${sIdx > 0 ? 'margin-top: 3px; padding-top: 3px; border-top: 1px dashed #E6E3DD;' : ''}">
+                                  <table style="width: 100%; border-collapse: collapse;">
+                                    <tr>
+                                      <td style="font-weight: bold; color: #23211E; font-size: 8.5px; text-transform: uppercase; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${sub.etapa || ''}">
+                                        ${sub.etapa || 'IMPLANTAÇÃO'}
+                                      </td>
+                                      ${subObrasList.length > 1 && sub.valorPlanejado > 0 ? `
+                                        <td style="text-align: right; font-family: monospace; font-size: 8px; color: #17794C; font-weight: bold; white-space: nowrap;">
+                                          R$${Math.round(sub.valorPlanejado).toLocaleString('pt-BR')}
+                                        </td>
+                                      ` : ''}
+                                    </tr>
+                                  </table>
+                                  <div style="color: #4A463F; font-family: monospace; font-size: 8px; font-weight: bold; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${sub.obra || ''}">
+                                    ${sub.obra || ''}
+                                  </div>
+                                  ${subPontos.length > 0 ? `
+                                    <div style="font-family: monospace; font-size: 7.5px; color: #8C877D; line-height: 1.1; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${subPontos.join(', ')}">
+                                      ${subPontos.join(', ')}
+                                    </div>
+                                  ` : ''}
+                                </div>
+                              `;
+                            }).join('')}
                           </div>
 
                           <!-- Saturação (Jornada) e Deslocamento -->
-                          <div style="font-family: monospace; font-size: 8.5px; color: #5C574F; margin-top: 2px; line-height: 1.1; white-space: nowrap;">
+                          <div style="font-family: monospace; font-size: 8.5px; color: #5C574F; margin-top: 3px; padding-top: 2px; border-top: 1px solid #F2F0EC; line-height: 1.1; white-space: nowrap;">
                             <span style="color: ${corJornadaDot}; font-weight: bold;">•</span>
                             <strong style="color: #23211E;">${jornadaH}</strong>
                             <span style="color: #A39E96;">·</span>
                             <span style="color: ${corDeslocDot}; font-weight: bold;">•</span>
                             <span style="color: ${corDeslocDot}; font-weight: bold;">desl ${deslocH}h</span>
                           </div>
-
-                          <!-- Pontos e Vãos -->
-                          ${cleanPontos.length > 0 ? `
-                            <div style="font-family: monospace; font-size: 8px; color: #8C877D; border-top: 1px solid #F0EDE8; margin-top: 2px; padding-top: 1px; line-height: 1.25; word-break: break-word; overflow: hidden;" title="${cleanPontos.join(', ')}">
-                              ${cleanPontos.join(', ')}
-                            </div>
-                          ` : ''}
                         </td>
                       `;
                     }).join('')}
@@ -764,11 +782,22 @@ export function generatePlanejamentoEmailHtml(payload: PlanejamentoEmailPayload)
       equipes.forEach(eq => {
         const diasObj = Array.isArray(eq.dias) ? eq.dias : (eq.dias ? Object.values(eq.dias) : []);
         diasObj.forEach((d: any) => {
-          if (d && d.obra && !d.isFolga && !d.isFeriado) {
-            if (!obrasMap.has(d.obra)) obrasMap.set(d.obra, { obra: d.obra, equipes: new Set(), etapas: new Set() });
-            const e = obrasMap.get(d.obra)!;
-            e.equipes.add(eq.codigo);
-            if (d.etapa) e.etapas.add(d.etapa);
+          if (d && !d.isFolga && !d.isFeriado) {
+            if (d.obras && Array.isArray(d.obras) && d.obras.length > 0) {
+              d.obras.forEach((sub: any) => {
+                if (sub.obra) {
+                  if (!obrasMap.has(sub.obra)) obrasMap.set(sub.obra, { obra: sub.obra, equipes: new Set(), etapas: new Set() });
+                  const e = obrasMap.get(sub.obra)!;
+                  e.equipes.add(eq.codigo);
+                  if (sub.etapa) e.etapas.add(sub.etapa);
+                }
+              });
+            } else if (d.obra) {
+              if (!obrasMap.has(d.obra)) obrasMap.set(d.obra, { obra: d.obra, equipes: new Set(), etapas: new Set() });
+              const e = obrasMap.get(d.obra)!;
+              e.equipes.add(eq.codigo);
+              if (d.etapa) e.etapas.add(d.etapa);
+            }
           }
         });
       });

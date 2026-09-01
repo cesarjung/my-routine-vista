@@ -32,6 +32,15 @@ export interface EquipeSemanalItem {
   dias: Record<string, DiaProgramacaoItem | null>; // key: YYYY-MM-DD
 }
 
+export interface SubItemProgramacao {
+  obra: string;
+  municipio: string;
+  etapa: string;
+  pontos: string[];
+  valorPlanejado: number;
+  tempoServicoMin?: number;
+}
+
 export interface DiaProgramacaoItem {
   data: string; // YYYY-MM-DD
   dataStr: string; // dd/MM
@@ -54,6 +63,7 @@ export interface DiaProgramacaoItem {
   alojamento?: string;
   alojamentoIda?: string;
   alojamentoVolta?: string;
+  obras?: SubItemProgramacao[];
 }
 
 export interface MetricasSemana {
@@ -512,34 +522,89 @@ export function usePlanejamentoSemanal({
       const metaDiariaDoDay = metaDiariaDataMap.get(eq)?.get(dataIso) ?? (metasMap.get(eq) || 5500);
       const pctMetaDia = metaDiariaDoDay > 0 ? Math.round((valorPlanejado / metaDiariaDoDay) * 100) : 0;
 
-      if (!programacoesPorEquipeData.has(eq)) {
-        programacoesPorEquipeData.set(eq, new Map());
-      }
-
-      programacoesPorEquipeData.get(eq)!.set(dataIso, {
-        data: dataIso,
-        dataStr: format(dateObj, 'dd/MM'),
-        diaSemanaStr: format(dateObj, 'EEE', { locale: ptBR }),
-        equipe: eq,
-        supervisor: supervisor || equipesConfigMap.get(eq) || 'SUPERVISOR',
-        obra: obra,
+      const subItem: SubItemProgramacao = {
+        obra,
         municipio,
         etapa: etapa || (isFolga ? 'FOLGA' : isFeriado ? 'FERIADO' : isIndisponivel ? 'INDISPONÍVEL' : ''),
         pontos: pontosList,
         valorPlanejado: isIndisponivel ? 0 : valorPlanejado,
-        pctMetaDia: isIndisponivel ? 0 : pctMetaDia,
-        tempoTotalMin: isIndisponivel ? 0 : tempoTotalMin,
-        tempoDeslocamentoMin: isIndisponivel ? 0 : tempoDeslocamentoMin,
         tempoServicoMin: isIndisponivel ? 0 : Math.max(0, tempoTotalMin - tempoDeslocamentoMin),
-        isFolga,
-        isFeriado,
-        isIndisponivel,
-        alojamentoIda: String(row[77] || '').trim(),
-        alojamentoVolta: String(row[78] || '').trim(),
-        alojamento: String(row[77] || '').trim() === String(row[78] || '').trim()
-          ? String(row[77] || '').trim()
-          : (String(row[77] || '').trim() && String(row[78] || '').trim() ? `${String(row[77] || '').trim()} / ${String(row[78] || '').trim()}` : (String(row[77] || '').trim() || String(row[78] || '').trim())),
-      });
+      };
+
+      if (!programacoesPorEquipeData.has(eq)) {
+        programacoesPorEquipeData.set(eq, new Map());
+      }
+
+      const existing = programacoesPorEquipeData.get(eq)!.get(dataIso);
+      if (existing) {
+        // Já existe programação para esta equipe nesta data (múltiplas obras no mesmo dia)
+        if (!existing.obras) {
+          existing.obras = [{
+            obra: existing.obra,
+            municipio: existing.municipio,
+            etapa: existing.etapa,
+            pontos: existing.pontos,
+            valorPlanejado: existing.valorPlanejado,
+            tempoServicoMin: existing.tempoServicoMin,
+          }];
+        }
+        existing.obras.push(subItem);
+
+        // Acumula o valor planejado total do dia
+        existing.valorPlanejado += isIndisponivel ? 0 : valorPlanejado;
+        existing.pctMetaDia = metaDiariaDoDay > 0 ? Math.round((existing.valorPlanejado / metaDiariaDoDay) * 100) : 0;
+
+        // Unir pontos sem repetições
+        pontosList.forEach(p => {
+          if (!existing.pontos.includes(p)) existing.pontos.push(p);
+        });
+
+        // Concatena no texto legado para compatibilidade
+        if (obra && !existing.obra.includes(obra)) {
+          existing.obra = `${existing.obra} / ${obra}`;
+        }
+        if (etapa && !existing.etapa.includes(etapa)) {
+          existing.etapa = `${existing.etapa} / ${etapa}`;
+        }
+        if (municipio && !existing.municipio.includes(municipio)) {
+          existing.municipio = `${existing.municipio} / ${municipio}`;
+        }
+
+        if (!isFolga) existing.isFolga = false;
+        if (!isFeriado) existing.isFeriado = false;
+        if (!isIndisponivel) existing.isIndisponivel = false;
+
+        // Tempos de jornada e deslocamento: mantém o maior registro da jornada
+        existing.tempoTotalMin = Math.max(existing.tempoTotalMin, isIndisponivel ? 0 : tempoTotalMin);
+        existing.tempoDeslocamentoMin = Math.max(existing.tempoDeslocamentoMin, isIndisponivel ? 0 : tempoDeslocamentoMin);
+        existing.tempoServicoMin = Math.max(0, existing.tempoTotalMin - existing.tempoDeslocamentoMin);
+      } else {
+        programacoesPorEquipeData.get(eq)!.set(dataIso, {
+          data: dataIso,
+          dataStr: format(dateObj, 'dd/MM'),
+          diaSemanaStr: format(dateObj, 'EEE', { locale: ptBR }),
+          equipe: eq,
+          supervisor: supervisor || equipesConfigMap.get(eq) || 'SUPERVISOR',
+          obra: obra,
+          municipio,
+          etapa: etapa || (isFolga ? 'FOLGA' : isFeriado ? 'FERIADO' : isIndisponivel ? 'INDISPONÍVEL' : ''),
+          pontos: pontosList,
+          valorPlanejado: isIndisponivel ? 0 : valorPlanejado,
+          pctMetaDia: isIndisponivel ? 0 : pctMetaDia,
+          tempoTotalMin: isIndisponivel ? 0 : tempoTotalMin,
+          tempoDeslocamentoMin: isIndisponivel ? 0 : tempoDeslocamentoMin,
+          tempoServicoMin: isIndisponivel ? 0 : Math.max(0, tempoTotalMin - tempoDeslocamentoMin),
+          isFolga,
+          isFeriado,
+          isIndisponivel,
+          alojamentoIda: String(row[77] || '').trim(),
+          alojamentoVolta: String(row[78] || '').trim(),
+          alojamento: String(row[77] || '').trim() === String(row[78] || '').trim()
+            ? String(row[77] || '').trim()
+            : (String(row[77] || '').trim() && String(row[78] || '').trim() ? `${String(row[77] || '').trim()} / ${String(row[78] || '').trim()}` : (String(row[77] || '').trim() || String(row[78] || '').trim())),
+          obras: [subItem],
+        });
+      }
     }
 
     // 5. Montar o Universo Completo de Equipes para a Semana

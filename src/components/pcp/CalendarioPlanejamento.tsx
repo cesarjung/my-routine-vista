@@ -560,14 +560,28 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     equipesFiltradas.forEach(eq => {
       if (!eq.dias) return;
       Object.values(eq.dias).forEach((prog: any) => {
-        if (prog && prog.obra && !prog.isFolga && !prog.isFeriado) {
-          const key = prog.obra;
-          if (!obrasMap.has(key)) {
-            obrasMap.set(key, { obra: key, etapas: new Set(), equipes: new Set() });
+        if (prog && !prog.isFolga && !prog.isFeriado) {
+          if (prog.obras && Array.isArray(prog.obras) && prog.obras.length > 0) {
+            prog.obras.forEach((sub: any) => {
+              if (sub.obra) {
+                const key = sub.obra;
+                if (!obrasMap.has(key)) {
+                  obrasMap.set(key, { obra: key, etapas: new Set(), equipes: new Set() });
+                }
+                const entry = obrasMap.get(key)!;
+                if (sub.etapa) entry.etapas.add(sub.etapa);
+                entry.equipes.add(eq.codigo);
+              }
+            });
+          } else if (prog.obra) {
+            const key = prog.obra;
+            if (!obrasMap.has(key)) {
+              obrasMap.set(key, { obra: key, etapas: new Set(), equipes: new Set() });
+            }
+            const entry = obrasMap.get(key)!;
+            if (prog.etapa) entry.etapas.add(prog.etapa);
+            entry.equipes.add(eq.codigo);
           }
-          const entry = obrasMap.get(key)!;
-          if (prog.etapa) entry.etapas.add(prog.etapa);
-          entry.equipes.add(eq.codigo);
         }
       });
     });
@@ -1294,21 +1308,78 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                       )}
                                     </div>
 
-                                    {/* Etapa e Obra */}
-                                    <div className="leading-tight my-0.5">
-                                      <span
-                                        className={`font-bold text-[10px] uppercase line-clamp-1 block ${prog.etapa?.toUpperCase().includes('EQUIPE PARADA') ? 'text-[#C0392E]' : 'text-[#23211E]'}`}
-                                        title={prog.etapa}
-                                      >
-                                        {prog.etapa}
-                                      </span>
-                                      <span className="font-mono text-[9px] text-[#6B6660] truncate block" title={prog.obra}>
-                                        {prog.obra}
-                                      </span>
+                                    {/* Lista de Obras e Etapas do Dia (Suporte a múltiplas obras no mesmo dia) */}
+                                    <div className="my-0.5 flex-1 flex flex-col justify-start overflow-y-auto max-h-[88px] pr-0.5 space-y-1 custom-scrollbar">
+                                      {(prog.obras && prog.obras.length > 0
+                                        ? prog.obras
+                                        : [
+                                            {
+                                              obra: prog.obra,
+                                              etapa: prog.etapa,
+                                              municipio: prog.municipio,
+                                              pontos: prog.pontos,
+                                              valorPlanejado: prog.valorPlanejado,
+                                            },
+                                          ]
+                                      ).map((sub, sIdx) => {
+                                        const isMulti = prog.obras && prog.obras.length > 1;
+                                        return (
+                                          <div
+                                            key={sIdx}
+                                            className={`leading-tight ${
+                                              sIdx > 0 ? 'pt-1 border-t border-[#F0EDE8]' : ''
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between gap-1">
+                                              <span
+                                                className={`font-bold text-[9.5px] uppercase truncate block flex-1 ${
+                                                  sub.etapa?.toUpperCase().includes('EQUIPE PARADA')
+                                                    ? 'text-[#C0392E]'
+                                                    : 'text-[#23211E]'
+                                                }`}
+                                                title={sub.etapa}
+                                              >
+                                                {sub.etapa || 'SEM ETAPA'}
+                                              </span>
+                                              {isMulti && sub.valorPlanejado > 0 && (
+                                                <span className="text-[8.5px] font-mono text-[#17794C] font-semibold shrink-0">
+                                                  R${Math.round(sub.valorPlanejado).toLocaleString('pt-BR')}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1">
+                                              <span
+                                                className="font-mono text-[9px] text-[#4A463F] font-semibold truncate block flex-1"
+                                                title={sub.obra}
+                                              >
+                                                {sub.obra || '-'}
+                                              </span>
+                                              {sub.municipio && sub.municipio !== prog.municipio && (
+                                                <span
+                                                  className="text-[7.5px] uppercase text-[#8C877D] truncate max-w-[60px]"
+                                                  title={sub.municipio}
+                                                >
+                                                  {sub.municipio}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {activeDensidade === 'detalhado' &&
+                                              sub.pontos &&
+                                              sub.pontos.length > 0 && (
+                                                <div
+                                                  className="text-[8px] font-mono text-[#8C877D] leading-tight truncate mt-0.5"
+                                                  title={sub.pontos.join(', ')}
+                                                >
+                                                  {sub.pontos.join(', ')}
+                                                </div>
+                                              )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
 
                                     {/* Saturação (Jornada) e Deslocamento */}
-                                    <div className="flex items-center justify-between font-mono text-[9.5px] text-[#5C574F] pt-0.5 border-t border-[#F2F0EC]">
+                                    <div className="flex items-center justify-between font-mono text-[9.5px] text-[#5C574F] pt-0.5 border-t border-[#F2F0EC] mt-auto">
                                       <div className="flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: corDotJornada }} />
                                         <span className="font-bold text-[#23211E]">{formatMinToHours(prog.tempoTotalMin)}</span>
@@ -1320,13 +1391,6 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                         </span>
                                       </div>
                                     </div>
-
-                                    {/* Pontos / Vãos */}
-                                    {activeDensidade === 'detalhado' && prog.pontos && prog.pontos.length > 0 && (
-                                      <div className="text-[8.5px] font-mono text-[#8C877D] pt-0.5 leading-[1.3] flex-1 overflow-hidden" style={{ wordBreak: 'break-word' }}>
-                                        {prog.pontos.join(', ')}
-                                      </div>
-                                    )}
                                   </div>
                                 );
                               })}
