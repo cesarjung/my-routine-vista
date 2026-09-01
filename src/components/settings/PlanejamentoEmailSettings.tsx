@@ -38,6 +38,9 @@ import {
 } from '@/hooks/usePlanejamentoEmailSettings';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfiles } from '@/hooks/useProfiles';
+import { useUnits } from '@/hooks/useUnits';
+import { useUnitManagers } from '@/hooks/useUnitManagers';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface PlanejamentoEmailSettingsProps {
   isAdmin?: boolean;
@@ -68,22 +71,63 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
     saveUserSignature,
   } = usePlanejamentoEmailSettings();
 
-  const canManageAllUnits = isAdmin || isGestor;
+  const { data: units } = useUnits();
+  const { data: unitManagers } = useUnitManagers();
+  const { data: userRole } = useUserRole();
+
+  const isGestorOrAdmin = isAdmin || isGestor || userRole === 'admin' || userRole === 'gestor' || currentProfile?.role === 'admin' || currentProfile?.role === 'gestor';
+  const canManageAllUnits = isGestorOrAdmin;
+
+  const normalizeUnitText = (str: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim();
 
   // 1. Filtrar unidades estritamente conforme permissão do usuário logado
   const allowedUnits: UnidadePlanejamento[] = useMemo(() => {
-    if (canManageAllUnits) {
+    // Gestor ou Administrador: tem acesso a TODAS as unidades
+    if (isGestorOrAdmin) {
       return UNIDADES_PLANEJAMENTO;
     }
+
     // Usuário comum: apenas unidades associadas explicitamente no perfil ou em unit_managers
-    const allowed = UNIDADES_PLANEJAMENTO.filter(u => {
-      const matchPrimary = userUnitId && (u.id === userUnitId || u.nome.toLowerCase().includes(userUnitId.toLowerCase()));
-      const matchManaged = userManagedUnits && userManagedUnits.includes(u.id);
-      return matchPrimary || matchManaged;
+    const userUnitIds = new Set<string>();
+    if (currentProfile?.unit_id) userUnitIds.add(currentProfile.unit_id);
+    if (userUnitId) userUnitIds.add(userUnitId);
+    
+    if (userManagedUnits && userManagedUnits.length > 0) {
+      userManagedUnits.forEach(id => userUnitIds.add(id));
+    }
+    if (unitManagers && activeUserId) {
+      unitManagers.filter(m => m.user_id === activeUserId).forEach(m => userUnitIds.add(m.unit_id));
+    }
+
+    // Mapeia os UUIDs da tabela units ou strings para os nomes normalizados
+    const allowedNamesNormalized = new Set<string>();
+    userUnitIds.forEach(idOrName => {
+      if (!idOrName) return;
+      const foundInUnitsTable = units?.find(
+        u => u.id === idOrName || normalizeUnitText(u.name) === normalizeUnitText(idOrName)
+      );
+      if (foundInUnitsTable) {
+        allowedNamesNormalized.add(normalizeUnitText(foundInUnitsTable.name));
+      }
+      allowedNamesNormalized.add(normalizeUnitText(idOrName));
     });
 
-    return allowed.length > 0 ? allowed : [UNIDADES_PLANEJAMENTO[0]];
-  }, [canManageAllUnits, userUnitId, userManagedUnits]);
+    // Filtra as UNIDADES_PLANEJAMENTO que batem por ID ou por Nome normalizado
+    const allowed = UNIDADES_PLANEJAMENTO.filter(u => {
+      const uNomeNorm = normalizeUnitText(u.nome);
+      const matchName = allowedNamesNormalized.has(uNomeNorm);
+      const matchId = userUnitIds.has(u.id);
+      return matchName || matchId;
+    });
+
+    // Retorna as unidades autorizadas (se ainda carregando ou nenhuma, retorna vazio ou primeira se gestor)
+    return allowed;
+  }, [isGestorOrAdmin, currentProfile?.unit_id, userUnitId, userManagedUnits, unitManagers, activeUserId, units]);
 
   // Unidade atualmente selecionada no dropdown
   const [selectedUnidadeId, setSelectedUnidadeId] = useState<string>(

@@ -38,6 +38,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useUnitManagers } from '@/hooks/useUnitManagers';
 import { useProfiles } from '@/hooks/useProfiles';
+import { useUnits } from '@/hooks/useUnits';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 
 export interface EnvioPlanejamentoModalProps {
@@ -79,13 +80,21 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   const { data: userRole } = useUserRole();
   const { data: unitManagers } = useUnitManagers();
   const { data: profiles } = useProfiles();
+  const { data: units } = useUnits();
   const myProfile = profiles?.find(p => p.id === user?.id);
 
   const { getUnidadeConfig, getUserSignature, smtpConfig } = usePlanejamentoEmailSettings();
   const [isSending, setIsSending] = useState(false);
 
+  const normalizeUnitText = (str: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim();
+
   // Verificação de permissão do usuário para enviar e-mail desta unidade
-  const isGestorOrAdmin = userRole === 'admin' || userRole === 'gestor';
+  const isGestorOrAdmin = userRole === 'admin' || userRole === 'gestor' || myProfile?.role === 'admin' || myProfile?.role === 'gestor';
   const myManagedUnitIds = useMemo(() => {
     return unitManagers?.filter(m => m.user_id === user?.id).map(m => m.unit_id) || [];
   }, [unitManagers, user?.id]);
@@ -93,14 +102,32 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   const hasUnitPermission = useMemo(() => {
     if (isGestorOrAdmin) return true;
     if (!user) return false;
-    if (myProfile?.unit_id === unidadeId) return true;
-    if (myManagedUnitIds.includes(unidadeId)) return true;
-    const unitObj = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeId);
-    if (unitObj && myProfile?.unit_id && unitObj.nome.toLowerCase().includes(myProfile.unit_id.toLowerCase())) {
-      return true;
-    }
+
+    // Coleta IDs e Nomes permitidos
+    const userUnitIds = new Set<string>();
+    if (myProfile?.unit_id) userUnitIds.add(myProfile.unit_id);
+    myManagedUnitIds.forEach(id => userUnitIds.add(id));
+
+    const allowedNamesNormalized = new Set<string>();
+    userUnitIds.forEach(idOrName => {
+      if (!idOrName) return;
+      const foundInUnitsTable = units?.find(
+        u => u.id === idOrName || normalizeUnitText(u.name) === normalizeUnitText(idOrName)
+      );
+      if (foundInUnitsTable) {
+        allowedNamesNormalized.add(normalizeUnitText(foundInUnitsTable.name));
+      }
+      allowedNamesNormalized.add(normalizeUnitText(idOrName));
+    });
+
+    const targetUnit = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeId);
+    const targetUnitNameNorm = normalizeUnitText(targetUnit?.nome || unidadeNome || unidadeId);
+
+    if (userUnitIds.has(unidadeId)) return true;
+    if (allowedNamesNormalized.has(targetUnitNameNorm)) return true;
+
     return false;
-  }, [isGestorOrAdmin, user, myProfile, myManagedUnitIds, unidadeId]);
+  }, [isGestorOrAdmin, user, myProfile, myManagedUnitIds, unidadeId, unidadeNome, units]);
 
   // Extrair obras únicas de todas as equipes para buscar vistorias
   const obraIds = useMemo(() => {
