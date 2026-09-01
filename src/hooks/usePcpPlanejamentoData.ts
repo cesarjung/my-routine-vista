@@ -1253,7 +1253,7 @@ export const usePcpPlanejamentoData = (
       }
 
       // Classificar a quantidade utilizando estritamente a BD_Config (Coluna AL -> Coluna AU)
-      const grupo = getGrupoAtividade(p.servico || p.descricao || '', p.codigo || (p as any).codigoAtividade || '');
+      const grupo = getGrupoAtividade(p.servico || p.descricao || '', (p as any).codigo || (p as any).codigoMaterial || (p as any).codigoAtividade || '');
       const qtd = Number(p.quantidade || 1);
 
       if (grupo === 'IMPLANT' || grupo === 'IMPLANTAÇÃO' || grupo === 'POSTE') {
