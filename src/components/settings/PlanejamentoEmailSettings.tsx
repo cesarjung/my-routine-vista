@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import {
   Mail,
   Server,
-  Shield,
   Lock,
   Plus,
   X,
@@ -24,9 +23,9 @@ import {
   Briefcase,
   User,
   Sparkles,
-  AlertTriangle,
   Code2,
   Copy,
+  Save,
 } from 'lucide-react';
 import { UNIDADES_PLANEJAMENTO, UnidadePlanejamento } from '@/constants/unidades';
 import {
@@ -257,18 +256,60 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
     }, 200);
   };
 
+  // ════════════════════════════════════════════════════════════════
+  // 4. SALVAR TODAS AS CONFIGURAÇÕES DE UMA SÓ VEZ
+  // ════════════════════════════════════════════════════════════════
+  const [isSavingAll, setIsSavingAll] = useState(false);
+
+  const handleSaveAll = () => {
+    setIsSavingAll(true);
+
+    // 1. Salva assinatura
+    saveUserSignature({
+      tipo: sigTipo,
+      nome: sigNome.trim(),
+      cargo: sigCargo.trim(),
+      celular: sigCelular.trim(),
+      html: previewHtml,
+      texto: previewTexto,
+    }, activeUserId);
+
+    // 2. Salva SMTP se for Admin/Gestor
+    if (canManageAllUnits && smtpForm.host && smtpForm.user) {
+      saveSmtpConfig(smtpForm);
+    }
+
+    // 3. Salva unidade ativa
+    if (selectedUnidadeId) {
+      saveUnidadeConfig(
+        selectedUnidadeId,
+        {
+          destinatariosPara: destPara,
+          destinatariosCc: destCc,
+          assuntoTemplate: assuntoTemplate.trim(),
+        },
+        activeUserId
+      );
+    }
+
+    setTimeout(() => {
+      setIsSavingAll(false);
+      toast.success('Todas as configurações de envio foram salvas com sucesso!');
+    }, 300);
+  };
+
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="space-y-6 max-w-6xl mx-auto pb-20">
       {/* Header com identificação do usuário logado */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-xl border bg-card/60 shadow-sm">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-xl border bg-card shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-sirtec-navy text-white shadow-sm">
-            <Mail className="w-6 h-6 text-sirtec-orange" />
+          <div className="p-2.5 rounded-lg bg-[#1E293B] text-white shadow-sm">
+            <Mail className="w-6 h-6 text-[#E07A1F]" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               Configurações de Envio de Planejamento
-              <Badge variant="outline" className="text-xs bg-sirtec-orange/10 text-sirtec-orange border-sirtec-orange/30">
+              <Badge variant="outline" className="text-xs bg-[#E07A1F]/10 text-[#E07A1F] border-[#E07A1F]/30">
                 PCP Operacional
               </Badge>
             </h2>
@@ -278,7 +319,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-muted/60 px-3 py-1.5 rounded-lg border text-xs">
+        <div className="flex items-center gap-2 bg-muted/80 px-3 py-1.5 rounded-lg border text-xs">
           <User className="w-4 h-4 text-muted-foreground" />
           <span className="text-muted-foreground">Usuário ativo:</span>
           <span className="font-semibold text-foreground">
@@ -295,11 +336,11 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
       {/* ════════════════════════════════════════════════════════════════ */}
       {/* 1. ASSINATURA DE E-MAIL (COM CAMPOS E PREVIEW EM TEMPO REAL)   */}
       {/* ════════════════════════════════════════════════════════════════ */}
-      <Card className="border shadow-sm">
-        <CardHeader className="pb-3 border-b bg-muted/20">
-          <div className="flex items-center justify-between">
+      <Card className="border shadow-sm bg-card">
+        <CardHeader className="pb-3 border-b bg-muted/30">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <PenTool className="w-5 h-5 text-sirtec-orange" />
+              <PenTool className="w-5 h-5 text-[#E07A1F]" />
               <div>
                 <CardTitle className="text-base font-bold">Assinatura Corporativa de E-mail</CardTitle>
                 <CardDescription className="text-xs">
@@ -312,7 +353,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs gap-1.5"
+                className="h-8 text-xs gap-1.5 font-medium border-border"
                 onClick={() => setShowHtmlCode(!showHtmlCode)}
               >
                 <Code2 className="w-3.5 h-3.5" />
@@ -321,12 +362,12 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
               <Button
                 type="button"
                 size="sm"
-                className="h-8 bg-sirtec-navy hover:bg-sirtec-navy/90 text-white text-xs gap-1.5"
+                className="h-8 bg-[#E07A1F] hover:bg-[#C96815] text-white font-semibold text-xs gap-1.5 shadow-sm"
                 onClick={handleSaveSignature}
                 disabled={isSavingSignature}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {isSavingSignature ? 'Salvando...' : 'Salvar Minha Assinatura'}
+                <Save className="w-3.5 h-3.5" />
+                {isSavingSignature ? 'Salvando...' : 'Salvar Assinatura'}
               </Button>
             </div>
           </div>
@@ -337,40 +378,40 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-sirtec-orange" />
+                <User className="w-3.5 h-3.5 text-[#E07A1F]" />
                 Nome Completo *
               </Label>
               <Input
                 placeholder="Ex: Cesar Jung"
                 value={sigNome}
                 onChange={(e) => setSigNome(e.target.value)}
-                className="h-9 text-sm"
+                className="h-9 text-sm bg-background"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold flex items-center gap-1.5">
-                <Briefcase className="w-3.5 h-3.5 text-sirtec-orange" />
+                <Briefcase className="w-3.5 h-3.5 text-[#E07A1F]" />
                 Cargo / Função *
               </Label>
               <Input
                 placeholder="Ex: Coordenador de PCP - CCM"
                 value={sigCargo}
                 onChange={(e) => setSigCargo(e.target.value)}
-                className="h-9 text-sm"
+                className="h-9 text-sm bg-background"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-sirtec-orange" />
+                <Phone className="w-3.5 h-3.5 text-[#E07A1F]" />
                 Celular / WhatsApp *
               </Label>
               <Input
                 placeholder="Ex: (55) 99708-7985"
                 value={sigCelular}
                 onChange={(e) => setSigCelular(e.target.value)}
-                className="h-9 text-sm"
+                className="h-9 text-sm bg-background"
               />
             </div>
           </div>
@@ -392,10 +433,10 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
           )}
 
           {/* Pré-visualização Visual Realista da Assinatura */}
-          <div className="p-4 rounded-xl border bg-white shadow-inner">
+          <div className="p-4 rounded-xl border bg-white shadow-xs">
             <div className="flex items-center justify-between pb-2 mb-3 border-b text-[11px] font-semibold text-slate-500">
               <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-sirtec-orange" />
+                <Sparkles className="w-3.5 h-3.5 text-[#E07A1F]" />
                 Pré-visualização da Assinatura no E-mail
               </span>
               <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
@@ -404,7 +445,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
             </div>
 
             <div
-              className="prose prose-sm max-w-none"
+              className="prose prose-sm max-w-none text-slate-900"
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
           </div>
@@ -414,11 +455,11 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
       {/* ════════════════════════════════════════════════════════════════ */}
       {/* 2. SERVIDOR DE ENVIO SMTP (PADRÃO SIRTEC · BLOQUEADO P/ COMUM) */}
       {/* ════════════════════════════════════════════════════════════════ */}
-      <Card className="border shadow-sm">
-        <CardHeader className="pb-3 border-b bg-muted/20">
-          <div className="flex items-center justify-between">
+      <Card className="border shadow-sm bg-card">
+        <CardHeader className="pb-3 border-b bg-muted/30">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Server className="w-5 h-5 text-sirtec-orange" />
+              <Server className="w-5 h-5 text-[#E07A1F]" />
               <div>
                 <CardTitle className="text-base font-bold flex items-center gap-2">
                   Servidor de Envio (SMTP)
@@ -438,11 +479,11 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
               <Button
                 type="button"
                 size="sm"
-                className="h-8 bg-sirtec-navy hover:bg-sirtec-navy/90 text-white text-xs gap-1.5"
+                className="h-8 bg-[#1E293B] hover:bg-[#0F172A] text-white font-semibold text-xs gap-1.5 shadow-sm"
                 onClick={handleSaveSmtp}
                 disabled={isSavingSmtp}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <Save className="w-3.5 h-3.5" />
                 {isSavingSmtp ? 'Salvando...' : 'Salvar Servidor SMTP'}
               </Button>
             ) : (
@@ -472,7 +513,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 onChange={(e) => setSmtpForm(prev => ({ ...prev, host: e.target.value }))}
                 disabled={!canManageAllUnits}
                 placeholder="smtp.sirtec.com.br"
-                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50 bg-background"
               />
             </div>
 
@@ -483,7 +524,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 value={smtpForm.port}
                 onChange={(e) => setSmtpForm(prev => ({ ...prev, port: parseInt(e.target.value, 10) || 587 }))}
                 disabled={!canManageAllUnits}
-                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50 bg-background"
               />
             </div>
 
@@ -494,7 +535,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 onValueChange={(val: any) => setSmtpForm(prev => ({ ...prev, secure: val }))}
                 disabled={!canManageAllUnits}
               >
-                <SelectTrigger className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50">
+                <SelectTrigger className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50 bg-background">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -512,7 +553,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 onChange={(e) => setSmtpForm(prev => ({ ...prev, senderName: e.target.value }))}
                 disabled={!canManageAllUnits}
                 placeholder="Sirtec PCP · Planejamento"
-                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50 bg-background"
               />
             </div>
 
@@ -524,7 +565,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 onChange={(e) => setSmtpForm(prev => ({ ...prev, user: e.target.value, fromEmail: e.target.value }))}
                 disabled={!canManageAllUnits}
                 placeholder="planejamento.ba@sirtec.com.br"
-                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50"
+                className="h-9 text-sm disabled:opacity-80 disabled:bg-muted/50 bg-background"
               />
             </div>
 
@@ -537,7 +578,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                   onChange={(e) => setSmtpForm(prev => ({ ...prev, password: e.target.value }))}
                   disabled={!canManageAllUnits}
                   placeholder="••••••••••••"
-                  className="h-9 text-sm pr-10 disabled:opacity-80 disabled:bg-muted/50"
+                  className="h-9 text-sm pr-10 disabled:opacity-80 disabled:bg-muted/50 bg-background"
                 />
                 {canManageAllUnits && (
                   <button
@@ -557,11 +598,11 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
       {/* ════════════════════════════════════════════════════════════════ */}
       {/* 3. DESTINATÁRIOS POR UNIDADE (INDIVIDUAL POR USUÁRIO + UNIDADE)*/}
       {/* ════════════════════════════════════════════════════════════════ */}
-      <Card className="border shadow-sm">
-        <CardHeader className="pb-3 border-b bg-muted/20">
+      <Card className="border shadow-sm bg-card">
+        <CardHeader className="pb-3 border-b bg-muted/30">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-sirtec-orange" />
+              <Building2 className="w-5 h-5 text-[#E07A1F]" />
               <div>
                 <CardTitle className="text-base font-bold">Destinatários por Unidade</CardTitle>
                 <CardDescription className="text-xs">
@@ -573,7 +614,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
             <div className="flex items-center gap-3 w-full md:w-auto">
               <div className="w-full md:w-64">
                 <Select value={selectedUnidadeId} onValueChange={setSelectedUnidadeId}>
-                  <SelectTrigger className="h-9 text-xs font-semibold bg-background border-sirtec-orange/40">
+                  <SelectTrigger className="h-9 text-xs font-semibold bg-background border-border shadow-xs">
                     <SelectValue placeholder="Selecione a Unidade" />
                   </SelectTrigger>
                   <SelectContent>
@@ -589,11 +630,11 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
               <Button
                 type="button"
                 size="sm"
-                className="h-9 bg-sirtec-navy hover:bg-sirtec-navy/90 text-white text-xs gap-1.5 whitespace-nowrap"
+                className="h-9 bg-[#E07A1F] hover:bg-[#C96815] text-white font-semibold text-xs gap-1.5 whitespace-nowrap shadow-sm"
                 onClick={handleSaveUnidade}
                 disabled={isSavingUnidade || !selectedUnidadeId}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <Save className="w-3.5 h-3.5" />
                 {isSavingUnidade ? 'Salvando...' : 'Salvar Unidade'}
               </Button>
             </div>
@@ -633,7 +674,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                   <Badge
                     key={email}
                     variant="secondary"
-                    className="gap-1.5 py-1 px-2.5 text-xs bg-sirtec-orange/10 text-sirtec-navy hover:bg-sirtec-orange/20 border border-sirtec-orange/20"
+                    className="gap-1.5 py-1 px-2.5 text-xs bg-[#E07A1F]/10 text-foreground hover:bg-[#E07A1F]/20 border border-[#E07A1F]/30"
                   >
                     <span>{email}</span>
                     <button
@@ -655,14 +696,14 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 value={novoPara}
                 onChange={(e) => setNovoPara(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPara())}
-                className="h-9 text-xs"
+                className="h-9 text-xs bg-background"
               />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleAddPara}
-                className="h-9 text-xs gap-1"
+                className="h-9 text-xs gap-1 font-medium"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Adicionar
@@ -711,14 +752,14 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
                 value={novoCc}
                 onChange={(e) => setNovoCc(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCc())}
-                className="h-9 text-xs"
+                className="h-9 text-xs bg-background"
               />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleAddCc}
-                className="h-9 text-xs gap-1"
+                className="h-9 text-xs gap-1 font-medium"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Adicionar
@@ -733,7 +774,7 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
               value={assuntoTemplate}
               onChange={(e) => setAssuntoTemplate(e.target.value)}
               placeholder="Programação Semanal PCP · {unidade} · {periodo}"
-              className="h-9 text-xs"
+              className="h-9 text-xs bg-background"
             />
             <p className="text-[11px] text-muted-foreground">
               Variáveis disponíveis: <code className="bg-muted px-1 py-0.5 rounded text-[10px]">{'{unidade}'}</code> e <code className="bg-muted px-1 py-0.5 rounded text-[10px]">{'{periodo}'}</code>.
@@ -741,6 +782,33 @@ export const PlanejamentoEmailSettings: React.FC<PlanejamentoEmailSettingsProps>
           </div>
         </CardContent>
       </Card>
+
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* 4. BARRA DE AÇÃO FIXA / DESTAQUE: SALVAR TODAS AS CONFIGURAÇÕES  */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <div className="p-4 rounded-xl border bg-card shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-[#E07A1F]/10 text-[#E07A1F]">
+            <Save className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-foreground">Salvar Todas as Configurações de Envio</h4>
+            <p className="text-xs text-muted-foreground">
+              Grava sua assinatura, o servidor SMTP e os destinatários da unidade atual de uma só vez.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleSaveAll}
+          disabled={isSavingAll}
+          className="w-full sm:w-auto h-11 px-8 bg-[#E07A1F] hover:bg-[#C96815] text-white font-bold text-sm shadow-md gap-2 cursor-pointer"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          {isSavingAll ? 'Salvando Configurações...' : 'Salvar Todas as Configurações'}
+        </Button>
+      </div>
     </div>
   );
 };
