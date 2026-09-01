@@ -788,18 +788,6 @@ export function usePlanejamentoSemanal({
     equipesResultado.forEach(eq => {
       Object.entries(eq.dias).forEach(([dataKey, dia]) => {
         if (dia && dia.obra && !dia.isFolga && !dia.isFeriado) {
-          const keyUpper = dia.obra.trim().toUpperCase();
-          const pInfo = projetoInfoMap.get(keyUpper);
-
-          let cleanProj = dia.obra.trim().toUpperCase();
-          if (!cleanProj.startsWith('B-') && !cleanProj.startsWith('P-')) {
-            if (cleanProj.startsWith('B') && cleanProj.length > 3) {
-              cleanProj = `B-${cleanProj.slice(1)}`;
-            } else {
-              cleanProj = `B-${cleanProj}`;
-            }
-          }
-
           const etUpper = (dia.etapa || '').toUpperCase();
           let tipoEtapa = '';
           if (etUpper.includes('DESLIG') && (etUpper.includes('CONCLU') || etUpper.includes('CONCL'))) {
@@ -809,6 +797,48 @@ export function usePlanejamentoSemanal({
           } else {
             // Somente obras que possuem etapa CONCLUSÃO ou DESLIGAMENTO/CONCLUSÃO
             return;
+          }
+
+          // Se tiver múltiplos projetos no mesmo dia (ex: "B-1278381 / B-1279998")
+          // ou se tiver lista estruturada em dia.obras
+          const subObrasList = dia.obras && dia.obras.length > 0
+            ? dia.obras
+            : [{ obra: dia.obra, etapa: dia.etapa, valorPlanejado: dia.valorPlanejado }];
+
+          let cleanProjRaw = dia.obra.trim().toUpperCase();
+
+          // Formata cada código de obra individualmente
+          const projCodes = cleanProjRaw.split('/').map(s => {
+            let code = s.trim().toUpperCase();
+            if (!code.startsWith('B-') && !code.startsWith('P-')) {
+              if (code.startsWith('B') && code.length > 3) {
+                code = `B-${code.slice(1)}`;
+              } else if (code.length > 0) {
+                code = `B-${code}`;
+              }
+            }
+            return code;
+          }).filter(Boolean);
+
+          const cleanProj = projCodes.join(' / ');
+
+          // Calcula a SOMA do valorConsiderado de todas as obras presentes nesta linha
+          let valorObraTotal = 0;
+          projCodes.forEach(code => {
+            const pInfo = projetoInfoMap.get(code)
+              || projetoInfoMap.get(code.replace(/^B-/, ''))
+              || projetoInfoMap.get(code.replace(/^P-/, ''));
+            if (pInfo && pInfo.valorConsiderado > 0) {
+              valorObraTotal += pInfo.valorConsiderado;
+            }
+          });
+
+          // Se nenhuma das obras estava na carteira ou o valor deu 0, usa a soma dos valores planejados
+          if (valorObraTotal === 0) {
+            valorObraTotal = subObrasList.reduce((acc, sub) => acc + (sub.valorPlanejado || 0), 0);
+            if (valorObraTotal === 0) {
+              valorObraTotal = dia.valorPlanejado || 0;
+            }
           }
 
           // Formatar data
@@ -832,7 +862,7 @@ export function usePlanejamentoSemanal({
               equipe: eq.codigo,
               projeto: cleanProj,
               tipo: tipoEtapa,
-              valorObra: pInfo?.valorConsiderado || 0,
+              valorObra: valorObraTotal,
             });
           }
         }
