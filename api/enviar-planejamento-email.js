@@ -1,10 +1,4 @@
-import { exec } from 'child_process';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import nodemailer from 'nodemailer';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -12,38 +6,63 @@ export default async function handler(req, res) {
   }
 
   try {
-    const data = req.body;
-    const scratchDir = path.resolve(__dirname, '..', 'scratch');
-    if (!fs.existsSync(scratchDir)) {
-      fs.mkdirSync(scratchDir, { recursive: true });
+    const data = req.body || {};
+    const smtpCfg = data.smtp || {};
+    const dest = data.destinatarios || {};
+    const assunto = data.assunto || 'Programação Semanal PCP';
+    const htmlContent = data.html || '';
+
+    const host = (smtpCfg.host || 'smtp.sirtec.com.br').trim();
+    const port = parseInt(smtpCfg.port, 10) || 587;
+    const secure = (smtpCfg.secure || 'tls').toLowerCase().trim();
+    const user = (smtpCfg.user || '').trim();
+    const password = (smtpCfg.password || '').trim();
+    const senderName = (smtpCfg.senderName || 'Sirtec PCP · Planejamento Operacional').trim();
+    const fromEmail = (smtpCfg.fromEmail || user).trim() || user;
+
+    const paraList = (dest.para || []).map(e => String(e).trim()).filter(Boolean);
+    const ccList = (dest.cc || []).map(e => String(e).trim()).filter(Boolean);
+    const bccList = (dest.bcc || []).map(e => String(e).trim()).filter(Boolean);
+
+    if (paraList.length === 0) {
+      return res.status(400).json({ success: false, error: "Nenhum destinatário informado no campo 'Para'." });
     }
 
-    const tempPayloadPath = path.join(scratchDir, `email_payload_${Date.now()}.json`);
-    fs.writeFileSync(tempPayloadPath, JSON.stringify(data, null, 2), 'utf-8');
+    if (!host || !user) {
+      return res.status(400).json({ success: false, error: 'Servidor SMTP e Usuário são obrigatórios nas Configurações.' });
+    }
 
-    const pyScript = path.resolve(__dirname, '..', 'send_planejamento_email.py');
-    const cmd = `python "${pyScript}" "${tempPayloadPath}"`;
-
-    exec(cmd, { cwd: path.resolve(__dirname, '..') }, (error, stdout, stderr) => {
-      try { if (fs.existsSync(tempPayloadPath)) fs.unlinkSync(tempPayloadPath); } catch (e) {}
-
-      if (error) {
-        console.error(`[API PCP EMAIL ERRO] ${error.message}`);
-        return res.status(500).json({ success: false, error: error.message });
-      }
-
-      try {
-        const parsedResult = JSON.parse(stdout.trim());
-        if (!parsedResult.success) {
-          return res.status(400).json(parsedResult);
-        }
-        return res.status(200).json(parsedResult);
-      } catch (e) {
-        return res.status(200).json({ success: true, message: stdout.trim() });
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: secure === 'ssl' || port === 465, // true for 465, false for other ports (STARTTLS)
+      auth: password ? { user, pass: password } : undefined,
+      tls: {
+        rejectUnauthorized: false
       }
     });
-  } catch (e) {
-    console.error(`[API PCP EMAIL EXCEPTION] ${e.message}`);
-    return res.status(500).json({ success: false, error: e.message });
+
+    const mailOptions = {
+      from: `"${senderName}" <${fromEmail}>`,
+      to: paraList.join(', '),
+      cc: ccList.length > 0 ? ccList.join(', ') : undefined,
+      bcc: bccList.length > 0 ? bccList.join(', ') : undefined,
+      subject: assunto,
+      html: htmlContent
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    return res.status(200).json({
+      success: true,
+      message: `E-mail de planejamento enviado com sucesso para ${paraList.length} destinatário(s)${ccList.length ? ` e ${ccList.length} em cópia` : ''}.`,
+      messageId: info.messageId
+    });
+  } catch (err) {
+    console.error(`[API PCP EMAIL ERRO]`, err);
+    return res.status(500).json({
+      success: false,
+      error: `Erro ao enviar e-mail: ${err.message || String(err)}`
+    });
   }
 }
