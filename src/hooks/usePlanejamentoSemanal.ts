@@ -61,10 +61,23 @@ export interface ObraConclusaoItem {
   valorObra: number;        // 47724.20
 }
 
+export function getNumPessoasPorTipo(tipo: string): number {
+  if (!tipo) return 3;
+  const t = String(tipo).trim().toUpperCase();
+  if (t === 'H3' || t.includes('H3')) return 3;
+  if (t === 'H5' || t.includes('H5') || t.includes('L5')) return 5;
+  if (t === 'LV' || t.includes('LV')) return 3;
+  if (t.includes('5')) return 5;
+  if (t.includes('3')) return 3;
+  if (t.includes('2')) return 2;
+  return 3;
+}
+
 export interface EquipeSemanalItem {
   codigo: string;
   supervisor: string;
-  tipoEquipe: string; // CONSTRUÇÃO, LINHA VIVA, MANUTENÇÃO, KIT, PODA, LINHA VIVA MANUT.
+  tipoEquipe: string; // H3, H5, LV, CONSTRUÇÃO, etc.
+  numPessoas: number; // 3, 5, etc.
   metaSemanal: number;
   metaDiaria: number;
   temProgramacao: boolean;
@@ -75,6 +88,39 @@ export interface EquipeSemanalItem {
   mediaDeslocamentoH: number;
   pctMeta: number;
   dias: Record<string, DiaProgramacaoItem | null>; // key: YYYY-MM-DD
+}
+
+export interface OcupacaoAlojamentoEquipeInfo {
+  codigo: string;
+  supervisor: string;
+  tipoEquipe: string;
+  numPessoas: number;
+  municipio: string;
+  obra: string;
+}
+
+export interface OcupacaoAlojamentoDia {
+  dataIso: string;
+  dataStr: string;
+  diaSemanaStr: string;
+  totalPessoas: number;
+  totalEquipes: number;
+  equipes: OcupacaoAlojamentoEquipeInfo[];
+  capacidade: number;
+  pctOcupacao: number;
+  isSobrecarregado: boolean;
+}
+
+export interface AlojamentoResumoSemanal {
+  id: string;
+  nome: string;
+  municipio?: string;
+  capacidade: number;
+  picoPessoas: number;
+  picoEquipes: number;
+  picoPct: number;
+  temSobrecarga: boolean;
+  ocupacaoDias: OcupacaoAlojamentoDia[];
 }
 
 export interface SubItemProgramacao {
@@ -262,6 +308,28 @@ export function usePlanejamentoSemanal({
     staleTime: 1000 * 60 * 5,
   });
 
+  // Carregamento dos Alojamentos Globais cadastrados no app
+  const alojamentosQuery = useQuery({
+    queryKey: ['global-alojamentos-cache'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planejamento_cache')
+        .select('principal')
+        .eq('unidade_id', 'GLOBAL_ALOJAMENTOS')
+        .maybeSingle();
+
+      if (error || !data || !data.principal) return [];
+      let parsed: any[] = [];
+      if (typeof data.principal === 'string') {
+        parsed = JSON.parse(data.principal);
+      } else {
+        parsed = data.principal as any;
+      }
+      return parsed || [];
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Sincronização direta com o Google Sheets
   const syncFromSheets = useCallback(async () => {
     if (!unidadeId) {
@@ -314,6 +382,8 @@ export function usePlanejamentoSemanal({
           turnosDentroMetaDesloc: 0,
         },
         alojamentos: [] as Array<{ equipe: string; municipio: string; alojamento: string }>,
+        alojamentosOcupacao: [] as AlojamentoResumoSemanal[],
+        temAlertaSobrecarga: false,
         avisoBdConfig: false,
         ultimaAtualizacao: null as string | null,
       };
@@ -359,8 +429,10 @@ export function usePlanejamentoSemanal({
       console.error('Erro ao ler bd_metas no semanal:', e);
     }
 
-    // 2. Extrair Equipes e Supervisores da BD_Config Coluna D (index 3)
+    // 2. Extrair Equipes, Supervisores e Tipo de Equipe (Coluna G) da BD_Config
     const equipesConfigMap = new Map<string, string>(); // Equipe -> Supervisor
+    const equipesTipoMap = new Map<string, string>(); // Equipe -> Tipo (H3, H5, LV, etc.)
+    const equipesEncarregadoMap = new Map<string, string>(); // Equipe -> Encarregado
     let avisoBdConfig = false;
     try {
       const metasParsed = typeof rawData.bd_metas === 'string' ? JSON.parse(rawData.bd_metas) : rawData.bd_metas;
@@ -370,9 +442,13 @@ export function usePlanejamentoSemanal({
         const row = bdConfigRows[i];
         if (!row || !Array.isArray(row)) continue;
         const eq = String(row[3] || '').trim().toUpperCase(); // Coluna D
-        const sup = String(row[4] || row[2] || '').trim(); // Coluna E (Supervisor), fallback Coluna C (Encarregado)
+        const enc = String(row[4] || '').trim(); // Coluna E (Encarregado)
+        const sup = String(row[5] || row[4] || row[2] || '').trim(); // Coluna F (Supervisor), fallback E/C
+        const tipo = String(row[6] || '').trim().toUpperCase(); // Coluna G (Tipo: H3, H5, LV, etc.)
         if (eq && eq !== 'EQUIPE' && eq.length >= 2) {
           equipesConfigMap.set(eq, sup || 'SUPERVISOR');
+          if (enc) equipesEncarregadoMap.set(eq, enc);
+          if (tipo) equipesTipoMap.set(eq, tipo);
         }
       }
     } catch (e) {
@@ -752,13 +828,17 @@ export function usePlanejamentoSemanal({
       });
 
       const temProgramacao = diasComProgCount > 0;
-      // Tipo para exibição: usa o tipo mais frequente no período
-      const tipoEquipe = diasManutNoPeriodo >= diasObrasNoPeriodo && diasComTipoNoPeriodo > 0
-        ? (tiposDaEquipe ? Array.from(tiposDaEquipe.entries())
-            .filter(([d]) => diasDaSemana.some(dia => format(dia, 'yyyy-MM-dd') === d) && TIPOS_MANUTENCAO.includes(tiposDaEquipe.get(d) || ''))
-            .map(([, t]) => t)[0] || 'MANUTENÇÃO' : 'MANUTENÇÃO')
-        : 'CONSTRUÇÃO';
-      const isManutencao = diasComTipoNoPeriodo > 0 && diasManutNoPeriodo >= diasObrasNoPeriodo;
+      // Tipo para exibição: preferencialmente da BD_Config (Coluna G: H3, H5, LV, etc.)
+      const tipoConfig = equipesTipoMap.get(eq);
+      const tipoEquipe = tipoConfig || (
+        diasManutNoPeriodo >= diasObrasNoPeriodo && diasComTipoNoPeriodo > 0
+          ? (tiposDaEquipe ? Array.from(tiposDaEquipe.entries())
+              .filter(([d]) => diasDaSemana.some(dia => format(dia, 'yyyy-MM-dd') === d) && TIPOS_MANUTENCAO.includes(tiposDaEquipe.get(d) || ''))
+              .map(([, t]) => t)[0] || 'MANUTENÇÃO' : 'MANUTENÇÃO')
+          : 'CONSTRUÇÃO'
+      );
+      const numPessoas = getNumPessoasPorTipo(tipoEquipe);
+      const isManutencao = !tipoConfig && diasComTipoNoPeriodo > 0 && diasManutNoPeriodo >= diasObrasNoPeriodo;
 
       const mediaJornadaMin = diasComProgCount > 0 ? Math.round(equipeJornadaMin / diasComProgCount) : 0;
       const mediaDeslocamentoH = diasComProgCount > 0 ? Math.round((equipeDeslocMin / diasComProgCount / 60) * 10) / 10 : 0;
@@ -782,6 +862,7 @@ export function usePlanejamentoSemanal({
         codigo: eq,
         supervisor: sup,
         tipoEquipe,
+        numPessoas,
         metaSemanal,
         metaDiaria: metaDiariaFallback,
         temProgramacao,
@@ -801,6 +882,178 @@ export function usePlanejamentoSemanal({
     const aderenciaEquipesProgramadas = totalMetaEquipesProgramadas > 0 ? Math.round((totalGeralPlanejado / totalMetaEquipesProgramadas) * 100) : 0;
     const jornadaMediaMin = totalTurnos > 0 ? Math.round(totalJornadaMinutos / totalTurnos) : 0;
     const deslocamentoMedioH = totalTurnos > 0 ? Math.round((totalDeslocamentoMinutos / totalTurnos / 60) * 10) / 10 : 0;
+
+    // 5.5 Consolidação de Ocupação Diária por Alojamento na Semana
+    const todosAlojamentos = (alojamentosQuery.data || []) as Array<{ id: string; nome: string; municipio?: string; capacidade: number; unidadeId?: string; unidadeNome?: string }>;
+    
+    // Obter o objeto da unidade atual para comparar tanto id quanto nome
+    const unidadeObj = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeId || u.nome === unidadeId);
+    const targetUnidadeId = unidadeObj?.id || unidadeId;
+    const targetUnidadeNome = (unidadeObj?.nome || '').trim().toUpperCase();
+
+    // Filtra alojamentos cadastrados que pertencem a esta unidade
+    const alojamentosCadastrados = todosAlojamentos.filter(aloj => {
+      const matchId = !!(targetUnidadeId && aloj.unidadeId === targetUnidadeId);
+      const matchNome = !!(targetUnidadeNome && aloj.unidadeNome && aloj.unidadeNome.trim().toUpperCase() === targetUnidadeNome);
+      return matchId || matchNome;
+    });
+
+    // Mapa para acumular ocupação por Alojamento
+    const ocupacaoPorAlojamentoMap = new Map<string, {
+      id: string;
+      nome: string;
+      municipio: string;
+      capacidade: number;
+      diasMap: Map<string, {
+        totalPessoas: number;
+        equipes: Array<{ codigo: string; supervisor: string; tipoEquipe: string; numPessoas: number; municipio: string; obra: string }>;
+      }>;
+    }>();
+
+    // Inicializa com os alojamentos cadastrados no banco da unidade selecionada
+    alojamentosCadastrados.forEach(aloj => {
+      if (!aloj.nome) return;
+      const key = aloj.nome.trim().toUpperCase();
+      ocupacaoPorAlojamentoMap.set(key, {
+        id: aloj.id || key,
+        nome: aloj.nome.trim(),
+        municipio: aloj.municipio || '',
+        capacidade: Number(aloj.capacidade) > 0 ? Number(aloj.capacidade) : 10,
+        diasMap: new Map(),
+      });
+    });
+
+    // Itera sobre todas as equipes e dias programados desta unidade
+    equipesResultado.forEach(eq => {
+      if (!eq.temProgramacao) return;
+      Object.entries(eq.dias).forEach(([dataIso, d]) => {
+        if (!d || d.isFolga || d.isFeriado || d.isIndisponivel) return;
+
+        const alojNomesDia = new Set<string>();
+        const ida = (d as any).alojamentoIda ? String((d as any).alojamentoIda).trim() : '';
+        const volta = (d as any).alojamentoVolta ? String((d as any).alojamentoVolta).trim() : '';
+        const alojGeral = (d as any).alojamento ? String((d as any).alojamento).trim() : '';
+
+        if (ida && ida !== '-' && !ida.toUpperCase().includes('FOLGA')) alojNomesDia.add(ida);
+        if (volta && volta !== '-' && !volta.toUpperCase().includes('FOLGA')) alojNomesDia.add(volta);
+        if (alojGeral && alojGeral !== '-' && !ida && !volta && !alojGeral.toUpperCase().includes('FOLGA')) {
+          alojNomesDia.add(alojGeral);
+        }
+
+        if (alojNomesDia.size === 0 && d.municipio && !d.municipio.toUpperCase().includes('BASE') && !d.municipio.toUpperCase().includes('FOLGA')) {
+          alojNomesDia.add(`Alojamento ${d.municipio}`);
+        }
+
+        alojNomesDia.forEach(nomeAloj => {
+          if (!nomeAloj || nomeAloj === '-' || nomeAloj.toUpperCase() === 'BASE CENTRAL') return;
+          const key = nomeAloj.trim().toUpperCase();
+
+          let registro = ocupacaoPorAlojamentoMap.get(key);
+          if (!registro) {
+            const matchCadastrado = alojamentosCadastrados.find(
+              c => key.includes(c.nome.toUpperCase()) || c.nome.toUpperCase().includes(key)
+            ) || todosAlojamentos.find(
+              c => key.includes(c.nome.toUpperCase()) || c.nome.toUpperCase().includes(key)
+            );
+            if (matchCadastrado) {
+              const matchKey = matchCadastrado.nome.trim().toUpperCase();
+              registro = ocupacaoPorAlojamentoMap.get(matchKey);
+              if (!registro) {
+                registro = {
+                  id: matchCadastrado.id || matchKey,
+                  nome: matchCadastrado.nome.trim(),
+                  municipio: matchCadastrado.municipio || d.municipio || '',
+                  capacidade: Number(matchCadastrado.capacidade) > 0 ? Number(matchCadastrado.capacidade) : 10,
+                  diasMap: new Map(),
+                };
+                ocupacaoPorAlojamentoMap.set(matchKey, registro);
+              }
+            } else {
+              registro = {
+                id: `dinamico-${key}`,
+                nome: nomeAloj.trim(),
+                municipio: d.municipio || '',
+                capacidade: 10, // capacidade padrão
+                diasMap: new Map(),
+              };
+              ocupacaoPorAlojamentoMap.set(key, registro);
+            }
+          }
+
+          if (!registro.diasMap.has(dataIso)) {
+            registro.diasMap.set(dataIso, { totalPessoas: 0, equipes: [] });
+          }
+
+          const diaEntry = registro.diasMap.get(dataIso)!;
+          if (!diaEntry.equipes.some(e => e.codigo === eq.codigo)) {
+            diaEntry.equipes.push({
+              codigo: eq.codigo,
+              supervisor: eq.supervisor,
+              tipoEquipe: eq.tipoEquipe,
+              numPessoas: eq.numPessoas,
+              municipio: d.municipio,
+              obra: d.obra,
+            });
+            diaEntry.totalPessoas += eq.numPessoas;
+          }
+        });
+      });
+    });
+
+    // Monta a lista AlojamentoResumoSemanal[]
+    const alojamentosOcupacao: AlojamentoResumoSemanal[] = [];
+
+    ocupacaoPorAlojamentoMap.forEach((registro) => {
+      const ocupacaoDias: OcupacaoAlojamentoDia[] = diasDaSemana.map(diaData => {
+        const dataIso = format(diaData, 'yyyy-MM-dd');
+        const diaEntry = registro.diasMap.get(dataIso) || { totalPessoas: 0, equipes: [] };
+        const totalPessoas = diaEntry.totalPessoas;
+        const totalEquipes = diaEntry.equipes.length;
+        const cap = registro.capacidade || 1;
+        const pctOcupacao = Math.round((totalPessoas / cap) * 100);
+        const isSobrecarregado = totalPessoas > cap;
+
+        return {
+          dataIso,
+          dataStr: format(diaData, 'dd/MM'),
+          diaSemanaStr: format(diaData, 'EEE', { locale: ptBR }),
+          totalPessoas,
+          totalEquipes,
+          equipes: diaEntry.equipes,
+          capacidade: registro.capacidade,
+          pctOcupacao,
+          isSobrecarregado,
+        };
+      });
+
+      const picoPessoas = Math.max(0, ...ocupacaoDias.map(d => d.totalPessoas));
+      const picoEquipes = Math.max(0, ...ocupacaoDias.map(d => d.totalEquipes));
+      const picoPct = registro.capacidade > 0 ? Math.round((picoPessoas / registro.capacidade) * 100) : 0;
+      const temSobrecarga = ocupacaoDias.some(d => d.isSobrecarregado);
+
+      // Inclui apenas alojamentos que possuem ocupação prevista no período (picoPessoas > 0)
+      if (picoPessoas > 0) {
+        alojamentosOcupacao.push({
+          id: registro.id,
+          nome: registro.nome,
+          municipio: registro.municipio,
+          capacidade: registro.capacidade,
+          picoPessoas,
+          picoEquipes,
+          picoPct,
+          temSobrecarga,
+          ocupacaoDias,
+        });
+      }
+    });
+
+    alojamentosOcupacao.sort((a, b) => {
+      if (a.temSobrecarga && !b.temSobrecarga) return -1;
+      if (!a.temSobrecarga && b.temSobrecarga) return 1;
+      return b.picoPessoas - a.picoPessoas;
+    });
+
+    const temAlertaSobrecarga = alojamentosOcupacao.some(a => a.temSobrecarga);
 
     // Agrupa alojamentos por Equipe (uma linha por equipe)
     const alojamentosPorEquipe: Array<{ equipe: string; supervisor: string; municipio: string; alojamento: string }> = [];
@@ -850,19 +1103,15 @@ export function usePlanejamentoSemanal({
           } else if (etUpper.includes('CONCLU') || etUpper.includes('CONCL')) {
             tipoEtapa = 'CONCLUSÃO';
           } else {
-            // Somente obras que possuem etapa CONCLUSÃO ou DESLIGAMENTO/CONCLUSÃO
             return;
           }
 
-          // Se tiver múltiplos projetos no mesmo dia (ex: "B-1278381 / B-1279998")
-          // ou se tiver lista estruturada em dia.obras
           const subObrasList = dia.obras && dia.obras.length > 0
             ? dia.obras
             : [{ obra: dia.obra, etapa: dia.etapa, valorPlanejado: dia.valorPlanejado }];
 
           let cleanProjRaw = dia.obra.trim().toUpperCase();
 
-          // Formata cada código de obra individualmente
           const projCodes = cleanProjRaw.split('/').map(s => {
             let code = s.trim().toUpperCase();
             if (!code.startsWith('B-') && !code.startsWith('P-')) {
@@ -877,7 +1126,6 @@ export function usePlanejamentoSemanal({
 
           const cleanProj = projCodes.join(' / ');
 
-          // Calcula a SOMA do valorConsiderado de todas as obras presentes nesta linha
           let valorObraTotal = 0;
           projCodes.forEach(code => {
             const pInfo = projetoInfoMap.get(code)
@@ -888,7 +1136,6 @@ export function usePlanejamentoSemanal({
             }
           });
 
-          // Se nenhuma das obras estava na carteira ou o valor deu 0, usa a soma dos valores planejados
           if (valorObraTotal === 0) {
             valorObraTotal = subObrasList.reduce((acc, sub) => acc + (sub.valorPlanejado || 0), 0);
             if (valorObraTotal === 0) {
@@ -896,7 +1143,6 @@ export function usePlanejamentoSemanal({
             }
           }
 
-          // Formatar data
           let dataFormatada = dataKey;
           let dateObj = new Date();
           try {
@@ -924,7 +1170,6 @@ export function usePlanejamentoSemanal({
       });
     });
 
-    // Ordenar por data crescente, depois supervisor, depois projeto
     obrasConclusoes.sort((a, b) => {
       const timeDiff = a.dataObj.getTime() - b.dataObj.getTime();
       if (timeDiff !== 0) return timeDiff;
@@ -955,11 +1200,13 @@ export function usePlanejamentoSemanal({
         turnosDentroMetaDesloc,
       },
       alojamentos: alojamentosPorEquipe,
+      alojamentosOcupacao,
+      temAlertaSobrecarga,
       obrasConclusoes,
       avisoBdConfig,
       ultimaAtualizacao: rawData.updated_at || null,
     };
-  }, [cacheQuery.data, diasDaSemana]);
+  }, [cacheQuery.data, alojamentosQuery.data, diasDaSemana]);
 
   return {
     inicioSemana,
@@ -974,6 +1221,8 @@ export function usePlanejamentoSemanal({
     equipes: processamento.equipes,
     metricas: processamento.metricas,
     alojamentos: processamento.alojamentos,
+    alojamentosOcupacao: processamento.alojamentosOcupacao,
+    temAlertaSobrecarga: processamento.temAlertaSobrecarga,
     obrasConclusoes: processamento.obrasConclusoes,
     avisoBdConfig: processamento.avisoBdConfig,
     ultimaAtualizacao: processamento.ultimaAtualizacao,

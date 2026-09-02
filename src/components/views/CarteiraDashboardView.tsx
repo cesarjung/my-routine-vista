@@ -3,7 +3,7 @@ import { useCarteiraDashboardData } from '@/hooks/useCarteiraDashboardData';
 import { CarteiraMapView } from './CarteiraMapView';
 import { format, differenceInMonths, parse, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Filter, Calendar, Maximize2, Minimize2, ZoomIn, ZoomOut, Download } from 'lucide-react';
+import { RefreshCw, Filter, Calendar, Maximize2, Minimize2, ZoomIn, ZoomOut, Download, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import {
@@ -62,6 +62,28 @@ const Gauge = ({ value, max, colorClass, size = 60 }: { value: number, max: numb
   );
 };
 
+export const FAIXAS_POSTES = [
+  { id: '1-5', label: '1 a 5', min: 1, max: 5 },
+  { id: '6-10', label: '6 a 10', min: 6, max: 10 },
+  { id: '11-20', label: '11 a 20', min: 11, max: 20 },
+  { id: '21-50', label: '21 a 50', min: 21, max: 50 },
+  { id: '51-100', label: '51 a 100', min: 51, max: 100 },
+  { id: '100+', label: 'Acima de 100', min: 101, max: Infinity }
+];
+
+export const PALETA_PRIORIDADES = [
+  { badge: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30', gauge: 'text-blue-500' },
+  { badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30', gauge: 'text-purple-500' },
+  { badge: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30', gauge: 'text-indigo-500' },
+  { badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30', gauge: 'text-amber-500' },
+  { badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30', gauge: 'text-emerald-500' },
+  { badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30', gauge: 'text-rose-500' },
+  { badge: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/30', gauge: 'text-teal-500' },
+  { badge: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30', gauge: 'text-orange-500' },
+  { badge: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30', gauge: 'text-cyan-500' },
+  { badge: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/30', gauge: 'text-pink-500' }
+];
+
 export const CarteiraDashboardView = () => {
   const [selectedUnidadesIds, setSelectedUnidadesIds] = useSessionState<string[]>('filter_unidades_carteiradashboard', []);
   const [zoomLevel, setZoomLevel] = useSessionState<number>('filter_zoom_carteiradashboard', 1);
@@ -78,13 +100,15 @@ export const CarteiraDashboardView = () => {
   const [selectedMunicipios, setSelectedMunicipios] = useSessionState<string[]>('filter_municipios_carteiradashboard', []);
   const [selectedPrioridades, setSelectedPrioridades] = useSessionState<string[]>('filter_prioridades_carteiradashboard', []);
   const [selectedVistorias, setSelectedVistorias] = useSessionState<string[]>('filter_vistorias_carteiradashboard', []); // 'SIM', 'NÃO', 'VENCIDAS'
-  const [selectedPostes, setSelectedPostes] = useSessionState<number[]>('filter_postes_carteiradashboard', []);
+  const [selectedFaixasPostes, setSelectedFaixasPostes] = useSessionState<string[]>('filter_faixas_postes_carteiradashboard', []);
   const [selectedAVNPs, setSelectedAVNPs] = useSessionState<number[]>('filter_avnps_carteiradashboard', []);
   const [selectedRecursoDisp, setSelectedRecursoDisp] = useSessionState<string[]>('filter_recurso_disp_carteiradashboard', []);
   const [filterStart, setFilterStart] = useSessionState<string>('filter_start_carteiradashboard', '');
   const [filterEnd, setFilterEnd] = useSessionState<string>('filter_end_carteiradashboard', '');
   const [selectedSituacao, setSelectedSituacao] = useSessionState<string[]>('filter_situacao_carteiradashboard', ['APTA']);
   const [ocultarConcluidasPassado, setOcultarConcluidasPassado] = useSessionState<boolean>('filter_ocultar_concluidas_passado', true);
+  const [horasServicoDia, setHorasServicoDia] = useSessionState<number>('filter_horas_servico_dia_carteira', 5);
+  const [diasUteisMes, setDiasUteisMes] = useSessionState<number>('filter_dias_uteis_mes_carteira', 22);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   // Filtros computados para manter compatibilidade
@@ -129,7 +153,8 @@ export const CarteiraDashboardView = () => {
       if (row.statusExecucao) status.add(row.statusExecucao);
       if (row.projeto) projetos.add(row.projeto);
       if (row.municipio) municipios.add(row.municipio);
-      if (row.prioridade) prioridades.add(row.prioridade);
+      if (row.prioridade && row.prioridade.trim()) prioridades.add(row.prioridade.trim());
+      else prioridades.add('(Vazio)');
       if (row.postesDisponiveis !== undefined && row.postesDisponiveis !== null) postes.add(row.postesDisponiveis);
       avnps.add(row.avnpMaisRecente);
       Object.values(row.avnpMap).forEach(v => avnps.add(v));
@@ -150,7 +175,11 @@ export const CarteiraDashboardView = () => {
       status: Array.from(status).sort(),
       projetos: Array.from(projetos).sort(),
       municipios: Array.from(municipios).sort(),
-      prioridades: Array.from(prioridades).sort(),
+      prioridades: Array.from(prioridades).sort((a, b) => {
+        if (a === '(Vazio)') return 1;
+        if (b === '(Vazio)') return -1;
+        return a.localeCompare(b);
+      }),
       postes: Array.from(postes).sort((a, b) => a - b),
       avnps: Array.from(avnps).sort((a, b) => b - a),
     };
@@ -177,10 +206,22 @@ export const CarteiraDashboardView = () => {
       if (selectedMunicipios.length > 0 && !selectedMunicipios.includes(row.municipio)) return false;
 
       // Filtro Prioridade
-      if (selectedPrioridades.length > 0 && !selectedPrioridades.includes(row.prioridade)) return false;
+      if (selectedPrioridades.length > 0) {
+        const rowPrio = (row.prioridade || '').trim();
+        const prioKey = rowPrio || '(Vazio)';
+        if (!selectedPrioridades.includes(prioKey) && !selectedPrioridades.includes(rowPrio)) return false;
+      }
 
-      // Filtro Postes
-      if (selectedPostes.length > 0 && !selectedPostes.includes(row.postesDisponiveis)) return false;
+      // Filtro Classificação de Postes
+      if (selectedFaixasPostes.length > 0) {
+        const p = row.postesDisponiveis ?? 0;
+        const matchFaixa = selectedFaixasPostes.some(fId => {
+          const f = FAIXAS_POSTES.find(x => x.id === fId);
+          if (!f) return false;
+          return p >= f.min && p <= f.max;
+        });
+        if (!matchFaixa) return false;
+      }
 
       // Filtro Vistoria
       if (selectedVistorias.length > 0) {
@@ -277,7 +318,7 @@ export const CarteiraDashboardView = () => {
     }
     
     return baseFiltered;
-  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedPostes, selectedVistorias, selectedAVNPs, selectedRecursoDisp, filterStart, filterEnd, ocultarConcluidasPassado]);
+  }, [data.carteira, selectedMeses, selectedStatus, selectedProjetos, selectedMunicipios, selectedPrioridades, selectedFaixasPostes, selectedVistorias, selectedAVNPs, selectedRecursoDisp, filterStart, filterEnd, ocultarConcluidasPassado]);
 
   // Indicadores
   const indicators = useMemo(() => {
@@ -300,9 +341,49 @@ export const CarteiraDashboardView = () => {
 
     const municipioMap: Record<string, { count: number, postes: number, valor: number }> = {};
 
+    let sumHorasPrevistas = 0;
+
+    interface CardStats {
+      count: number;
+      countComOrcamento: number;
+      countSemOrcamento: number;
+      sumPostes: number;
+      sumPostesComOrcamento: number;
+      sumPostesSemOrcamento: number;
+      sumFaturamento: number;
+      sumFaturamentoComOrcamento: number;
+      sumFaturamentoSemOrcamento: number;
+      sumHoras: number;
+    }
+
+    const initStat = (): CardStats => ({
+      count: 0,
+      countComOrcamento: 0,
+      countSemOrcamento: 0,
+      sumPostes: 0,
+      sumPostesComOrcamento: 0,
+      sumPostesSemOrcamento: 0,
+      sumFaturamento: 0,
+      sumFaturamentoComOrcamento: 0,
+      sumFaturamentoSemOrcamento: 0,
+      sumHoras: 0
+    });
+
+    const faixasPostesStats: Record<string, CardStats> = {
+      '1-5': initStat(),
+      '6-10': initStat(),
+      '11-20': initStat(),
+      '21-50': initStat(),
+      '51-100': initStat(),
+      '100+': initStat()
+    };
+
+    const prioridadesStats: Record<string, CardStats> = {};
+
     filteredData.forEach(row => {
       const isInapta = row.obrasInaptasVal !== '0' && row.obrasInaptasVal !== '';
       const considerarApta = considerarInaptas || !isInapta;
+      const semOrcamento = row.obrasSemOrcamentoVal === '0' || (row.orcamentoValidado === 0 && row.capacidadeFaturamento === 0);
 
       if (isInapta) {
         countInaptas++;
@@ -313,6 +394,50 @@ export const CarteiraDashboardView = () => {
         totalObrasAptas++;
         sumPostes += row.postesDisponiveis;
         sumFaturamento += row.capacidadeFaturamento;
+        const hPrev = row.tempoPrevistoHoras || 0;
+        sumHorasPrevistas += hPrev;
+
+        const p = row.postesDisponiveis ?? 0;
+        for (const f of FAIXAS_POSTES) {
+          if (p >= f.min && p <= f.max) {
+            const st = faixasPostesStats[f.id];
+            st.count++;
+            st.sumPostes += p;
+            st.sumFaturamento += row.capacidadeFaturamento || 0;
+            st.sumHoras += hPrev;
+            if (semOrcamento) {
+              st.countSemOrcamento++;
+              st.sumPostesSemOrcamento += p;
+              st.sumFaturamentoSemOrcamento += row.capacidadeFaturamento || 0;
+            } else {
+              st.countComOrcamento++;
+              st.sumPostesComOrcamento += p;
+              st.sumFaturamentoComOrcamento += row.capacidadeFaturamento || 0;
+            }
+            break;
+          }
+        }
+
+        const prio = (row.prioridade || '').trim();
+        if (prio && prio !== '(Vazio)') {
+          if (!prioridadesStats[prio]) {
+            prioridadesStats[prio] = initStat();
+          }
+          const pst = prioridadesStats[prio];
+          pst.count++;
+          pst.sumPostes += (row.postesDisponiveis || 0);
+          pst.sumFaturamento += (row.capacidadeFaturamento || 0);
+          pst.sumHoras += hPrev;
+          if (semOrcamento) {
+            pst.countSemOrcamento++;
+            pst.sumPostesSemOrcamento += (row.postesDisponiveis || 0);
+            pst.sumFaturamentoSemOrcamento += (row.capacidadeFaturamento || 0);
+          } else {
+            pst.countComOrcamento++;
+            pst.sumPostesComOrcamento += (row.postesDisponiveis || 0);
+            pst.sumFaturamentoComOrcamento += (row.capacidadeFaturamento || 0);
+          }
+        }
 
         if (row.dataVistoria) countVistoriadas++;
         if (row.obrasSemOrcamentoVal === '0') countSemOrcamento++;
@@ -419,9 +544,23 @@ export const CarteiraDashboardView = () => {
       sumPostesInaptas,
       sumFaturamentoInaptas,
       geralTotalObras,
-      geralSumPostes
+      geralSumPostes,
+      faixasPostesStats,
+      prioridadesStats,
+      sumHorasPrevistas
     };
   }, [filteredData, data.baseCurva, data.metasFaturamento, selectedMeses, data.carteira, considerarInaptas]);
+
+  const prioridadesParaExibir = useMemo(() => {
+    if (selectedPrioridades.length > 0) {
+      return selectedPrioridades.filter(p => p && p !== '(Vazio)');
+    }
+    return Object.keys(indicators.prioridadesStats).sort((a, b) => {
+      const diff = (indicators.prioridadesStats[b]?.count || 0) - (indicators.prioridadesStats[a]?.count || 0);
+      if (diff !== 0) return diff;
+      return a.localeCompare(b);
+    });
+  }, [selectedPrioridades, indicators.prioridadesStats]);
 
   if (isLoading) {
     return (
@@ -499,7 +638,7 @@ export const CarteiraDashboardView = () => {
             <FilterSelect label="Projeto" options={options.projetos.map(m => ({ value: m, label: m }))} selectedValues={selectedProjetos} onChange={setSelectedProjetos} searchable={true} />
             <FilterSelect label="Prioridade" options={options.prioridades.map(m => ({ value: m, label: m }))} selectedValues={selectedPrioridades} onChange={setSelectedPrioridades} />
             <FilterSelect label="Mês" options={options.meses.map(m => ({ value: m, label: m }))} selectedValues={selectedMeses} onChange={setSelectedMeses} />
-            <FilterSelect label="Postes" options={options.postes.map(p => ({ value: p, label: String(p) }))} selectedValues={selectedPostes} onChange={setSelectedPostes} />
+            <FilterSelect label="Postes" options={FAIXAS_POSTES.map(f => ({ value: f.id, label: f.label }))} selectedValues={selectedFaixasPostes} onChange={setSelectedFaixasPostes} />
             <FilterSelect label="Vistoria" options={[
               { value: "SIM", label: "SIM (Válidas)" },
               { value: "VENCIDAS", label: "VENCIDAS (+6 meses)" },
@@ -522,6 +661,46 @@ export const CarteiraDashboardView = () => {
               selectedValues={selectedSituacao} 
               onChange={setSelectedSituacao} 
             />
+
+            {/* Configuração de Horas em Serviço por Dia */}
+            <div className="flex flex-col justify-center min-w-[85px]">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1" title="Horas de Serviço por Dia por Equipe">
+                Hrs/Dia Eq.
+              </span>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  step={0.5}
+                  value={horasServicoDia}
+                  onChange={(e) => setHorasServicoDia(Math.max(0.5, Number(e.target.value) || 5))}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  title="Horas em serviço por dia (ex: 5h)"
+                />
+                <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-bold pointer-events-none">h</span>
+              </div>
+            </div>
+
+            {/* Configuração de Dias Úteis no Mês */}
+            <div className="flex flex-col justify-center min-w-[85px]">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1" title="Dias Úteis no Mês para Dimensionamento de Equipes">
+                Dias Úteis
+              </span>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  step={1}
+                  value={diasUteisMes}
+                  onChange={(e) => setDiasUteisMes(Math.max(1, Number(e.target.value) || 22))}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  title="Dias úteis no mês (ex: 22 dias)"
+                />
+                <span className="absolute right-2 top-2 text-[10px] text-muted-foreground font-bold pointer-events-none">d</span>
+              </div>
+            </div>
 
             <Toggle
               pressed={ocultarConcluidasPassado}
@@ -567,9 +746,13 @@ export const CarteiraDashboardView = () => {
         </div>
 
         {/* Filtros Ativos Badge row (Opcional, mas útil) */}
-        {(selectedMeses.length > 0 || selectedVistorias.length > 0 || selectedStatus.length > 0 || selectedAVNPs.length > 0 || selectedPrioridades.length > 0 || selectedMunicipios.length > 0) && (
+        {(selectedMeses.length > 0 || selectedFaixasPostes.length > 0 || selectedVistorias.length > 0 || selectedStatus.length > 0 || selectedAVNPs.length > 0 || selectedPrioridades.length > 0 || selectedMunicipios.length > 0) && (
           <div className="flex flex-wrap gap-2 pt-2">
             {selectedMeses.map(m => <FilterBadge key={m} label={`Mês: ${m}`} onRemove={() => setSelectedMeses(selectedMeses.filter(x => x !== m))} />)}
+            {selectedFaixasPostes.map(fId => {
+              const f = FAIXAS_POSTES.find(x => x.id === fId);
+              return <FilterBadge key={fId} label={`Postes: ${f?.label || fId}`} onRemove={() => setSelectedFaixasPostes(selectedFaixasPostes.filter(x => x !== fId))} />;
+            })}
             {selectedVistorias.map(m => <FilterBadge key={m} label={`Vistoria: ${m}`} onRemove={() => setSelectedVistorias(selectedVistorias.filter(x => x !== m))} />)}
             {selectedStatus.map(m => <FilterBadge key={m} label={`Status: ${m}`} onRemove={() => setSelectedStatus(selectedStatus.filter(x => x !== m))} />)}
             {selectedAVNPs.map(m => <FilterBadge key={m} label={`AVNP: ${(m * 100).toFixed(0)}%`} onRemove={() => setSelectedAVNPs(selectedAVNPs.filter(x => x !== m))} />)}
@@ -852,6 +1035,343 @@ export const CarteiraDashboardView = () => {
           </div>
 
         </div>
+
+        {/* CARDS DE CLASSIFICAÇÃO DE POSTES (6 Cards em 1 linha) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+          {FAIXAS_POSTES.map((faixa, idx) => {
+            const stats = indicators.faixasPostesStats[faixa.id] || {
+              count: 0,
+              countComOrcamento: 0,
+              countSemOrcamento: 0,
+              sumPostes: 0,
+              sumPostesComOrcamento: 0,
+              sumPostesSemOrcamento: 0,
+              sumFaturamento: 0,
+              sumFaturamentoComOrcamento: 0,
+              sumFaturamentoSemOrcamento: 0,
+              sumHoras: 0
+            };
+            const isFilterActive = selectedFaixasPostes.includes(faixa.id);
+
+            const pctObras = indicators.totalObras > 0 ? (stats.count / indicators.totalObras) * 100 : 0;
+            const pctPostes = indicators.sumPostes > 0 ? (stats.sumPostes / indicators.sumPostes) * 100 : 0;
+            const pctMetaFat = indicators.sumMetaFaturamento > 0
+              ? (stats.sumFaturamento / indicators.sumMetaFaturamento) * 100
+              : (indicators.sumFaturamento > 0 ? (stats.sumFaturamento / indicators.sumFaturamento) * 100 : 0);
+
+            const diasEquipe = (horasServicoDia > 0 ? stats.sumHoras / horasServicoDia : stats.sumHoras / 5);
+            const equipesNecessarias = (diasUteisMes > 0 ? diasEquipe / diasUteisMes : diasEquipe / 22);
+            const pctHoras = indicators.sumHorasPrevistas > 0 ? (stats.sumHoras / indicators.sumHorasPrevistas) * 100 : 0;
+            // Cálculo de horas e faturamento usa somente obras com orçamento para não distorcer a produtividade
+            const valorPorEquipe = equipesNecessarias > 0 ? stats.sumFaturamentoComOrcamento / equipesNecessarias : 0;
+
+            const colors = [
+              { badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30', gauge: 'text-emerald-500' },
+              { badge: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/30', gauge: 'text-teal-500' },
+              { badge: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30', gauge: 'text-cyan-500' },
+              { badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30', gauge: 'text-amber-500' },
+              { badge: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30', gauge: 'text-orange-500' },
+              { badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30', gauge: 'text-rose-500' }
+            ][idx];
+
+            return (
+              <div
+                key={faixa.id}
+                onClick={() => setActiveMetricModal({
+                  title: `Obras com Postes: ${faixa.label}`,
+                  filterFn: (r) => {
+                    const p = r.postesDisponiveis ?? 0;
+                    return (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && p >= faixa.min && p <= faixa.max;
+                  }
+                })}
+                className={cn(
+                  "bg-card border border-border p-3.5 rounded-xl shadow-sm cursor-pointer hover:shadow-md hover:border-primary/50 transition-all flex flex-col justify-between group relative overflow-hidden",
+                  isFilterActive && "ring-2 ring-primary border-transparent bg-primary/5"
+                )}
+                title={`Clique para listar obras com ${faixa.label} postes`}
+              >
+                {/* Cabeçalho da Faixa */}
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+                  <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-md border tracking-wide", colors.badge)}>
+                    {faixa.label}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Postes</span>
+                </div>
+
+                {/* Bloco 1: Total de Obras com Velocímetro */}
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] text-muted-foreground uppercase font-semibold">Obras</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">{stats.count}</span>
+                      <span className="text-[10px] text-muted-foreground">de {indicators.totalObras}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-muted-foreground">({pctObras.toFixed(1)}%)</span>
+                    {stats.countSemOrcamento > 0 && (
+                      <span className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold leading-tight mt-0.5" title={`${stats.countSemOrcamento} obra(s) sem orçamento`}>
+                        {stats.countComOrcamento} c/ orç. • {stats.countSemOrcamento} s/ orç.
+                      </span>
+                    )}
+                  </div>
+                  <div className="shrink-0">
+                    <Gauge value={stats.count} max={indicators.totalObras || 1} colorClass={colors.gauge} size={50} />
+                  </div>
+                </div>
+
+                {/* Bloco 2: Total de Postes e representatividade */}
+                <div className="bg-muted/30 rounded-lg p-2 mb-2 flex flex-col gap-1 border border-border/40">
+                  <div className="flex justify-between items-baseline text-[11px]">
+                    <span className="text-muted-foreground font-medium">Postes:</span>
+                    <span className="font-bold text-foreground">
+                      {stats.sumPostes.toLocaleString('pt-BR')} <span className="text-[9px] text-muted-foreground font-normal">/ {indicators.sumPostes.toLocaleString('pt-BR')}</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-muted-foreground">Repres. Postes:</span>
+                    <span className="font-bold text-foreground">{pctPostes.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-muted/60 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className={cn("h-full rounded-full transition-all duration-500", colors.gauge.replace('text-', 'bg-'))}
+                      style={{ width: `${Math.min(pctPostes, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Bloco 3: Valor Considerado / Faturamento e Meta */}
+                <div className="pt-1.5 border-t border-border/60 flex flex-col gap-0.5 mb-2">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground">Valor Total:</span>
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.sumFaturamento)}
+                    </span>
+                  </div>
+                  {stats.countSemOrcamento > 0 && (
+                    <div className="flex justify-between items-center text-[9px] text-amber-600 dark:text-amber-400" title="Valor correspondente a obras sem orçamento">
+                      <span>s/ Orçamento ({stats.countSemOrcamento}):</span>
+                      <span className="font-semibold">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.sumFaturamentoSemOrcamento)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-[9px] text-muted-foreground">
+                    <span>% Meta Fat.:</span>
+                    <span className="font-bold text-foreground">
+                      {pctMetaFat.toFixed(1)}% {indicators.sumMetaFaturamento > 0 ? 'da Meta' : 'do Total'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bloco 4: Horas Previstas & Dimensionamento de Equipes */}
+                <div className="pt-2 border-t border-border/60 bg-muted/20 -mx-3.5 -mb-3.5 p-2.5 rounded-b-xl flex flex-col gap-1.5">
+                  <div className="flex justify-between items-baseline text-[11px]">
+                    <span className="text-muted-foreground font-semibold" title={`Tempo baseado em ${stats.countComOrcamento} obra(s) com orçamento`}>
+                      Tempo Previsto:
+                    </span>
+                    <span className="font-black text-foreground">
+                      {stats.sumHoras.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} <span className="text-[9px] text-muted-foreground font-normal">h ({pctHoras.toFixed(1)}%)</span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/40">
+                    <div className="bg-background/80 rounded p-1 text-center border border-border/40">
+                      <span className="text-[9px] text-muted-foreground block font-medium">Dias/Eq. ({horasServicoDia}h)</span>
+                      <span className="text-[11px] font-bold text-foreground">
+                        {diasEquipe.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+                      </span>
+                    </div>
+                    <div className="bg-primary/10 rounded p-1 text-center border border-primary/20">
+                      <span className="text-[9px] text-primary block font-bold">Eq. Nec. ({diasUteisMes}d)</span>
+                      <span className="text-[11px] font-black text-primary">
+                        {equipesNecessarias.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Valor por Equipe Necessária */}
+                  <div className="pt-1 border-t border-border/40 flex justify-between items-baseline">
+                    <span className="text-[9px] text-muted-foreground font-bold uppercase" title="Faturamento das obras c/ orçamento dividido pelas Equipes Necessárias">
+                      Produção / Eq.:
+                    </span>
+                    <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(valorPorEquipe)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* CARDS DE PRIORIDADES */}
+        {prioridadesParaExibir.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-primary" /> Prioridades da Carteira ({prioridadesParaExibir.length})
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              {prioridadesParaExibir.map((prio, idx) => {
+                const stats = indicators.prioridadesStats[prio] || {
+                  count: 0,
+                  countComOrcamento: 0,
+                  countSemOrcamento: 0,
+                  sumPostes: 0,
+                  sumPostesComOrcamento: 0,
+                  sumPostesSemOrcamento: 0,
+                  sumFaturamento: 0,
+                  sumFaturamentoComOrcamento: 0,
+                  sumFaturamentoSemOrcamento: 0,
+                  sumHoras: 0
+                };
+                const isFilterActive = selectedPrioridades.includes(prio);
+
+                const pctObras = indicators.totalObras > 0 ? (stats.count / indicators.totalObras) * 100 : 0;
+                const pctPostes = indicators.sumPostes > 0 ? (stats.sumPostes / indicators.sumPostes) * 100 : 0;
+                const pctMetaFat = indicators.sumMetaFaturamento > 0
+                  ? (stats.sumFaturamento / indicators.sumMetaFaturamento) * 100
+                  : (indicators.sumFaturamento > 0 ? (stats.sumFaturamento / indicators.sumFaturamento) * 100 : 0);
+
+                const diasEquipe = (horasServicoDia > 0 ? stats.sumHoras / horasServicoDia : stats.sumHoras / 5);
+                const equipesNecessarias = (diasUteisMes > 0 ? diasEquipe / diasUteisMes : diasEquipe / 22);
+                const pctHoras = indicators.sumHorasPrevistas > 0 ? (stats.sumHoras / indicators.sumHorasPrevistas) * 100 : 0;
+                // Cálculo de horas e faturamento usa somente obras com orçamento para não distorcer a produtividade
+                const valorPorEquipe = equipesNecessarias > 0 ? stats.sumFaturamentoComOrcamento / equipesNecessarias : 0;
+
+                const colors = PALETA_PRIORIDADES[idx % PALETA_PRIORIDADES.length];
+
+                return (
+                  <div
+                    key={prio}
+                    onClick={() => setActiveMetricModal({
+                      title: `Obras - Prioridade: ${prio}`,
+                      filterFn: (r) => {
+                        const rowPrio = (r.prioridade || '').trim();
+                        return (considerarInaptas || r.obrasInaptasVal === '0' || r.obrasInaptasVal === '') && rowPrio === prio;
+                      }
+                    })}
+                    className={cn(
+                      "bg-card border border-border p-3.5 rounded-xl shadow-sm cursor-pointer hover:shadow-md hover:border-primary/50 transition-all flex flex-col justify-between group relative overflow-hidden",
+                      isFilterActive && "ring-2 ring-primary border-transparent bg-primary/5"
+                    )}
+                    title={`Clique para listar obras com prioridade: ${prio}`}
+                  >
+                    {/* Cabeçalho da Prioridade */}
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+                      <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-md border tracking-wide truncate max-w-[140px]", colors.badge)} title={prio}>
+                        {prio}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase shrink-0">Prioridade</span>
+                    </div>
+
+                    {/* Bloco 1: Total de Obras com Velocímetro */}
+                    <div className="flex items-center justify-between gap-1 mb-2">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] text-muted-foreground uppercase font-semibold">Obras</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">{stats.count}</span>
+                          <span className="text-[10px] text-muted-foreground">de {indicators.totalObras}</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-muted-foreground">({pctObras.toFixed(1)}%)</span>
+                        {stats.countSemOrcamento > 0 && (
+                          <span className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold leading-tight mt-0.5" title={`${stats.countSemOrcamento} obra(s) sem orçamento`}>
+                            {stats.countComOrcamento} c/ orç. • {stats.countSemOrcamento} s/ orç.
+                          </span>
+                        )}
+                      </div>
+                      <div className="shrink-0">
+                        <Gauge value={stats.count} max={indicators.totalObras || 1} colorClass={colors.gauge} size={50} />
+                      </div>
+                    </div>
+
+                    {/* Bloco 2: Total de Postes e representatividade */}
+                    <div className="bg-muted/30 rounded-lg p-2 mb-2 flex flex-col gap-1 border border-border/40">
+                      <div className="flex justify-between items-baseline text-[11px]">
+                        <span className="text-muted-foreground font-medium">Postes:</span>
+                        <span className="font-bold text-foreground">
+                          {stats.sumPostes.toLocaleString('pt-BR')} <span className="text-[9px] text-muted-foreground font-normal">/ {indicators.sumPostes.toLocaleString('pt-BR')}</span>
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-muted-foreground">Repres. Postes:</span>
+                        <span className="font-bold text-foreground">{pctPostes.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-muted/60 rounded-full h-1.5 overflow-hidden">
+                        <div 
+                          className={cn("h-full rounded-full transition-all duration-500", colors.gauge.replace('text-', 'bg-'))}
+                          style={{ width: `${Math.min(pctPostes, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bloco 3: Valor Considerado / Faturamento e Meta */}
+                    <div className="pt-1.5 border-t border-border/60 flex flex-col gap-0.5 mb-2">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">Valor Total:</span>
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.sumFaturamento)}
+                        </span>
+                      </div>
+                      {stats.countSemOrcamento > 0 && (
+                        <div className="flex justify-between items-center text-[9px] text-amber-600 dark:text-amber-400" title="Valor correspondente a obras sem orçamento">
+                          <span>s/ Orçamento ({stats.countSemOrcamento}):</span>
+                          <span className="font-semibold">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.sumFaturamentoSemOrcamento)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center text-[9px] text-muted-foreground">
+                        <span>% Meta Fat.:</span>
+                        <span className="font-bold text-foreground">
+                          {pctMetaFat.toFixed(1)}% {indicators.sumMetaFaturamento > 0 ? 'da Meta' : 'do Total'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bloco 4: Horas Previstas & Dimensionamento de Equipes */}
+                    <div className="pt-2 border-t border-border/60 bg-muted/20 -mx-3.5 -mb-3.5 p-2.5 rounded-b-xl flex flex-col gap-1.5">
+                      <div className="flex justify-between items-baseline text-[11px]">
+                        <span className="text-muted-foreground font-semibold" title={`Tempo baseado em ${stats.countComOrcamento} obra(s) com orçamento`}>
+                          Tempo Previsto:
+                        </span>
+                        <span className="font-black text-foreground">
+                          {stats.sumHoras.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} <span className="text-[9px] text-muted-foreground font-normal">h ({pctHoras.toFixed(1)}%)</span>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/40">
+                        <div className="bg-background/80 rounded p-1 text-center border border-border/40">
+                          <span className="text-[9px] text-muted-foreground block font-medium">Dias/Eq. ({horasServicoDia}h)</span>
+                          <span className="text-[11px] font-bold text-foreground">
+                            {diasEquipe.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+                          </span>
+                        </div>
+                        <div className="bg-primary/10 rounded p-1 text-center border border-primary/20">
+                          <span className="text-[9px] text-primary block font-bold">Eq. Nec. ({diasUteisMes}d)</span>
+                          <span className="text-[11px] font-black text-primary">
+                            {equipesNecessarias.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Valor por Equipe Necessária */}
+                      <div className="pt-1 border-t border-border/40 flex justify-between items-baseline">
+                        <span className="text-[9px] text-muted-foreground font-bold uppercase" title="Faturamento das obras c/ orçamento dividido pelas Equipes Necessárias">
+                          Produção / Eq.:
+                        </span>
+                        <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(valorPorEquipe)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
 
 
@@ -1146,10 +1666,22 @@ export const CarteiraDashboardView = () => {
               if (selectedMunicipios.length > 0 && !selectedMunicipios.includes(row.municipio)) return false;
 
               // 5. Filtro Prioridade
-              if (selectedPrioridades.length > 0 && !selectedPrioridades.includes(row.prioridade)) return false;
+              if (selectedPrioridades.length > 0) {
+                const rowPrio = (row.prioridade || '').trim();
+                const prioKey = rowPrio || '(Vazio)';
+                if (!selectedPrioridades.includes(prioKey) && !selectedPrioridades.includes(rowPrio)) return false;
+              }
 
-              // 6. Filtro Postes
-              if (selectedPostes.length > 0 && !selectedPostes.includes(row.postesDisponiveis)) return false;
+              // 6. Filtro Classificação de Postes
+              if (selectedFaixasPostes.length > 0) {
+                const p = row.postesDisponiveis ?? 0;
+                const matchFaixa = selectedFaixasPostes.some(fId => {
+                  const f = FAIXAS_POSTES.find(x => x.id === fId);
+                  if (!f) return false;
+                  return p >= f.min && p <= f.max;
+                });
+                if (!matchFaixa) return false;
+              }
 
               // 7. Filtro Vistoria
               if (selectedVistorias.length > 0) {
@@ -1261,6 +1793,7 @@ export const CarteiraDashboardView = () => {
             const totalObras = searchedModalObras.length;
             const totalPostes = searchedModalObras.reduce((sum, o) => sum + (o.postesDisponiveis || 0), 0);
             const totalValor = searchedModalObras.reduce((sum, o) => sum + (o.capacidadeFaturamento || 0), 0);
+            const totalHoras = searchedModalObras.reduce((sum, o) => sum + (o.tempoPrevistoHoras || 0), 0);
 
             return (
               <div className="flex flex-col h-full overflow-hidden text-foreground">
@@ -1307,6 +1840,7 @@ export const CarteiraDashboardView = () => {
                 <div className="px-6 py-3 bg-secondary/20 border-b border-border flex flex-wrap gap-6 text-xs font-semibold text-muted-foreground">
                   <div>Obras: <span className="text-foreground">{totalObras}</span></div>
                   <div>Total Postes: <span className="text-foreground">{totalPostes.toLocaleString('pt-BR')}</span></div>
+                  <div>Total Horas: <span className="text-foreground">{totalHoras.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h</span></div>
                   <div>Total Valor: <span className="text-green-600 font-bold">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor)}
                   </span></div>
@@ -1325,6 +1859,7 @@ export const CarteiraDashboardView = () => {
                           <th className="px-4 py-2 font-semibold text-center">Prioridade</th>
                           <th className="px-4 py-2 font-semibold text-center">Status Execução</th>
                           <th className="px-4 py-2 font-semibold text-center">Postes Disp.</th>
+                          <th className="px-4 py-2 font-semibold text-center">Tempo Previsto</th>
                           <th className="px-4 py-2 font-semibold text-center">AVNP</th>
                           <th className="px-4 py-2 font-semibold text-center">Valor Considerado</th>
                           <th className="px-4 py-2 font-semibold text-center">Orçamento Val.</th>
@@ -1358,6 +1893,9 @@ export const CarteiraDashboardView = () => {
                             </td>
                             <td className="px-4 py-2 text-center"><div className="max-w-[120px] truncate mx-auto" title={obra.statusExecucao || '-'}>{obra.statusExecucao || '-'}</div></td>
                             <td className="px-4 py-2 text-center">{obra.postesDisponiveis}</td>
+                            <td className="px-4 py-2 text-center font-semibold text-foreground">
+                              {(obra.tempoPrevistoHoras || 0) > 0 ? `${(obra.tempoPrevistoHoras || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h` : '-'}
+                            </td>
                             <td className="px-4 py-2 text-center font-bold text-[11px] text-indigo-600 whitespace-nowrap">
                               {(() => {
                                 const mesesParaMostrar = selectedMeses.length > 0
@@ -1402,7 +1940,7 @@ export const CarteiraDashboardView = () => {
                         ))}
                         {searchedModalObras.length === 0 && (
                           <tr>
-                            <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
+                            <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground">
                               Nenhuma obra encontrada.
                             </td>
                           </tr>

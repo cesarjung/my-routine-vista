@@ -87,6 +87,8 @@ export const PcpCalendarioView: React.FC = () => {
     equipes,
     metricas,
     alojamentos,
+    alojamentosOcupacao,
+    temAlertaSobrecarga,
     obrasConclusoes,
     avisoBdConfig,
     ultimaAtualizacao,
@@ -391,6 +393,8 @@ export const PcpCalendarioView: React.FC = () => {
             equipes={equipes}
             metricas={metricas}
             alojamentos={alojamentos}
+            alojamentosOcupacao={alojamentosOcupacao}
+            temAlertaSobrecarga={temAlertaSobrecarga}
             obrasConclusoes={obrasConclusoes}
             avisoBdConfig={avisoBdConfig}
             ultimaAtualizacao={ultimaAtualizacao}
@@ -417,6 +421,8 @@ export const PcpCalendarioView: React.FC = () => {
           equipes={equipes}
           metricas={metricas}
           alojamentos={alojamentos}
+          alojamentosOcupacao={alojamentosOcupacao}
+          temAlertaSobrecarga={temAlertaSobrecarga}
           obrasConclusoes={obrasConclusoes}
           ultimaAtualizacao={ultimaAtualizacao}
           mapDataGps={mapDataGps}

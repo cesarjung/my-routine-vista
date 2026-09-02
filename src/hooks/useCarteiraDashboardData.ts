@@ -31,6 +31,8 @@ export interface CarteiraRow {
   orcamentoValidado: number;
   orcamentoRaw: string;
   recursosAplicados: number;
+  tempoPrevistoHoras: number;
+  isSemOrcamento: boolean;
 }
 
 export interface BaseCurvaRow {
@@ -182,10 +184,24 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
       if (foundOrcamentoIdx !== -1) indexOrcamento = foundOrcamentoIdx;
       if (foundPostesIdx !== -1) indexPostes = foundPostesIdx;
 
+      const bdMetasObj = (unidadeData.bdMetas || {}) as any;
+      const tempoPorObra: Record<string, number> = bdMetasObj?.tempo_por_obra || {};
+
       // --- PROCESSAR CARTEIRA ---
-      for (let i = 1; i < carteiraRows.length; i++) {
-        const row = carteiraRows[i];
+      const seenProjetosUnidade = new Set<string>();
+
+      for (let i = 4; i < unidadeData.carteira.length; i++) {
+        const row = unidadeData.carteira[i];
         if (!row || !Array.isArray(row)) continue; 
+
+        const obraId = String(row[12] || '').trim();
+        if (!obraId || obraId === '-' || obraId.toLowerCase() === 'projeto') continue;
+
+        // Deduplica se a mesma obra aparecer duplicada na planilha da mesma unidade
+        if (seenProjetosUnidade.has(obraId)) {
+          continue;
+        }
+        seenProjetosUnidade.add(obraId);
 
         // Ler AVNP (F) e Mês (G)
         const avnpStr = row[5] ? String(row[5]).trim() : '';
@@ -197,7 +213,8 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
             if (dataInicioRaw && dataInicioRaw !== '-') {
               const matchDI = dataInicioRaw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
               if (matchDI) {
-                mesStr = `01/${matchDI[2]}/${matchDI[3]}`;
+                const dateDI = new Date(Number(matchDI[3]), Number(matchDI[2]) - 1, Number(matchDI[1]));
+                mesStr = `${format(dateDI, "MMM", { locale: ptBR })}./${format(dateDI, "yy")}`.toLowerCase();
               }
             }
         }
@@ -234,10 +251,11 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
         if (isNaN(lat)) lat = 0;
         if (isNaN(lng)) lng = 0;
 
-        const obraId = String(row[12] || '').trim();
-        if (obraId === 'B-1160331') {
-          console.log('CARTEIRA HEADERS GUANAMBI:', unidadeData.carteira[0]);
-        }
+        const cleanObraId = obraId.replace(/^B-/, '').trim();
+        const tempoPrevistoHoras = tempoPorObra[obraId] !== undefined ? tempoPorObra[obraId] : (tempoPorObra[cleanObraId] || 0);
+        const orcamentoVal = parseNumber(row[indexOrcamento]);
+        const capFatVal = parseNumber(row[38]);
+        const isSemOrcamento = (row[3] && String(row[3]).trim() === '0') || (orcamentoVal === 0 && capFatVal === 0);
 
         carteira.push({
           id: `${unidadeData.unidadeId}-${i}`,
@@ -264,13 +282,14 @@ export const useCarteiraDashboardData = (selectedUnidadesIds: string[]) => {
 
           qtdGpm: parseNumber(row[22]), // W
           qtdNeoex: parseNumber(row[23]), // X
-          orcamentoValidado: parseNumber(row[indexOrcamento]), // Dinâmico (Fallback 37)
+          orcamentoValidado: orcamentoVal, // Dinâmico (Fallback 37)
           orcamentoRaw: String(row[indexOrcamento] !== undefined && row[indexOrcamento] !== null && row[indexOrcamento] !== '' ? row[indexOrcamento] : 'VAZIO'),
           recursosAplicados: recursosAplicadosPorObra[String(row[12] || '').trim()] || 0, // Obra ID na coluna M
+          tempoPrevistoHoras,
+          isSemOrcamento,
         });
       }
 
-      const bdMetasObj = unidadeData.bdMetas as any;
       const baseCurvaRows = bdMetasObj?.base_curva || [];
       const bdConfigRows = bdMetasObj?.bd_config || [];
       

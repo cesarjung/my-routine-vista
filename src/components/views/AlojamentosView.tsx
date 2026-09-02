@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useAlojamentos, Alojamento } from '@/hooks/useAlojamentos';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import { Button } from '@/components/ui/button';
-import { Home, Trash2, Building2, MapPin, Users } from 'lucide-react';
+import { Home, Trash2, Building2, MapPin, Users, Pencil, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const AlojamentosView = () => {
-  const { alojamentos, addAlojamento, removeAlojamento } = useAlojamentos();
+  const { alojamentos, addAlojamento, updateAlojamento, removeAlojamento } = useAlojamentos();
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [unidadeId, setUnidadeId] = useState('');
   const [nome, setNome] = useState('');
   const [latitude, setLatitude] = useState('');
@@ -16,6 +17,26 @@ export const AlojamentosView = () => {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const handleStartEdit = (aloj: Alojamento) => {
+    setEditingId(aloj.id);
+    setUnidadeId(aloj.unidadeId || '');
+    setNome(aloj.nome);
+    setLatitude(aloj.latitude ? aloj.latitude.toString() : '');
+    setLongitude(aloj.longitude ? aloj.longitude.toString() : '');
+    setCapacidade(aloj.capacidade ? aloj.capacidade.toString() : '');
+    setError('');
+    setSuccess('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setNome('');
+    setLatitude('');
+    setLongitude('');
+    setCapacidade('');
+    setError('');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,22 +68,34 @@ export const AlojamentosView = () => {
       return;
     }
 
-    addAlojamento({
-      unidadeId,
-      unidadeNome: unidade.nome,
-      nome,
-      latitude: lat,
-      longitude: lng,
-      capacidade: cap
-    });
+    if (editingId) {
+      updateAlojamento(editingId, {
+        unidadeId,
+        unidadeNome: unidade.nome,
+        nome,
+        latitude: lat,
+        longitude: lng,
+        capacidade: cap
+      });
+      setSuccess('Alojamento atualizado com sucesso!');
+      setEditingId(null);
+    } else {
+      addAlojamento({
+        unidadeId,
+        unidadeNome: unidade.nome,
+        nome,
+        latitude: lat,
+        longitude: lng,
+        capacidade: cap
+      });
+      setSuccess('Alojamento cadastrado com sucesso!');
+    }
 
-    setSuccess('Alojamento cadastrado com sucesso!');
     // Reset form
     setNome('');
     setLatitude('');
     setLongitude('');
     setCapacidade('');
-    // Keep unidadeId selected for convenience
     
     setTimeout(() => setSuccess(''), 3000);
   };
@@ -75,17 +108,36 @@ export const AlojamentosView = () => {
         </div>
         <div>
           <h2 className="text-xl font-bold text-foreground">Gerenciamento de Alojamentos e Bases</h2>
-          <p className="text-sm text-muted-foreground">Cadastre os endereços para visualização no mapa de Carteira.</p>
+          <p className="text-sm text-muted-foreground">Cadastre e edite os endereços e capacidades para visualização no PCP e Mapa.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Formulário de Cadastro */}
+        {/* Formulário de Cadastro / Edição */}
         <div className="col-span-1 border border-border bg-card rounded-xl shadow-sm p-5 h-fit">
-          <h3 className="font-bold text-base mb-4 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" /> Novo Cadastro
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-base flex items-center gap-2">
+              {editingId ? (
+                <>
+                  <Pencil className="w-4 h-4 text-primary" /> Editar Cadastro
+                </>
+              ) : (
+                <>
+                  <MapPin className="w-4 h-4 text-primary" /> Novo Cadastro
+                </>
+              )}
+            </h3>
+            {editingId && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" /> Cancelar
+              </button>
+            )}
+          </div>
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
@@ -154,7 +206,16 @@ export const AlojamentosView = () => {
             {error && <div className="text-xs text-red-500 font-medium p-2 bg-red-500/10 rounded">{error}</div>}
             {success && <div className="text-xs text-green-600 font-medium p-2 bg-green-500/10 rounded">{success}</div>}
 
-            <Button type="submit" className="w-full mt-2">Salvar Cadastro</Button>
+            <div className="flex items-center gap-2 mt-2">
+              <Button type="submit" className="flex-1">
+                {editingId ? 'Salvar Alterações' : 'Salvar Cadastro'}
+              </Button>
+              {editingId && (
+                <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                  Cancelar
+                </Button>
+              )}
+            </div>
           </form>
         </div>
 
@@ -186,8 +247,9 @@ export const AlojamentosView = () => {
                 <tbody className="divide-y divide-border">
                   {alojamentos.map(aloj => {
                     const isBase = aloj.nome.toLowerCase().includes('base');
+                    const isSelected = editingId === aloj.id;
                     return (
-                      <tr key={aloj.id} className="hover:bg-muted/10 transition-colors">
+                      <tr key={aloj.id} className={cn("hover:bg-muted/10 transition-colors", isSelected && "bg-primary/5")}>
                         <td className="py-3 px-4">
                           <span className="font-medium">{aloj.unidadeNome.replace('UNIDADE ', '')}</span>
                         </td>
@@ -206,15 +268,26 @@ export const AlojamentosView = () => {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
-                            onClick={() => removeAlojamento(aloj.id)}
-                            title="Remover"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              onClick={() => handleStartEdit(aloj)}
+                              title="Editar"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                              onClick={() => removeAlojamento(aloj.id)}
+                              title="Remover"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );

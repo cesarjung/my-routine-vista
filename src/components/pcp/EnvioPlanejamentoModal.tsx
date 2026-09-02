@@ -52,6 +52,8 @@ export interface EnvioPlanejamentoModalProps {
   equipes: EquipeSemanalItem[];
   metricas: MetricasSemana;
   alojamentos: Array<{ equipe: string; municipio: string; alojamento: string }>;
+  alojamentosOcupacao?: import('@/hooks/usePlanejamentoSemanal').AlojamentoResumoSemanal[];
+  temAlertaSobrecarga?: boolean;
   obrasConclusoes?: import('@/hooks/usePlanejamentoSemanal').ObraConclusaoItem[];
   ultimaAtualizacao?: string | null;
   /** Dados GPS reais das equipes, capturados do PlanejamentoEquipesMap ao vivo */
@@ -69,6 +71,8 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
   equipes,
   metricas,
   alojamentos,
+  alojamentosOcupacao = [],
+  temAlertaSobrecarga = false,
   obrasConclusoes = [],
   ultimaAtualizacao,
   mapDataGps = [],
@@ -760,6 +764,8 @@ export const EnvioPlanejamentoModal: React.FC<EnvioPlanejamentoModalProps> = ({
               equipes={equipes}
               metricas={metricas}
               alojamentos={alojamentos}
+              alojamentosOcupacao={alojamentosOcupacao}
+              temAlertaSobrecarga={temAlertaSobrecarga}
               obrasConclusoes={obrasConclusoes}
               ultimaAtualizacao={ultimaAtualizacao}
               escopo={escopo}

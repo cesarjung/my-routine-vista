@@ -91,7 +91,8 @@ export default async function handler(req, res) {
       'BD_Metas!A1:E',
       'Reprogramadas!A1:AZ',
       'Base_Curva!A1:Z',
-      'BD_Config!A1:BA'
+      'BD_Config!A1:BA',
+      'BD_Orçamento!A1:I'
     ];
 
     const fetchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&')}`;
@@ -123,6 +124,60 @@ export default async function handler(req, res) {
     const reprogramadas = cleanRows(valueRanges[3]?.values || []);
     const baseCurva = cleanRows(valueRanges[4]?.values || []);
     const bdConfig = cleanRows(valueRanges[5]?.values || []);
+    const bdOrcamento = cleanRows(valueRanges[6]?.values || []);
+
+    // Calcular tabela de tempos padrão a partir de BD_Config (AK:AO)
+    const temposPadraoMap = {};
+    for (let i = 3; i < bdConfig.length; i++) {
+      const row = bdConfig[i];
+      const codigo = String(row[36] || row[0] || '').trim().toUpperCase(); // AK
+      const desc = String(row[37] || row[1] || '').trim().toUpperCase(); // AL
+      const rawTempo = row[40] !== undefined ? row[40] : row[4]; // AO
+
+      let tempoHours = 0;
+      if (rawTempo) {
+        if (typeof rawTempo === 'number') {
+          tempoHours = rawTempo * 24;
+        } else {
+          const str = String(rawTempo).trim();
+          const match = str.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+          if (match) {
+            tempoHours = Number(match[1]) + Number(match[2]) / 60 + Number(match[3]) / 3600;
+          } else {
+            const match2 = str.match(/^(\d{1,2}):(\d{2})$/);
+            if (match2) {
+              tempoHours = Number(match2[1]) + Number(match2[2]) / 60;
+            } else {
+              const num = Number(str.replace(',', '.'));
+              if (!isNaN(num)) tempoHours = num * 24;
+            }
+          }
+        }
+      }
+
+      if (codigo && tempoHours > 0) temposPadraoMap[codigo] = tempoHours;
+      if (desc && tempoHours > 0) temposPadraoMap[desc] = tempoHours;
+    }
+
+    // Calcular tempo total em horas por obra do BD_Orçamento
+    const tempoPorObra = {};
+    for (let i = 1; i < bdOrcamento.length; i++) {
+      const row = bdOrcamento[i];
+      const obra1 = String(row[0] || '').trim(); // Projeto ex: 1149340
+      const obra2 = String(row[8] || '').trim(); // Projeto com máscara ex: B-1149340
+      const codigo = String(row[3] || '').trim().toUpperCase();
+      const desc = String(row[4] || '').trim().toUpperCase();
+      const qtdStr = String(row[6] || '0').replace(/\./g, '').replace(',', '.').trim();
+      const qtd = Number(qtdStr) || 0;
+
+      const unitTime = temposPadraoMap[codigo] || temposPadraoMap[desc] || 0;
+      const totalTime = qtd * unitTime;
+
+      if (totalTime > 0) {
+        if (obra1) tempoPorObra[obra1] = (tempoPorObra[obra1] || 0) + totalTime;
+        if (obra2 && obra2 !== obra1) tempoPorObra[obra2] = (tempoPorObra[obra2] || 0) + totalTime;
+      }
+    }
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://curyufedazpkhtxrwhkn.supabase.co';
     const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1cnl1ZmVkYXpwa2h0eHJ3aGtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5NzU5NTIsImV4cCI6MjA4MjU1MTk1Mn0.DGKJPQBmLCTw5YyKwg7LfRQMseeVgXzljD5Z6lCESRs';
@@ -136,7 +191,8 @@ export default async function handler(req, res) {
         base_curva: baseCurva,
         bd_config: bdConfig,
         recursos_aplicados: {},
-        central_postes: []
+        central_postes: [],
+        tempo_por_obra: tempoPorObra
       }),
       reprogramadas: JSON.stringify(reprogramadas),
       updated_at: new Date().toISOString()

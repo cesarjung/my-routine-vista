@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Sparkles,
   MapPin,
@@ -23,9 +25,18 @@ import {
   ZoomIn,
   ZoomOut,
   Wrench,
+  Pencil,
+  Loader2,
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { UNIDADES_PLANEJAMENTO } from '@/constants/unidades';
 import {
   EquipeSemanalItem,
@@ -47,6 +58,30 @@ const CORES_EQUIPES = [
   '#00897B', '#3949AB', '#F4511E', '#039BE5', '#7CB342', 
   '#C0CA33', '#FB8C00', '#6D4C41', '#546E7A', '#E53935'
 ];
+
+const PALETA_CARDS_EQUIPES = [
+  { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' }, // Azul
+  { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' }, // Verde
+  { bg: '#FFF7ED', text: '#C2410C', border: '#FED7AA' }, // Laranja
+  { bg: '#FAF5FF', text: '#7E22CE', border: '#E9D5FF' }, // Roxo
+  { bg: '#FDF2F8', text: '#BE185D', border: '#FBCFE8' }, // Rosa
+  { bg: '#ECFEFF', text: '#0E7490', border: '#A5F3FC' }, // Ciano
+  { bg: '#FEFCE8', text: '#A16207', border: '#FEF08A' }, // Âmbar
+  { bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' }, // Índigo
+  { bg: '#FFF1F2', text: '#BE123C', border: '#FECDD3' }, // Carmesim
+  { bg: '#F0FDFA', text: '#0F766E', border: '#99F6E4' }, // Esmeralda
+  { bg: '#EEF2FF', text: '#4338CA', border: '#C7D2FE' }, // Azul Escuro
+  { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' }, // Dourado
+];
+
+export function getEstiloCardEquipe(codigo: string) {
+  if (!codigo) return PALETA_CARDS_EQUIPES[0];
+  let hash = 0;
+  for (let i = 0; i < codigo.length; i++) {
+    hash = codigo.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return PALETA_CARDS_EQUIPES[Math.abs(hash) % PALETA_CARDS_EQUIPES.length];
+}
 
 export function getCorEquipe(equipe: string): string {
   let hash = 0;
@@ -197,6 +232,8 @@ export interface CalendarioPlanejamentoProps {
   equipes: EquipeSemanalItem[];
   metricas: MetricasSemana;
   alojamentos: Array<{ equipe: string; municipio: string; alojamento: string }>;
+  alojamentosOcupacao?: import('@/hooks/usePlanejamentoSemanal').AlojamentoResumoSemanal[];
+  temAlertaSobrecarga?: boolean;
   avisoBdConfig?: boolean;
   ultimaAtualizacao?: string | null;
   escopo?: 'todas' | 'com_programacao';
@@ -248,6 +285,8 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     turnosDentroMetaDesloc: 0,
   },
   alojamentos = [],
+  alojamentosOcupacao = [],
+  temAlertaSobrecarga = false,
   obrasConclusoes = [],
   avisoBdConfig = false,
   ultimaAtualizacao,
@@ -285,8 +324,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   // Filtros da grade
   const [filtroSupervisor, setFiltroSupervisor] = useState<string>('');
   const [filtroEquipe, setFiltroEquipe] = useState<string>('');
-  const TODOS_TIPOS_CONHECIDOS = ['CONSTRUÇÃO', 'LINHA VIVA', 'MANUTENÇÃO', 'KIT', 'PODA', 'LINHA VIVA MANUT.'];
-  const [tiposSelecionados, setTiposSelecionados] = useState<Set<string>>(new Set(TODOS_TIPOS_CONHECIDOS));
+  const [tiposDesmarcados, setTiposDesmarcados] = useState<Set<string>>(new Set());
   const [tipoDropdownAberto, setTipoDropdownAberto] = useState(false);
   const tipoDropdownRef = useRef<HTMLDivElement>(null);
   const [filtroDisponibilidade, setFiltroDisponibilidade] = useState<string>('');
@@ -294,6 +332,21 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   const [filtroJornada, setFiltroJornada] = useState<string>('');
   const [filtroDeslocamento, setFiltroDeslocamento] = useState<string>('');
   const [zoomGrade, setZoomGrade] = useState(100);
+
+  // Listas únicas para os selects
+  const supervisoresUnicos = useMemo(() => {
+    const set = new Set(equipes.map(e => e.supervisor || 'Sem Supervisor'));
+    return Array.from(set).sort();
+  }, [equipes]);
+
+  const tiposUnicos = useMemo(() => {
+    const set = new Set<string>();
+    equipes.forEach(e => { if (e.tipoEquipe) set.add(e.tipoEquipe); });
+    if (set.size === 0) {
+      ['CONSTRUÇÃO', 'H3', 'H5', 'LV', 'MANUTENÇÃO'].forEach(t => set.add(t));
+    }
+    return Array.from(set).sort();
+  }, [equipes]);
 
   // Fechar dropdown de tipos ao clicar fora
   useEffect(() => {
@@ -307,7 +360,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
   }, []);
 
   const toggleTipo = (tipo: string) => {
-    setTiposSelecionados(prev => {
+    setTiposDesmarcados(prev => {
       const next = new Set(prev);
       if (next.has(tipo)) next.delete(tipo);
       else next.add(tipo);
@@ -315,22 +368,8 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     });
   };
 
-  const selecionarTodosTipos = () => setTiposSelecionados(new Set(tiposUnicos));
-  const limparTodosTipos = () => setTiposSelecionados(new Set());
-
-  // Listas únicas para os selects
-  const supervisoresUnicos = useMemo(() => {
-    const set = new Set(equipes.map(e => e.supervisor || 'Sem Supervisor'));
-    return Array.from(set).sort();
-  }, [equipes]);
-
-  const tiposUnicos = useMemo(() => {
-    // Sempre incluir todos os tipos conhecidos + quaisquer extras dos dados
-    const TODOS_TIPOS_CONHECIDOS = ['CONSTRUÇÃO', 'LINHA VIVA', 'MANUTENÇÃO', 'KIT', 'PODA', 'LINHA VIVA MANUT.'];
-    const set = new Set(TODOS_TIPOS_CONHECIDOS);
-    equipes.forEach(e => { if (e.tipoEquipe) set.add(e.tipoEquipe); });
-    return Array.from(set).sort();
-  }, [equipes]);
+  const selecionarTodosTipos = () => setTiposDesmarcados(new Set());
+  const limparTodosTipos = () => setTiposDesmarcados(new Set(tiposUnicos));
 
   // Force re-render counter (para edições in-place de vistorias)
   const [, setForceRender] = useState(0);
@@ -377,6 +416,131 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     }
   };
 
+  // QueryClient para invalidar cache de alojamentos
+  const queryClient = useQueryClient();
+
+  // Estado para Edição de Alojamento / Base
+  const [alojamentoEditando, setAlojamentoEditando] = useState<{
+    id: string;
+    nomeOriginal: string;
+    nome: string;
+    municipio: string;
+    capacidade: number;
+    latitude?: number;
+    longitude?: number;
+  } | null>(null);
+  const [salvandoAlojamento, setSalvandoAlojamento] = useState(false);
+  const [erroEdicaoAlojamento, setErroEdicaoAlojamento] = useState('');
+
+  const abrirEdicaoAlojamento = (aloj: {
+    id: string;
+    nome: string;
+    municipio?: string;
+    capacidade: number;
+    latitude?: number;
+    longitude?: number;
+  }) => {
+    setErroEdicaoAlojamento('');
+    setAlojamentoEditando({
+      id: aloj.id,
+      nomeOriginal: aloj.nome,
+      nome: aloj.nome,
+      municipio: aloj.municipio || '',
+      capacidade: aloj.capacidade || 10,
+      latitude: aloj.latitude,
+      longitude: aloj.longitude,
+    });
+  };
+
+  const handleSalvarEdicaoAlojamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!alojamentoEditando) return;
+    setSalvandoAlojamento(true);
+    setErroEdicaoAlojamento('');
+
+    try {
+      const nomeTrim = alojamentoEditando.nome.trim();
+      const munTrim = (alojamentoEditando.municipio || '').trim();
+      const capNum = Number(alojamentoEditando.capacidade) > 0 ? Number(alojamentoEditando.capacidade) : 10;
+
+      if (!nomeTrim) {
+        setErroEdicaoAlojamento('O nome do alojamento não pode ficar vazio.');
+        setSalvandoAlojamento(false);
+        return;
+      }
+
+      // 1. Carrega todos os alojamentos globais do Supabase
+      const { data, error: fetchErr } = await supabase
+        .from('planejamento_cache')
+        .select('principal')
+        .eq('unidade_id', 'GLOBAL_ALOJAMENTOS')
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+
+      let lista: any[] = [];
+      if (data && data.principal) {
+        lista = typeof data.principal === 'string' ? JSON.parse(data.principal) : data.principal;
+      }
+      if (!Array.isArray(lista)) lista = [];
+
+      // Obter unidade atual
+      const unidadeObj = UNIDADES_PLANEJAMENTO.find(u => u.id === unidadeId || u.nome === unidadeId);
+      const targetUnidadeId = unidadeObj?.id || unidadeId || '';
+      const targetUnidadeNome = unidadeObj?.nome || unidadeNome || '';
+
+      // 2. Busca pelo ID ou pelo nome original
+      const idx = lista.findIndex(a => 
+        (alojamentoEditando.id && a.id === alojamentoEditando.id) || 
+        (a.nome && a.nome.trim().toUpperCase() === alojamentoEditando.nomeOriginal.trim().toUpperCase())
+      );
+
+      if (idx >= 0) {
+        lista[idx] = {
+          ...lista[idx],
+          nome: nomeTrim,
+          municipio: munTrim,
+          capacidade: capNum,
+          latitude: alojamentoEditando.latitude ?? lista[idx].latitude ?? 0,
+          longitude: alojamentoEditando.longitude ?? lista[idx].longitude ?? 0,
+          unidadeId: lista[idx].unidadeId || targetUnidadeId,
+          unidadeNome: lista[idx].unidadeNome || targetUnidadeNome,
+        };
+      } else {
+        lista.push({
+          id: alojamentoEditando.id && !alojamentoEditando.id.startsWith('dinamico-') ? alojamentoEditando.id : crypto.randomUUID(),
+          nome: nomeTrim,
+          municipio: munTrim,
+          capacidade: capNum,
+          latitude: alojamentoEditando.latitude ?? 0,
+          longitude: alojamentoEditando.longitude ?? 0,
+          unidadeId: targetUnidadeId,
+          unidadeNome: targetUnidadeNome,
+        });
+      }
+
+      // 3. Salva de volta no Supabase
+      const { error: saveErr } = await supabase
+        .from('planejamento_cache')
+        .upsert({
+          unidade_id: 'GLOBAL_ALOJAMENTOS',
+          principal: lista as any,
+        }, { onConflict: 'unidade_id' });
+
+      if (saveErr) throw saveErr;
+
+      // 4. Invalida os caches para atualizar toda a tela imediatamente
+      await queryClient.invalidateQueries({ queryKey: ['alojamentos_global'] });
+      await queryClient.invalidateQueries({ queryKey: ['planejamento_semanal'] });
+      setAlojamentoEditando(null);
+    } catch (err: any) {
+      console.error('Erro ao salvar alojamento:', err);
+      setErroEdicaoAlojamento(err.message || 'Erro ao salvar alterações no banco.');
+    } finally {
+      setSalvandoAlojamento(false);
+    }
+  };
+
   // 1. Equipes filtradas pelo escopo + filtros avançados
   const equipesFiltradas = useMemo(() => {
     let filtered = [...equipes];
@@ -399,8 +563,8 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     }
 
     // Filtro Tipo (multi-select)
-    if (tiposSelecionados.size < tiposUnicos.length) {
-      filtered = filtered.filter(e => tiposSelecionados.has(e.tipoEquipe || 'CONSTRUÇÃO'));
+    if (tiposDesmarcados.size > 0) {
+      filtered = filtered.filter(e => !tiposDesmarcados.has(e.tipoEquipe || 'CONSTRUÇÃO'));
     }
 
     // Filtro Disponibilidade
@@ -440,7 +604,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     }
 
     return filtered;
-  }, [equipes, activeEscopo, filtroSupervisor, filtroEquipe, tiposSelecionados, tiposUnicos, filtroDisponibilidade, filtroMeta, filtroJornada, filtroDeslocamento]);
+  }, [equipes, activeEscopo, filtroSupervisor, filtroEquipe, tiposDesmarcados, tiposUnicos, filtroDisponibilidade, filtroMeta, filtroJornada, filtroDeslocamento]);
 
   // 2. Métricas calculadas dinamicamente com base nas equipes filtradas
   const metricasFiltradas = useMemo(() => {
@@ -523,6 +687,50 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
     const codigosVisiveis = new Set(equipesFiltradas.map(e => e.codigo.toUpperCase()));
     return alojamentos.filter(a => codigosVisiveis.has(a.equipe.toUpperCase()));
   }, [alojamentos, equipesFiltradas]);
+
+  // 4.1 Ocupação de alojamentos filtrada pelas equipes visíveis
+  const alojamentosOcupacaoFiltrados = useMemo(() => {
+    if (!alojamentosOcupacao || alojamentosOcupacao.length === 0) return [];
+    const codigosVisiveis = new Set(equipesFiltradas.map(e => e.codigo.toUpperCase()));
+
+    return alojamentosOcupacao.map(aloj => {
+      const ocupacaoDias = aloj.ocupacaoDias.map(dia => {
+        const equipesDiaFiltradas = dia.equipes.filter(e => codigosVisiveis.has(e.codigo.toUpperCase()));
+        const totalPessoas = equipesDiaFiltradas.reduce((acc, e) => acc + (e.numPessoas || 3), 0);
+        const totalEquipes = equipesDiaFiltradas.length;
+        const cap = aloj.capacidade || 1;
+        const pctOcupacao = Math.round((totalPessoas / cap) * 100);
+        const isSobrecarregado = totalPessoas > cap;
+
+        return {
+          ...dia,
+          equipes: equipesDiaFiltradas,
+          totalPessoas,
+          totalEquipes,
+          pctOcupacao,
+          isSobrecarregado,
+        };
+      });
+
+      const picoPessoas = Math.max(0, ...ocupacaoDias.map(d => d.totalPessoas));
+      const picoEquipes = Math.max(0, ...ocupacaoDias.map(d => d.totalEquipes));
+      const picoPct = aloj.capacidade > 0 ? Math.round((picoPessoas / aloj.capacidade) * 100) : 0;
+      const temSobrecarga = ocupacaoDias.some(d => d.isSobrecarregado);
+
+      return {
+        ...aloj,
+        picoPessoas,
+        picoEquipes,
+        picoPct,
+        temSobrecarga,
+        ocupacaoDias,
+      };
+    }).filter(aloj => aloj.picoPessoas > 0 || (aloj.capacidade > 0 && aloj.id && !aloj.id.startsWith('dinamico-')));
+  }, [alojamentosOcupacao, equipesFiltradas]);
+
+  const temAlertaSobrecargaEfetivo = useMemo(() => {
+    return alojamentosOcupacaoFiltrados.some(a => a.temSobrecarga);
+  }, [alojamentosOcupacaoFiltrados]);
 
   // 5. Totalizadores diários para a grade (baseado em equipesFiltradas)
   const totalizadoresDiarios = useMemo(() => {
@@ -763,18 +971,51 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             </p>
           </div>
 
-          <div className="text-right shrink-0">
-            <span className="text-[11px] uppercase tracking-wider text-[#A39E96] font-semibold block">
-              PERÍODO DA SEMANA
-            </span>
-            <span className="font-mono font-bold text-sm text-[#23211E] block mt-0.5">
-              Semana de {format(inicioSemana, 'dd/MM')} a {format(fimSemana, 'dd/MM/yyyy')}
-            </span>
-            {avisoBdConfig && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-[#B4581A] bg-[#FBEBDC] px-2 py-0.5 rounded mt-1 font-medium">
-                <Info className="w-3 h-3" /> Universo de equipes lido da Plan_Principal
+          <div className="flex items-center sm:items-end gap-3 flex-col sm:flex-row justify-between shrink-0">
+            {/* Controle de Zoom no Cabeçalho */}
+            <div className="inline-flex items-center gap-1 bg-[#FAF8F5] border border-[#DEDAD3] rounded-lg p-1 shadow-2xs print:hidden">
+              <span className="text-[10px] font-bold text-[#6B6660] px-1.5 flex items-center gap-1">
+                <Search className="w-3 h-3 text-[#A39E96]" /> Zoom
               </span>
-            )}
+              <button
+                type="button"
+                onClick={() => setZoomGrade(z => Math.max(60, z - 5))}
+                className="p-1 rounded hover:bg-white text-[#5C574F] hover:text-[#23211E] transition-colors border border-transparent hover:border-[#DEDAD3]"
+                title="Diminuir Zoom (-5%)"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomGrade(100)}
+                className="text-[10.5px] font-mono font-bold text-[#23211E] px-2 py-0.5 rounded hover:bg-white transition-colors border border-transparent hover:border-[#DEDAD3]"
+                title="Clique para resetar em 100%"
+              >
+                {zoomGrade}%
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomGrade(z => Math.min(150, z + 5))}
+                className="p-1 rounded hover:bg-white text-[#5C574F] hover:text-[#23211E] transition-colors border border-transparent hover:border-[#DEDAD3]"
+                title="Aumentar Zoom (+5%)"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="text-right shrink-0">
+              <span className="text-[11px] uppercase tracking-wider text-[#A39E96] font-semibold block">
+                PERÍODO DA SEMANA
+              </span>
+              <span className="font-mono font-bold text-sm text-[#23211E] block mt-0.5">
+                Semana de {format(inicioSemana, 'dd/MM')} a {format(fimSemana, 'dd/MM/yyyy')}
+              </span>
+              {avisoBdConfig && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-[#B4581A] bg-[#FBEBDC] px-2 py-0.5 rounded mt-1 font-medium">
+                  <Info className="w-3 h-3" /> Universo de equipes lido da Plan_Principal
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1008,9 +1249,9 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             <div className="relative" ref={tipoDropdownRef}>
               <button type="button" onClick={() => setTipoDropdownAberto(!tipoDropdownAberto)}
                 className={`text-[10px] font-semibold border rounded px-1.5 py-1 bg-white text-[#23211E] focus:outline-none inline-flex items-center gap-1 ${
-                  tiposSelecionados.size < tiposUnicos.length ? 'border-[#E07A1F] ring-1 ring-[#E07A1F]/30' : 'border-[#DEDAD3]'
+                  tiposDesmarcados.size > 0 ? 'border-[#E07A1F] ring-1 ring-[#E07A1F]/30' : 'border-[#DEDAD3]'
                 }`}>
-                Tipos ({tiposSelecionados.size}/{tiposUnicos.length})
+                Tipos ({tiposUnicos.length - tiposDesmarcados.size}/{tiposUnicos.length})
                 <ChevronDown className={`w-3 h-3 transition-transform ${tipoDropdownAberto ? 'rotate-180' : ''}`} />
               </button>
               {tipoDropdownAberto && (
@@ -1021,7 +1262,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                   </div>
                   {tiposUnicos.map(tipo => (
                     <label key={tipo} className="flex items-center gap-2 px-2 py-1 hover:bg-[#FAF8F5] cursor-pointer">
-                      <input type="checkbox" checked={tiposSelecionados.has(tipo)} onChange={() => toggleTipo(tipo)}
+                      <input type="checkbox" checked={!tiposDesmarcados.has(tipo)} onChange={() => toggleTipo(tipo)}
                         className="w-3 h-3 rounded border-[#DEDAD3] text-[#E07A1F] focus:ring-[#E07A1F] accent-[#E07A1F]" />
                       <span className="text-[10px] font-semibold text-[#23211E]">{tipo}</span>
                     </label>
@@ -1065,9 +1306,9 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
             </select>
 
             {/* Limpar */}
-            {(filtroSupervisor || filtroEquipe || tiposSelecionados.size < tiposUnicos.length || filtroDisponibilidade || filtroMeta || filtroJornada || filtroDeslocamento) && (
+            {(filtroSupervisor || filtroEquipe || tiposDesmarcados.size > 0 || filtroDisponibilidade || filtroMeta || filtroJornada || filtroDeslocamento) && (
               <button type="button"
-                onClick={() => { setFiltroSupervisor(''); setFiltroEquipe(''); setTiposSelecionados(new Set(tiposUnicos)); setFiltroDisponibilidade(''); setFiltroMeta(''); setFiltroJornada(''); setFiltroDeslocamento(''); }}
+                onClick={() => { setFiltroSupervisor(''); setFiltroEquipe(''); setTiposDesmarcados(new Set()); setFiltroDisponibilidade(''); setFiltroMeta(''); setFiltroJornada(''); setFiltroDeslocamento(''); }}
                 className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-[10px] font-bold text-[#C0392E] hover:bg-[#F9E4E1]">
                 <X className="w-3 h-3" /> Limpar
               </button>
@@ -1082,12 +1323,12 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
           {/* Grade do Calendário */}
           <div className="overflow-x-auto">
-            <div style={{ minWidth: `${Math.max(900, 110 + diasDaSemana.length * 180 + 340)}px`, transform: `scale(${zoomGrade / 100})`, transformOrigin: 'top left', width: `${10000 / zoomGrade}%` }}>
+            <div style={{ minWidth: `${Math.max(880, 105 + diasDaSemana.length * 140 + 400)}px`, transform: `scale(${zoomGrade / 100})`, transformOrigin: 'top left', width: `${10000 / zoomGrade}%` }}>
               {/* Cabeçalho da Grade */}
               <div
                 className="bg-[#F2F0EC] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#5C574F] tracking-wider py-2 px-3 items-center grid calendario-grid-row"
                 style={{
-                  gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px`,
+                  gridTemplateColumns: `105px repeat(${diasDaSemana.length}, minmax(140px, 1fr)) 72px 68px 40px 84px 48px 88px`,
                   ['--dias-count' as any]: diasDaSemana.length,
                 }}
               >
@@ -1105,8 +1346,8 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                     </div>
                   );
                 })}
-                <div className="text-right pr-2">Planejado</div>
-                <div className="text-right pr-2">Meta</div>
+                <div className="text-right pr-1.5">Planejado</div>
+                <div className="text-right pr-1.5">Meta</div>
                 <div className="text-center">%</div>
                 <div className="text-center">Status Prod.</div>
                 <div className="text-center">Desloc.</div>
@@ -1142,17 +1383,17 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                         <div
                           className="bg-[#FAF8F5] border-y border-[#E6E3DD] text-xs font-bold text-[#5C574F] py-2 px-3 items-center grid calendario-grid-row"
                           style={{
-                            gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px`,
+                            gridTemplateColumns: `105px repeat(${diasDaSemana.length}, minmax(140px, 1fr)) 72px 68px 40px 84px 48px 88px`,
                             ['--dias-count' as any]: diasDaSemana.length,
                           }}
                         >
                           <div className="col-span-1 flex items-center gap-1 text-[10.5px] select-none" style={{ gridColumn: `1 / span ${1 + diasDaSemana.length}` }}>
                             <span>👤 Supervisor: {supervisor} ({groupEquipes.length} {groupEquipes.length === 1 ? 'equipe' : 'equipes'})</span>
                           </div>
-                          <div className="text-right pr-2 font-mono text-[10px] text-[#17794C]">
+                          <div className="text-right pr-1.5 font-mono text-[10px] text-[#17794C]">
                             R$ {supTotalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </div>
-                          <div className="text-right pr-2 font-mono text-[10px] text-[#6B6660]">
+                          <div className="text-right pr-1.5 font-mono text-[10px] text-[#6B6660]">
                             R$ {supTotalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </div>
                           <div className="text-center">
@@ -1167,7 +1408,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                             </span>
                           </div>
                           <div className="text-center">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${supCorBadge}`}>
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[8.5px] font-bold whitespace-nowrap ${supCorBadge}`}>
                               {supStatusTexto}
                             </span>
                           </div>
@@ -1176,7 +1417,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                           </div>
                           <div className="text-center">
                             {equipesComProg.length > 0 ? (
-                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${supCorDesloc}`}>
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[8.5px] font-bold whitespace-nowrap ${supCorDesloc}`}>
                                 {supTextoDesloc}
                               </span>
                             ) : '-'}
@@ -1194,26 +1435,42 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
                           // Status Deslocamento badges
                           const corDesloc = !temProg ? 'text-[#6B6660] bg-[#F0EDE8]' : mediaDesloc <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
-                          const textoDesloc = !temProg ? '-' : mediaDesloc <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
+                          const textoDesloc = !temProg ? '-' : mediaDesloc <= 2.0 ? 'Dentro Meta' : 'Atenção > 2,0h';
 
                           return (
                             <div
                               key={eq.codigo}
                               className="px-3 py-2.5 items-center hover:bg-[#FAF8F5] transition-colors text-xs grid calendario-grid-row"
                               style={{
-                                gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px`,
+                                gridTemplateColumns: `105px repeat(${diasDaSemana.length}, minmax(140px, 1fr)) 72px 68px 40px 84px 48px 88px`,
                                 borderLeft: `3px solid ${temProg ? corFaixa : '#BFB9B0'}`,
                                 ['--dias-count' as any]: diasDaSemana.length,
                               }}
                             >
                               {/* Coluna Equipe */}
-                              <div className="flex flex-col justify-center pl-1 leading-tight">
-                                <span className="font-bold text-xs text-[#23211E]">{eq.codigo}</span>
-                                <span className="text-[10px] text-[#6B6660] truncate" title={eq.supervisor}>
+                              <div className="flex flex-col justify-center pl-0.5 leading-tight gap-0.5 min-w-0 pr-1">
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className="font-bold text-xs text-[#23211E] tracking-tight">{eq.codigo}</span>
+                                  {eq.tipoEquipe && (
+                                    <span
+                                      className={`px-1 py-0.2 rounded text-[7.5px] font-black uppercase tracking-wider border shrink-0 ${
+                                        eq.tipoEquipe.includes('H5') || eq.tipoEquipe.includes('L5')
+                                          ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                          : eq.tipoEquipe.includes('LV')
+                                            ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                            : 'bg-blue-100 text-blue-800 border-blue-300'
+                                      }`}
+                                      title={`${eq.tipoEquipe} · ${eq.numPessoas || 3} integrantes`}
+                                    >
+                                      {eq.tipoEquipe}·{eq.numPessoas || 3}p
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[9.5px] text-[#6B6660] truncate" title={eq.supervisor}>
                                   {eq.supervisor}
                                 </span>
                                 {temProg && (
-                                  <span className="text-[9px] font-mono text-[#8C877D] mt-0.5">
+                                  <span className="text-[8.5px] font-mono text-[#8C877D]">
                                     {formatMinToHours(eq.mediaJornadaMin)} · {mediaDesloc.toFixed(1).replace('.', ',')}h
                                   </span>
                                 )}
@@ -1269,139 +1526,130 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                                   return (
                                     <div
                                       key={diaIso}
-                                      className="mx-1 h-[150px] rounded-md border border-[#E8C9A0]/60 bg-[#FBF5EC] flex flex-col items-center justify-center p-1"
+                                      className="mx-1 h-[150px] rounded-md border border-[#E6E3DD]/60 bg-[#F2F0EC] flex flex-col items-center justify-center p-1"
                                     >
-                                      <span className="text-[10px] font-bold text-[#B4581A] uppercase tracking-wider">
+                                      <span className="text-[10px] font-bold text-[#A39E96] uppercase tracking-wider">
                                         Indisponível
                                       </span>
                                     </div>
                                   );
                                 }
 
-                                const corPct = getCorPctPlanejado(prog.pctMetaDia);
-                                const corDotJornada =
-                                  prog.tempoTotalMin > 600
-                                    ? '#C0392E'
-                                    : prog.tempoTotalMin >= 450
-                                      ? '#17794C'
-                                      : '#C9A227';
-                                const deslocH = prog.tempoDeslocamentoMin / 60;
-                                const corDotDesloc = getCorDeslocamento(deslocH).texto;
+                                const pct = prog.pctMetaDia;
+                                const isAbaixoMeta = pct < 100;
+                                const isSuperMeta = pct >= 200;
+                                const corPct = getCorPctPlanejado(pct);
 
                                 return (
                                   <div
                                     key={diaIso}
-                                    className="mx-1 h-[150px] rounded-md border border-[#E6E3DD] bg-white p-1.5 flex flex-col justify-between shadow-2xs hover:border-[#DEDAD3] transition-colors"
+                                    className={`mx-1 h-[150px] rounded-md border p-1.5 flex flex-col justify-between transition-shadow hover:shadow-xs relative ${
+                                      isSuperMeta
+                                        ? 'border-[#7CB342] bg-[#F9FCF5]'
+                                        : isAbaixoMeta
+                                          ? 'border-[#E6E3DD] bg-white'
+                                          : 'border-[#A0D4B2] bg-[#F5FAF7]'
+                                    }`}
                                   >
-                                    {/* Faixa Superior: % Meta Diária e Município */}
-                                    <div className="flex items-center justify-between gap-1">
+                                    {/* Topo do Card */}
+                                    <div className="flex items-center justify-between text-[9px] gap-1">
                                       <span
-                                        className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold"
-                                        style={{ backgroundColor: corPct.fundo, color: corPct.texto }}
+                                        className="font-mono font-bold px-1 py-0.2 rounded border"
+                                        style={{
+                                          backgroundColor: corPct.fundo,
+                                          color: corPct.texto,
+                                          borderColor: corPct.texto + '40',
+                                        }}
                                       >
-                                        {prog.pctMetaDia > 0 ? `${prog.pctMetaDia}%` : '-'}
+                                        {pct > 0 ? `${pct}%` : '-'}
                                       </span>
-                                      {prog.municipio && (
-                                        <span className="px-1.5 py-0.2 rounded bg-[#F2F0EC] text-[#6B6660] text-[8px] font-bold uppercase truncate max-w-[120px]" title={prog.municipio}>
-                                          {prog.municipio}
+
+                                      {prog.alojamento && (
+                                        <span
+                                          className="text-[8px] font-medium text-[#6B6660] bg-[#FAF8F5] border border-[#E6E3DD] px-1 py-0.2 rounded truncate max-w-[75px]"
+                                          title={`Alojamento: ${prog.alojamento}`}
+                                        >
+                                          {prog.alojamento}
                                         </span>
                                       )}
                                     </div>
 
-                                    {/* Lista de Obras e Etapas do Dia (Suporte a múltiplas obras no mesmo dia) */}
-                                    <div className="my-0.5 flex-1 flex flex-col justify-start overflow-y-auto max-h-[88px] pr-0.5 space-y-1 custom-scrollbar">
-                                      {(prog.obras && prog.obras.length > 0
-                                        ? prog.obras
-                                        : [
-                                            {
-                                              obra: prog.obra,
-                                              etapa: prog.etapa,
-                                              municipio: prog.municipio,
-                                              pontos: prog.pontos,
-                                              valorPlanejado: prog.valorPlanejado,
-                                            },
-                                          ]
-                                      ).map((sub, sIdx) => {
-                                        const isMulti = prog.obras && prog.obras.length > 1;
-                                        return (
-                                          <div
-                                            key={sIdx}
-                                            className={`leading-tight ${
-                                              sIdx > 0 ? 'pt-1 border-t border-[#F0EDE8]' : ''
-                                            }`}
-                                          >
-                                            <div className="flex items-center justify-between gap-1">
+                                    {/* Meio: Obras / Etapas */}
+                                    <div className="my-auto space-y-1 overflow-hidden">
+                                      {prog.obras && prog.obras.length > 0 ? (
+                                        prog.obras.slice(0, 2).map((sub, sIdx) => {
+                                          const isObraParada = sub.etapa?.toUpperCase().includes('EQUIPE PARADA');
+                                          return (
+                                            <div
+                                              key={sIdx}
+                                              className={`text-[9.5px] leading-tight ${
+                                                isObraParada ? 'bg-amber-50 border border-amber-300 p-0.5 rounded' : ''
+                                              }`}
+                                            >
                                               <span
-                                                className={`font-bold text-[9.5px] uppercase truncate block flex-1 ${
-                                                  sub.etapa?.toUpperCase().includes('EQUIPE PARADA')
-                                                    ? 'text-[#C0392E]'
-                                                    : 'text-[#23211E]'
+                                                className={`font-bold block truncate ${
+                                                  isObraParada ? 'text-amber-800' : 'text-[#23211E]'
                                                 }`}
                                                 title={sub.etapa}
                                               >
-                                                {sub.etapa || 'SEM ETAPA'}
+                                                {sub.etapa}
                                               </span>
-                                              {isMulti && sub.valorPlanejado > 0 && (
-                                                <span className="text-[8.5px] font-mono text-[#17794C] font-semibold shrink-0">
-                                                  R${Math.round(sub.valorPlanejado).toLocaleString('pt-BR')}
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="flex items-center justify-between gap-1">
-                                              <span
-                                                className="font-mono text-[9px] text-[#4A463F] font-semibold truncate block flex-1"
-                                                title={sub.obra}
-                                              >
-                                                {sub.obra || '-'}
+                                              <span className="font-mono text-[8.5px] text-[#6B6660] block truncate">
+                                                {sub.obra}
                                               </span>
-                                              {sub.municipio && sub.municipio !== prog.municipio && (
-                                                <span
-                                                  className="text-[7.5px] uppercase text-[#8C877D] truncate max-w-[60px]"
-                                                  title={sub.municipio}
-                                                >
-                                                  {sub.municipio}
-                                                </span>
-                                              )}
                                             </div>
-                                            {activeDensidade === 'detalhado' &&
-                                              sub.pontos &&
-                                              sub.pontos.length > 0 && (
-                                                <div
-                                                  className="text-[8px] font-mono text-[#8C877D] leading-tight truncate mt-0.5"
-                                                  title={sub.pontos.join(', ')}
-                                                >
-                                                  {sub.pontos.join(', ')}
-                                                </div>
-                                              )}
-                                          </div>
-                                        );
-                                      })}
+                                          );
+                                        })
+                                      ) : (
+                                        <div className="text-[9.5px] leading-tight">
+                                          <span
+                                            className={`font-bold block truncate ${
+                                              prog.etapa?.toUpperCase().includes('EQUIPE PARADA')
+                                                ? 'text-amber-800 bg-amber-50 border border-amber-300 p-0.5 rounded'
+                                                : 'text-[#23211E]'
+                                            }`}
+                                            title={prog.etapa}
+                                          >
+                                            {prog.etapa || '-'}
+                                          </span>
+                                          {prog.obra && (
+                                            <span className="font-mono text-[8.5px] text-[#6B6660] block truncate">
+                                              {prog.obra}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
 
-                                    {/* Saturação (Jornada) e Deslocamento */}
-                                    <div className="flex items-center justify-between font-mono text-[9.5px] text-[#5C574F] pt-0.5 border-t border-[#F2F0EC] mt-auto">
-                                      <div className="flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: corDotJornada }} />
-                                        <span className="font-bold text-[#23211E]">{formatMinToHours(prog.tempoTotalMin)}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: corDotDesloc }} />
-                                        <span className="font-bold text-[9px]" style={{ color: corDotDesloc }}>
-                                          desl {deslocH.toFixed(1).replace('.', ',')}h
-                                        </span>
-                                      </div>
+                                    {/* Rodapé do Card */}
+                                    <div className="flex items-center justify-between text-[9px] pt-1 border-t border-[#F2F0EC]">
+                                      <span className="flex items-center gap-1 font-mono text-[#5C574F]">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#17794C]" />
+                                        {formatMinToHours(prog.tempoTotalMin)}
+                                      </span>
+
+                                      <span
+                                        className="flex items-center gap-0.5 font-mono text-[8.5px]"
+                                        style={{ color: getCorDeslocamento(prog.tempoDeslocamentoMin / 60).texto }}
+                                      >
+                                        <span
+                                          className="w-1.5 h-1.5 rounded-full"
+                                          style={{ backgroundColor: getCorDeslocamento(prog.tempoDeslocamentoMin / 60).texto }}
+                                        />
+                                        desl {(prog.tempoDeslocamentoMin / 60).toFixed(1).replace('.', ',')}h
+                                      </span>
                                     </div>
                                   </div>
                                 );
                               })}
 
                               {/* Coluna Planejado */}
-                              <div className="text-right pr-1 font-mono font-bold text-[9px] text-[#17794C] leading-tight">
+                              <div className="text-right pr-1 font-mono font-bold text-[9.5px] text-[#17794C] leading-tight">
                                 R${eq.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                               </div>
 
                               {/* Coluna Meta */}
-                              <div className="text-right pr-1 font-mono text-[9px] text-[#6B6660] leading-tight">
+                              <div className="text-right pr-1 font-mono text-[9.5px] text-[#6B6660] leading-tight">
                                 R${eq.metaSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                               </div>
 
@@ -1420,20 +1668,20 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
 
                               {/* Coluna Status Produção */}
                               <div className="text-center">
-                                <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-bold whitespace-nowrap ${corBadge}`}>
+                                <span className={`inline-block px-1.5 py-0.5 rounded text-[8.5px] font-bold whitespace-nowrap ${corBadge}`}>
                                   {statusTexto}
                                 </span>
                               </div>
 
                               {/* Coluna Média Deslocamento */}
-                              <div className="text-center font-bold text-[9px] text-[#23211E] font-mono">
+                              <div className="text-center font-bold text-[9.5px] text-[#23211E] font-mono">
                                 {temProg ? `${mediaDesloc.toFixed(1).replace('.', ',')}h` : '-'}
                               </div>
 
                               {/* Coluna Status Deslocamento */}
                               <div className="text-center">
                                 {temProg ? (
-                                  <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-bold whitespace-nowrap ${corDesloc}`}>
+                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[8.5px] font-bold whitespace-nowrap ${corDesloc}`}>
                                     {textoDesloc}
                                   </span>
                                 ) : '-'}
@@ -1450,7 +1698,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
               {/* Linha de Totais do Período */}
               <div
                 className="bg-[#FAF8F5] border-t-2 border-[#DEDAD3] text-xs font-bold py-2.5 px-3 items-center grid text-[#23211E]"
-                style={{ gridTemplateColumns: `110px repeat(${diasDaSemana.length}, minmax(180px, 1fr)) 65px 60px 35px 75px 40px 65px` }}
+                style={{ gridTemplateColumns: `105px repeat(${diasDaSemana.length}, minmax(140px, 1fr)) 72px 68px 40px 84px 48px 88px` }}
               >
                 <div className="pl-1 uppercase tracking-wider text-[11px] text-[#5C574F]">
                   Total Geral
@@ -1467,11 +1715,11 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                   </div>
                 ))}
 
-                <div className="text-right pr-2 text-[#23211E] font-mono text-xs">
+                <div className="text-right pr-1.5 text-[#23211E] font-mono text-xs">
                   R$ {metricasFiltradas.totalPlanejado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
 
-                <div className="text-right pr-2 text-[#6B6660] font-mono text-[10px]">
+                <div className="text-right pr-1.5 text-[#6B6660] font-mono text-[10px]">
                   R$ {metricasFiltradas.totalMeta.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
 
@@ -1494,7 +1742,7 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                     const corBadgeGeral = pctGeral >= 100 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : pctGeral >= 70 ? 'text-[#A06A16] bg-[#FBF2DA] border border-[#E8C9A0]' : 'text-[#C0392E] bg-[#F9E4E1] border border-[#F2C0B8]';
                     const statusTextoGeral = pctGeral >= 100 ? 'Meta Atingida' : pctGeral >= 70 ? 'Atenção' : 'Abaixo Meta';
                     return (
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corBadgeGeral}`}>
+                      <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${corBadgeGeral}`}>
                         {statusTextoGeral}
                       </span>
                     );
@@ -1511,9 +1759,9 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
                   {(() => {
                     const deslocGeral = metricasFiltradas.deslocamentoMedioH;
                     const corDeslocGeral = deslocGeral <= 2.0 ? 'text-[#17794C] bg-[#E6F2EA] border border-[#A0D4B2]' : 'text-[#B4581A] bg-[#FBEBDC] border border-[#F5D3B3]';
-                    const textoDeslocGeral = deslocGeral <= 2.0 ? 'Dentro da Meta' : 'Atenção > 2,0h';
+                    const textoDeslocGeral = deslocGeral <= 2.0 ? 'Dentro Meta' : 'Atenção > 2,0h';
                     return (
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${corDeslocGeral}`}>
+                      <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${corDeslocGeral}`}>
                         {textoDeslocGeral}
                       </span>
                     );
@@ -1812,34 +2060,412 @@ export const CalendarioPlanejamento: React.FC<CalendarioPlanejamentoProps> = ({
         </div>
       )}
 
-      {/* 5.6 ALOJAMENTOS */}
-      {blocos.alojamentos && alojamentosFiltrados.length > 0 && (
-        <div className="bg-white rounded-xl border border-[#E6E3DD] p-4 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between border-b border-[#E6E3DD] pb-2.5">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-[#E07A1F]" />
-              <h3 className="text-sm font-bold text-[#23211E]">
-                Alojamentos e Bases ({alojamentosFiltrados.length})
-              </h3>
-            </div>
-          </div>
+      {/* 5.6 RESUMO DE OCUPAÇÃO DE ALOJAMENTOS */}
+      {blocos.alojamentos && alojamentosOcupacaoFiltrados.length > 0 && (() => {
+        // Estatísticas para o Header e Footer
+        const totalVagasFaltando = alojamentosOcupacaoFiltrados.reduce((acc, a) => {
+          return acc + (a.picoPessoas > a.capacidade ? a.picoPessoas - a.capacidade : 0);
+        }, 0);
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            {alojamentosFiltrados.map((aloj, idx) => (
-              <div
-                key={idx}
-                className="p-2.5 rounded-lg border border-[#E6E3DD] bg-[#FBFAF7] flex flex-col gap-1"
-                style={{ borderLeft: `3px solid ${getCorEquipe(aloj.equipe)}` }}
-              >
-                <span className="font-bold font-mono text-xs text-[#23211E]">{aloj.equipe}</span>
-                <span className="text-[11px] text-[#5C574F]">
-                  {aloj.alojamento || <span className="text-[#A39E96] italic">Base Central</span>}
+        const totalAlojComFalta = alojamentosOcupacaoFiltrados.filter(a => a.picoPessoas > a.capacidade).length;
+
+        const picoGeralSemana = Math.max(0, ...alojamentosOcupacaoFiltrados.map(a => a.picoPessoas));
+
+        const totaisPorDia = diasDaSemana.map(diaData => {
+          const dataIso = format(diaData, 'yyyy-MM-dd');
+          const equipesNoDia = new Set<string>();
+          let locaisNoDia = 0;
+
+          alojamentosOcupacaoFiltrados.forEach(aloj => {
+            const diaEntry = aloj.ocupacaoDias.find(d => d.dataIso === dataIso);
+            if (diaEntry && diaEntry.totalPessoas > 0) {
+              locaisNoDia += 1;
+              diaEntry.equipes.forEach(e => equipesNoDia.add(e.codigo));
+            }
+          });
+
+          return {
+            dataIso,
+            totalEquipes: equipesNoDia.size,
+            totalLocais: locaisNoDia,
+          };
+        });
+
+        const getStatusLinha = (aloj: (typeof alojamentosOcupacaoFiltrados)[0]) => {
+          if (aloj.temSobrecarga || aloj.picoPessoas > aloj.capacidade) return { border: '#DC2626', bg: 'bg-rose-50/20' };
+          if (aloj.picoPct >= 85) return { border: '#D97706', bg: 'bg-transparent' };
+          if (aloj.picoPct >= 40) return { border: '#047857', bg: 'bg-transparent' };
+          return { border: '#22C55E', bg: 'bg-transparent' };
+        };
+
+        const getStatusDia = (totalPessoas: number, capacidade: number) => {
+          if (totalPessoas === 0) {
+            return {
+              corBarra: '#E7E5E4',
+              corTexto: '#A8A29E',
+              isVazio: true,
+            };
+          }
+          const cap = capacidade || 1;
+          const pct = Math.round((totalPessoas / cap) * 100);
+          if (totalPessoas > cap) {
+            return {
+              corBarra: '#DC2626',
+              corTexto: '#DC2626',
+              isVazio: false,
+              pct,
+            };
+          }
+          if (pct >= 85) {
+            return {
+              corBarra: '#D97706',
+              corTexto: '#D97706',
+              isVazio: false,
+              pct,
+            };
+          }
+          if (pct >= 40) {
+            return {
+              corBarra: '#047857',
+              corTexto: '#047857',
+              isVazio: false,
+              pct,
+            };
+          }
+          return {
+            corBarra: '#22C55E',
+            corTexto: '#15803D',
+            isVazio: false,
+            pct,
+          };
+        };
+
+        return (
+          <div className="bg-[#FAF9F5] rounded-xl border border-[#E6E3DD] p-4 sm:p-5 shadow-2xs space-y-3.5">
+            {/* Cabeçalho do Bloco */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-1 h-5 bg-[#E07A1F] rounded-full inline-block" />
+                <h3 className="text-base font-bold text-[#1C1917]">
+                  Alojamentos e Bases ({alojamentosOcupacaoFiltrados.length})
+                </h3>
+              </div>
+
+              {totalVagasFaltando > 0 ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#FEF2F2] text-[#991B1B] border border-[#FCA5A5]/60 text-xs font-bold tracking-tight">
+                  Faltam {totalVagasFaltando} {totalVagasFaltando === 1 ? 'vaga' : 'vagas'} em {totalAlojComFalta} {totalAlojComFalta === 1 ? 'alojamento' : 'alojamentos'}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] text-xs font-semibold">
+                  Capacidade Adequada
+                </span>
+              )}
+            </div>
+
+            {/* Tabela Estruturada */}
+            <div className="overflow-x-auto rounded-xl border border-[#E6E3DD] bg-white shadow-2xs">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#FAF8F5] border-b border-[#E6E3DD] text-[10px] uppercase font-bold text-[#78716C] tracking-wider">
+                    <th className="py-2.5 px-3 text-left min-w-[140px]">ALOJAMENTO</th>
+                    {diasDaSemana.map((diaData, idx) => (
+                      <th key={idx} className="py-2.5 px-2 text-left min-w-[110px]">
+                        <span className="font-black text-[#1C1917] text-[10.5px]">{format(diaData, 'EEE', { locale: ptBR }).toUpperCase()}</span>{' '}
+                        <span className="font-mono text-[9.5px] text-[#78716C] font-normal">{format(diaData, 'dd/MM')}</span>
+                      </th>
+                    ))}
+                    <th className="py-2.5 px-3 text-right w-[85px] tracking-wider">PICO</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0EDE8]">
+                  {alojamentosOcupacaoFiltrados.map((aloj) => {
+                    const statusLinha = getStatusLinha(aloj);
+                    const cap = aloj.capacidade || 1;
+
+                    return (
+                      <tr
+                        key={aloj.id}
+                        className={`hover:bg-[#FAF8F5]/80 transition-colors ${statusLinha.bg}`}
+                        style={{ borderLeft: `4px solid ${statusLinha.border}` }}
+                      >
+                        {/* Nome do Alojamento */}
+                        <td className="py-3 px-3 text-left align-top">
+                          <div className="leading-tight space-y-0.5">
+                            <div className="flex items-center gap-1.5 group">
+                              <span className="font-bold text-xs text-[#1C1917] block">{aloj.nome}</span>
+                              <button
+                                type="button"
+                                onClick={() => abrirEdicaoAlojamento(aloj)}
+                                className="p-1 rounded text-[#A8A29E] hover:text-[#E07A1F] hover:bg-[#E07A1F]/10 transition-all opacity-80 group-hover:opacity-100 cursor-pointer print:hidden"
+                                title="Editar dados deste alojamento/base"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <span className="text-[10.5px] text-[#78716C] font-medium block">
+                              {aloj.capacidade} {aloj.capacidade === 1 ? 'vaga' : 'vagas'}
+                              {aloj.municipio && aloj.municipio.toUpperCase() !== aloj.nome.toUpperCase() && (
+                                <span className="text-[#A39E96]"> · {aloj.municipio}</span>
+                              )}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Dias da Semana */}
+                        {aloj.ocupacaoDias.map((dia) => {
+                          const statusDia = getStatusDia(dia.totalPessoas, aloj.capacidade);
+
+                          return (
+                            <td key={dia.dataIso} className="py-3 px-2 text-left align-top">
+                              {statusDia.isVazio ? (
+                                <div className="flex items-center justify-between gap-1 max-w-[90px] pt-0.5">
+                                  <div className="w-14 h-1 bg-[#E7E5E4] rounded-full" />
+                                  <span className="text-[#A8A29E] text-xs font-mono">-</span>
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5 max-w-[120px]">
+                                  {/* Barra de Progresso + Headcount */}
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <div className="w-14 sm:w-16 h-1.5 bg-[#F5F2EC] rounded-full overflow-hidden shrink-0">
+                                      <div
+                                        className="h-full rounded-full transition-all"
+                                        style={{
+                                          width: `${Math.min(100, Math.max(15, (dia.totalPessoas / cap) * 100))}%`,
+                                          backgroundColor: statusDia.corBarra,
+                                        }}
+                                      />
+                                    </div>
+                                    <span
+                                      className="font-mono font-bold text-[10.5px] shrink-0"
+                                      style={{ color: statusDia.corTexto }}
+                                    >
+                                      {dia.totalPessoas}p
+                                    </span>
+                                  </div>
+
+                                  {/* Códigos das Equipes em Grid/Inline Monospace */}
+                                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-left pt-0.5">
+                                    {dia.equipes.map((e, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="text-[10px] font-mono font-medium text-[#44403C] hover:text-[#E07A1F] cursor-default whitespace-nowrap"
+                                        title={`Equipe ${e.codigo} (${e.tipoEquipe} · ${e.numPessoas}p)\nSupervisor: ${e.supervisor || '-'}\nObra: ${e.obra || '-'}`}
+                                      >
+                                        {e.codigo}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+
+                        {/* Pico / Faltam Vagas */}
+                        <td className="py-3 px-3 text-right align-top whitespace-nowrap">
+                          <div className="flex flex-col items-end gap-1">
+                            <span
+                              className="font-mono font-bold text-xs"
+                              style={{ color: statusLinha.border }}
+                            >
+                              {aloj.picoPessoas}/{aloj.capacidade}
+                            </span>
+                            {aloj.picoPessoas > aloj.capacidade ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-[#FEE2E2] text-[#991B1B] text-[9.5px] font-bold">
+                                faltam {aloj.picoPessoas - aloj.capacidade}
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                  aloj.picoPct >= 85
+                                    ? 'bg-[#FEF3C7] text-[#92400E]'
+                                    : 'bg-[#ECFDF5] text-[#065F46]'
+                                }`}
+                              >
+                                {aloj.picoPct}%
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* Linha de Totais */}
+                  <tr className="bg-[#FAF8F5] border-t-2 border-[#E6E3DD] font-bold">
+                    <td className="py-2.5 px-3 text-left text-[11px] font-bold text-[#44403C] uppercase tracking-wider">
+                      TOTAL
+                    </td>
+                    {totaisPorDia.map((tot, idx) => (
+                      <td key={idx} className="py-2.5 px-2 text-left align-middle whitespace-nowrap">
+                        {tot.totalEquipes > 0 ? (
+                          <div className="text-[10.5px] text-[#1C1917] font-sans">
+                            <strong>{tot.totalEquipes}</strong> <span className="text-[#78716C] font-normal text-[9.5px]">eq</span>{' '}
+                            <strong>{tot.totalLocais}</strong> <span className="text-[#78716C] font-normal text-[9.5px]">locais</span>
+                          </div>
+                        ) : (
+                          <span className="text-[#A8A29E] font-mono text-xs">-</span>
+                        )}
+                      </td>
+                    ))}
+                    <td className="py-2.5 px-3 text-right text-xs font-mono font-bold text-[#1C1917]">
+                      {picoGeralSemana}p
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Legenda e Nota do Rodapé */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-[10px] text-[#78716C]">
+              <div className="flex items-center gap-3.5 flex-wrap">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
+                  até 40%
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#047857]" />
+                  40–85%
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#D97706]" />
+                  85–100%
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
+                  sem cama
                 </span>
               </div>
-            ))}
+
+              <span className="italic">
+                Equipes distintas alojadas no dia; a mesma equipe pode ter mais de um local reservado.
+              </span>
+            </div>
+
+            {/* Modal de Edição de Alojamento */}
+            <Dialog open={!!alojamentoEditando} onOpenChange={(open) => !open && setAlojamentoEditando(null)}>
+              <DialogContent className="sm:max-w-[440px] bg-white border border-[#E6E3DD] p-5 shadow-lg">
+                <DialogHeader className="border-b border-[#E6E3DD] pb-3">
+                  <DialogTitle className="text-sm font-bold text-[#1C1917] flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-[#E07A1F]" />
+                    Editar Alojamento / Base
+                  </DialogTitle>
+                </DialogHeader>
+
+                {alojamentoEditando && (
+                  <form onSubmit={handleSalvarEdicaoAlojamento} className="space-y-3.5 pt-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-[#5C574F] uppercase tracking-wider block">
+                        Nome do Local
+                      </label>
+                      <input
+                        type="text"
+                        value={alojamentoEditando.nome}
+                        onChange={(e) => setAlojamentoEditando({ ...alojamentoEditando, nome: e.target.value })}
+                        required
+                        placeholder="Ex: Alojamento Coribe Centro"
+                        className="w-full bg-[#FAF8F5] border border-[#DEDAD3] rounded-lg h-9 px-3 text-xs font-semibold text-[#1C1917] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-[#5C574F] uppercase tracking-wider block">
+                          Capacidade (Vagas)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="500"
+                          value={alojamentoEditando.capacidade}
+                          onChange={(e) => setAlojamentoEditando({ ...alojamentoEditando, capacidade: parseInt(e.target.value, 10) || 0 })}
+                          required
+                          className="w-full bg-[#FAF8F5] border border-[#DEDAD3] rounded-lg h-9 px-3 text-xs font-bold font-mono text-[#1C1917] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-[#5C574F] uppercase tracking-wider block">
+                          Município / Cidade
+                        </label>
+                        <input
+                          type="text"
+                          value={alojamentoEditando.municipio}
+                          onChange={(e) => setAlojamentoEditando({ ...alojamentoEditando, municipio: e.target.value })}
+                          placeholder="Ex: CORIBE"
+                          className="w-full bg-[#FAF8F5] border border-[#DEDAD3] rounded-lg h-9 px-3 text-xs font-semibold text-[#1C1917] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-[#78716C] uppercase tracking-wider block">
+                          Latitude (Opcional)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={alojamentoEditando.latitude ?? ''}
+                          onChange={(e) => setAlojamentoEditando({ ...alojamentoEditando, latitude: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                          placeholder="-13.4000"
+                          className="w-full bg-[#FAF8F5] border border-[#DEDAD3] rounded-lg h-8 px-2.5 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-[#78716C] uppercase tracking-wider block">
+                          Longitude (Opcional)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={alojamentoEditando.longitude ?? ''}
+                          onChange={(e) => setAlojamentoEditando({ ...alojamentoEditando, longitude: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                          placeholder="-44.1833"
+                          className="w-full bg-[#FAF8F5] border border-[#DEDAD3] rounded-lg h-8 px-2.5 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-1 focus:ring-[#E07A1F]"
+                        />
+                      </div>
+                    </div>
+
+                    {erroEdicaoAlojamento && (
+                      <div className="p-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700 font-medium">
+                        {erroEdicaoAlojamento}
+                      </div>
+                    )}
+
+                    <DialogFooter className="pt-3 border-t border-[#E6E3DD] gap-2 flex items-center justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setAlojamentoEditando(null)}
+                        disabled={salvandoAlojamento}
+                        className="h-8 text-xs font-bold"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={salvandoAlojamento}
+                        className="h-8 text-xs font-bold bg-[#E07A1F] hover:bg-[#C0671A] text-white"
+                      >
+                        {salvandoAlojamento ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                            Salvando...
+                          </>
+                        ) : (
+                          'Salvar Alterações'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 5.9 RESUMO EXECUTIVO DO PERÍODO */}
       {blocos.resumo && (

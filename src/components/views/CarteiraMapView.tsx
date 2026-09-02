@@ -44,11 +44,12 @@ const getStatusColor = (s: string) => {
 };
 
 const getPostesTextColor = (postes: number) => {
-  if (postes <= 10) return '#ffffff'; // White
-  if (postes <= 20) return '#67e8f9'; // Cyan-300
-  if (postes <= 30) return '#fde047'; // Yellow-300
-  if (postes <= 100) return '#fdba74'; // Orange-300
-  return '#fca5a5'; // Red-300
+  if (postes <= 5) return '#ffffff'; // White (1 a 5)
+  if (postes <= 10) return '#4ade80'; // Green-400 (6 a 10)
+  if (postes <= 20) return '#67e8f9'; // Cyan-300 (11 a 20)
+  if (postes <= 50) return '#fde047'; // Yellow-300 (21 a 50)
+  if (postes <= 100) return '#fdba74'; // Orange-300 (51 a 100)
+  return '#fca5a5'; // Red-300 (Acima de 100)
 };
 
 const createMarkerIcon = (status: string, postes: number) => {
@@ -474,10 +475,11 @@ export const CarteiraMapView = ({ obras }: CarteiraMapViewProps) => {
         <div className="mt-3 pt-3 border-t border-border">
           <h4 className="font-bold mb-2">Qtd. Postes</h4>
           <div className="space-y-1.5 font-bold tracking-tight">
-            <div className="flex items-center gap-2"><span style={{ color: '#ffffff', textShadow: '1px 1px 2px #000' }}>Até 10</span></div>
+            <div className="flex items-center gap-2"><span style={{ color: '#ffffff', textShadow: '1px 1px 2px #000' }}>1 a 5</span></div>
+            <div className="flex items-center gap-2"><span style={{ color: '#4ade80', textShadow: '1px 1px 2px #000' }}>6 a 10</span></div>
             <div className="flex items-center gap-2"><span style={{ color: '#67e8f9', textShadow: '1px 1px 2px #000' }}>11 a 20</span></div>
-            <div className="flex items-center gap-2"><span style={{ color: '#fde047', textShadow: '1px 1px 2px #000' }}>21 a 30</span></div>
-            <div className="flex items-center gap-2"><span style={{ color: '#fdba74', textShadow: '1px 1px 2px #000' }}>31 a 100</span></div>
+            <div className="flex items-center gap-2"><span style={{ color: '#fde047', textShadow: '1px 1px 2px #000' }}>21 a 50</span></div>
+            <div className="flex items-center gap-2"><span style={{ color: '#fdba74', textShadow: '1px 1px 2px #000' }}>51 a 100</span></div>
             <div className="flex items-center gap-2"><span style={{ color: '#fca5a5', textShadow: '1px 1px 2px #000' }}>Acima de 100</span></div>
           </div>
         </div>
