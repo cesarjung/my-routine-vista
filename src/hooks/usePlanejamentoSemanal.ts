@@ -876,6 +876,18 @@ export function usePlanejamentoSemanal({
       });
     });
 
+    // Ordenar: Equipes com programação primeiro, depois por Supervisor e Código
+    equipesResultado.sort((a, b) => {
+      if (a.temProgramacao !== b.temProgramacao) {
+        return a.temProgramacao ? -1 : 1;
+      }
+      if (a.supervisor !== b.supervisor) {
+        return a.supervisor.localeCompare(b.supervisor);
+      }
+      return a.codigo.localeCompare(b.codigo);
+    });
+
+    // 5.4 Métricas Consolidadas do Período
     const equipesProgramadas = equipesResultado.filter(e => e.temProgramacao);
     const totalMetaEquipesProgramadas = equipesProgramadas.reduce((acc, eq) => acc + eq.metaSemanal, 0);
     const aderenciaPeriodo = totalGeralMeta > 0 ? Math.round((totalGeralPlanejado / totalGeralMeta) * 100) : 0;
@@ -884,6 +896,7 @@ export function usePlanejamentoSemanal({
     const deslocamentoMedioH = totalTurnos > 0 ? Math.round((totalDeslocamentoMinutos / totalTurnos / 60) * 10) / 10 : 0;
 
     // 5.5 Consolidação de Ocupação Diária por Alojamento na Semana
+    // BASEADA ESTRITAMENTE NAS COLUNAS BZ (ALOJAMENTO IDA) E CA (ALOJAMENTO VOLTA) DA PLAN_PRINCIPAL
     const todosAlojamentos = (alojamentosQuery.data || []) as Array<{ id: string; nome: string; municipio?: string; capacidade: number; unidadeId?: string; unidadeNome?: string }>;
     
     // Obter o objeto da unidade atual para comparar tanto id quanto nome
@@ -897,6 +910,30 @@ export function usePlanejamentoSemanal({
       const matchNome = !!(targetUnidadeNome && aloj.unidadeNome && aloj.unidadeNome.trim().toUpperCase() === targetUnidadeNome);
       return matchId || matchNome;
     });
+
+    // Helper para verificar se a string é um nome de alojamento/base válido da planilha
+    const isValidAlojName = (name: string): boolean => {
+      if (!name) return false;
+      const u = name.toUpperCase().trim();
+      if (
+        u === '' ||
+        u === '-' ||
+        u === 'N/A' ||
+        u === 'NA' ||
+        u === 'NÃO' ||
+        u === 'NAO' ||
+        u === 'SEM ALOJAMENTO' ||
+        u === 'FOLGA' ||
+        u === 'DOMINGO' ||
+        u === 'FERIADO' ||
+        u === 'INDISPONÍVEL' ||
+        u === 'INDISPONIVEL' ||
+        u === 'BASE CENTRAL'
+      ) {
+        return false;
+      }
+      return true;
+    };
 
     // Mapa para acumular ocupação por Alojamento
     const ocupacaoPorAlojamentoMap = new Map<string, {
@@ -929,32 +966,35 @@ export function usePlanejamentoSemanal({
       Object.entries(eq.dias).forEach(([dataIso, d]) => {
         if (!d || d.isFolga || d.isFeriado || d.isIndisponivel) return;
 
+        // Extrai estritamente das colunas BZ (IDA) e CA (VOLTA)
         const alojNomesDia = new Set<string>();
         const ida = (d as any).alojamentoIda ? String((d as any).alojamentoIda).trim() : '';
         const volta = (d as any).alojamentoVolta ? String((d as any).alojamentoVolta).trim() : '';
-        const alojGeral = (d as any).alojamento ? String((d as any).alojamento).trim() : '';
 
-        if (ida && ida !== '-' && !ida.toUpperCase().includes('FOLGA')) alojNomesDia.add(ida);
-        if (volta && volta !== '-' && !volta.toUpperCase().includes('FOLGA')) alojNomesDia.add(volta);
-        if (alojGeral && alojGeral !== '-' && !ida && !volta && !alojGeral.toUpperCase().includes('FOLGA')) {
-          alojNomesDia.add(alojGeral);
+        if (isValidAlojName(volta)) {
+          alojNomesDia.add(volta);
+        }
+        if (isValidAlojName(ida) && !alojNomesDia.has(ida)) {
+          // Se volta estiver vazio ou for diferente, adiciona ida
+          if (!isValidAlojName(volta) || (!ida.toUpperCase().includes('BASE CENTRAL') && !ida.toUpperCase().includes('BASE PRINCIPAL'))) {
+            alojNomesDia.add(ida);
+          }
         }
 
-        if (alojNomesDia.size === 0 && d.municipio && !d.municipio.toUpperCase().includes('BASE') && !d.municipio.toUpperCase().includes('FOLGA')) {
-          alojNomesDia.add(`Alojamento ${d.municipio}`);
-        }
-
+        // NÃO FAZ FALLBACK PARA MUNICÍPIO! Apenas quem estiver explicitamente listado em BZ ou CA.
         alojNomesDia.forEach(nomeAloj => {
-          if (!nomeAloj || nomeAloj === '-' || nomeAloj.toUpperCase() === 'BASE CENTRAL') return;
+          if (!isValidAlojName(nomeAloj)) return;
           const key = nomeAloj.trim().toUpperCase();
 
           let registro = ocupacaoPorAlojamentoMap.get(key);
           if (!registro) {
+            // Tenta casar com alojamentos cadastrados da unidade ou globais
             const matchCadastrado = alojamentosCadastrados.find(
-              c => key.includes(c.nome.toUpperCase()) || c.nome.toUpperCase().includes(key)
+              c => key === c.nome.trim().toUpperCase() || key.includes(c.nome.toUpperCase()) || c.nome.toUpperCase().includes(key)
             ) || todosAlojamentos.find(
-              c => key.includes(c.nome.toUpperCase()) || c.nome.toUpperCase().includes(key)
+              c => key === c.nome.trim().toUpperCase() || key.includes(c.nome.toUpperCase()) || c.nome.toUpperCase().includes(key)
             );
+
             if (matchCadastrado) {
               const matchKey = matchCadastrado.nome.trim().toUpperCase();
               registro = ocupacaoPorAlojamentoMap.get(matchKey);
@@ -969,11 +1009,12 @@ export function usePlanejamentoSemanal({
                 ocupacaoPorAlojamentoMap.set(matchKey, registro);
               }
             } else {
+              // Alojamento listado na planilha que ainda não estava cadastrado no banco
               registro = {
                 id: `dinamico-${key}`,
                 nome: nomeAloj.trim(),
                 municipio: d.municipio || '',
-                capacidade: 10, // capacidade padrão
+                capacidade: 10, // capacidade padrão inicial até o usuário editar pelo botão de lápis
                 diasMap: new Map(),
               };
               ocupacaoPorAlojamentoMap.set(key, registro);
