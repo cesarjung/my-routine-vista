@@ -19,7 +19,8 @@ export type NavigationContext =
   | { type: 'pcp_calendario'; section: 'planejamento' }
   | { type: 'pcp_planejamento'; section: 'planejamento' }
   | { type: 'pcp_planejamento_auto'; section: 'planejamento' }
-  | { type: 'lancamentos_servicos' };
+  | { type: 'lancamentos_servicos' }
+  | { type: 'reportes' };
 
 export interface NavigationState {
   context: NavigationContext;

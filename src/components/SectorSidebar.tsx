@@ -25,7 +25,8 @@ import {
   Hammer,
   Truck,
   ClipboardCheck,
-  Bot
+  Bot,
+  Bug
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -900,6 +901,20 @@ export const SectorSidebar = ({ context, onNavigate, collapsed, onCollapseChange
         >
           <Settings className={cn('w-4 h-4 flex-shrink-0', context.type === 'settings' && 'text-primary')} />
           {!collapsed && <span className="text-sm">Configurações</span>}
+        </button>
+
+        <button
+          onClick={() => onNavigate({ type: 'reportes' })}
+          className={cn(
+            'w-full flex items-center gap-3 px-2 py-1.5 rounded-md transition-colors',
+            context.type === 'reportes'
+              ? 'bg-sidebar-accent text-sidebar-primary font-medium'
+              : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+          )}
+          title={collapsed ? "Reportes" : undefined}
+        >
+          <Bug className={cn('w-4 h-4 flex-shrink-0', context.type === 'reportes' && 'text-primary')} />
+          {!collapsed && <span className="text-sm">Reportes</span>}
         </button>
 
         <button

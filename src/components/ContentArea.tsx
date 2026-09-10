@@ -28,6 +28,7 @@ import { LancamentosServicosView } from '@/components/views/LancamentosServicosV
 import { PcpCalendarioView } from '@/components/views/PcpCalendarioView';
 import { PcpPlanejamentoView } from '@/components/views/PcpPlanejamentoView';
 import { PcpPlanejAutoView } from '@/components/views/PcpPlanejAutoView';
+import { ReportesView } from '@/components/views/ReportesView';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -60,6 +61,8 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         return 'Minhas Tarefas';
       case 'settings':
         return 'Configurações';
+      case 'reportes':
+        return 'Reportes';
       case 'planejamento':
         if (context.section === 'carteira_dashboard') return 'Carteira';
         if (context.section === 'carteira') return 'Carteira Planejada';
@@ -139,6 +142,27 @@ export const ContentArea = ({ context, viewMode, onViewModeChange }: ContentArea
         </header>
         <div className="w-full flex-1 min-h-0 overflow-y-auto pr-1">
           <SettingsView hideHeader={true} />
+        </div>
+      </div>
+    );
+  }
+
+  // Reportes View
+  if (context.type === 'reportes') {
+    return (
+      <div className="h-full flex flex-col p-6 bg-background">
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-base font-semibold text-foreground leading-none mb-1">Reportes</h1>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                <span>Relato e Acompanhamento de Erros</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="w-full flex-1 min-h-0 overflow-y-auto pr-1">
+          <ReportesView />
         </div>
       </div>
     );
