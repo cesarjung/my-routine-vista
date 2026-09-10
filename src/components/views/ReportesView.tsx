@@ -17,12 +17,16 @@ import {
   Download,
   Trash2,
   MessageSquare,
+  MessageCircle,
+  Send,
+  Hash,
   User,
   ShieldCheck,
   RefreshCw,
   X,
   UploadCloud,
   ChevronDown,
+  ChevronUp,
   ArrowRight,
   Sparkles
 } from 'lucide-react';
@@ -99,6 +103,11 @@ export const ReportesView = () => {
   const [manageStatus, setManageStatus] = useState<ReporteStatus>('em_andamento');
   const [manageResposta, setManageResposta] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Chat & Interações state
+  const [chatInputs, setChatInputs] = useState<Record<string, string>>({});
+  const [openChats, setOpenChats] = useState<Record<string, boolean>>({});
+  const [sendingChatId, setSendingChatId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -269,6 +278,51 @@ export const ReportesView = () => {
     }
   };
 
+  // Toggle chat expansion
+  const toggleChat = (id: string) => {
+    setOpenChats((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Enviar mensagem no chat do chamado
+  const handleSendMessage = async (reporte: ReporteItem) => {
+    const text = (chatInputs[reporte.id] || '').trim();
+    if (!text) return;
+
+    // Verificar se o usuário logado tem permissão para interagir (autor ou gestor/admin)
+    const isAuthor =
+      user?.id === reporte.usuario_id ||
+      (user?.email && reporte.usuario_email && user.email.toLowerCase() === reporte.usuario_email.toLowerCase());
+
+    if (!isAuthor && !isGestorOrAdmin) {
+      toast.error('Apenas o solicitante do chamado e administradores/gestores podem interagir.');
+      return;
+    }
+
+    setSendingChatId(reporte.id);
+    try {
+      const userRole = isAdmin ? 'admin' : isGestorOrAdmin ? 'gestor' : 'usuario';
+      const updated = await reportesService.addMessage(reporte.id, {
+        usuario_id: user?.id || 'anon',
+        usuario_nome: loggedUserName,
+        usuario_role: userRole,
+        mensagem: text,
+      });
+
+      // Atualiza o reporte no estado local
+      setReportes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      // Limpa o input
+      setChatInputs((prev) => ({ ...prev, [reporte.id]: '' }));
+      // Garante que o chat fica aberto
+      setOpenChats((prev) => ({ ...prev, [reporte.id]: true }));
+      toast.success('Mensagem enviada no chamado!');
+    } catch (err: any) {
+      console.error('Erro ao enviar mensagem no chat:', err);
+      toast.error(err.message || 'Erro ao enviar mensagem.');
+    } finally {
+      setSendingChatId(null);
+    }
+  };
+
   // Metrics
   const metrics = useMemo(() => {
     const total = reportes.length;
@@ -287,13 +341,16 @@ export const ReportesView = () => {
       }
       const matchesStatus = statusFilter === 'todos' ? true : r.status === statusFilter;
       const query = searchQuery.toLowerCase().trim();
+      const numQuery = query.replace('#', '').trim();
       const matchesSearch =
         !query ||
         r.titulo.toLowerCase().includes(query) ||
         r.descricao.toLowerCase().includes(query) ||
         r.usuario_nome.toLowerCase().includes(query) ||
+        (r.numero && (r.numero.toString() === numQuery || `#${r.numero}`.includes(query))) ||
         (r.categoria && r.categoria.toLowerCase().includes(query)) ||
-        (r.respondido_por_nome && r.respondido_por_nome.toLowerCase().includes(query));
+        (r.respondido_por_nome && r.respondido_por_nome.toLowerCase().includes(query)) ||
+        (r.mensagens && r.mensagens.some((m) => m.mensagem.toLowerCase().includes(query) || m.usuario_nome.toLowerCase().includes(query)));
       return matchesStatus && matchesSearch;
     });
   }, [reportes, statusFilter, searchQuery, mostrarResolvidos]);
@@ -561,6 +618,12 @@ export const ReportesView = () => {
                     <div className="space-y-3 flex-1">
                       {/* Tags & Header */}
                       <div className="flex flex-wrap items-center gap-2">
+                        {/* Ticket Number Badge */}
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25 font-bold text-xs gap-1">
+                          <Hash className="w-3 h-3 text-primary" />
+                          Chamado #{reporte.numero || '?'}
+                        </Badge>
+
                         {/* Status Badge */}
                         {reporte.status === 'pendente' && (
                           <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border-amber-300/40 gap-1.5 font-semibold text-xs">
@@ -597,8 +660,9 @@ export const ReportesView = () => {
                       </div>
 
                       {/* Title */}
-                      <h4 className="text-base font-semibold text-foreground tracking-tight">
-                        {reporte.titulo}
+                      <h4 className="text-base font-semibold text-foreground tracking-tight flex items-center gap-1.5">
+                        <span className="text-primary font-bold">#{reporte.numero || ''}</span>
+                        <span>{reporte.titulo}</span>
                       </h4>
 
                       {/* Description */}
@@ -772,6 +836,172 @@ export const ReportesView = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Seção de Interação / Chat entre Solicitante e Gestão */}
+                  {(() => {
+                    const isAuthor =
+                      user?.id === reporte.usuario_id ||
+                      (user?.email && reporte.usuario_email && user.email.toLowerCase() === reporte.usuario_email.toLowerCase());
+                    const canChat = isAuthor || isGestorOrAdmin;
+                    const mensagens = reporte.mensagens || [];
+                    const isChatOpen = !!openChats[reporte.id] || mensagens.length > 0;
+
+                    return (
+                      <div className="mt-4 pt-4 border-t border-border/60">
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleChat(reporte.id)}
+                            className="flex items-center gap-2 text-xs font-semibold text-foreground hover:text-primary transition-colors cursor-pointer group py-1"
+                          >
+                            <div className="w-6 h-6 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center text-primary transition-colors">
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </div>
+                            <span>Interações & Chat do Chamado</span>
+                            {mensagens.length > 0 ? (
+                              <Badge variant="secondary" className="text-[11px] px-1.5 py-0 font-bold bg-primary/15 text-primary border-primary/20">
+                                {mensagens.length} {mensagens.length === 1 ? 'mensagem' : 'mensagens'}
+                              </Badge>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground font-normal">
+                                (Sem mensagens)
+                              </span>
+                            )}
+                            {isChatOpen ? (
+                              <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                            )}
+                          </button>
+
+                          {!isChatOpen && canChat && mensagens.length === 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleChat(reporte.id)}
+                              className="h-7 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              Escrever mensagem
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Conteúdo do Chat Expandido */}
+                        {isChatOpen && (
+                          <div className="mt-3 space-y-3 bg-muted/20 p-3.5 rounded-lg border border-border/40 animate-in fade-in-50 duration-200">
+                            {/* Histórico de Mensagens */}
+                            {mensagens.length > 0 ? (
+                              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                                {mensagens.map((msg) => {
+                                  const isMe =
+                                    msg.usuario_id === user?.id ||
+                                    (user?.email && msg.usuario_nome?.toLowerCase().includes(user.email.split('@')[0].toLowerCase()));
+                                  const isManagement = msg.usuario_role === 'admin' || msg.usuario_role === 'gestor';
+
+                                  return (
+                                    <div
+                                      key={msg.id}
+                                      className={cn(
+                                        'flex flex-col text-xs rounded-lg p-2.5 max-w-[92%] sm:max-w-[80%]',
+                                        isMe
+                                          ? 'ml-auto bg-primary text-primary-foreground shadow-sm'
+                                          : isManagement
+                                          ? 'mr-auto bg-blue-50 dark:bg-blue-950/40 border border-blue-200/50 dark:border-blue-900/40 text-foreground'
+                                          : 'mr-auto bg-card border text-foreground'
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className={cn('font-semibold truncate', isMe ? 'text-primary-foreground' : 'text-foreground')}>
+                                          {msg.usuario_nome}
+                                        </span>
+                                        {isManagement ? (
+                                          <span
+                                            className={cn(
+                                              'text-[10px] px-1.5 py-0.2 rounded-full font-medium',
+                                              isMe
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-blue-500/15 text-blue-700 dark:text-blue-400'
+                                            )}
+                                          >
+                                            {msg.usuario_role === 'admin' ? 'Admin' : 'Gestão'}
+                                          </span>
+                                        ) : (
+                                          <span
+                                            className={cn(
+                                              'text-[10px] px-1.5 py-0.2 rounded-full font-medium',
+                                              isMe ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
+                                            )}
+                                          >
+                                            Solicitante
+                                          </span>
+                                        )}
+                                        <span
+                                          className={cn(
+                                            'text-[10px] ml-auto opacity-75',
+                                            isMe ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                                          )}
+                                        >
+                                          {msg.created_at
+                                            ? format(new Date(msg.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })
+                                            : ''}
+                                        </span>
+                                      </div>
+                                      <div className={cn('whitespace-pre-line leading-relaxed break-words', isMe ? 'text-primary-foreground/95' : 'text-foreground/90')}>
+                                        {msg.mensagem}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-center py-2 text-xs text-muted-foreground">
+                                Nenhuma interação registrada ainda. Use o campo abaixo para dialogar com {isGestorOrAdmin ? 'o solicitante' : 'a equipe de suporte'}.
+                              </div>
+                            )}
+
+                            {/* Caixa de Envio */}
+                            {canChat ? (
+                              <div className="flex items-end gap-2 pt-1 border-t border-border/40">
+                                <Textarea
+                                  placeholder={`Escreva uma mensagem como ${loggedUserName}... (Pressione Enter para enviar)`}
+                                  value={chatInputs[reporte.id] || ''}
+                                  onChange={(e) => setChatInputs((prev) => ({ ...prev, [reporte.id]: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      handleSendMessage(reporte);
+                                    }
+                                  }}
+                                  rows={2}
+                                  className="text-xs resize-none min-h-[42px] bg-background"
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSendMessage(reporte)}
+                                  disabled={!chatInputs[reporte.id]?.trim() || sendingChatId === reporte.id}
+                                  className="h-10 px-3 shrink-0 gap-1.5 text-xs font-semibold shadow-sm"
+                                >
+                                  {sendingChatId === reporte.id ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Send className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Enviar</span>
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-muted-foreground bg-muted/40 p-2 rounded text-center">
+                                Apenas o solicitante deste chamado e a equipe de gestão podem interagir por mensagens.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             );
@@ -961,17 +1191,20 @@ export const ReportesView = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <ShieldCheck className="w-5 h-5 text-primary" />
-              Gerenciar Reporte
+              <span>Gerenciar Chamado #{selectedReportForResponse?.numero || ''}</span>
             </DialogTitle>
             <DialogDescription>
-              Atualize o status deste reporte e deixe uma resposta técnica para o usuário.
+              Atualize o status deste chamado e deixe uma resposta técnica para o usuário.
             </DialogDescription>
           </DialogHeader>
 
           {selectedReportForResponse && (
             <div className="space-y-4 pt-2">
               <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-1">
-                <div className="font-semibold text-foreground text-sm">{selectedReportForResponse.titulo}</div>
+                <div className="font-semibold text-foreground text-sm flex items-center gap-1.5">
+                  <span className="text-primary font-bold">#{selectedReportForResponse.numero || ''}</span>
+                  <span>{selectedReportForResponse.titulo}</span>
+                </div>
                 <div className="text-muted-foreground line-clamp-2">{selectedReportForResponse.descricao}</div>
                 <div className="text-muted-foreground pt-1">
                   Aberto por: <strong className="text-foreground">{selectedReportForResponse.usuario_nome}</strong>

@@ -44,6 +44,14 @@ export default async function handler(req, res) {
 
       items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+      // Garantir numero sequencial
+      const sortedByDate = [...items].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      sortedByDate.forEach((item, index) => {
+        if (!item.numero) item.numero = index + 1;
+      });
+
       return res.status(200).json({ success: true, data: items });
     }
 
@@ -52,8 +60,23 @@ export default async function handler(req, res) {
       const reportId = body.id || `rep_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const nowIso = new Date().toISOString();
 
+      // Calcular numero sequencial
+      let numero = body.numero;
+      if (!numero) {
+        const { data: allRows } = await supabase
+          .from('planejamento_cache')
+          .select('principal')
+          .like('unidade_id', 'REP_%');
+
+        const maxNum = (allRows || []).reduce((max, r) => {
+          return Math.max(max, r?.principal?.numero || 0);
+        }, 0);
+        numero = maxNum + 1;
+      }
+
       const newReport = {
         id: reportId,
+        numero,
         titulo: body.titulo || 'Reporte de Erro',
         descricao: body.descricao || '',
         categoria: body.categoria || 'Geral',
@@ -69,6 +92,7 @@ export default async function handler(req, res) {
         respondido_por_id: null,
         respondido_por_nome: null,
         respondido_em: null,
+        mensagens: [],
         created_at: nowIso,
         updated_at: nowIso,
       };
@@ -90,7 +114,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'PATCH') {
       const body = req.body || {};
-      const { id, status, resposta, respondido_por_id, respondido_por_nome } = body;
+      const { id, status, resposta, respondido_por_id, respondido_por_nome, nova_mensagem } = body;
       const nowIso = new Date().toISOString();
 
       const { data: existingRow } = await supabase
@@ -108,7 +132,19 @@ export default async function handler(req, res) {
       if (resposta !== undefined) item.resposta = resposta;
       if (respondido_por_id !== undefined) item.respondido_por_id = respondido_por_id;
       if (respondido_por_nome !== undefined) item.respondido_por_nome = respondido_por_nome;
-      item.respondido_em = nowIso;
+
+      if (nova_mensagem && nova_mensagem.mensagem) {
+        const msgObj = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          usuario_id: nova_mensagem.usuario_id,
+          usuario_nome: nova_mensagem.usuario_nome,
+          usuario_role: nova_mensagem.usuario_role || 'usuario',
+          mensagem: nova_mensagem.mensagem.trim(),
+          created_at: nowIso,
+        };
+        item.mensagens = [...(item.mensagens || []), msgObj];
+      }
+
       item.updated_at = nowIso;
 
       await supabase
