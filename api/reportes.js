@@ -4,56 +4,6 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1cnl1ZmVkYXpwa2h0eHJ3aGtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5NzU5NTIsImV4cCI6MjA4MjU1MTk1Mn0.DGKJPQBmLCTw5YyKwg7LfRQMseeVgXzljD5Z6lCESRs';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const CACHE_STORE_KEY = 'SYSTEM_REPORTES_STORE';
-
-// Helper to fetch list from Supabase cloud
-async function getCloudReportes() {
-  // 1. Try native app_reports table first
-  try {
-    const { data, error } = await supabase
-      .from('app_reports')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!error && Array.isArray(data)) {
-      return data;
-    }
-  } catch (e) {}
-
-  // 2. Fallback to Supabase cloud JSON store in planejamento_cache
-  try {
-    const { data, error } = await supabase
-      .from('planejamento_cache')
-      .select('principal')
-      .eq('unidade_id', CACHE_STORE_KEY)
-      .maybeSingle();
-
-    if (!error && data?.principal && Array.isArray(data.principal)) {
-      return data.principal;
-    }
-  } catch (e) {
-    console.error('[API Reportes] Erro ao buscar da nuvem:', e);
-  }
-
-  return [];
-}
-
-// Helper to save list to Supabase cloud
-async function saveCloudReportes(list) {
-  try {
-    await supabase
-      .from('planejamento_cache')
-      .upsert({
-        unidade_id: CACHE_STORE_KEY,
-        principal: list,
-        updated_at: new Date().toISOString(),
-      });
-    return true;
-  } catch (e) {
-    console.error('[API Reportes] Erro ao salvar na nuvem:', e);
-    return false;
-  }
-}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -66,14 +16,44 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const list = await getCloudReportes();
-      return res.status(200).json({ success: true, data: list });
+      // 1. Tentar ler de app_reports
+      try {
+        const { data: tableData, error: tableErr } = await supabase
+          .from('app_reports')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!tableErr && Array.isArray(tableData) && tableData.length > 0) {
+          return res.status(200).json({ success: true, data: tableData });
+        }
+      } catch (e) {}
+
+      // 2. Ler da base compartilhada do Supabase
+      const { data, error } = await supabase
+        .from('planejamento_cache')
+        .select('principal')
+        .like('unidade_id', 'REP_%');
+
+      if (error) {
+        return res.status(200).json({ success: true, data: [] });
+      }
+
+      const items = (data || [])
+        .map((r) => r.principal)
+        .filter(Boolean);
+
+      items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      return res.status(200).json({ success: true, data: items });
     }
 
     if (req.method === 'POST') {
       const body = req.body || {};
+      const reportId = body.id || `rep_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const nowIso = new Date().toISOString();
+
       const newReport = {
-        id: body.id || `rep_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        id: reportId,
         titulo: body.titulo || 'Reporte de Erro',
         descricao: body.descricao || '',
         categoria: body.categoria || 'Geral',
@@ -89,19 +69,21 @@ export default async function handler(req, res) {
         respondido_por_id: null,
         respondido_por_nome: null,
         respondido_em: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_at: nowIso,
+        updated_at: nowIso,
       };
 
-      // Try inserting into app_reports if it exists
       try {
         await supabase.from('app_reports').insert(newReport);
       } catch (e) {}
 
-      // Always save to Supabase cloud JSON store so it's globally persistent
-      const currentList = await getCloudReportes();
-      const updatedList = [newReport, ...currentList.filter((r) => r.id !== newReport.id)];
-      await saveCloudReportes(updatedList);
+      await supabase
+        .from('planejamento_cache')
+        .upsert({
+          unidade_id: `REP_${reportId}`,
+          principal: newReport,
+          updated_at: nowIso,
+        });
 
       return res.status(200).json({ success: true, data: newReport });
     }
@@ -109,37 +91,47 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH') {
       const body = req.body || {};
       const { id, status, resposta, respondido_por_id, respondido_por_nome } = body;
+      const nowIso = new Date().toISOString();
 
-      const currentList = await getCloudReportes();
-      const index = currentList.findIndex((r) => r.id === id);
+      const { data: existingRow } = await supabase
+        .from('planejamento_cache')
+        .select('principal')
+        .eq('unidade_id', `REP_${id}`)
+        .maybeSingle();
 
-      if (index === -1) {
+      if (!existingRow?.principal) {
         return res.status(404).json({ success: false, error: 'Reporte não encontrado.' });
       }
 
-      if (status !== undefined) currentList[index].status = status;
-      if (resposta !== undefined) currentList[index].resposta = resposta;
-      if (respondido_por_id !== undefined) currentList[index].respondido_por_id = respondido_por_id;
-      if (respondido_por_nome !== undefined) currentList[index].respondido_por_nome = respondido_por_nome;
-      currentList[index].respondido_em = new Date().toISOString();
-      currentList[index].updated_at = new Date().toISOString();
+      const item = existingRow.principal;
+      if (status !== undefined) item.status = status;
+      if (resposta !== undefined) item.resposta = resposta;
+      if (respondido_por_id !== undefined) item.respondido_por_id = respondido_por_id;
+      if (respondido_por_nome !== undefined) item.respondido_por_nome = respondido_por_nome;
+      item.respondido_em = nowIso;
+      item.updated_at = nowIso;
 
-      // Try updating in app_reports if exists
+      await supabase
+        .from('planejamento_cache')
+        .upsert({
+          unidade_id: `REP_${id}`,
+          principal: item,
+          updated_at: nowIso,
+        });
+
       try {
-        await supabase.from('app_reports').update(currentList[index]).eq('id', id);
+        await supabase.from('app_reports').update(item).eq('id', id);
       } catch (e) {}
 
-      // Save updated list to Supabase cloud store
-      await saveCloudReportes(currentList);
-
-      return res.status(200).json({ success: true, data: currentList[index] });
+      return res.status(200).json({ success: true, data: item });
     }
 
     if (req.method === 'DELETE') {
       const { id } = req.body || {};
-      const currentList = await getCloudReportes();
-      const filtered = currentList.filter((r) => r.id !== id);
-      await saveCloudReportes(filtered);
+      await supabase
+        .from('planejamento_cache')
+        .delete()
+        .eq('unidade_id', `REP_${id}`);
 
       try {
         await supabase.from('app_reports').delete().eq('id', id);

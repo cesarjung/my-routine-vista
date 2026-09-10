@@ -45,101 +45,56 @@ export interface UpdateReporteDTO {
   respondido_por_nome?: string;
 }
 
-const CACHE_STORE_KEY = 'SYSTEM_REPORTES_STORE';
-const LOCAL_STORAGE_KEY = 'sirtec_reportes_cache';
-
-// Helper to fetch directly from Supabase Cloud
-async function fetchDirectFromSupabase(): Promise<ReporteItem[]> {
-  try {
-    // 1. Try native app_reports table
-    const { data: tableData, error: tableErr } = await supabase
-      .from('app_reports' as any)
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!tableErr && Array.isArray(tableData) && tableData.length > 0) {
-      return tableData as any;
-    }
-  } catch (e) {}
-
-  try {
-    // 2. Try Supabase cloud JSON store in planejamento_cache
-    const { data, error } = await supabase
-      .from('planejamento_cache')
-      .select('principal')
-      .eq('unidade_id', CACHE_STORE_KEY)
-      .maybeSingle();
-
-    if (!error && data?.principal && Array.isArray(data.principal)) {
-      return data.principal as any;
-    }
-  } catch (e) {
-    console.error('[ReportesService] Erro ao buscar do Supabase:', e);
-  }
-
-  return [];
-}
-
-// Helper to save directly to Supabase Cloud
-async function saveDirectToSupabase(list: ReporteItem[]): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('planejamento_cache')
-      .upsert({
-        unidade_id: CACHE_STORE_KEY,
-        principal: list as any,
-        updated_at: new Date().toISOString()
-      });
-    return !error;
-  } catch (e) {
-    console.error('[ReportesService] Erro ao salvar no Supabase:', e);
-    return false;
-  }
-}
-
 export const reportesService = {
+  /**
+   * Busca a lista unificada de todos os reportes diretamente do Supabase.
+   * Mesma base utilizada tanto no ambiente local quanto em produção.
+   */
   async list(): Promise<ReporteItem[]> {
-    // 1. Tentar buscar da API (/api/reportes)
     try {
-      const res = await fetch('/api/reportes');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(json.data));
-          return json.data;
-        }
+      // 1. Tentar ler da tabela nativa app_reports (se já tiver sido criada)
+      const { data: tableData, error: tableErr } = await supabase
+        .from('app_reports' as any)
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!tableErr && Array.isArray(tableData) && tableData.length > 0) {
+        return tableData as any;
+      }
+    } catch (e) {}
+
+    // 2. Ler da base compartilhada do Supabase via planejamento_cache com chave REP_%
+    try {
+      const { data, error } = await supabase
+        .from('planejamento_cache')
+        .select('principal')
+        .like('unidade_id', 'REP_%');
+
+      if (!error && Array.isArray(data)) {
+        const items = data
+          .map((row: any) => row.principal)
+          .filter(Boolean) as ReporteItem[];
+
+        // Ordenar do mais recente para o mais antigo
+        items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return items;
       }
     } catch (err) {
-      console.warn('[ReportesService] Falha ao conectar à API local/serverless:', err);
-    }
-
-    // 2. Tentar buscar direto do Supabase Cloud (garante sincronização global no Vercel)
-    try {
-      const cloudData = await fetchDirectFromSupabase();
-      if (cloudData.length > 0) {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudData));
-        return cloudData;
-      }
-    } catch (err) {
-      console.warn('[ReportesService] Falha ao buscar do Supabase:', err);
-    }
-
-    // 3. Fallback: cache local do navegador
-    try {
-      const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    } catch (e) {
-      console.error('[ReportesService] Erro ao ler cache local:', e);
+      console.error('[ReportesService] Erro ao carregar reportes do Supabase:', err);
     }
 
     return [];
   },
 
+  /**
+   * Cria um novo reporte gravando diretamente no Supabase.
+   */
   async create(dto: CreateReporteDTO): Promise<ReporteItem> {
-    const newItem: ReporteItem = {
-      id: `rep_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+    const reportId = `rep_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const nowIso = new Date().toISOString();
+
+    const newReport: ReporteItem = {
+      id: reportId,
       titulo: dto.titulo,
       descricao: dto.descricao,
       categoria: dto.categoria || 'Geral',
@@ -155,98 +110,110 @@ export const reportesService = {
       respondido_por_id: null,
       respondido_por_nome: null,
       respondido_em: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: nowIso,
+      updated_at: nowIso,
     };
 
-    let finalItem = newItem;
-
-    // 1. Tentar salvar via API
+    // 1. Tentar gravar na tabela app_reports se existir
     try {
-      const res = await fetch('/api/reportes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dto),
+      await supabase.from('app_reports' as any).insert(newReport);
+    } catch (e) {}
+
+    // 2. Gravar registro individual no Supabase (planejamento_cache)
+    const { error } = await supabase
+      .from('planejamento_cache')
+      .upsert({
+        unidade_id: `REP_${reportId}`,
+        principal: newReport as any,
+        updated_at: nowIso,
       });
 
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          finalItem = json.data;
-        }
-      }
-    } catch (err) {
-      console.warn('[ReportesService] Erro na requisição da API:', err);
+    if (error) {
+      console.error('[ReportesService] Erro ao salvar reporte no Supabase:', error);
+      throw new Error('Não foi possível salvar o reporte no banco de dados.');
     }
 
-    // 2. Sempre salvar direto no Supabase Cloud para garantir persistência global imediata
-    try {
-      const current = await this.list();
-      const updated = [finalItem, ...current.filter((r) => r.id !== finalItem.id)];
-      await saveDirectToSupabase(updated);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.warn('[ReportesService] Falha ao persistir na nuvem:', err);
-    }
-
-    return finalItem;
+    return newReport;
   },
 
+  /**
+   * Atualiza o status ou resposta de um reporte na base compartilhada do Supabase.
+   */
   async update(dto: UpdateReporteDTO): Promise<ReporteItem> {
-    let updatedItem: ReporteItem | null = null;
+    const nowIso = new Date().toISOString();
 
-    // 1. Tentar atualizar via API
-    try {
-      const res = await fetch('/api/reportes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dto),
+    // 1. Buscar item existente no Supabase
+    const { data: existingRow, error: fetchErr } = await supabase
+      .from('planejamento_cache')
+      .select('principal')
+      .eq('unidade_id', `REP_${dto.id}`)
+      .maybeSingle();
+
+    if (fetchErr || !existingRow?.principal) {
+      // Tentar buscar na tabela app_reports se existir
+      try {
+        const { data: rep } = await supabase
+          .from('app_reports' as any)
+          .select('*')
+          .eq('id', dto.id)
+          .single();
+
+        if (rep) {
+          const updated = {
+            ...rep,
+            ...(dto.status !== undefined ? { status: dto.status } : {}),
+            ...(dto.resposta !== undefined ? { resposta: dto.resposta } : {}),
+            ...(dto.respondido_por_id !== undefined ? { respondido_por_id: dto.respondido_por_id } : {}),
+            ...(dto.respondido_por_nome !== undefined ? { respondido_por_nome: dto.respondido_por_nome } : {}),
+            respondido_em: nowIso,
+            updated_at: nowIso,
+          };
+          await supabase.from('app_reports' as any).update(updated).eq('id', dto.id);
+          return updated as ReporteItem;
+        }
+      } catch (e) {}
+
+      throw new Error('Reporte não encontrado no banco de dados.');
+    }
+
+    const currentItem = existingRow.principal as ReporteItem;
+
+    if (dto.status !== undefined) currentItem.status = dto.status;
+    if (dto.resposta !== undefined) currentItem.resposta = dto.resposta;
+    if (dto.respondido_por_id !== undefined) currentItem.respondido_por_id = dto.respondido_por_id;
+    if (dto.respondido_por_nome !== undefined) currentItem.respondido_por_nome = dto.respondido_por_nome;
+    currentItem.respondido_em = nowIso;
+    currentItem.updated_at = nowIso;
+
+    // Atualizar no Supabase
+    await supabase
+      .from('planejamento_cache')
+      .upsert({
+        unidade_id: `REP_${dto.id}`,
+        principal: currentItem as any,
+        updated_at: nowIso,
       });
 
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          updatedItem = json.data;
-        }
-      }
-    } catch (err) {
-      console.warn('[ReportesService] Erro ao atualizar via API:', err);
-    }
+    try {
+      await supabase.from('app_reports' as any).update(currentItem).eq('id', dto.id);
+    } catch (e) {}
 
-    // 2. Atualizar direto no Supabase Cloud
-    const current = await this.list();
-    const idx = current.findIndex((r) => r.id === dto.id);
-    if (idx !== -1) {
-      if (dto.status !== undefined) current[idx].status = dto.status;
-      if (dto.resposta !== undefined) current[idx].resposta = dto.resposta;
-      if (dto.respondido_por_id !== undefined) current[idx].respondido_por_id = dto.respondido_por_id;
-      if (dto.respondido_por_nome !== undefined) current[idx].respondido_por_nome = dto.respondido_por_nome;
-      current[idx].respondido_em = new Date().toISOString();
-      current[idx].updated_at = new Date().toISOString();
-      updatedItem = current[idx];
-
-      await saveDirectToSupabase(current);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(current));
-      return updatedItem;
-    }
-
-    if (updatedItem) return updatedItem;
-    throw new Error('Reporte não encontrado.');
+    return currentItem;
   },
 
+  /**
+   * Exclui um reporte do Supabase.
+   */
   async delete(id: string): Promise<boolean> {
-    try {
-      await fetch('/api/reportes', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-    } catch (err) {}
+    const { error } = await supabase
+      .from('planejamento_cache')
+      .delete()
+      .eq('unidade_id', `REP_${id}`);
 
-    const current = await this.list();
-    const filtered = current.filter((r) => r.id !== id);
-    await saveDirectToSupabase(filtered);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
-    return true;
+    try {
+      await supabase.from('app_reports' as any).delete().eq('id', id);
+    } catch (e) {}
+
+    return !error;
   },
 };
