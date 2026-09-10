@@ -45,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -73,6 +74,7 @@ export const ReportesView = () => {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | ReporteStatus>('todos');
+  const [mostrarResolvidos, setMostrarResolvidos] = useState(true);
 
   // Dialogs
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
@@ -279,6 +281,10 @@ export const ReportesView = () => {
   // Filtered list
   const filteredReportes = useMemo(() => {
     return reportes.filter((r) => {
+      // Se "mostrarResolvidos" estiver desmarcado, esconde os resolvidos a não ser que o filtro ativo seja 'resolvido'
+      if (!mostrarResolvidos && r.status === 'resolvido' && statusFilter !== 'resolvido') {
+        return false;
+      }
       const matchesStatus = statusFilter === 'todos' ? true : r.status === statusFilter;
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -290,7 +296,7 @@ export const ReportesView = () => {
         (r.respondido_por_nome && r.respondido_por_nome.toLowerCase().includes(query));
       return matchesStatus && matchesSearch;
     });
-  }, [reportes, statusFilter, searchQuery]);
+  }, [reportes, statusFilter, searchQuery, mostrarResolvidos]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in-50 duration-200">
@@ -339,7 +345,13 @@ export const ReportesView = () => {
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total */}
-        <Card className="border shadow-sm">
+        <Card
+          onClick={() => setStatusFilter('todos')}
+          className={cn(
+            "border shadow-sm cursor-pointer transition-all hover:border-primary/50",
+            statusFilter === 'todos' && "ring-1 ring-primary/40 bg-primary/[0.02]"
+          )}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total de Reportes</CardTitle>
             <Bug className="w-4 h-4 text-muted-foreground" />
@@ -351,7 +363,13 @@ export const ReportesView = () => {
         </Card>
 
         {/* Pendentes */}
-        <Card className="border shadow-sm border-amber-200/50 dark:border-amber-900/30 bg-amber-50/20 dark:bg-amber-950/10">
+        <Card
+          onClick={() => setStatusFilter('pendente')}
+          className={cn(
+            "border shadow-sm border-amber-200/50 dark:border-amber-900/30 bg-amber-50/20 dark:bg-amber-950/10 cursor-pointer transition-all hover:border-amber-400/70",
+            statusFilter === 'pendente' && "ring-1 ring-amber-500/50"
+          )}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-amber-700 dark:text-amber-400">Pendentes</CardTitle>
             <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -363,7 +381,13 @@ export const ReportesView = () => {
         </Card>
 
         {/* Em Andamento */}
-        <Card className="border shadow-sm border-blue-200/50 dark:border-blue-900/30 bg-blue-50/20 dark:bg-blue-950/10">
+        <Card
+          onClick={() => setStatusFilter('em_andamento')}
+          className={cn(
+            "border shadow-sm border-blue-200/50 dark:border-blue-900/30 bg-blue-50/20 dark:bg-blue-950/10 cursor-pointer transition-all hover:border-blue-400/70",
+            statusFilter === 'em_andamento' && "ring-1 ring-blue-500/50"
+          )}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-400">Em Andamento</CardTitle>
             <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -375,7 +399,16 @@ export const ReportesView = () => {
         </Card>
 
         {/* Resolvidos */}
-        <Card className="border shadow-sm border-emerald-200/50 dark:border-emerald-900/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+        <Card
+          onClick={() => {
+            setStatusFilter('resolvido');
+            setMostrarResolvidos(true);
+          }}
+          className={cn(
+            "border shadow-sm border-emerald-200/50 dark:border-emerald-900/30 bg-emerald-50/20 dark:bg-emerald-950/10 cursor-pointer transition-all hover:border-emerald-400/70",
+            statusFilter === 'resolvido' && "ring-1 ring-emerald-500/50"
+          )}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Resolvidos</CardTitle>
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -388,7 +421,7 @@ export const ReportesView = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Status Pills */}
         <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-lg border w-fit overflow-x-auto">
           <button
@@ -425,7 +458,10 @@ export const ReportesView = () => {
             Em Andamento ({metrics.emAndamento})
           </button>
           <button
-            onClick={() => setStatusFilter('resolvido')}
+            onClick={() => {
+              setStatusFilter('resolvido');
+              setMostrarResolvidos(true);
+            }}
             className={cn(
               'px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap',
               statusFilter === 'resolvido'
@@ -437,15 +473,34 @@ export const ReportesView = () => {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar reporte ou usuário..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 text-xs"
-          />
+        {/* Right Controls: Switch Mostrar Resolvidos + Search */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Switch Mostrar Resolvidos */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-card rounded-lg border shadow-sm h-9">
+            <Switch
+              id="toggle-resolvidos"
+              checked={mostrarResolvidos}
+              onCheckedChange={setMostrarResolvidos}
+            />
+            <label
+              htmlFor="toggle-resolvidos"
+              className="text-xs font-medium cursor-pointer select-none text-foreground flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <CheckCircle2 className={cn("w-3.5 h-3.5", mostrarResolvidos ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")} />
+              <span>Mostrar resolvidos</span>
+            </label>
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1 sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar reporte ou usuário..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-xs"
+            />
+          </div>
         </div>
       </div>
 
