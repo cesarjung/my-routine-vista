@@ -491,6 +491,20 @@ export default async function handler(req, res) {
       return -1;
     };
 
+    // Helper: Find last row of a given date to keep rows grouped chronologically
+    const findLastIndexForDate = (rowsArray, targetDataStr) => {
+      let lastIdx = -1;
+      for (let i = 5; i < rowsArray.length; i++) {
+        const r = rowsArray[i];
+        if (!r || r.length === 0) continue;
+        const existDataStr = extractDate(r[1]);
+        if (targetDataStr && existDataStr === targetDataStr) {
+          lastIdx = i;
+        }
+      }
+      return lastIdx;
+    };
+
 function getWeekdayNumber(dataStr) {
   if (!dataStr) return 1;
   const m = String(dataStr).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
@@ -520,6 +534,7 @@ function getRowBackgroundColor(dayOfWeek) {
 }
 
     const cellUpdates = [];
+    const insertRequests = [];
     const formatRequests = [];
     const usedTargetIndices = new Set();
 
@@ -541,26 +556,61 @@ function getRowBackgroundColor(dayOfWeek) {
         if (slotIdx !== -1) {
           targetRowIndex = slotIdx;
         } else {
+          // Se não há slot pré-criado para esta equipe no dia, procura o final do bloco do mesmo dia para inserir
+          const lastIdxOfDay = findLastIndexForDate(currentRows, op.novaDataStr);
+          if (lastIdxOfDay !== -1) {
+            targetRowIndex = lastIdxOfDay + 1;
+            insertRequests.push({
+              insertDimension: {
+                range: {
+                  sheetId: planPrincipalSheetId,
+                  dimension: 'ROWS',
+                  startIndex: targetRowIndex,
+                  endIndex: targetRowIndex + 1
+                },
+                inheritFromBefore: true
+              }
+            });
+            currentRows.splice(targetRowIndex, 0, op.rowCells);
+          } else {
+            let blankIdx = findFirstEmptyInUpdated(currentRows, usedTargetIndices);
+            while (usedTargetIndices.has(blankIdx)) {
+              blankIdx++;
+            }
+            targetRowIndex = blankIdx;
+            while (currentRows.length <= targetRowIndex) currentRows.push([]);
+            currentRows[targetRowIndex] = op.rowCells;
+          }
+        }
+        usedTargetIndices.add(targetRowIndex);
+
+      } else {
+        // APPEND
+        const lastIdxOfDay = findLastIndexForDate(currentRows, op.novaDataStr);
+        if (lastIdxOfDay !== -1) {
+          targetRowIndex = lastIdxOfDay + 1;
+          insertRequests.push({
+            insertDimension: {
+              range: {
+                sheetId: planPrincipalSheetId,
+                dimension: 'ROWS',
+                startIndex: targetRowIndex,
+                endIndex: targetRowIndex + 1
+              },
+              inheritFromBefore: true
+            }
+          });
+          currentRows.splice(targetRowIndex, 0, op.rowCells);
+        } else {
           let blankIdx = findFirstEmptyInUpdated(currentRows, usedTargetIndices);
           while (usedTargetIndices.has(blankIdx)) {
             blankIdx++;
           }
           targetRowIndex = blankIdx;
+          while (currentRows.length <= targetRowIndex) currentRows.push([]);
+          currentRows[targetRowIndex] = op.rowCells;
         }
         usedTargetIndices.add(targetRowIndex);
-        while (currentRows.length <= targetRowIndex) currentRows.push([]);
-        currentRows[targetRowIndex] = op.rowCells;
-
-      } else {
-        // APPEND
-        let blankIdx = findFirstEmptyInUpdated(currentRows, usedTargetIndices);
-        while (usedTargetIndices.has(blankIdx)) {
-          blankIdx++;
-        }
-        targetRowIndex = blankIdx;
-        usedTargetIndices.add(targetRowIndex);
-        while (currentRows.length <= targetRowIndex) currentRows.push([]);
-        currentRows[targetRowIndex] = op.rowCells;
       }
 
       const targetRowNumber = targetRowIndex + 1; // 1-indexed for Google Sheets
@@ -644,6 +694,22 @@ function getRowBackgroundColor(dayOfWeek) {
         }
       }
     });
+
+    // 8.5 Executa inserções físicas de linhas para manter registros agrupados por data
+    if (insertRequests.length > 0) {
+      const insertRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests: insertRequests })
+      });
+      const insertData = await insertRes.json();
+      if (!insertRes.ok) {
+        console.error('Aviso ao inserir linhas físicas no Sheets:', insertData);
+      }
+    }
 
     // 9. Grava as novas programações e atualizações na Plan_Principal
     if (cellUpdates.length > 0) {
