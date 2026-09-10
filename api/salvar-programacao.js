@@ -155,6 +155,34 @@ function cleanCode(code) {
   return String(code).trim().toUpperCase().replace(/^[BP]-/, '').replace(/[^A-Z0-9]/g, '');
 }
 
+function parseNumericValue(val) {
+  if (typeof val === 'number') {
+    return isNaN(val) ? 0 : val;
+  }
+  if (!val || typeof val !== 'string') {
+    return 0;
+  }
+  const clean = val.trim();
+  if (!clean) return 0;
+
+  const isPercent = clean.includes('%');
+  let numStr = clean.replace(/[R$\s%]/g, '');
+
+  if (numStr.includes(',') && numStr.includes('.')) {
+    numStr = numStr.replace(/\./g, '').replace(',', '.');
+  } else if (numStr.includes(',')) {
+    numStr = numStr.replace(',', '.');
+  }
+
+  const parsed = parseFloat(numStr);
+  if (isNaN(parsed)) return 0;
+  return isPercent ? parsed / 100 : parsed;
+}
+
+const NUMERIC_COL_INDICES = new Set([
+  17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 37, 38, 39, 40, 41, 42, 43, 68
+]);
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -591,16 +619,27 @@ function getRowBackgroundColor(dayOfWeek) {
         if (cIdx === 1) {
           val = extractDate(val) || val;
         }
-        const valStr = String(val ?? '').trim().replace(/^"|"$/g, '');
+
+        let cellValue;
+        if (NUMERIC_COL_INDICES.has(cIdx)) {
+          if (val === '' || val === null || val === undefined) {
+            cellValue = MANAGED_COL_INDICES.has(cIdx) ? 0 : '';
+          } else {
+            cellValue = parseNumericValue(val);
+          }
+        } else {
+          cellValue = String(val ?? '').trim().replace(/^"|"$/g, '');
+        }
+
         if (MANAGED_COL_INDICES.has(cIdx)) {
           cellUpdates.push({
             range: `Plan_Principal!${getColumnLetter(cIdx)}${targetRowNumber}`,
-            values: [[valStr]]
+            values: [[cellValue]]
           });
-        } else if (valStr) {
+        } else if (cellValue !== '') {
           cellUpdates.push({
             range: `Plan_Principal!${getColumnLetter(cIdx)}${targetRowNumber}`,
-            values: [[valStr]]
+            values: [[cellValue]]
           });
         }
       }

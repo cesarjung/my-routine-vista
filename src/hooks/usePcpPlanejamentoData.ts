@@ -1196,7 +1196,9 @@ export const usePcpPlanejamentoData = (
   const buildCsvContent = (rows: any[][]): string => {
     const lines = rows.map(fullRow => {
       return fullRow.map(val => {
-        const s = String(val ?? '');
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'number') return String(val);
+        const s = String(val);
         if (s.includes(';') || s.includes('"') || s.includes('\n')) {
           return `"${s.replace(/"/g, '""')}"`;
         }
@@ -1306,25 +1308,29 @@ export const usePcpPlanejamentoData = (
       newRow[16] = 'TRUE';                                  // Col Q (16): PES (Checkbox marcado como TRUE)
     }
 
-    if (qtdCavaRocha > 0) newRow[18] = formatQuantityDisplay(qtdCavaRocha);       // Col S (18): CAVA EM ROCHA
-    if (qtdPostes > 0) newRow[20] = formatQuantityDisplay(qtdPostes);             // Col U (20): IMPLANT. (Postes)
-    if (qtdEquipamentos > 0) newRow[21] = formatQuantityDisplay(qtdEquipamentos); // Col V (21): EQUIPAM. (Trafos e Equipamentos)
-    if (qtdEstruturas > 0) newRow[22] = formatQuantityDisplay(qtdEstruturas);     // Col W (22): ACABAM. (Estruturas / Acabamento)
-    if (qtdCabosBt > 0) newRow[23] = formatQuantityDisplay(qtdCabosBt);           // Col X (23): CABO BT (metros)
-    if (qtdCabos4 > 0) newRow[24] = formatQuantityDisplay(qtdCabos4);             // Col Y (24): CABO 4 (metros)
-    if (qtdCabos10 > 0) newRow[25] = formatQuantityDisplay(qtdCabos10);           // Col Z (25): CABO 1/0 (metros)
-    if (qtdCabosMtXlpe > 0) newRow[28] = formatQuantityDisplay(qtdCabosMtXlpe);   // Col AC (28): CABO MT XLPE (metros)
-    if (qtdPoda > 0) newRow[29] = formatQuantityDisplay(qtdPoda);                 // Col AD (29): PODA
+    if (qtdCavaRocha > 0) newRow[18] = Math.round(qtdCavaRocha * 100) / 100;       // Col S (18): CAVA EM ROCHA (numérico)
+    if (qtdPostes > 0) newRow[20] = Math.round(qtdPostes * 100) / 100;             // Col U (20): IMPLANT. Postes (numérico)
+    if (qtdEquipamentos > 0) newRow[21] = Math.round(qtdEquipamentos * 100) / 100; // Col V (21): EQUIPAM. (numérico)
+    if (qtdEstruturas > 0) newRow[22] = Math.round(qtdEstruturas * 100) / 100;     // Col W (22): ACABAM. (numérico)
+    if (qtdCabosBt > 0) newRow[23] = Math.round(qtdCabosBt * 100) / 100;           // Col X (23): CABO BT (numérico)
+    if (qtdCabos4 > 0) newRow[24] = Math.round(qtdCabos4 * 100) / 100;             // Col Y (24): CABO 4 (numérico)
+    if (qtdCabos10 > 0) newRow[25] = Math.round(qtdCabos10 * 100) / 100;           // Col Z (25): CABO 1/0 (numérico)
+    if (qtdCabosMtXlpe > 0) newRow[28] = Math.round(qtdCabosMtXlpe * 100) / 100;   // Col AC (28): CABO MT XLPE (numérico)
+    if (qtdPoda > 0) newRow[29] = Math.round(qtdPoda * 100) / 100;                 // Col AD (29): PODA (numérico)
 
     newRow[36] = 'NÃO';                                     // Col AK (36): ANALISAR PRODUÇÃO?
-    newRow[37] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col AL (37): Valor Planejado
-    
-    const metaVal = form.metaEquipeValor || 4442;
-    newRow[38] = `R$ ${metaVal.toFixed(2)}`;                // Col AM (38): Valor da Meta da Equipe
 
-    const pctMeta = metaVal > 0 ? (valorTotalAtividades / metaVal * 100) : 0;
-    const pctMetaFormatted = `${pctMeta.toFixed(1)}%`;
-    newRow[39] = pctMetaFormatted;                          // Col AN (39): Percentual Planejado da Meta
+    // Valores Numéricos Puros para permitir que o Google Sheets formate nativamente com R$ e calcule fórmulas
+    const valPlan = Math.round(valorTotalAtividades * 100) / 100;
+    newRow[37] = valPlan;                                   // Col AL (37): Planejado R$ (numérico puro ex: 10261.01)
+    
+    const equipeKey = (form.equipe || '').trim().toUpperCase();
+    const metaDaEquipe = metasPorEquipeMap.get(equipeKey);
+    const metaVal = Math.round(((form.metaEquipeValor && form.metaEquipeValor > 0) ? form.metaEquipeValor : (metaDaEquipe && metaDaEquipe > 0 ? metaDaEquipe : 4442)) * 100) / 100;
+    newRow[38] = metaVal;                                   // Col AM (38): Meta R$ (numérico puro ex: 4824)
+
+    const pctMeta = metaVal > 0 ? (valPlan / metaVal) : 0;
+    newRow[39] = Math.round(pctMeta * 10000) / 10000;       // Col AN (39): % Plan. (número decimal puro ex: 1.0261 que a formatação da coluna 0% exibe como 103%)
 
     if (form.reprogramar) {
       newRow[46] = '';                                      // Col AU (46): Vazio na Plan_Principal (motivo vai apenas para Reprogramadas)
@@ -1358,7 +1364,7 @@ export const usePcpPlanejamentoData = (
     const mTot = tTotalGeral % 60;
     newRow[67] = `${String(hTot).padStart(2, '0')}:${String(mTot).padStart(2, '0')}:00`; // Col BP (67): Tempo Total Geral Somado
 
-    newRow[68] = `R$ ${valorTotalAtividades.toFixed(2)}`;   // Col BQ (68): Planejado TPM (Valor Planejado em R$)
+    newRow[68] = valPlan;                                   // Col BQ (68): Planejado TPM (numérico puro ex: 10261.01)
 
     const etapasAtividadesUnicas = Array.from(
       new Set(
