@@ -669,7 +669,16 @@ export const usePcpPlanejamentoData = (
     // 4. Fallback estrito apenas para atividades não cadastradas na BD_Config
     if (/^(INSTALAR|SUBSTITUIR|IMPLANTAR)\s+POSTE/.test(cleanDesc)) return 'IMPLANT';
     if (/^CAVA EM ROCHA/.test(cleanDesc)) return 'CAVA EM ROCHA';
-    if (/^CAVA NORMAL/.test(cleanDesc)) return 'CAVA NORMAL';
+    if (
+      /^CAVA NORMAL/.test(cleanDesc) ||
+      cleanDesc.includes('CAVA NORMAL') ||
+      cleanDesc.includes('CAVA EM SOLO') ||
+      cleanDesc.includes('ESCAVAÇÃO EM SOLO') ||
+      cleanDesc.includes('ESCAVACAO EM SOLO') ||
+      cleanCod === 'SIR0000001'
+    ) return 'CAVA NORMAL';
+    if (/^FUNDA(C|Ç)(A|Ã)O\s+ESPECIAL/.test(cleanDesc) || cleanDesc.includes('FUNDACAO ESPECIAL') || cleanDesc.includes('FUNDAÇÃO ESPECIAL')) return 'FUNDAÇ. ESPECIAL';
+    if (/^ATER(\.|\s)+CERCA/.test(cleanDesc) || cleanDesc.includes('ATER. CERCA') || cleanDesc.includes('ATERRAMENTO CERCA')) return 'ATER. CERCA';
     if (/^(PODA|CORTE DE ARVORE)/.test(cleanDesc)) return 'PODA';
     if (/^INSTALAR\s+(TRAFO|TRANSFORMADOR|RELIGADOR|CELULA)/.test(cleanDesc)) return 'EQUIPAM.';
     if (/^INSTALAR\s+CABO\s+(MULTIPLEX|BT)/.test(cleanDesc)) return 'CABO BT (METROS)';
@@ -1230,15 +1239,22 @@ export const usePcpPlanejamentoData = (
 
     let tempoAtividadesMin = 0;
     let valorTotalAtividades = 0;
+    let qtdCavaNormal = 0;
+    let qtdCavaRocha = 0;
+    let qtdFundacaoEspecial = 0;
     let qtdPostes = 0;
     let qtdEquipamentos = 0;
     let qtdEstruturas = 0;
     let qtdCabosBt = 0;
     let qtdCabos4 = 0;
     let qtdCabos10 = 0;
+    let qtdCabos40 = 0;
+    let qtdCabos336 = 0;
     let qtdCabosMtXlpe = 0;
     let qtdPoda = 0;
-    let qtdCavaRocha = 0;
+    let qtdAterCerca = 0;
+    let qtdEstSimplesLv = 0;
+    let qtdEstDuplaLv = 0;
 
     const blocos = selectedPontos.map(p => {
       const h = Math.floor(p.tempoEstimadoMinutos / 60);
@@ -1255,14 +1271,39 @@ export const usePcpPlanejamentoData = (
       }
 
       // Classificar a quantidade utilizando estritamente a BD_Config (Coluna AL -> Coluna AU)
-      const grupo = getGrupoAtividade(p.servico || p.descricao || '', (p as any).codigo || (p as any).codigoMaterial || (p as any).codigoAtividade || '');
+      const codItem = (p as any).codigo || (p as any).codigoMaterial || (p as any).codigoAtividade || '';
+      const grupo = getGrupoAtividade(p.servico || p.descricao || '', codItem);
       const qtd = Number(p.quantidade || 1);
+      const descUpper = (p.servico || p.descricao || '').toUpperCase();
+      const codUpper = String(codItem).trim().toUpperCase();
 
-      if (grupo === 'IMPLANT' || grupo === 'IMPLANTAÇÃO' || grupo === 'POSTE') {
+      if (
+        grupo === 'CAVA NORMAL' ||
+        grupo === 'CAVA' ||
+        grupo === 'CAVA EM SOLO COMUM' ||
+        grupo === 'ESCAVAÇÃO' ||
+        grupo === 'ESCAV' ||
+        descUpper.includes('CAVA NORMAL') ||
+        descUpper.includes('CAVA EM SOLO') ||
+        descUpper.includes('ESCAVAÇÃO EM SOLO') ||
+        descUpper.includes('ESCAVACAO EM SOLO') ||
+        codUpper === 'SIR0000001'
+      ) {
+        qtdCavaNormal += qtd;
+      } else if (grupo === 'CAVA EM ROCHA' || descUpper.includes('CAVA EM ROCHA')) {
+        qtdCavaRocha += qtd;
+      } else if (
+        grupo === 'FUNDAÇ. ESPECIAL' ||
+        grupo === 'FUNDACAO ESPECIAL' ||
+        descUpper.includes('FUNDACAO ESPECIAL') ||
+        descUpper.includes('FUNDAÇÃO ESPECIAL')
+      ) {
+        qtdFundacaoEspecial += qtd;
+      } else if (grupo === 'IMPLANT' || grupo === 'IMPLANTAÇÃO' || grupo === 'POSTE' || descUpper.includes('POSTE')) {
         qtdPostes += qtd;
       } else if (grupo === 'EQUIPAM.' || grupo === 'EQUIPAMENTO' || grupo === 'EQUIPAMENTOS') {
         qtdEquipamentos += qtd;
-      } else if (grupo === 'ACABAM.' || grupo === 'ACABAMENTO' || grupo === 'EST. DUPLA LV' || grupo === 'EST. SIMPLES LV') {
+      } else if (grupo === 'ACABAM.' || grupo === 'ACABAMENTO') {
         qtdEstruturas += qtd;
       } else if (grupo === 'CABO BT (METROS)' || grupo === 'CABO BT') {
         qtdCabosBt += qtd;
@@ -1270,12 +1311,20 @@ export const usePcpPlanejamentoData = (
         qtdCabos4 += qtd;
       } else if (grupo === 'CABO 1/0 (METROS)' || grupo === 'CABO 1/0') {
         qtdCabos10 += qtd;
+      } else if (grupo === 'CABO 4/0 (METROS)' || grupo === 'CABO 4/0') {
+        qtdCabos40 += qtd;
+      } else if (grupo === 'CABO 336 (METROS)' || grupo === 'CABO 336') {
+        qtdCabos336 += qtd;
       } else if (grupo === 'CABO MT XLPE (METROS)' || grupo === 'CABO MT XLPE') {
         qtdCabosMtXlpe += qtd;
-      } else if (grupo === 'PODA') {
+      } else if (grupo === 'PODA' || descUpper.includes('PODA') || descUpper.includes('CORTE DE ARVORE')) {
         qtdPoda += qtd;
-      } else if (grupo === 'CAVA EM ROCHA') {
-        qtdCavaRocha += qtd;
+      } else if (grupo === 'ATER. CERCA' || descUpper.includes('ATER. CERCA') || descUpper.includes('ATERRAMENTO CERCA')) {
+        qtdAterCerca += qtd;
+      } else if (grupo === 'EST. SIMPLES LV') {
+        qtdEstSimplesLv += qtd;
+      } else if (grupo === 'EST. DUPLA LV') {
+        qtdEstDuplaLv += qtd;
       }
 
       return `${p.ponto} - [${cleanEtapaPonto}] ${p.servico} - Qtd: ${qtdStr} - Hr. Prev: ${hrPrevStr}`;
@@ -1308,15 +1357,22 @@ export const usePcpPlanejamentoData = (
       newRow[16] = 'TRUE';                                  // Col Q (16): PES (Checkbox marcado como TRUE)
     }
 
-    if (qtdCavaRocha > 0) newRow[18] = Math.round(qtdCavaRocha * 100) / 100;       // Col S (18): CAVA EM ROCHA (numérico)
-    if (qtdPostes > 0) newRow[20] = Math.round(qtdPostes * 100) / 100;             // Col U (20): IMPLANT. Postes (numérico)
-    if (qtdEquipamentos > 0) newRow[21] = Math.round(qtdEquipamentos * 100) / 100; // Col V (21): EQUIPAM. (numérico)
-    if (qtdEstruturas > 0) newRow[22] = Math.round(qtdEstruturas * 100) / 100;     // Col W (22): ACABAM. (numérico)
-    if (qtdCabosBt > 0) newRow[23] = Math.round(qtdCabosBt * 100) / 100;           // Col X (23): CABO BT (numérico)
-    if (qtdCabos4 > 0) newRow[24] = Math.round(qtdCabos4 * 100) / 100;             // Col Y (24): CABO 4 (numérico)
-    if (qtdCabos10 > 0) newRow[25] = Math.round(qtdCabos10 * 100) / 100;           // Col Z (25): CABO 1/0 (numérico)
-    if (qtdCabosMtXlpe > 0) newRow[28] = Math.round(qtdCabosMtXlpe * 100) / 100;   // Col AC (28): CABO MT XLPE (numérico)
-    if (qtdPoda > 0) newRow[29] = Math.round(qtdPoda * 100) / 100;                 // Col AD (29): PODA (numérico)
+    if (qtdCavaNormal > 0) newRow[17] = Math.round(qtdCavaNormal * 100) / 100;         // Col R (17): CAVA NORMAL (numérico)
+    if (qtdCavaRocha > 0) newRow[18] = Math.round(qtdCavaRocha * 100) / 100;           // Col S (18): CAVA EM ROCHA (numérico)
+    if (qtdFundacaoEspecial > 0) newRow[19] = Math.round(qtdFundacaoEspecial * 100) / 100; // Col T (19): FUNDAÇ. ESPECIAL (numérico)
+    if (qtdPostes > 0) newRow[20] = Math.round(qtdPostes * 100) / 100;                 // Col U (20): IMPLANTAÇÃO Postes (numérico)
+    if (qtdEquipamentos > 0) newRow[21] = Math.round(qtdEquipamentos * 100) / 100;     // Col V (21): EQUIPAM. (numérico)
+    if (qtdEstruturas > 0) newRow[22] = Math.round(qtdEstruturas * 100) / 100;         // Col W (22): ACABAMENTO (numérico)
+    if (qtdCabosBt > 0) newRow[23] = Math.round(qtdCabosBt * 100) / 100;               // Col X (23): CABO BT (numérico)
+    if (qtdCabos4 > 0) newRow[24] = Math.round(qtdCabos4 * 100) / 100;                 // Col Y (24): CABO 4 (numérico)
+    if (qtdCabos10 > 0) newRow[25] = Math.round(qtdCabos10 * 100) / 100;               // Col Z (25): CABO 1/0 (numérico)
+    if (qtdCabos40 > 0) newRow[26] = Math.round(qtdCabos40 * 100) / 100;               // Col AA (26): CABO 4/0 (numérico)
+    if (qtdCabos336 > 0) newRow[27] = Math.round(qtdCabos336 * 100) / 100;             // Col AB (27): CABO 336 (numérico)
+    if (qtdCabosMtXlpe > 0) newRow[28] = Math.round(qtdCabosMtXlpe * 100) / 100;       // Col AC (28): CABO MT XLPE (numérico)
+    if (qtdPoda > 0) newRow[29] = Math.round(qtdPoda * 100) / 100;                     // Col AD (29): PODA (numérico)
+    if (qtdAterCerca > 0) newRow[30] = Math.round(qtdAterCerca * 100) / 100;           // Col AE (30): ATER. CERCA (numérico)
+    if (qtdEstSimplesLv > 0) newRow[31] = Math.round(qtdEstSimplesLv * 100) / 100;     // Col AF (31): EST. SIMPLES LV (numérico)
+    if (qtdEstDuplaLv > 0) newRow[32] = Math.round(qtdEstDuplaLv * 100) / 100;         // Col AG (32): EST. DUPLA LV (numérico)
 
     newRow[36] = 'NÃO';                                     // Col AK (36): ANALISAR PRODUÇÃO?
 
