@@ -603,22 +603,31 @@ export const PcpPlanejamentoView = () => {
       }
     }
 
-    const customAl = diasCustomAlojMap[diaId] || {};
-    const finalOrigemId = customAl.origem || defaultOrigemId;
-    const finalDestinoId = customAl.destino || defaultDestinoId;
+    // Busca personalização manual em diasCustomAlojMap por diaId direto, rawDiaId ou prefixo_rawDiaId
+    const rawDiaId = diaId.includes('_') ? diaId.split('_').slice(1).join('_') : diaId;
+    const customAl = diasCustomAlojMap[diaId]
+      || (diaId.includes('_') ? diasCustomAlojMap[rawDiaId] : undefined)
+      || (eqPrefix ? diasCustomAlojMap[`${eqPrefix}_${rawDiaId}`] : undefined)
+      || {};
+
+    // A alteração manual sempre prevalece sobre a regra default de base/alojamento
+    const finalOrigemId = (customAl.origem !== undefined && customAl.origem !== '') ? customAl.origem : defaultOrigemId;
+    const finalDestinoId = (customAl.destino !== undefined && customAl.destino !== '') ? customAl.destino : defaultDestinoId;
 
     const baseInfo = unidadeAtivaInfo || UNIDADES_PLANEJAMENTO[1];
     const alojList = alojamentosDaUnidade;
 
     const targetObra = overrideObra !== undefined ? overrideObra : selectedObra;
 
-    const origemObj = finalOrigemId === 'BASE' || finalOrigemId === baseInfo.baseNome
+    const isBaseOrigem = finalOrigemId === 'BASE' || finalOrigemId === baseInfo.baseNome || finalOrigemId.toUpperCase().includes('BASE');
+    const origemObj = isBaseOrigem
       ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
-      : (alojList.find(a => a.id === finalOrigemId || a.nome === finalOrigemId) || { id: finalOrigemId, nome: finalOrigemId, latitude: null, longitude: null });
+      : (alojList.find(a => a.id === finalOrigemId || a.nome.trim().toUpperCase() === String(finalOrigemId).trim().toUpperCase()) || { id: finalOrigemId, nome: finalOrigemId, latitude: null, longitude: null });
 
-    const destinoObj = finalDestinoId === 'BASE' || finalDestinoId === baseInfo.baseNome
+    const isBaseDestino = finalDestinoId === 'BASE' || finalDestinoId === baseInfo.baseNome || finalDestinoId.toUpperCase().includes('BASE');
+    const destinoObj = isBaseDestino
       ? { id: 'BASE', nome: baseInfo.baseNome, latitude: baseInfo.baseLatitude, longitude: baseInfo.baseLongitude }
-      : (alojList.find(a => a.id === finalDestinoId || a.nome === finalDestinoId) || { id: finalDestinoId, nome: finalDestinoId, latitude: null, longitude: null });
+      : (alojList.find(a => a.id === finalDestinoId || a.nome.trim().toUpperCase() === String(finalDestinoId).trim().toUpperCase()) || { id: finalDestinoId, nome: finalDestinoId, latitude: null, longitude: null });
 
     let distIdaKm = 0;
     let calcTempoIdaMin = 15;
@@ -1069,37 +1078,92 @@ export const PcpPlanejamentoView = () => {
       const next = {
         ...current,
         [tipo === 'origem' ? 'origem' : 'destino']: alojNome,
-        tempoIdaMin: current.tempoIdaMin !== undefined ? current.tempoIdaMin : 40,
-        tempoVoltaMin: current.tempoVoltaMin !== undefined ? current.tempoVoltaMin : 40,
       };
-      return { ...prev, [diaId]: next };
+      const updated = { ...prev, [diaId]: next };
+
+      if (!diaId.includes('_')) {
+        // Se diaId não tem equipe (modo obra), sincroniza também para as equipes selecionadas
+        selectedEquipes.forEach(eq => {
+          const eqKey = `${eq}_${diaId}`;
+          const eqCurr = prev[eqKey] || {};
+          updated[eqKey] = {
+            ...eqCurr,
+            [tipo === 'origem' ? 'origem' : 'destino']: alojNome,
+          };
+        });
+      } else {
+        // Se diaId tem equipe (ex: EH156_2026-10-26), sincroniza também na chave pura diaId
+        const rawId = diaId.split('_').slice(1).join('_');
+        const rawCurr = prev[rawId] || {};
+        updated[rawId] = {
+          ...rawCurr,
+          [tipo === 'origem' ? 'origem' : 'destino']: alojNome,
+        };
+      }
+      return updated;
     });
   };
 
   const handleUpdateDiaTempo = (diaId: string, tipo: 'ida' | 'volta', minutos: number) => {
     setDiasCustomAlojMap(prev => {
       const current = prev[diaId] || {};
-      return {
-        ...prev,
-        [diaId]: {
-          ...current,
+      const next = {
+        ...current,
+        [tipo === 'ida' ? 'tempoIdaMin' : 'tempoVoltaMin']: minutos,
+        [tipo === 'ida' ? 'manualIda' : 'manualVolta']: true,
+      };
+      const updated = { ...prev, [diaId]: next };
+
+      if (!diaId.includes('_')) {
+        selectedEquipes.forEach(eq => {
+          const eqKey = `${eq}_${diaId}`;
+          const eqCurr = prev[eqKey] || {};
+          updated[eqKey] = {
+            ...eqCurr,
+            [tipo === 'ida' ? 'tempoIdaMin' : 'tempoVoltaMin']: minutos,
+            [tipo === 'ida' ? 'manualIda' : 'manualVolta']: true,
+          };
+        });
+      } else {
+        const rawId = diaId.split('_').slice(1).join('_');
+        const rawCurr = prev[rawId] || {};
+        updated[rawId] = {
+          ...rawCurr,
           [tipo === 'ida' ? 'tempoIdaMin' : 'tempoVoltaMin']: minutos,
           [tipo === 'ida' ? 'manualIda' : 'manualVolta']: true,
-        }
-      };
+        };
+      }
+      return updated;
     });
   };
 
   const handleUpdateDiaTempoComp = (diaId: string, field: 'saidaBase' | 'seguranca', minutos: number) => {
     setDiasTemposCompMap(prev => {
       const current = prev[diaId] || {};
-      return {
-        ...prev,
-        [diaId]: {
-          ...current,
-          [field === 'saidaBase' ? 'tempoSaidaBaseMin' : 'tempoSegurancaMin']: minutos,
-        }
+      const next = {
+        ...current,
+        [field === 'saidaBase' ? 'tempoSaidaBaseMin' : 'tempoSegurancaMin']: minutos,
       };
+      const updated = { ...prev, [diaId]: next };
+
+      if (!diaId.includes('_')) {
+        selectedEquipes.forEach(eq => {
+          const eqKey = `${eq}_${diaId}`;
+          const eqCurr = prev[eqKey] || {};
+          updated[eqKey] = {
+            ...eqCurr,
+            [field === 'saidaBase' ? 'tempoSaidaBaseMin' : 'tempoSegurancaMin']: minutos,
+          };
+        });
+      } else {
+        const rawId = diaId.split('_').slice(1).join('_');
+        const rawCurr = prev[rawId] || {};
+        updated[rawId] = {
+          ...rawCurr,
+          [field === 'saidaBase' ? 'tempoSaidaBaseMin' : 'tempoSegurancaMin']: minutos,
+        };
+      }
+      return updated;
     });
   };
 

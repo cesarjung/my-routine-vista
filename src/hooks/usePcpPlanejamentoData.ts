@@ -1433,6 +1433,10 @@ export const usePcpPlanejamentoData = (
           .filter(Boolean)
       )
     );
+    const temAlojamento = (form.alojamentoIda && !form.alojamentoIda.toUpperCase().includes('BASE')) ||
+                          (form.alojamentoVolta && !form.alojamentoVolta.toUpperCase().includes('BASE'));
+    newRow[73] = temAlojamento ? 'SIM' : 'NÃO';             // Col BV (73): Alojamento (SIM / NÃO)
+
     newRow[76] = etapasAtividadesUnicas.length > 0 ? etapasAtividadesUnicas.join('/') : ''; // Col BY (76): ETAPA MATERIAIS (apenas etapas dos pontos com materiais)
 
     newRow[77] = form.alojamentoIda || form.alojamento || ''; // Col BZ (77): Alojamento de Ida
