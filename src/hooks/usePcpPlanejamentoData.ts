@@ -417,7 +417,7 @@ export interface ServicoBase {
 export const sortPontosAndVaos = (a: string, b: string): number => {
   const isVaoA = (a || '').toUpperCase().startsWith('V');
   const isVaoB = (b || '').toUpperCase().startsWith('V');
-  
+
   if (!isVaoA && isVaoB) return -1;
   if (isVaoA && !isVaoB) return 1;
 
@@ -554,28 +554,28 @@ export const usePcpPlanejamentoData = (
         const tempoStr = String(row[40] || '').trim();
         const valStr = String(row[44] || '').trim();
         const valKStr = String(row[45] || '').trim();
-        
+
         if (!atividade || atividade === 'DESCRIÇÃO ATIVIDADE') continue;
 
         let tempoMinutos = 0;
         if (tempoStr) {
-           const p = tempoStr.split(':');
-           if (p.length === 3) {
-             tempoMinutos = parseInt(p[0]||'0', 10) * 60 + parseInt(p[1]||'0', 10) + parseFloat(p[2]||'0') / 60;
-           } else if (p.length === 2) {
-             tempoMinutos = parseInt(p[0]||'0', 10) * 60 + parseInt(p[1]||'0', 10);
-           } else if (p.length === 1 && parseFloat(p[0])) {
-             tempoMinutos = parseFloat(p[0]);
-           }
+          const p = tempoStr.split(':');
+          if (p.length === 3) {
+            tempoMinutos = parseInt(p[0] || '0', 10) * 60 + parseInt(p[1] || '0', 10) + parseFloat(p[2] || '0') / 60;
+          } else if (p.length === 2) {
+            tempoMinutos = parseInt(p[0] || '0', 10) * 60 + parseInt(p[1] || '0', 10);
+          } else if (p.length === 1 && parseFloat(p[0])) {
+            tempoMinutos = parseFloat(p[0]);
+          }
         }
 
         // Prioriza o Valor Contratual / Valor com Fator K da Unidade (Coluna AT / Index 45)
         let valor = 0;
         if (valKStr) {
-           valor = parseMoedaPtBr(valKStr);
+          valor = parseMoedaPtBr(valKStr);
         }
         if (valor === 0 && valStr) {
-           valor = parseMoedaPtBr(valStr);
+          valor = parseMoedaPtBr(valStr);
         }
 
         lista.push({
@@ -588,11 +588,11 @@ export const usePcpPlanejamentoData = (
     } catch (e) {
       console.error('Erro ao parsear bd_config:', e);
     }
-    
+
     if (lista.length === 0) {
       lista.push({ codigo: 'SIR0000001', servico: 'SUBSTITUIÇÃO DE POSTE', tempoMinutosPorUnidade: 60, valorPorUnidade: 100.0 });
     }
-    
+
     return lista;
   }, [rawCacheQuery.data]);
 
@@ -1073,15 +1073,15 @@ export const usePcpPlanejamentoData = (
 
           // 1. Match por código da atividade (ex: SIR0000001, SDEMU1004II)
           let foundServ = cod ? servicosBase.find(s => s.codigo && s.codigo === cod) : undefined;
-          
+
           // 2. Match por descrição exata
           if (!foundServ) {
             foundServ = servicosBase.find(s => s.servico === descricao);
           }
-          
+
           // 3. Match por aproximação / substring
           if (!foundServ) {
-            foundServ = servicosBase.find(s => descricao.includes(s.servico) || s.servico.includes(descricao)) 
+            foundServ = servicosBase.find(s => descricao.includes(s.servico) || s.servico.includes(descricao))
               || (servicosBase.length > 0 ? servicosBase[0] : { codigo: cod, servico: descricao, tempoMinutosPorUnidade: 15, valorPorUnidade: 0 });
           }
 
@@ -1379,7 +1379,7 @@ export const usePcpPlanejamentoData = (
     // Valores Numéricos Puros para permitir que o Google Sheets formate nativamente com R$ e calcule fórmulas
     const valPlan = Math.round(valorTotalAtividades * 100) / 100;
     newRow[37] = valPlan;                                   // Col AL (37): Planejado R$ (numérico puro ex: 10261.01)
-    
+
     const equipeKey = (form.equipe || '').trim().toUpperCase();
     const metaDaEquipe = metasPorEquipeMap.get(equipeKey);
     const metaVal = Math.round(((form.metaEquipeValor && form.metaEquipeValor > 0) ? form.metaEquipeValor : (metaDaEquipe && metaDaEquipe > 0 ? metaDaEquipe : 4442)) * 100) / 100;
@@ -1395,13 +1395,13 @@ export const usePcpPlanejamentoData = (
     }
 
     newRow[56] = nomeUnidadePlanejadaUpper;                 // Col BE (56): Unidade Planejada
-    
+
     const cleanDateNum = form.dataProgramacao.replace(/\//g, '');
     newRow[62] = `${form.equipe}_${cleanDateNum}`;          // Col BK: Chave Equipe & Data
 
-    const tSaidaBase = form.tempoSaidaBaseMinutos || 15;
-    const tDesloc = form.tempoDeslocamentoMinutos || 30;
-    const tSeg = form.tempoSegurancaMinutos || 15;
+    const tSaidaBase = form.tempoSaidaBaseMinutos !== undefined ? Number(form.tempoSaidaBaseMinutos) : 15;
+    const tDesloc = form.tempoDeslocamentoMinutos !== undefined ? Number(form.tempoDeslocamentoMinutos) : 30;
+    const tSeg = form.tempoSegurancaMinutos !== undefined ? Number(form.tempoSegurancaMinutos) : 15;
 
     const hAtiv = Math.floor(tempoAtividadesMin / 60);
     const mAtiv = tempoAtividadesMin % 60;
@@ -1411,9 +1411,13 @@ export const usePcpPlanejamentoData = (
     const mDesl = tDesloc % 60;
     newRow[64] = `${String(hDesl).padStart(2, '0')}:${String(mDesl).padStart(2, '0')}:00`; // Col BM (64): Tempo Deslocamento
 
-    newRow[65] = `00:${String(tSaidaBase).padStart(2, '0')}:00`;                           // Col BN (65): Tempo Saída Base
+    const hSb = Math.floor(tSaidaBase / 60);
+    const mSb = tSaidaBase % 60;
+    newRow[65] = `${String(hSb).padStart(2, '0')}:${String(mSb).padStart(2, '0')}:00`;     // Col BN (65): Tempo Saída Base
 
-    newRow[66] = `00:${String(tSeg).padStart(2, '0')}:00`;                                 // Col BO (66): Tempo Segurança
+    const hSeg = Math.floor(tSeg / 60);
+    const mSeg = tSeg % 60;
+    newRow[66] = `${String(hSeg).padStart(2, '0')}:${String(mSeg).padStart(2, '0')}:00`;     // Col BO (66): Tempo Segurança
 
     const tTotalGeral = tempoAtividadesMin + tDesloc + tSaidaBase + tSeg;
     const hTot = Math.floor(tTotalGeral / 60);

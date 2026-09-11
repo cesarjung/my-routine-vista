@@ -1430,11 +1430,16 @@ export const PcpPlanejamentoView = () => {
     }
 
     try {
-      // Resolver alojamento do dia (Ida = Origem / Volta = Destino)
+      // Resolver alojamento e deslocamento do dia (Ida = Origem / Volta = Destino)
       const diaIdx = diasProgramados.indexOf(diaTarget);
       const disp = getDayDisplacement(compositeKey, diaIdx, diasProgramados.length, obraParaEnviar);
       const alojIda = disp.origemNome || alojamentoPadrao;
       const alojVolta = disp.destinoNome || alojamentoPadrao;
+
+      const tComp = diasTemposCompMap[compositeKey] || diasTemposCompMap[diaTarget.id];
+      const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+      const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+      const sDesloc = disp.tempoTotalDeslocamentoMin;
 
       const formPayload: PcpProgramacaoForm = {
         unidadeId: selectedUnidadeId,
@@ -1453,6 +1458,9 @@ export const PcpPlanejamentoView = () => {
         alojamentoIda: alojIda,
         alojamentoVolta: alojVolta,
         alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
+        tempoDeslocamentoMinutos: sDesloc,
+        tempoSaidaBaseMinutos: sBase,
+        tempoSegurancaMinutos: sSeg,
       };
 
       await salvarProgramacao.mutateAsync({
@@ -1513,6 +1521,11 @@ export const PcpPlanejamentoView = () => {
             const alojIda = disp.origemNome || alojamentoPadrao;
             const alojVolta = disp.destinoNome || alojamentoPadrao;
 
+            const tComp = diasTemposCompMap[compositeKey] || diasTemposCompMap[d.id];
+            const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+            const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+            const sDesloc = disp.tempoTotalDeslocamentoMin;
+
             allForms.push({
               unidadeId: selectedUnidadeId,
               dataProgramacao: d.dataCompleta,
@@ -1530,6 +1543,9 @@ export const PcpPlanejamentoView = () => {
               alojamentoIda: alojIda,
               alojamentoVolta: alojVolta,
               alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
+              tempoDeslocamentoMinutos: sDesloc,
+              tempoSaidaBaseMinutos: sBase,
+              tempoSegurancaMinutos: sSeg,
             });
           }
         }
@@ -1571,9 +1587,15 @@ export const PcpPlanejamentoView = () => {
 
           for (const eq of equipesToSend) {
             const diaIdx = diasComAtividadesOuEtapaPermitida.indexOf(d);
-            const disp = getDayDisplacement(d.id, diaIdx, diasComAtividadesOuEtapaPermitida.length);
+            const compositeKey = `${eq}_${d.id}`;
+            const disp = getDayDisplacement(compositeKey, diaIdx, diasComAtividadesOuEtapaPermitida.length, selectedObra);
             const alojIda = disp.origemNome || alojamentoPadrao;
             const alojVolta = disp.destinoNome || alojamentoPadrao;
+
+            const tComp = diasTemposCompMap[compositeKey] || diasTemposCompMap[d.id];
+            const sBase = tComp?.tempoSaidaBaseMin ?? tempoSaidaBasePadrao;
+            const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
+            const sDesloc = disp.tempoTotalDeslocamentoMin;
 
             allForms.push({
               unidadeId: selectedUnidadeId,
@@ -1584,14 +1606,17 @@ export const PcpPlanejamentoView = () => {
               etapaGeral: etapaGeral,
               obra: selectedObra!,
               pontos: allActs,
-              isPes: diasPesMap[d.id] || false,
-              reprogramar: diasReprogramarMap[d.id] || false,
-              motivoReprogramacao: diasMotivoReprogramarMap[d.id] || '',
-              motivoDescumprimento: diasMotivoDescumprimentoMap[d.id] || '',
+              isPes: diasPesMap[compositeKey] || diasPesMap[d.id] || false,
+              reprogramar: diasReprogramarMap[compositeKey] || diasReprogramarMap[d.id] || false,
+              motivoReprogramacao: diasMotivoReprogramarMap[compositeKey] || diasMotivoReprogramarMap[d.id] || '',
+              motivoDescumprimento: diasMotivoDescumprimentoMap[compositeKey] || diasMotivoDescumprimentoMap[d.id] || '',
               metaEquipeValor: metasPorEquipeMap.get(eq.toUpperCase()) || (metaEquipeInput ? Number(metaEquipeInput) : 0),
               alojamentoIda: alojIda,
               alojamentoVolta: alojVolta,
               alojamento: alojIda === alojVolta ? alojIda : `${alojIda} ➔ ${alojVolta}`,
+              tempoDeslocamentoMinutos: sDesloc,
+              tempoSaidaBaseMinutos: sBase,
+              tempoSegurancaMinutos: sSeg,
             });
           }
         }
