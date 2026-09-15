@@ -534,6 +534,30 @@ export const usePcpPlanejamentoData = (
     return map;
   }, [rawCacheQuery.data]);
 
+  // Parse BD_Config to extract Supervisor per Equipe (Coluna D=Equipe [index 3], Coluna F=Supervisor [index 5])
+  const supervisoresPorEquipeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!rawCacheQuery.data?.bd_metas) return map;
+    try {
+      const rawStr = rawCacheQuery.data.bd_metas;
+      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      const bdConfigRows = parsed?.bd_config || [];
+
+      for (let i = 2; i < bdConfigRows.length; i++) {
+        const row = bdConfigRows[i];
+        if (!row || row.length < 6) continue;
+        const eq = String(row[3] || '').trim().toUpperCase();
+        const sup = String(row[5] || '').trim().toUpperCase();
+        if (eq && sup && sup !== 'SUPERVISOR' && !sup.includes('SUPERVISOR')) {
+          map.set(eq, sup);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao parsear supervisores de bd_config:', e);
+    }
+    return map;
+  }, [rawCacheQuery.data]);
+
   // Parse BD_Config to extract official services catalog with correct times and values
   const servicosBase = useMemo(() => {
     const lista: ServicoBase[] = [];
@@ -885,24 +909,41 @@ export const usePcpPlanejamentoData = (
   const supervisoresDisponiveis = useMemo(() => {
     const setSup = new Set<string>();
 
+    // 1. Prioridade absoluta: Supervisores da BD_Config da unidade atual
+    if (rawCacheQuery.data?.bd_metas) {
+      try {
+        const rawStr = rawCacheQuery.data.bd_metas;
+        const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+        const bdConfigRows = parsed?.bd_config || [];
+        for (let i = 2; i < bdConfigRows.length; i++) {
+          const row = bdConfigRows[i];
+          if (!row || row.length < 6) continue;
+          const sup = String(row[5] || '').trim().toUpperCase();
+          if (sup && sup !== 'SUPERVISOR' && !sup.includes('SUPERVISOR')) {
+            setSup.add(sup);
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao extrair supervisores de bd_config:', e);
+      }
+    }
+
+    // 2. Extrai de obras da carteira da unidade
     obras.forEach(o => {
       if (o.supervisor && o.supervisor.trim() && o.supervisor.toUpperCase() !== 'NÃO INFORMADO') {
         setSup.add(o.supervisor.trim().toUpperCase());
       }
     });
 
+    // 3. Extrai de programacoes ativas da unidade
     programacoesAtivas.forEach(p => {
-      if (p.supervisor && p.supervisor.trim()) {
+      if (p.supervisor && p.supervisor.trim() && p.supervisor.toUpperCase() !== 'SUPERVISOR') {
         setSup.add(p.supervisor.trim().toUpperCase());
       }
     });
 
-    if (setSup.size === 0) {
-      ['BARTOLOMEU', 'JOSE NILTON', 'ALFREDO', 'DANIEL', 'JHANATAN'].forEach(s => setSup.add(s));
-    }
-
     return Array.from(setSup).sort();
-  }, [obras, programacoesAtivas]);
+  }, [rawCacheQuery.data?.bd_metas, obras, programacoesAtivas]);
 
   // Extract unique Equipes for this unit (from bd_metas and programacoesAtivas)
   const equipesDisponiveis = useMemo(() => {
@@ -1333,14 +1374,28 @@ export const usePcpPlanejamentoData = (
     const compiledStr = blocos.join(' | ');
     const formattedDateWithDay = formatDateWithWeekday(form.dataProgramacao, form.dateObj);
 
-    const encarregado = form.encarregado || encarregadosPorEquipeMap.get((form.equipe || '').trim().toUpperCase()) || '';
+    const eqUpper = (form.equipe || '').trim().toUpperCase();
+    const encarregado = form.encarregado || encarregadosPorEquipeMap.get(eqUpper) || '';
     const titulo = form.obra.nomeProjeto || (form.obra as any).titulo || (form.obra as any).descricao || '';
     const prioridade = form.obra.prioridade || '';
+
+    // Resolução consistente do Supervisor:
+    // 1. Verifica se a equipe possui supervisor oficial mapeado na BD_Config da unidade atual
+    const supOficialDaEquipe = supervisoresPorEquipeMap.get(eqUpper);
+    let resolvedSupervisor = (form.supervisor || '').trim().toUpperCase();
+
+    // Se o supervisor enviado for vazio, ou se for 'BARTOLOMEU' em uma unidade onde Bartolomeu não é supervisor oficial (evita vazamento de default histórico),
+    // ou se o supervisor enviado não estiver na lista de supervisores disponíveis da unidade atual, usa o oficial da equipe.
+    if (!resolvedSupervisor || (resolvedSupervisor === 'BARTOLOMEU' && !supervisoresDisponiveis.includes('BARTOLOMEU'))) {
+      resolvedSupervisor = supOficialDaEquipe || (supervisoresDisponiveis[0] || 'SUPERVISOR');
+    } else if (supOficialDaEquipe && !supervisoresDisponiveis.includes(resolvedSupervisor)) {
+      resolvedSupervisor = supOficialDaEquipe;
+    }
 
     const newRow = new Array(79).fill('');
     newRow[0] = form.reprogramar ? 'REPROGRAMADA' : '';    // Col A (0): Reprog.
     newRow[1] = form.dataProgramacao;                       // Col B (1): Data como valor de data puro (dd/MM/yyyy)
-    newRow[4] = form.supervisor;                            // Col E (4): Supervisor
+    newRow[4] = resolvedSupervisor;                         // Col E (4): Supervisor
     newRow[5] = encarregado;                                // Col F (5): Encarregado
     newRow[6] = form.equipe;                                // Col G (6): Equipe
     newRow[7] = form.obra.projeto;                          // Col H (7): Projeto
@@ -1653,6 +1708,7 @@ export const usePcpPlanejamentoData = (
     statusesCarteira,
     metasPorEquipeMap,
     encarregadosPorEquipeMap,
+    supervisoresPorEquipeMap,
     orcamentoPontosQuery,
     orcamentoPorPontoMap,
     pontosDisponiveisDoProjeto,

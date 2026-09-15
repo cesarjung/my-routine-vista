@@ -258,6 +258,7 @@ export const PcpPlanejamentoView = () => {
     supervisoresCarteira,
     statusesCarteira,
     metasPorEquipeMap,
+    supervisoresPorEquipeMap,
     orcamentoPontosQuery,
     orcamentoPorPontoMap,
     pontosDisponiveisDoProjeto,
@@ -476,11 +477,38 @@ export const PcpPlanejamentoView = () => {
   const [isDataRangeOpen, setIsDataRangeOpen] = useState<boolean>(false);
 
   // Parâmetros Gerais
-  const [supervisor, setSupervisor] = useState<string>('BARTOLOMEU');
-  const [selectedEquipes, setSelectedEquipes] = useInMemorySessionState<string[]>('pcp_mem_selected_equipes', ['EH156']);
+  const [supervisor, setSupervisor] = useState<string>('');
+  const [selectedEquipes, setSelectedEquipes] = useInMemorySessionState<string[]>('pcp_mem_selected_equipes', []);
   const [tempoSaidaBasePadrao, setTempoSaidaBasePadrao] = useInMemorySessionState<number>('pcp_mem_tempo_saida_base', 15);
   const [tempoSegurancaPadrao, setTempoSegurancaPadrao] = useInMemorySessionState<number>('pcp_mem_tempo_seguranca', 15);
   const [metaEquipeInput, setMetaEquipeInput] = useState<number>(4442);
+
+  // Garante que selectedEquipes contenha equipes válidas da unidade selecionada
+  useEffect(() => {
+    if (equipesDisponiveis.length > 0) {
+      const hasValidEquipe = selectedEquipes.some(eq => equipesDisponiveis.includes(eq));
+      if (!hasValidEquipe) {
+        setSelectedEquipes([equipesDisponiveis[0]]);
+      }
+    }
+  }, [selectedUnidadeId, equipesDisponiveis]);
+
+  // Sincroniza supervisor com a equipe ativa ou com a unidade selecionada
+  useEffect(() => {
+    const eqAtiva = (selectedEquipes[0] || '').trim().toUpperCase();
+    if (eqAtiva && supervisoresPorEquipeMap) {
+      const supDaEquipe = supervisoresPorEquipeMap.get(eqAtiva);
+      if (supDaEquipe) {
+        setSupervisor(supDaEquipe);
+        return;
+      }
+    }
+    if (supervisoresDisponiveis.length > 0) {
+      if (!supervisor || !supervisoresDisponiveis.includes(supervisor.toUpperCase())) {
+        setSupervisor(supervisoresDisponiveis[0]);
+      }
+    }
+  }, [selectedEquipes, selectedUnidadeId, supervisoresPorEquipeMap, supervisoresDisponiveis]);
 
   // Sincroniza meta com a equipe selecionada
   useEffect(() => {
@@ -1505,11 +1533,14 @@ export const PcpPlanejamentoView = () => {
       const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
       const sDesloc = disp.tempoTotalDeslocamentoMin;
 
+      const eqUpper = equipeAtiva.trim().toUpperCase();
+      const eqSupervisor = supervisoresPorEquipeMap.get(eqUpper) || supervisor || (supervisoresDisponiveis[0] || '');
+
       const formPayload: PcpProgramacaoForm = {
         unidadeId: selectedUnidadeId,
         dataProgramacao: diaTarget.dataCompleta,
         dateObj: diaTarget.dateObj,
-        supervisor,
+        supervisor: eqSupervisor,
         equipe: equipeAtiva,
         etapaGeral: etapaGeral,
         obra: obraParaEnviar,
@@ -1590,11 +1621,14 @@ export const PcpPlanejamentoView = () => {
             const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
             const sDesloc = disp.tempoTotalDeslocamentoMin;
 
+            const eqUpper = eq.trim().toUpperCase();
+            const eqSupervisor = supervisoresPorEquipeMap.get(eqUpper) || supervisor || (supervisoresDisponiveis[0] || '');
+
             allForms.push({
               unidadeId: selectedUnidadeId,
               dataProgramacao: d.dataCompleta,
               dateObj: d.dateObj,
-              supervisor,
+              supervisor: eqSupervisor,
               equipe: eq,
               etapaGeral: etapaGeral,
               obra: obraDoSlot,
@@ -1661,11 +1695,14 @@ export const PcpPlanejamentoView = () => {
             const sSeg = tComp?.tempoSegurancaMin ?? tempoSegurancaPadrao;
             const sDesloc = disp.tempoTotalDeslocamentoMin;
 
+            const eqUpper = eq.trim().toUpperCase();
+            const eqSupervisor = supervisoresPorEquipeMap.get(eqUpper) || supervisor || (supervisoresDisponiveis[0] || '');
+
             allForms.push({
               unidadeId: selectedUnidadeId,
               dataProgramacao: d.dataCompleta,
               dateObj: d.dateObj,
-              supervisor,
+              supervisor: eqSupervisor,
               equipe: eq,
               etapaGeral: etapaGeral,
               obra: selectedObra!,
@@ -3664,14 +3701,27 @@ export const PcpPlanejamentoView = () => {
               {/* 2. Parâmetros (Chips horizontais em linha única) */}
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 {/* Equipe */}
-                <Select value={selectedEquipes[0] || 'EH156'} onValueChange={val => setSelectedEquipes([val])}>
+                <Select value={selectedEquipes[0] || (equipesDisponiveis[0] ?? '')} onValueChange={val => setSelectedEquipes([val])}>
                   <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
                     <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">EQUIPE</span>
-                    <span className="font-mono font-bold text-[#23211E]">{selectedEquipes[0] || 'EH156'}</span>
+                    <span className="font-mono font-bold text-[#23211E]">{selectedEquipes[0] || (equipesDisponiveis[0] ?? 'Selecione...')}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {equipesDisponiveis.map(eq => (
                       <SelectItem key={eq} value={eq} className="text-xs font-mono font-semibold">{eq}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Supervisor */}
+                <Select value={supervisor} onValueChange={setSupervisor}>
+                  <SelectTrigger className="h-8 px-3 text-xs bg-white border border-[#DEDAD3] rounded-lg shadow-2xs text-[#23211E] font-semibold flex items-center gap-1.5 w-auto">
+                    <span className="text-[10px] uppercase tracking-wider text-[#A39E96] font-semibold">SUPERVISOR</span>
+                    <span className="font-semibold text-[#23211E]">{supervisor || 'Selecione...'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {supervisoresDisponiveis.map(s => (
+                      <SelectItem key={s} value={s} className="text-xs font-semibold">{s}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

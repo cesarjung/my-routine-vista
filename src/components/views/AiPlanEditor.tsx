@@ -122,11 +122,18 @@ export const AiPlanEditor = ({
   salvarProgramacao,
   index,
 }: AiPlanEditorProps) => {
-  const { servicosBase } = usePcpPlanejamentoData(unidadeId, plano.projeto);
+  const { servicosBase, supervisoresPorEquipeMap } = usePcpPlanejamentoData(unidadeId, plano.projeto);
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [equipe, setEquipe] = useState(plano.equipe || (equipesDisponiveis[0] ?? ''));
   const [supervisor, setSupervisor] = useState(supervisoresDisponiveis[0] ?? 'SUPERVISOR');
+
+  useEffect(() => {
+    if (equipe && supervisoresPorEquipeMap) {
+      const sup = supervisoresPorEquipeMap.get(equipe.trim().toUpperCase());
+      if (sup) setSupervisor(sup);
+    }
+  }, [equipe, supervisoresPorEquipeMap]);
   const [selectedEtapas, setSelectedEtapas] = useState<string[]>([]);
   const [isEtapasPopoverOpen, setIsEtapasPopoverOpen] = useState(false);
   const [filtroLv, setFiltroLv] = useState<'COMPLETO' | 'SOMENTE_LV' | 'SEM_LV'>('COMPLETO');
