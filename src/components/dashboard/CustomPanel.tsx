@@ -4,6 +4,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useTasks } from '@/hooks/useTasks';
 import { useRoutines } from '@/hooks/useRoutines';
+import { RoutineDetailPanel } from '@/components/RoutineDetailPanel';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { toast } from 'sonner';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { useDeleteDashboardPanel, useUpdateDashboardPanel, DashboardPanel } from '@/hooks/useDashboardPanels';
 import { PanelFormDialog } from '@/components/dashboard/PanelFormDialog';
@@ -259,7 +262,7 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       }
 
       const buildTasksQuery = () => {
-        let q = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, start_date, sector_id');
+        let q = supabase.from('tasks').select('id, title, status, unit_id, assigned_to, routine_id, created_at, due_date, start_date, sector_id');
 
         if (sectorOrFilter) q = q.or(sectorOrFilter);
 
@@ -549,10 +552,10 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         });
 
         results = Array.from(routineMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-        return { results, routinesMap, routineTitlesMap, units: units || [], rawTasks };
+        return { results, routinesMap, routineTitlesMap, units: units || [], rawTasks: tasks || [] };
       }
 
-      return { results, routinesMap, routineTitlesMap, rawTasks };
+      return { results, routinesMap, routineTitlesMap, rawTasks: tasks || [] };
     }
   });
 };
@@ -715,9 +718,30 @@ export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: Custo
     frequency: '',
   });
 
-  const { data: allTasks } = useTasks(undefined, { enabled: tasksDialog.isOpen });
   const deletePanel = useDeleteDashboardPanel();
   const { isAdmin } = useIsAdmin();
+
+  // Routine detail sheet (opened from the task list)
+  const [routineSheet, setRoutineSheet] = useState<{ routine: any; contextDate: string | null } | null>(null);
+  const [loadingRoutineId, setLoadingRoutineId] = useState<string | null>(null);
+
+  const openRoutineFromTask = async (task: any) => {
+    if (!task.routine_id) return;
+    setLoadingRoutineId(task.id);
+    try {
+      const { data: routine, error } = await supabase
+        .from('routines')
+        .select('*')
+        .eq('id', task.routine_id)
+        .single();
+      if (error || !routine) throw error || new Error('Rotina não encontrada');
+      setRoutineSheet({ routine, contextDate: task.due_date || task.start_date || null });
+    } catch (err: any) {
+      toast.error('Não foi possível abrir a rotina: ' + (err?.message || 'erro desconhecido'));
+    } finally {
+      setLoadingRoutineId(null);
+    }
+  };
 
   const openTasksDialog = (
     entityId: string,
@@ -738,33 +762,40 @@ export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: Custo
     setTasksDialog(prev => ({ ...prev, isOpen: false }));
   };
 
-  // Filter tasks based on dialog state
-  const filteredTasks = (data?.rawTasks || [])?.filter(task => {
-    if (!tasksDialog.isOpen) return false;
-
-    // Filter by entity type
-    if (tasksDialog.entityType === 'unit') {
-      if ((task as any).unit_id !== tasksDialog.entityId) return false;
-    } else if (tasksDialog.entityType === 'responsible') {
-      if ((task as any).assigned_to !== tasksDialog.entityId) return false;
-    } else if (tasksDialog.entityType === 'sector') {
-      if ((task as any).sector_id !== tasksDialog.entityId) return false;
-    } else if (tasksDialog.entityType === 'task') {
-      // If grouped by task, the entityId is either a routine_id or a 'title:...'
-      if (tasksDialog.entityId.startsWith('title:')) {
-        const titleKey = tasksDialog.entityId.substring(6);
-        if ((task as any).title !== titleKey || (task as any).routine_id) return false;
-      } else {
-        if ((task as any).routine_id !== tasksDialog.entityId) return false;
+  // Filter tasks based on dialog state (data.rawTasks is already filtered by the
+  // panel's period / sector / unit / frequency / title filters)
+  const filteredTasks = (tasksDialog.isOpen ? (data?.rawTasks || []) : [])
+    .filter((task: any) => {
+      // Filter by entity type
+      if (tasksDialog.entityType === 'unit') {
+        if (task.unit_id !== tasksDialog.entityId) return false;
+      } else if (tasksDialog.entityType === 'responsible') {
+        if (task.assigned_to !== tasksDialog.entityId) return false;
+      } else if (tasksDialog.entityType === 'sector') {
+        if (task.sector_id !== tasksDialog.entityId) return false;
+      } else if (tasksDialog.entityType === 'task') {
+        // If grouped by task, the entityId is either a routine_id or a 'title:...'
+        if (tasksDialog.entityId.startsWith('title:')) {
+          const titleKey = tasksDialog.entityId.substring(6);
+          if (task.title !== titleKey || task.routine_id) return false;
+        } else {
+          if (task.routine_id !== tasksDialog.entityId) return false;
+        }
       }
-    }
-    
-    // Filter by effective sector
-    const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : panel.filters.sector_id;
-    if (effectiveSectorId && task.sector_id !== effectiveSectorId) return false;
-    
-    return true;
-  }) || [];
+
+      // Filter by the clicked frequency column (D / S / Q / M)
+      if (tasksDialog.frequency) {
+        const freq = task.routine_id ? data?.routinesMap?.[task.routine_id] : null;
+        if (freq !== tasksDialog.frequency) return false;
+      }
+
+      return true;
+    })
+    .sort((a: any, b: any) => String(a.due_date || '').localeCompare(String(b.due_date || '')));
+
+  const getTaskDisplayTitle = (task: any) =>
+    (task.routine_id && data?.routineTitlesMap?.[task.routine_id]) ||
+    (task.title ? String(task.title).replace(/^\[Rotina\]\s*/, '') : 'Tarefa sem título');
 
   // Determine visible frequencies
   const visibleFrequencies = panel.filters.task_frequency && panel.filters.task_frequency.length > 0
@@ -1021,46 +1052,84 @@ export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: Custo
                 Nenhuma tarefa encontrada
               </div>
             ) : (
-              <div className="space-y-4">
-                {filteredTasks.map((task: any) => (
-                  <div key={task.id} className="p-4 rounded-lg border bg-card">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h4 className="font-medium">{task.title}</h4>
-                        {task.description && (
-                          <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
-                            {task.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                          {task.routine && (
-                            <span className="flex items-center gap-1">
-                              <Play className="w-3 h-3" />
-                              Rotina: {task.routine.title}
+              <div className="space-y-2">
+                {filteredTasks.map((task: any) => {
+                  const clickable = !!task.routine_id;
+                  const startDt = task.start_date ? new Date(task.start_date) : null;
+                  const dueDt = task.due_date ? new Date(task.due_date) : null;
+                  const sameDay = startDt && dueDt && startDt.toDateString() === dueDt.toDateString();
+                  const freq = task.routine_id ? data?.routinesMap?.[task.routine_id] : null;
+                  const unitName = data?.results?.find((r: any) => r.id === task.unit_id)?.name;
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      id={`panel-task-${task.id}`}
+                      disabled={!clickable || loadingRoutineId === task.id}
+                      onClick={() => openRoutineFromTask(task)}
+                      className={cn(
+                        'w-full text-left p-3 rounded-lg border bg-card transition-all group',
+                        clickable && 'hover:border-primary/50 hover:bg-secondary/30 hover:shadow-sm cursor-pointer',
+                        !clickable && 'cursor-default'
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-medium text-sm truncate" title={getTaskDisplayTitle(task)}>
+                            {getTaskDisplayTitle(task)}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full font-medium",
+                              task.status === 'concluida' ? "bg-success/20 text-success" :
+                                task.status === 'atrasada' ? "bg-destructive/20 text-destructive" :
+                                  task.status === 'em_andamento' ? "bg-warning/20 text-warning" :
+                                    "bg-secondary/50"
+                            )}>
+                              {STATUS_LABELS[task.status] || task.status}
                             </span>
-                          )}
-                          <span className={cn(
-                            "px-2 py-0.5 rounded-full font-medium flex items-center gap-1",
-                            task.status === 'concluida' ? "bg-success/20 text-success" :
-                              task.status === 'atrasada' ? "bg-destructive/20 text-destructive" :
-                                task.status === 'em_andamento' ? "bg-warning/20 text-warning" :
-                                  "bg-secondary/50"
-                          )}>
-                            {STATUS_LABELS[task.status] || task.status}
-                          </span>
-                          {task.due_date && (
-                            <span>Vencimento: {new Date(task.due_date).toLocaleDateString()}</span>
-                          )}
+                            {freq && <span>{FREQUENCY_FULL_LABELS[freq] || freq}</span>}
+                            {unitName && tasksDialog.entityType !== 'unit' && <span>{unitName}</span>}
+                            {dueDt && (
+                              <span>
+                                {startDt && !sameDay
+                                  ? `Período: ${startDt.toLocaleDateString('pt-BR')} – ${dueDt.toLocaleDateString('pt-BR')}`
+                                  : `Vencimento: ${dueDt.toLocaleDateString('pt-BR')}`}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        {clickable && (
+                          <span className="flex items-center gap-1 text-xs text-primary opacity-70 group-hover:opacity-100 shrink-0 mt-0.5">
+                            {loadingRoutineId === task.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <><Play className="w-3 h-3" /> Abrir rotina</>}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Routine detail (opened from the task list) */}
+      <Sheet open={!!routineSheet} onOpenChange={(open) => !open && setRoutineSheet(null)}>
+        <SheetContent className="sm:max-w-xl w-[90vw] p-0" side="right">
+          {routineSheet && (
+            <div className="h-full overflow-y-auto">
+              <RoutineDetailPanel
+                routine={routineSheet.routine}
+                contextDate={routineSheet.contextDate}
+                onClose={() => setRoutineSheet(null)}
+              />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 };
