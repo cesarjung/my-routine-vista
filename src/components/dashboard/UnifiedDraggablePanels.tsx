@@ -475,6 +475,7 @@ export const UnifiedDraggablePanels = ({
           <DragOverlayContent
             panel={activePanel}
             selectedSectorId={selectedSectorId}
+            selectedPeriod={selectedPeriod}
             renderUnitsPanel={renderUnitsPanel}
             renderResponsiblesPanel={renderResponsiblesPanel}
           />

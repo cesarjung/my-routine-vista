@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
+import { addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
 
 const FREQUENCIES = ['diaria', 'semanal', 'quinzenal', 'mensal'] as const;
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -73,6 +73,68 @@ const getPeriodDates = (period: string) => {
     default:
       return null;
   }
+};
+
+// Parses a task date. Date-only strings (YYYY-MM-DD) are treated as LOCAL dates
+// (start of day for start_date, end of day for due_date) to avoid UTC shift.
+const parseTaskDate = (value: string | null | undefined, edge: 'start' | 'end'): Date | null => {
+  if (!value) return null;
+  if (value.length === 10) {
+    const [y, m, d] = value.split('-').map(Number);
+    return edge === 'start' ? new Date(y, m - 1, d, 0, 0, 0, 0) : new Date(y, m - 1, d, 23, 59, 59, 999);
+  }
+  const dt = new Date(value);
+  return isNaN(dt.getTime()) ? null : dt;
+};
+
+/**
+ * "Hoje" semantics per frequency:
+ *  - diária (or tasks without routine): task window must contain today
+ *  - semanal: task window must overlap the current week (Mon-Sun)
+ *  - quinzenal: task window must overlap today ± 14 days
+ *  - mensal: task window must overlap the current month
+ * For non-daily routines only ONE task per routine+unit is kept (the one closest to now),
+ * so a cycle is never double counted.
+ */
+const filterTasksByCurrentCycle = <T extends { routine_id: string | null; unit_id: string | null; start_date: string | null; due_date: string | null }>(
+  tasks: T[],
+  routinesMap: Record<string, string>
+): T[] => {
+  const now = new Date();
+  const windows: Record<string, { start: Date; end: Date }> = {
+    diaria: { start: startOfDay(now), end: endOfDay(now) },
+    semanal: { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) },
+    quinzenal: { start: startOfDay(addDays(now, -14)), end: endOfDay(addDays(now, 14)) },
+    mensal: { start: startOfMonth(now), end: endOfMonth(now) },
+  };
+
+  const daily: T[] = [];
+  const bestByKey = new Map<string, { task: T; distance: number }>();
+
+  tasks.forEach(task => {
+    const freq = task.routine_id ? routinesMap[task.routine_id] || 'diaria' : 'diaria';
+    const win = windows[freq] || windows.diaria;
+    const due = parseTaskDate(task.due_date, 'end');
+    const start = parseTaskDate(task.start_date, 'start') || (due ? startOfDay(due) : null);
+    if (!start || !due) return;
+    if (start > win.end || due < win.start) return; // no overlap
+
+    if (freq === 'diaria' || !task.routine_id) {
+      daily.push(task);
+      return;
+    }
+
+    const distance = start <= now && now <= due
+      ? 0
+      : Math.min(Math.abs(start.getTime() - now.getTime()), Math.abs(due.getTime() - now.getTime()));
+    const key = `${task.routine_id}|${task.unit_id || 'none'}`;
+    const current = bestByKey.get(key);
+    if (!current || distance < current.distance) {
+      bestByKey.set(key, { task, distance });
+    }
+  });
+
+  return [...daily, ...Array.from(bestByKey.values()).map(v => v.task)];
 };
 
 const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | null, dashboardPeriod?: string | null) => {
@@ -169,8 +231,22 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           return `${year}-${month}-${day}`;
         };
 
-        const startStr = formatDateString(periodDates.start);
-        const endStr = `${formatDateString(periodDates.end)}T23:59:59.999Z`;
+        // For "today", non-daily routines must be evaluated by their current CYCLE
+        // (week / fortnight / month), so fetch a wider window and refine client-side.
+        let fetchStart = periodDates.start;
+        let fetchEnd = periodDates.end;
+        if (effectivePeriod === 'today') {
+          const now = new Date();
+          const m = startOfMonth(now);
+          const minus14 = startOfDay(addDays(now, -14));
+          const me = endOfMonth(now);
+          const plus14 = endOfDay(addDays(now, 14));
+          fetchStart = m < minus14 ? m : minus14;
+          fetchEnd = me > plus14 ? me : plus14;
+        }
+
+        const startStr = formatDateString(fetchStart);
+        const endStr = `${formatDateString(fetchEnd)}T23:59:59.999Z`;
 
         // Interval overlap: a task belongs to the period if its window [start_date, due_date]
         // intersects [startStr, endStr]. This is required for weekly/biweekly/monthly tasks,
@@ -185,7 +261,11 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       tasksQuery = tasksQuery.limit(3000); // 3000 is a safe threshold for browser memory per panel.
       const { data: rawTasksData, error: fetchError } = await tasksQuery;
       if (fetchError) throw fetchError;
-      const rawTasks = (rawTasksData || []).filter(t => !t.routine_id || activeRoutineIds.has(t.routine_id));
+      let rawTasks = (rawTasksData || []).filter(t => !t.routine_id || activeRoutineIds.has(t.routine_id));
+
+      if (effectivePeriod === 'today') {
+        rawTasks = filterTasksByCurrentCycle(rawTasks, routinesMap);
+      }
 
       // Helper for robust frequency resolution (falls back gracefully if routinesMap is restricted)
       const getTaskFrequency = (t: any) => {
