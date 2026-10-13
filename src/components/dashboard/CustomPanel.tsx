@@ -182,11 +182,10 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
       // Get period dates
       const periodDates = getPeriodDates(effectivePeriod);
 
-      // Build tasks query
-      let tasksQuery = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, start_date, sector_id');
-      
+      // Build tasks query (as a factory, so it can be re-created for each page)
       const effectiveSectorId = dashboardSectorId && dashboardSectorId !== 'all' ? dashboardSectorId : filters.sector_id;
 
+      let sectorOrFilter: string | null = null;
       if (effectiveSectorId) {
         const sectorIdStr = Array.isArray(effectiveSectorId) ? effectiveSectorId[0] : effectiveSectorId;
         if (sectorIdStr && typeof sectorIdStr === 'string' && sectorIdStr.trim() !== '') {
@@ -194,35 +193,13 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           const { data: sectorUnits } = await supabase.from('units').select('id').eq('sector_id', sectorIdStr);
           const sectorUnitIds = sectorUnits?.map(u => u.id).filter(Boolean) || [];
 
-          if (sectorUnitIds.length > 0) {
-            tasksQuery = tasksQuery.or(`sector_id.eq.${sectorIdStr},sector_id.is.null,unit_id.in.(${sectorUnitIds.join(',')})`);
-          } else {
-            tasksQuery = tasksQuery.or(`sector_id.eq.${sectorIdStr},sector_id.is.null`);
-          }
+          sectorOrFilter = sectorUnitIds.length > 0
+            ? `sector_id.eq.${sectorIdStr},sector_id.is.null,unit_id.in.(${sectorUnitIds.join(',')})`
+            : `sector_id.eq.${sectorIdStr},sector_id.is.null`;
         }
       }
 
-      if (filters.unit_id) {
-        if (Array.isArray(filters.unit_id)) {
-          const validUnits = filters.unit_id.filter(id => id && id.toLowerCase() !== 'todas as unidades' && id.toLowerCase() !== 'selecionar todos');
-          if (validUnits.length > 0) tasksQuery = tasksQuery.in('unit_id', validUnits);
-        } else if (filters.unit_id.toLowerCase() !== 'todas as unidades' && filters.unit_id.toLowerCase() !== 'selecionar todos') {
-          tasksQuery = tasksQuery.eq('unit_id', filters.unit_id);
-        }
-      }
-
-      if (filters.status && filters.status.length > 0) {
-        tasksQuery = tasksQuery.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
-      }
-
-      if (!filters.task_frequency || filters.task_frequency.length === 0) {
-        if (titleFallback && titleFallback.length > 0) {
-          tasksQuery = tasksQuery.in('title', titleFallback);
-        } else if (titleIlikeFallback) {
-          tasksQuery = tasksQuery.ilike('title', `%${titleIlikeFallback}%`);
-        }
-      }
-
+      let periodOrFilter: string | null = null;
       if (periodDates) {
         const formatDateString = (date: Date) => {
           const year = date.getFullYear();
@@ -231,37 +208,78 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
           return `${year}-${month}-${day}`;
         };
 
-        // For "today", non-daily routines must be evaluated by their current CYCLE
-        // (week / fortnight / month), so fetch a wider window and refine client-side.
-        let fetchStart = periodDates.start;
-        let fetchEnd = periodDates.end;
-        if (effectivePeriod === 'today') {
-          const now = new Date();
-          const m = startOfMonth(now);
-          const minus14 = startOfDay(addDays(now, -14));
-          const me = endOfMonth(now);
-          const plus14 = endOfDay(addDays(now, 14));
-          fetchStart = m < minus14 ? m : minus14;
-          fetchEnd = me > plus14 ? me : plus14;
-        }
-
-        const startStr = formatDateString(fetchStart);
-        const endStr = `${formatDateString(fetchEnd)}T23:59:59.999Z`;
+        const startStr = formatDateString(periodDates.start);
+        const endStr = `${formatDateString(periodDates.end)}T23:59:59.999Z`;
 
         // Interval overlap: a task belongs to the period if its window [start_date, due_date]
-        // intersects [startStr, endStr]. This is required for weekly/biweekly/monthly tasks,
-        // whose due_date is at the end of the cycle (e.g. a weekly task is not "due today",
-        // but it is active today). Tasks without start_date fall back to due_date in range.
-        tasksQuery = tasksQuery.or(
-          `and(due_date.gte.${startStr},due_date.lte.${endStr}),and(start_date.lte.${endStr},due_date.gte.${startStr})`
-        );
+        // intersects [startStr, endStr]. Tasks without start_date fall back to due_date in range.
+        const clauses = [
+          `and(due_date.gte.${startStr},due_date.lte.${endStr})`,
+          `and(start_date.lte.${endStr},due_date.gte.${startStr})`,
+        ];
+
+        // For "today", non-daily routines are evaluated by their current CYCLE
+        // (week / fortnight / month): fetch a wider window ONLY for those routines,
+        // then refine client-side (filterTasksByCurrentCycle).
+        if (effectivePeriod === 'today') {
+          const nonDailyIds = activeRoutines.filter(r => normalizeFreq(r.frequency) !== 'diaria').map(r => r.id);
+          if (nonDailyIds.length > 0) {
+            const now = new Date();
+            const m = startOfMonth(now);
+            const minus14 = startOfDay(addDays(now, -14));
+            const me = endOfMonth(now);
+            const plus14 = endOfDay(addDays(now, 14));
+            const wideStart = formatDateString(m < minus14 ? m : minus14);
+            const wideEnd = `${formatDateString(me > plus14 ? me : plus14)}T23:59:59.999Z`;
+            clauses.push(`and(routine_id.in.(${nonDailyIds.join(',')}),start_date.lte.${wideEnd},due_date.gte.${wideStart})`);
+          }
+        }
+        periodOrFilter = clauses.join(',');
       }
 
-      // Fetch all task rows bypassing the 1000 row Supabase API default:
-      tasksQuery = tasksQuery.limit(3000); // 3000 is a safe threshold for browser memory per panel.
-      const { data: rawTasksData, error: fetchError } = await tasksQuery;
-      if (fetchError) throw fetchError;
-      let rawTasks = (rawTasksData || []).filter(t => !t.routine_id || activeRoutineIds.has(t.routine_id));
+      const buildTasksQuery = () => {
+        let q = supabase.from('tasks').select('id, status, unit_id, assigned_to, routine_id, created_at, due_date, start_date, sector_id');
+
+        if (sectorOrFilter) q = q.or(sectorOrFilter);
+
+        if (filters.unit_id) {
+          if (Array.isArray(filters.unit_id)) {
+            const validUnits = filters.unit_id.filter(id => id && id.toLowerCase() !== 'todas as unidades' && id.toLowerCase() !== 'selecionar todos');
+            if (validUnits.length > 0) q = q.in('unit_id', validUnits);
+          } else if (filters.unit_id.toLowerCase() !== 'todas as unidades' && filters.unit_id.toLowerCase() !== 'selecionar todos') {
+            q = q.eq('unit_id', filters.unit_id);
+          }
+        }
+
+        if (filters.status && filters.status.length > 0) {
+          q = q.in('status', filters.status as ('pendente' | 'em_andamento' | 'concluida' | 'atrasada' | 'cancelada')[]);
+        }
+
+        if (!filters.task_frequency || filters.task_frequency.length === 0) {
+          if (titleFallback && titleFallback.length > 0) {
+            q = q.in('title', titleFallback);
+          } else if (titleIlikeFallback) {
+            q = q.ilike('title', `%${titleIlikeFallback}%`);
+          }
+        }
+
+        if (periodOrFilter) q = q.or(periodOrFilter);
+
+        return q.order('id', { ascending: true });
+      };
+
+      // Supabase/PostgREST caps each response at 1000 rows, so paginate until exhausted.
+      const PAGE_SIZE = 1000;
+      const MAX_ROWS = 20000; // safety cap
+      const rawTasksData: any[] = [];
+      for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
+        const { data: page, error: fetchError } = await buildTasksQuery().range(from, from + PAGE_SIZE - 1);
+        if (fetchError) throw fetchError;
+        rawTasksData.push(...(page || []));
+        if (!page || page.length < PAGE_SIZE) break;
+      }
+      let rawTasks = rawTasksData.filter(t => !t.routine_id || activeRoutineIds.has(t.routine_id));
+
 
       if (effectivePeriod === 'today') {
         rawTasks = filterTasksByCurrentCycle(rawTasks, routinesMap);
