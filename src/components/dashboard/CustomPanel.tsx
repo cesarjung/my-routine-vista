@@ -1031,8 +1031,8 @@ export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: Custo
         </div>
       </div>
 
-      {/* Tasks Dialog */}
-      <Dialog open={tasksDialog.isOpen} onOpenChange={(open) => !open && closeTasksDialog()}>
+      {/* Tasks Dialog — hidden while the routine sheet is open, reappears when it closes */}
+      <Dialog open={tasksDialog.isOpen && !routineSheet} onOpenChange={(open) => !open && closeTasksDialog()}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
