@@ -234,7 +234,7 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
       ref={setNodeRef}
       style={style}
       className={cn(
-        'absolute transition-shadow duration-200 w-max',
+        'absolute isolate transition-shadow duration-200 w-max',
         isDragging && 'opacity-50 z-50 shadow-2xl'
       )}
     >
@@ -242,7 +242,7 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
       <div
         {...(canDrag ? { ...attributes, ...listeners } : {})}
         className={cn(
-          "absolute left-0 top-0 bottom-0 w-8 z-[60] flex items-center justify-center bg-gradient-to-r from-muted/90 to-transparent rounded-l-lg transition-opacity touch-none",
+          "absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center bg-gradient-to-r from-muted/90 to-transparent rounded-l-lg transition-opacity touch-none",
           canDrag
             ? "cursor-grab active:cursor-grabbing opacity-100 ring-1 ring-border/50"
             : "cursor-not-allowed opacity-40"
