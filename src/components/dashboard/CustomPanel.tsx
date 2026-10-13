@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { FolderKanban, Building2, Users, Loader2, Play, Settings, Trash2, CheckCircle2, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -172,7 +172,13 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
         const startStr = formatDateString(periodDates.start);
         const endStr = `${formatDateString(periodDates.end)}T23:59:59.999Z`;
 
-        tasksQuery = tasksQuery.gte('due_date', startStr).lte('due_date', endStr);
+        // Interval overlap: a task belongs to the period if its window [start_date, due_date]
+        // intersects [startStr, endStr]. This is required for weekly/biweekly/monthly tasks,
+        // whose due_date is at the end of the cycle (e.g. a weekly task is not "due today",
+        // but it is active today). Tasks without start_date fall back to due_date in range.
+        tasksQuery = tasksQuery.or(
+          `and(due_date.gte.${startStr},due_date.lte.${endStr}),and(start_date.lte.${endStr},due_date.gte.${startStr})`
+        );
       }
 
       // Fetch all task rows bypassing the 1000 row Supabase API default:
@@ -537,26 +543,50 @@ export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: Custo
 
   const panelRef = useRef<HTMLDivElement>(null);
 
+  const DEFAULT_WIDTH = 380;
   const savedHeight = (panel.display_config?.height as number) || (panel.filters.group_by === 'tracker_gantt' ? 480 : 350);
-  const savedWidth = panel.display_config?.width as number | undefined;
+  const savedWidth = (panel.display_config?.width as number) || DEFAULT_WIDTH;
 
-  const handleResizeStop = useCallback(() => {
-    if (!panelRef.current) return;
+  // Keep latest values in refs so the window listener never uses stale data
+  const latestRef = useRef({ panel, savedHeight, savedWidth, updatePanel });
+  latestRef.current = { panel, savedHeight, savedWidth, updatePanel };
 
-    const currentWidth = panelRef.current.offsetWidth;
-    const currentHeight = panelRef.current.offsetHeight;
+  const persistSize = useCallback(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const { panel: p, savedHeight: h, savedWidth: w, updatePanel: upd } = latestRef.current;
+    const currentWidth = el.offsetWidth;
+    const currentHeight = el.offsetHeight;
 
-    if (Math.abs(currentHeight - savedHeight) > 10 || (savedWidth && Math.abs(currentWidth - savedWidth) > 10)) {
-      updatePanel.mutate({
-        id: panel.id,
+    if (Math.abs(currentHeight - h) > 4 || Math.abs(currentWidth - w) > 4) {
+      upd.mutate({
+        id: p.id,
         display_config: {
-          ...panel.display_config,
+          ...p.display_config,
           width: currentWidth,
           height: currentHeight
         }
       });
     }
-  }, [panel.id, panel.display_config, savedHeight, savedWidth, updatePanel]);
+  }, []);
+
+  // The native CSS resize handle often releases the mouse OUTSIDE the panel,
+  // so listen for mouseup on the window after a mousedown inside the panel.
+  const handleResizeStart = useCallback(() => {
+    const onUp = () => {
+      window.removeEventListener('mouseup', onUp);
+      persistSize();
+    };
+    window.addEventListener('mouseup', onUp);
+  }, [persistSize]);
+
+  // Re-apply saved size when it changes remotely (refetch), so the DOM matches the DB
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    el.style.width = `${savedWidth}px`;
+    el.style.height = `${savedHeight}px`;
+  }, [savedWidth, savedHeight]);
 
   const [tasksDialog, setTasksDialog] = useState<TasksDialogState>({
     isOpen: false,
@@ -739,14 +769,13 @@ export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: Custo
     return (
       <div
         ref={panelRef}
-        onMouseUp={handleResizeStop}
+        onMouseDown={handleResizeStart}
         className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
         style={{
           minHeight: 250,
           minWidth: 280,
           height: savedHeight,
-          width: savedWidth || 'auto',
-          maxWidth: '100%'
+          width: savedWidth,
         }}
       >
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30 flex-shrink-0">
@@ -799,14 +828,13 @@ export const CustomPanel = ({ panel, dashboardSectorId, dashboardPeriod }: Custo
     <>
       <div
         ref={panelRef}
-        onMouseUp={handleResizeStop}
+        onMouseDown={handleResizeStart}
         className="rounded-lg border border-border bg-card overflow-hidden flex flex-col resize"
         style={{
           minHeight: 150,
           minWidth: 280,
           height: savedHeight,
-          width: savedWidth || 'auto',
-          maxWidth: '100%'
+          width: savedWidth,
         }}
       >
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-secondary/30 flex-shrink-0">

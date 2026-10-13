@@ -234,7 +234,7 @@ const DraggablePanel = ({ panel, renderContent, canDrag }: DraggablePanelProps) 
       ref={setNodeRef}
       style={style}
       className={cn(
-        'absolute transition-shadow duration-200 w-[calc(50%-1rem)] min-w-[300px]',
+        'absolute transition-shadow duration-200 w-max',
         isDragging && 'opacity-50 z-50 shadow-2xl'
       )}
     >
@@ -283,7 +283,7 @@ const DragOverlayContent = ({ panel, selectedSectorId, selectedPeriod, renderUni
   };
 
   return (
-    <div className="relative opacity-90 shadow-2xl rounded-lg w-[calc(50vw-2rem)] min-w-[300px] max-w-[600px]">
+    <div className="relative opacity-90 shadow-2xl rounded-lg w-max">
       <div className="absolute left-0 top-0 bottom-0 w-8 z-[60] flex items-center justify-center cursor-grabbing bg-gradient-to-r from-muted/90 to-transparent rounded-l-lg ring-1 ring-border/50">
         <GripVertical className="w-4 h-4 text-muted-foreground" />
       </div>
