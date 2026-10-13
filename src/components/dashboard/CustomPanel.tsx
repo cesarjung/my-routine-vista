@@ -96,7 +96,7 @@ const parseTaskDate = (value: string | null | undefined, edge: 'start' | 'end'):
  * For non-daily routines only ONE task per routine+unit is kept (the one closest to now),
  * so a cycle is never double counted.
  */
-const filterTasksByCurrentCycle = <T extends { routine_id: string | null; unit_id: string | null; start_date: string | null; due_date: string | null }>(
+const filterTasksByCurrentCycle = <T extends { routine_id: string | null; unit_id: string | null; start_date: string | null; due_date: string | null; status?: string | null }>(
   tasks: T[],
   routinesMap: Record<string, string>
 ): T[] => {
@@ -110,6 +110,10 @@ const filterTasksByCurrentCycle = <T extends { routine_id: string | null; unit_i
 
   const daily: T[] = [];
   const bestByKey = new Map<string, { task: T; distance: number }>();
+  // Carry-over: most recent UNFINISHED task from a previous cycle (used only when
+  // the routine+unit has no task in the current cycle — e.g. routines that only
+  // generate the next occurrence after completion, or overdue items).
+  const carryByKey = new Map<string, { task: T; due: number }>();
 
   tasks.forEach(task => {
     const freq = task.routine_id ? routinesMap[task.routine_id] || 'diaria' : 'diaria';
@@ -117,9 +121,20 @@ const filterTasksByCurrentCycle = <T extends { routine_id: string | null; unit_i
     const due = parseTaskDate(task.due_date, 'end');
     const start = parseTaskDate(task.start_date, 'start') || (due ? startOfDay(due) : null);
     if (!start || !due) return;
-    if (start > win.end || due < win.start) return; // no overlap
+    const isDaily = freq === 'diaria' || !task.routine_id;
+    const key = `${task.routine_id}|${task.unit_id || 'none'}`;
 
-    if (freq === 'diaria' || !task.routine_id) {
+    if (start > win.end || due < win.start) {
+      // Outside the current cycle
+      const unfinished = task.status !== 'concluida' && task.status !== 'cancelada';
+      if (!isDaily && due < win.start && unfinished) {
+        const cur = carryByKey.get(key);
+        if (!cur || due.getTime() > cur.due) carryByKey.set(key, { task, due: due.getTime() });
+      }
+      return;
+    }
+
+    if (isDaily) {
       daily.push(task);
       return;
     }
@@ -127,11 +142,14 @@ const filterTasksByCurrentCycle = <T extends { routine_id: string | null; unit_i
     const distance = start <= now && now <= due
       ? 0
       : Math.min(Math.abs(start.getTime() - now.getTime()), Math.abs(due.getTime() - now.getTime()));
-    const key = `${task.routine_id}|${task.unit_id || 'none'}`;
     const current = bestByKey.get(key);
     if (!current || distance < current.distance) {
       bestByKey.set(key, { task, distance });
     }
+  });
+
+  carryByKey.forEach((v, key) => {
+    if (!bestByKey.has(key)) bestByKey.set(key, { task: v.task, distance: Infinity });
   });
 
   return [...daily, ...Array.from(bestByKey.values()).map(v => v.task)];
@@ -232,6 +250,9 @@ const useCustomPanelData = (panel: DashboardPanel, dashboardSectorId?: string | 
             const wideStart = formatDateString(m < minus14 ? m : minus14);
             const wideEnd = `${formatDateString(me > plus14 ? me : plus14)}T23:59:59.999Z`;
             clauses.push(`and(routine_id.in.(${nonDailyIds.join(',')}),start_date.lte.${wideEnd},due_date.gte.${wideStart})`);
+            // Unfinished tasks from previous cycles (carry-over), bounded to 120 days
+            const carryStart = formatDateString(startOfDay(addDays(now, -120)));
+            clauses.push(`and(routine_id.in.(${nonDailyIds.join(',')}),status.in.(pendente,em_andamento,atrasada),due_date.gte.${carryStart},due_date.lt.${wideStart})`);
           }
         }
         periodOrFilter = clauses.join(',');
